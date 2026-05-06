@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '../../hooks/useAuth';
 
@@ -23,6 +24,7 @@ type FieldErrors = {
 };
 
 export default function RegisterScreen() {
+  const { t } = useTranslation();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -35,29 +37,29 @@ export default function RegisterScreen() {
     const errors: FieldErrors = {};
 
     if (!username.trim()) {
-      errors.username = 'El nombre de usuario es obligatorio.';
+      errors.username = t('auth.register.error_username_required');
     } else if (username.trim().length < 3) {
-      errors.username = 'El nombre de usuario debe tener al menos 3 caracteres.';
+      errors.username = t('auth.register.error_username_min');
     } else if (username.trim().length > 30) {
-      errors.username = 'El nombre de usuario no puede superar los 30 caracteres.';
+      errors.username = t('auth.register.error_username_max');
     } else if (!/^[a-zA-Z0-9_-]+$/.test(username.trim())) {
-      errors.username = 'Solo se permiten letras, números, _ y -.';
+      errors.username = t('auth.register.error_username_format');
     }
 
     if (!email.trim()) {
-      errors.email = 'El email es obligatorio.';
+      errors.email = t('auth.register.error_email_required');
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      errors.email = 'Introduce un email válido.';
+      errors.email = t('auth.register.error_email_invalid');
     }
 
     if (!password) {
-      errors.password = 'La contraseña es obligatoria.';
+      errors.password = t('auth.register.error_password_required');
     } else if (password.length < 8) {
-      errors.password = 'La contraseña debe tener al menos 8 caracteres.';
+      errors.password = t('auth.register.error_password_min');
     } else if (!/[A-Z]/.test(password)) {
-      errors.password = 'La contraseña debe contener al menos una mayúscula.';
+      errors.password = t('auth.register.error_password_uppercase');
     } else if (!/[0-9]/.test(password)) {
-      errors.password = 'La contraseña debe contener al menos un número.';
+      errors.password = t('auth.register.error_password_number');
     }
 
     setFieldErrors(errors);
@@ -96,19 +98,19 @@ export default function RegisterScreen() {
               onPress={() => router.back()}
               className="mb-8 self-start"
               accessibilityRole="button"
-              accessibilityLabel="Volver atrás"
-              accessibilityHint="Navega a la pantalla anterior"
+              accessibilityLabel={t('auth.register.back_label')}
+              accessibilityHint={t('auth.register.back_hint')}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               style={{ minHeight: 44, justifyContent: 'center' }}
             >
-              <Text className="text-primary-light text-base">← Volver</Text>
+              <Text className="text-primary-light text-base">{t('common.back')}</Text>
             </Pressable>
 
             <Text
               className="text-3xl font-bold text-white mb-8"
               accessibilityRole="header"
             >
-              Crear cuenta
+              {t('auth.register.title')}
             </Text>
 
             {/* Error global del servidor */}
@@ -125,12 +127,12 @@ export default function RegisterScreen() {
 
             {/* Campo nombre de usuario */}
             <View className="mb-4">
-              <Text className="text-gray-300 text-sm mb-1.5 ml-1">Nombre de usuario</Text>
+              <Text className="text-gray-300 text-sm mb-1.5 ml-1">{t('auth.register.username_label')}</Text>
               <TextInput
                 className={`w-full bg-surface-elevated rounded-xl px-4 py-3.5 text-white text-base border ${
                   fieldErrors.username ? 'border-red-500' : 'border-surface-card'
                 }`}
-                placeholder="gamer_pro_99"
+                placeholder={t('auth.register.username_placeholder')}
                 placeholderTextColor="#6b7280"
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -143,8 +145,8 @@ export default function RegisterScreen() {
                     setFieldErrors((prev: FieldErrors) => ({ ...prev, username: undefined }));
                   }
                 }}
-                accessibilityLabel="Nombre de usuario"
-                accessibilityHint="Introduce un nombre de usuario único. Solo letras, números, guiones y guiones bajos."
+                accessibilityLabel={t('auth.register.username_label')}
+                accessibilityHint={t('auth.register.username_hint')}
               />
               {fieldErrors.username && (
                 <Text
@@ -158,12 +160,12 @@ export default function RegisterScreen() {
 
             {/* Campo email */}
             <View className="mb-4">
-              <Text className="text-gray-300 text-sm mb-1.5 ml-1">Email</Text>
+              <Text className="text-gray-300 text-sm mb-1.5 ml-1">{t('auth.register.email_label')}</Text>
               <TextInput
                 className={`w-full bg-surface-elevated rounded-xl px-4 py-3.5 text-white text-base border ${
                   fieldErrors.email ? 'border-red-500' : 'border-surface-card'
                 }`}
-                placeholder="tu@email.com"
+                placeholder={t('auth.register.email_placeholder')}
                 placeholderTextColor="#6b7280"
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -177,8 +179,8 @@ export default function RegisterScreen() {
                     setFieldErrors((prev: FieldErrors) => ({ ...prev, email: undefined }));
                   }
                 }}
-                accessibilityLabel="Email"
-                accessibilityHint="Introduce tu dirección de correo electrónico"
+                accessibilityLabel={t('auth.register.email_label')}
+                accessibilityHint={t('auth.register.email_hint')}
               />
               {fieldErrors.email && (
                 <Text
@@ -192,12 +194,12 @@ export default function RegisterScreen() {
 
             {/* Campo contraseña */}
             <View className="mb-8">
-              <Text className="text-gray-300 text-sm mb-1.5 ml-1">Contraseña</Text>
+              <Text className="text-gray-300 text-sm mb-1.5 ml-1">{t('auth.register.password_label')}</Text>
               <TextInput
                 className={`w-full bg-surface-elevated rounded-xl px-4 py-3.5 text-white text-base border ${
                   fieldErrors.password ? 'border-red-500' : 'border-surface-card'
                 }`}
-                placeholder="Mínimo 8 caracteres, una mayúscula y un número"
+                placeholder={t('auth.register.password_placeholder')}
                 placeholderTextColor="#6b7280"
                 secureTextEntry
                 autoCapitalize="none"
@@ -212,8 +214,8 @@ export default function RegisterScreen() {
                   }
                 }}
                 onSubmitEditing={handleSubmit}
-                accessibilityLabel="Contraseña"
-                accessibilityHint="Mínimo 8 caracteres, al menos una mayúscula y un número"
+                accessibilityLabel={t('auth.register.password_label')}
+                accessibilityHint={t('auth.register.password_hint')}
               />
               {fieldErrors.password && (
                 <Text
@@ -231,18 +233,18 @@ export default function RegisterScreen() {
               onPress={handleSubmit}
               disabled={isRegistering}
               accessibilityRole="button"
-              accessibilityLabel="Crear cuenta"
-              accessibilityHint="Envía el formulario para crear tu cuenta en UnlockHub"
+              accessibilityLabel={t('auth.register.submit')}
+              accessibilityHint={t('auth.register.submit_hint')}
               accessibilityState={{ disabled: isRegistering, busy: isRegistering }}
               style={{ minHeight: 52 }}
             >
               {isRegistering ? (
                 <ActivityIndicator
                   color="#ffffff"
-                  accessibilityLabel="Creando tu cuenta, por favor espera"
+                  accessibilityLabel={t('auth.register.loading_label')}
                 />
               ) : (
-                <Text className="text-white font-semibold text-base">Crear cuenta</Text>
+                <Text className="text-white font-semibold text-base">{t('auth.register.submit')}</Text>
               )}
             </Pressable>
           </View>

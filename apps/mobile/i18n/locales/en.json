@@ -1,0 +1,105 @@
+{
+  "common": {
+    "back": "← Back",
+    "retry": "Retry",
+    "loading": "Loading...",
+    "error_generic": "Something went wrong. Please try again.",
+    "cancel": "Cancel"
+  },
+  "auth": {
+    "login": {
+      "title": "UnlockHub",
+      "subtitle": "Your achievements hub",
+      "email_label": "Email",
+      "email_placeholder": "you@email.com",
+      "email_hint": "Enter your email address",
+      "password_label": "Password",
+      "password_hint": "Enter your password",
+      "submit": "Log in",
+      "submit_hint": "Submit the form to log in to your account",
+      "loading_label": "Logging in, please wait",
+      "create_account": "Create account",
+      "create_account_label": "Create a new account",
+      "create_account_hint": "Navigate to the registration screen to create a new account",
+      "error_email_required": "Email is required.",
+      "error_email_invalid": "Enter a valid email address.",
+      "error_password_required": "Password is required."
+    },
+    "register": {
+      "title": "Create account",
+      "back_label": "Go back",
+      "back_hint": "Navigate to the previous screen",
+      "username_label": "Username",
+      "username_placeholder": "gamer_pro_99",
+      "username_hint": "Enter a unique username. Only letters, numbers, hyphens and underscores.",
+      "email_label": "Email",
+      "email_placeholder": "you@email.com",
+      "email_hint": "Enter your email address",
+      "password_label": "Password",
+      "password_placeholder": "At least 8 characters, one uppercase and one number",
+      "password_hint": "At least 8 characters, one uppercase letter and one number",
+      "submit": "Create account",
+      "submit_hint": "Submit the form to create your UnlockHub account",
+      "loading_label": "Creating your account, please wait",
+      "error_username_required": "Username is required.",
+      "error_username_min": "Username must be at least 3 characters.",
+      "error_username_max": "Username cannot exceed 30 characters.",
+      "error_username_format": "Only letters, numbers, _ and - are allowed.",
+      "error_email_required": "Email is required.",
+      "error_email_invalid": "Enter a valid email address.",
+      "error_password_required": "Password is required.",
+      "error_password_min": "Password must be at least 8 characters.",
+      "error_password_uppercase": "Password must contain at least one uppercase letter.",
+      "error_password_number": "Password must contain at least one number."
+    }
+  },
+  "tabs": {
+    "home": "Home",
+    "rankings": "Rankings",
+    "friends": "Friends",
+    "profile": "Profile"
+  },
+  "home": {
+    "title": "Home",
+    "empty": "Your recent achievements will appear here"
+  },
+  "friends": {
+    "title": "Friends",
+    "empty": "Your friends and their activity will appear here"
+  },
+  "rankings": {
+    "title": "Rankings",
+    "subtitle": "Top global players",
+    "my_position_label": "Your position",
+    "my_position_aria": "Your position: #{{rank}} with {{xp}} XP",
+    "my_position_unranked_aria": "You don't have a ranking position yet. Accumulated XP: {{xp}}",
+    "list_label": "Global ranking list",
+    "refresh_label": "Refresh ranking",
+    "error_title": "Could not load the ranking",
+    "error_message": "Check your internet connection and try again.",
+    "retry_label": "Retry loading the ranking",
+    "empty": "The ranking has no players yet.\nBe the first to appear!"
+  },
+  "profile": {
+    "title": "Your profile",
+    "unauthenticated_message": "Log in to view your profile, stats and achievements.",
+    "login": "Log in",
+    "login_hint": "Navigate to the login screen",
+    "refresh_label": "Refresh profile",
+    "premium_label": "Premium user",
+    "premium_badge": "Premium",
+    "stat_level": "Level",
+    "stat_xp": "XP",
+    "stat_streak": "Streak",
+    "stats_aria": "Stats: Level {{level}}, {{xp}} XP, streak of {{streak}} days",
+    "profile_aria": "Profile of {{username}}. Level {{level}}. {{xp}} accumulated XP.",
+    "platforms_section": "Linked platforms",
+    "sync_prefix": "Sync:",
+    "platforms_empty": "You have no linked platforms yet.\nLink them from settings to sync your achievements.",
+    "logout": "Log out",
+    "logout_hint": "Log out of your account on this device. Confirmation will be requested.",
+    "logging_out": "Logging out…",
+    "logout_dialog_title": "Log out",
+    "logout_dialog_message": "Are you sure you want to log out?"
+  }
+}

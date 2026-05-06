@@ -1,0 +1,105 @@
+{
+  "common": {
+    "back": "← Volver",
+    "retry": "Reintentar",
+    "loading": "Cargando...",
+    "error_generic": "Algo salió mal. Inténtalo de nuevo.",
+    "cancel": "Cancelar"
+  },
+  "auth": {
+    "login": {
+      "title": "UnlockHub",
+      "subtitle": "Tu hub de logros",
+      "email_label": "Email",
+      "email_placeholder": "tu@email.com",
+      "email_hint": "Introduce tu dirección de correo electrónico",
+      "password_label": "Contraseña",
+      "password_hint": "Introduce tu contraseña",
+      "submit": "Iniciar sesión",
+      "submit_hint": "Envía el formulario para iniciar sesión con tu cuenta",
+      "loading_label": "Iniciando sesión, por favor espera",
+      "create_account": "Crear cuenta",
+      "create_account_label": "Crear cuenta nueva",
+      "create_account_hint": "Navega a la pantalla de registro para crear una nueva cuenta",
+      "error_email_required": "El email es obligatorio.",
+      "error_email_invalid": "Introduce un email válido.",
+      "error_password_required": "La contraseña es obligatoria."
+    },
+    "register": {
+      "title": "Crear cuenta",
+      "back_label": "Volver atrás",
+      "back_hint": "Navega a la pantalla anterior",
+      "username_label": "Nombre de usuario",
+      "username_placeholder": "gamer_pro_99",
+      "username_hint": "Introduce un nombre de usuario único. Solo letras, números, guiones y guiones bajos.",
+      "email_label": "Email",
+      "email_placeholder": "tu@email.com",
+      "email_hint": "Introduce tu dirección de correo electrónico",
+      "password_label": "Contraseña",
+      "password_placeholder": "Mínimo 8 caracteres, una mayúscula y un número",
+      "password_hint": "Mínimo 8 caracteres, al menos una mayúscula y un número",
+      "submit": "Crear cuenta",
+      "submit_hint": "Envía el formulario para crear tu cuenta en UnlockHub",
+      "loading_label": "Creando tu cuenta, por favor espera",
+      "error_username_required": "El nombre de usuario es obligatorio.",
+      "error_username_min": "El nombre de usuario debe tener al menos 3 caracteres.",
+      "error_username_max": "El nombre de usuario no puede superar los 30 caracteres.",
+      "error_username_format": "Solo se permiten letras, números, _ y -.",
+      "error_email_required": "El email es obligatorio.",
+      "error_email_invalid": "Introduce un email válido.",
+      "error_password_required": "La contraseña es obligatoria.",
+      "error_password_min": "La contraseña debe tener al menos 8 caracteres.",
+      "error_password_uppercase": "La contraseña debe contener al menos una mayúscula.",
+      "error_password_number": "La contraseña debe contener al menos un número."
+    }
+  },
+  "tabs": {
+    "home": "Inicio",
+    "rankings": "Rankings",
+    "friends": "Amigos",
+    "profile": "Perfil"
+  },
+  "home": {
+    "title": "Inicio",
+    "empty": "Tus logros recientes aparecerán aquí"
+  },
+  "friends": {
+    "title": "Amigos",
+    "empty": "Tus amigos y su actividad aparecerán aquí"
+  },
+  "rankings": {
+    "title": "Rankings",
+    "subtitle": "Top jugadores globales",
+    "my_position_label": "Tu posición",
+    "my_position_aria": "Tu posición: #{{rank}} con {{xp}} XP",
+    "my_position_unranked_aria": "Todavía no tienes posición en el ranking. XP acumulado: {{xp}}",
+    "list_label": "Lista del ranking global",
+    "refresh_label": "Actualizar ranking",
+    "error_title": "No se pudo cargar el ranking",
+    "error_message": "Comprueba tu conexión a internet e inténtalo de nuevo.",
+    "retry_label": "Reintentar carga del ranking",
+    "empty": "El ranking todavía no tiene jugadores.\n¡Sé el primero en aparecer!"
+  },
+  "profile": {
+    "title": "Tu perfil",
+    "unauthenticated_message": "Inicia sesión para ver tu perfil, estadísticas y logros.",
+    "login": "Iniciar sesión",
+    "login_hint": "Navega a la pantalla de inicio de sesión",
+    "refresh_label": "Actualizar perfil",
+    "premium_label": "Usuario premium",
+    "premium_badge": "Premium",
+    "stat_level": "Nivel",
+    "stat_xp": "XP",
+    "stat_streak": "Racha",
+    "stats_aria": "Estadísticas: Nivel {{level}}, {{xp}} XP, racha de {{streak}} días",
+    "profile_aria": "Perfil de {{username}}. Nivel {{level}}. {{xp}} XP acumulados.",
+    "platforms_section": "Plataformas vinculadas",
+    "sync_prefix": "Sync:",
+    "platforms_empty": "No tienes plataformas vinculadas todavía.\nVincúlalas desde los ajustes para sincronizar tus logros.",
+    "logout": "Cerrar sesión",
+    "logout_hint": "Cierra tu sesión en este dispositivo. Se te pedirá confirmación.",
+    "logging_out": "Cerrando sesión…",
+    "logout_dialog_title": "Cerrar sesión",
+    "logout_dialog_message": "¿Estás seguro de que quieres cerrar sesión?"
+  }
+}
