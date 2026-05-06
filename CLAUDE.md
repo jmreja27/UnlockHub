@@ -338,11 +338,12 @@ Añadir una plataforma nueva = crear su adapter implementando esta interfaz + a�
 
 | Fase | Contenido | Estado |
 |---|---|---|
-| **Fase 1 — MVP** | Setup monorepo, auth, vinculación Steam + RA, tracking de logros, rankings, perfil, multiidioma, premium, AdMob | 🔲 Pendiente |
+| **Fase 1 — MVP** | Setup monorepo, auth, vinculación Steam + RA, tracking de logros, rankings, perfil, multiidioma, premium, AdMob | ✅ Completa |
 | **Fase 2 — Social** | Amigos, feed de actividad, retos semanales, sistema de puntos, racha diaria, push notifications, Gaming Wrapped, perfil público | 🔲 Pendiente |
-| **Fase 3 — Avanzado** | Torneos con recompensas, canje de puntos, integración PS/Xbox | 🔲 Futuro |
+| **Fase 3 — Producción y monetización** | Google Play Billing real, despliegue Railway, AdMob producción, Privacy Policy/GDPR, EAS Build, Play Store listing, Sentry | 🔲 Pendiente |
+| **Fase 4 — Avanzado** | Torneos con recompensas, canje de puntos, integración PS/Xbox | 🔲 Futuro |
 
-> **Aviso legal Fase 3**: Los torneos con recompensas reales pueden clasificarse como juegos de azar en España (Ley 13/2011). Consultar con abogado antes de implementar.
+> **Aviso legal Fase 4**: Los torneos con recompensas reales pueden clasificarse como juegos de azar en España (Ley 13/2011). Consultar con abogado antes de implementar.
 
 ---
 
@@ -360,3 +361,182 @@ Añadir una plataforma nueva = crear su adapter implementando esta interfaz + a�
 10. Suscripción premium + AdMob
 11. i18n ES/EN en toda la app
 12. Tests y CI al 80% de cobertura
+
+---
+
+## Orden recomendado de desarrollo (Fase 2)
+
+> Base: partir de `develop` con la Fase 1 completa. Cada paso sale de `develop` en su propio `feat/*` y mergea de vuelta con `--no-ff`.
+
+1. **Schema Prisma — tablas sociales**
+   - Nuevas tablas: `Friendship` (userId, friendId, status: PENDING/ACCEPTED), `ActivityEvent` (userId, type, payload, createdAt), `WeeklyChallenge` (title, description, targetValue, metric, startAt, endAt), `UserChallenge` (userId, challengeId, progress, completedAt)
+   - Migración y regeneración de tipos Prisma
+   - Añadir tipos `Friendship`, `ActivityEvent`, `Challenge` a `packages/types`
+
+2. **Sistema de amigos — API**
+   - `friendship.service.ts`: sendRequest, acceptRequest, rejectRequest, unfriend, getFriends, getPendingRequests
+   - `friendship.repository.ts`: queries Prisma con paginación
+   - Rutas `/friends/*` con autenticación y rate limiting
+   - Validators Zod en `packages/validators`
+
+3. **Sistema de amigos — pantalla móvil**
+   - Tab "Amigos" en `app/(tabs)/friends.tsx`: lista de amigos, solicitudes pendientes, buscador por username
+   - Hook `useFriends.ts` con TanStack Query + optimistic updates en accept/reject
+   - Strings i18n ES/EN para todo el módulo
+   - *(paralelo con paso 4)*
+
+4. **Racha diaria (streakDays)**
+   - Job BullMQ `streak.worker.ts`: se lanza a medianoche UTC, incrementa `streakDays` si el usuario tuvo actividad en las últimas 24h, resetea a 0 si no
+   - `streak.scheduler.ts`: job repetible con cron `0 0 * * *`
+   - Integración con `addXp` en `user.service.ts`: +50 XP por racha mantenida, haptic + notificación local al alcanzar rachas de 7/30/100 días
+   - *(paralelo con paso 3)*
+
+5. **Sistema de puntos (UserPoint) — historial y consulta**
+   - `points.service.ts`: awardPoints (registra en `UserPoint`), getPointsHistory (paginado), getPointsTotal
+   - Ruta `/users/me/points`
+   - Hook `usePoints.ts` + pantalla de historial de puntos en el perfil
+   - Llamar a `awardPoints` desde los eventos existentes (logros, rachas, retos completados)
+
+6. **Feed de actividad — backend**
+   - `activity.service.ts`: createEvent (escribe en `ActivityEvent`), getFriendsFeed (paginado, solo amigos aceptados), getPublicFeed
+   - Socket.io namespace `/activity`: evento `new_activity` emitido a las rooms de amigos al crear un evento
+   - `sockets/activity.handler.ts`: join room al conectar, broadcast al crear evento
+   - Llamar a `createEvent` desde sync worker (logros nuevos), friendship service (nuevos amigos) y challenge service (retos completados)
+
+7. **Feed de actividad — pantalla móvil**
+   - Pantalla `app/(tabs)/home.tsx` (reemplaza o amplía la pantalla Home actual)
+   - Hook `useFeed.ts`: TanStack Query con polling o WebSocket según conectividad
+   - Componente `ActivityCard.tsx`: avatar, texto de evento, timestamp relativo, haptic en likes
+   - Pull-to-refresh, skeleton screen, modo offline con datos cacheados
+
+8. **Retos semanales**
+   - `challenge.service.ts`: createWeeklyChallenge, evaluateUserProgress, completeChallenge (llama a awardPoints + createEvent)
+   - `challenge.scheduler.ts`: job BullMQ cron `0 0 * * 1` (cada lunes) que crea el reto de la semana y evalúa el anterior
+   - Pantalla `app/(tabs)/challenges.tsx` con reto activo, barra de progreso y ranking del reto
+   - Hook `useChallenges.ts`
+
+9. **Push notifications**
+   - Configurar `expo-notifications` en la app: permisos, token de dispositivo
+   - `notification.service.ts` (API): saveDeviceToken, sendPush (usando Expo Push API), sendBulk para notificaciones batch via BullMQ
+   - Eventos que disparan push: nuevo amigo, logro desbloqueado, racha en riesgo (23h sin actividad), reto completado, posición en ranking mejorada (top 10)
+   - Preferencias de notificación por usuario (qué tipos activar/desactivar)
+
+10. **Perfil público**
+    - Pantalla `app/profile/[username].tsx`: avatar, nivel, XP, rachas, logros recientes, amigos en común
+    - Ruta `/users/:username/public` ya existe — consumirla con hook `usePublicProfile.ts`
+    - Botón "Enviar solicitud de amistad" integrado con `useFriends`
+    - Accesible desde rankings (tap en un jugador) y desde el feed de actividad
+
+11. **Gaming Wrapped**
+    - `wrapped.service.ts`: aggregation anual — juego más jugado, logro más raro desbloqueado, mejor racha, total de XP ganado, comparación con el año anterior
+    - Pantalla `app/wrapped/[year].tsx`: animaciones con `reanimated`, compartible como imagen (expo-view-shot)
+    - Disponible a partir del 1 de diciembre, datos del año en curso
+    - *(puede desarrollarse en paralelo con pasos 9-10)*
+
+12. **Tests y CI al 80% de cobertura para Fase 2**
+    - Tests unitarios para todos los nuevos services: friendship, activity, challenge, points, notification, wrapped
+    - Tests de integración supertest para todas las nuevas rutas
+    - Tests de componentes móvil con @testing-library/react-native para ActivityCard, ChallengeCard, FriendItem
+    - Actualizar `collectCoverageFrom` en `jest.config.js` si se añaden nuevas exclusiones
+
+---
+
+## Orden recomendado de desarrollo (Fase 3 — Producción y monetización)
+
+> Objetivo: publicar en Google Play Store y generar ingresos reales. Prerequisito: Fase 2 completa en `develop`.
+
+1. **Infraestructura de producción (Railway)**
+   - Provisionar PostgreSQL 16 + Redis 7 en Railway
+   - Desplegar la API Node.js con variables de entorno de producción
+   - Dominio propio + SSL/HTTPS (Railway lo gestiona automáticamente)
+   - Configurar `REDIS_URL`, `DATABASE_URL`, `JWT_SECRET`, `ENCRYPTION_KEY` como secrets de Railway
+   - Health check endpoint `/health` para Railway
+
+2. **Legal — Privacy Policy, ToS y GDPR**
+   - Redactar y publicar Privacy Policy (requerida por Google Play, AdMob y GDPR)
+   - Redactar Términos y Condiciones
+   - Banner de consentimiento en la app para tracking de AdMob (ATT en iOS, consentimiento en Android)
+   - Sin Privacy Policy publicada, AdMob no aprueba la cuenta y Google Play rechaza la app
+
+3. **AdMob — cuenta y configuración de producción**
+   - Crear cuenta AdMob y vincularla a la app
+   - Reemplazar los ad unit IDs de test por los de producción en `components/AdBanner.tsx`
+   - Configurar mediation si se quiere maximizar ingresos
+   - La aprobación de AdMob puede tardar varios días — iniciar este paso en paralelo con el paso 2
+
+4. **Google Play Billing — integración real de pagos**
+   - Instalar SDK: `expo-in-app-purchases` o `react-native-iap`
+   - Crear los productos en Google Play Console (suscripción mensual y anual)
+   - Implementar flujo de compra en la app: `requestSubscription`, `getSubscriptions`, restore purchases
+   - Endpoint backend `/subscriptions/verify-google` que valida el receipt con la Google Play Developer API
+   - Webhook `/subscriptions/google-webhook` para manejar renovaciones automáticas, cancelaciones y expirations (usando Google Play Real-time Developer Notifications via Pub/Sub)
+   - Actualizar `subscription.service.ts` para procesar los eventos del webhook
+
+5. **EAS Build — compilación y firma de la app**
+   - Instalar y configurar EAS CLI (`npm install -g eas-cli`)
+   - Crear `eas.json` con perfiles `development`, `preview` y `production`
+   - Generar keystore de Android (EAS lo gestiona — guardar copia de seguridad del keystore, sin él no se puede actualizar la app)
+   - Build de producción: `eas build --platform android --profile production`
+   - Genera el AAB (Android App Bundle) requerido por Play Store
+
+6. **Google Play Console — listing y subida**
+   - Crear cuenta Google Play Developer ($25 única vez)
+   - Crear la app en Play Console y rellenar el listing: título, descripción corta/larga, capturas de pantalla, icono 512x512, feature graphic
+   - Cuestionario de clasificación por edades (PEGI/IARC)
+   - Sección "Data Safety": declarar qué datos se recogen (email, datos de juego, identificadores de dispositivo para AdMob)
+   - Subir el AAB a la pista de producción: `eas submit --platform android`
+   - Primera revisión de Google tarda entre 1 y 7 días
+
+7. **Monitoring y crash reporting (Sentry)**
+   - Instalar `@sentry/react-native` en la app móvil y `@sentry/node` en la API
+   - Configurar source maps para que los stack traces sean legibles
+   - Alertas para errores críticos (tasa de crashes > X%, errores 5xx en la API)
+   - Dashboard de rendimiento: latencia de endpoints, tiempo de carga de pantallas
+
+8. **Variables de entorno y secrets de producción**
+   - Auditar todos los `.env.example` y asegurarse de que ningún secret está en el repositorio
+   - Configurar los secrets de producción en Railway y en GitHub Actions (para EAS Build en CI)
+   - Rotar todos los secrets de desarrollo antes del lanzamiento
+
+9. **Smoke tests de producción**
+   - Registro, login y logout en el entorno de producción real
+   - Sync de Steam y RetroAchievements con cuentas reales
+   - Flujo de compra de premium end-to-end (con tarjeta real o cuenta de test de Google Play)
+   - Verificar que AdMob muestra anuncios reales (no de test) en usuarios free
+   - Verificar que los rankings se actualizan en Redis
+
+---
+
+## Orden recomendado de desarrollo (Fase 4 — Avanzado)
+
+> Expansión post-lanzamiento. Partir de `develop` con Fase 3 estable en producción.
+
+1. **Integración PlayStation Network (PSN)**
+   - Crear `psn.adapter.ts` implementando `PlatformAdapter`
+   - OAuth2 con la PSN API para obtener logros (trofeos)
+   - Añadir `PSN` al enum `Platform` en Prisma + migración
+   - Normalización de puntos: trofeos Bronce/Plata/Oro/Platino → XP
+
+2. **Integración Xbox (Xbox Live / Microsoft)**
+   - Crear `xbox.adapter.ts` implementando `PlatformAdapter`
+   - OAuth2 con Microsoft Identity Platform
+   - Añadir `XBOX` al enum `Platform` en Prisma + migración
+   - Normalización de Gamerscore → XP
+
+3. **Sistema de torneos**
+   - Modelo `Tournament` en Prisma: nombre, fechas, métrica (logros desbloqueados, XP ganado), premio
+   - `tournament.service.ts`: crear torneo, inscribir usuario, evaluar clasificación, distribuir premios
+   - Pantalla de torneos con cuenta atrás, clasificación en tiempo real (Socket.io), historial
+   - > ⚠️ **Aviso legal**: los torneos con recompensas económicas pueden clasificarse como juegos de azar en España (Ley 13/2011). Consultar con abogado antes de implementar.
+
+4. **Canje de puntos (UserPoint)**
+   - Catálogo de recompensas canjeables: skins de perfil, marcos de avatar, insignias exclusivas
+   - `rewards.service.ts`: getRewardsCatalog, redeemReward (descuenta UserPoint + otorga recompensa)
+   - Pantalla de tienda de recompensas en el perfil
+   - Las recompensas son cosméticas — no afectan a rankings (modelo de negocio ético)
+
+5. **App Store iOS**
+   - Apple Developer Program ($99/año)
+   - Build iOS con EAS: `eas build --platform ios --profile production`
+   - Configurar StoreKit 2 para in-app purchases en iOS (flujo diferente a Google Play Billing)
+   - Subir a App Store Connect y pasar revisión de Apple (más estricta que Google Play)
