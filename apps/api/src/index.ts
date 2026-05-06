@@ -7,6 +7,7 @@ import { startSyncWorker } from './jobs/sync.worker';
 import { restoreAutoSyncs } from './jobs/sync.scheduler';
 import { streakWorker } from './jobs/streak.worker';
 import { scheduleStreakJob } from './jobs/streak.scheduler';
+import { challengeWorker, scheduleChallengeEvaluation } from './jobs/challenge.scheduler';
 
 const env = validateEnv();
 
@@ -22,12 +23,14 @@ server.listen(env.PORT, async () => {
   if (env.NODE_ENV !== 'test') {
     await restoreAutoSyncs();
     await scheduleStreakJob();
+    await scheduleChallengeEvaluation();
   }
 });
 
 process.on('SIGTERM', async () => {
   await syncWorker.close();
   await streakWorker.close();
+  await challengeWorker.close();
   io.close();
   server.close(() => {
     console.warn('Servidor cerrado.');

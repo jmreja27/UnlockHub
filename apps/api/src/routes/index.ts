@@ -9,6 +9,7 @@ import subscriptionRouter from './subscription.routes';
 import friendshipRouter from './friendship.routes';
 import pointsRouter from './points.routes';
 import activityRouter from './activity.routes';
+import challengeRouter from './challenge.routes';
 
 const router = Router();
 
@@ -25,5 +26,6 @@ router.use('/subscriptions', subscriptionRouter);
 router.use('/friends', friendshipRouter);
 router.use('/users/me/points', pointsRouter);
 router.use('/activity', activityRouter);
+router.use('/challenges', challengeRouter);
 
 export default router;
