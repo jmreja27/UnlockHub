@@ -24,6 +24,8 @@ const config = {
     '!src/config/env.ts',
     '!src/jobs/**',
     '!src/platforms/**',
+    '!src/lib/socket.ts',
+    '!src/sockets/**',
   ],
 };
 
