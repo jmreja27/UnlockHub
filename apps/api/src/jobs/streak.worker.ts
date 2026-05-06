@@ -2,6 +2,7 @@ import { Worker } from 'bullmq';
 import { redis } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 import { addXp } from '../services/user.service';
+import { createEvent } from '../services/activity.service';
 
 const STREAK_XP_REWARD = 50;
 const STREAK_MILESTONES = new Set([7, 30, 100]);
@@ -39,8 +40,8 @@ export async function processStreaks(): Promise<void> {
         await addXp(user.id, STREAK_XP_REWARD, 'STREAK');
 
         if (STREAK_MILESTONES.has(newStreak)) {
-          // Guardar el milestone en Redis para que la app lo lea al abrir
           await redis.set(`streak:milestone:${user.id}`, newStreak, 'EX', 7 * 24 * 3600);
+          void createEvent(user.id, 'STREAK_MILESTONE', { days: newStreak });
         }
       } else {
         // Sin actividad — reset de racha
