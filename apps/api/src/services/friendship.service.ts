@@ -1,5 +1,6 @@
 import { friendshipRepository } from '../repositories/friendship.repository';
 import { AppError } from '../middleware/errorHandler';
+import { createEvent } from './activity.service';
 import type { Friendship, PaginatedResponse } from '@unlockhub/types';
 
 function toFriendshipDto(row: {
@@ -59,6 +60,13 @@ export async function acceptFriendRequest(friendshipId: string, userId: string):
   }
 
   const updated = await friendshipRepository.updateStatus(friendshipId, 'ACCEPTED');
+
+  // Emitir evento de actividad para ambos usuarios (fire-and-forget)
+  void Promise.all([
+    createEvent(userId, 'FRIEND_ADDED', { friendId: friendship.senderId }),
+    createEvent(friendship.senderId, 'FRIEND_ADDED', { friendId: userId }),
+  ]);
+
   return toFriendshipDto(updated);
 }
 
