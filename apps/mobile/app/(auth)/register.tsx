@@ -1,29 +1,255 @@
-import { View, Text, Pressable } from 'react-native';
+// Pantalla de registro con formulario completo y validación por campo
+import { useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  Pressable,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import * as Haptics from 'expo-haptics';
+import { useTranslation } from 'react-i18next';
+
+import { useAuth } from '../../hooks/useAuth';
+
+type FieldErrors = {
+  username?: string;
+  email?: string;
+  password?: string;
+};
 
 export default function RegisterScreen() {
+  const { t } = useTranslation();
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+
+  const { register, isRegistering, registerError } = useAuth();
+
+  // Validación de campos en cliente antes de llamar a la API
+  function validateFields(): boolean {
+    const errors: FieldErrors = {};
+
+    if (!username.trim()) {
+      errors.username = t('auth.register.error_username_required');
+    } else if (username.trim().length < 3) {
+      errors.username = t('auth.register.error_username_min');
+    } else if (username.trim().length > 30) {
+      errors.username = t('auth.register.error_username_max');
+    } else if (!/^[a-zA-Z0-9_-]+$/.test(username.trim())) {
+      errors.username = t('auth.register.error_username_format');
+    }
+
+    if (!email.trim()) {
+      errors.email = t('auth.register.error_email_required');
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      errors.email = t('auth.register.error_email_invalid');
+    }
+
+    if (!password) {
+      errors.password = t('auth.register.error_password_required');
+    } else if (password.length < 8) {
+      errors.password = t('auth.register.error_password_min');
+    } else if (!/[A-Z]/.test(password)) {
+      errors.password = t('auth.register.error_password_uppercase');
+    } else if (!/[0-9]/.test(password)) {
+      errors.password = t('auth.register.error_password_number');
+    }
+
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  }
+
+  function handleSubmit() {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    if (!validateFields()) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
+
+    register({
+      username: username.trim(),
+      email: email.trim().toLowerCase(),
+      password,
+    });
+  }
+
   return (
     <SafeAreaView className="flex-1 bg-surface">
-      <View className="flex-1 px-6 pt-12">
-        <Pressable
-          onPress={() => router.back()}
-          className="mb-8 self-start"
-          accessibilityRole="button"
-          accessibilityLabel="Volver atrás"
-          accessibilityHint="Navega a la pantalla anterior"
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+      <KeyboardAvoidingView
+        className="flex-1"
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{ flexGrow: 1 }}
+          keyboardShouldPersistTaps="handled"
         >
-          <Text className="text-primary-light text-base">← Volver</Text>
-        </Pressable>
+          <View className="flex-1 px-6 pt-6 pb-12">
+            {/* Botón volver */}
+            <Pressable
+              onPress={() => router.back()}
+              className="mb-8 self-start"
+              accessibilityRole="button"
+              accessibilityLabel={t('auth.register.back_label')}
+              accessibilityHint={t('auth.register.back_hint')}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              style={{ minHeight: 44, justifyContent: 'center' }}
+            >
+              <Text className="text-primary-light text-base">{t('common.back')}</Text>
+            </Pressable>
 
-        <Text className="text-3xl font-bold text-white mb-8" accessibilityRole="header">
-          Crear cuenta
-        </Text>
+            <Text
+              className="text-3xl font-bold text-white mb-8"
+              accessibilityRole="header"
+            >
+              {t('auth.register.title')}
+            </Text>
 
-        {/* Formulario de registro — se implementa en el paso de autenticación */}
-        <Text className="text-gray-400 text-center mt-12">Próximamente</Text>
-      </View>
+            {/* Error global del servidor */}
+            {registerError && (
+              <View
+                className="w-full bg-red-900/40 border border-red-500/60 rounded-xl px-4 py-3 mb-6"
+                accessible
+                accessibilityLiveRegion="polite"
+                accessibilityRole="alert"
+              >
+                <Text className="text-red-400 text-sm">{registerError}</Text>
+              </View>
+            )}
+
+            {/* Campo nombre de usuario */}
+            <View className="mb-4">
+              <Text className="text-gray-300 text-sm mb-1.5 ml-1">{t('auth.register.username_label')}</Text>
+              <TextInput
+                className={`w-full bg-surface-elevated rounded-xl px-4 py-3.5 text-white text-base border ${
+                  fieldErrors.username ? 'border-red-500' : 'border-surface-card'
+                }`}
+                placeholder={t('auth.register.username_placeholder')}
+                placeholderTextColor="#6b7280"
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="username"
+                returnKeyType="next"
+                value={username}
+                onChangeText={(text: string) => {
+                  setUsername(text);
+                  if (fieldErrors.username) {
+                    setFieldErrors((prev: FieldErrors) => ({ ...prev, username: undefined }));
+                  }
+                }}
+                accessibilityLabel={t('auth.register.username_label')}
+                accessibilityHint={t('auth.register.username_hint')}
+              />
+              {fieldErrors.username && (
+                <Text
+                  className="text-red-400 text-xs mt-1 ml-1"
+                  accessibilityLiveRegion="polite"
+                >
+                  {fieldErrors.username}
+                </Text>
+              )}
+            </View>
+
+            {/* Campo email */}
+            <View className="mb-4">
+              <Text className="text-gray-300 text-sm mb-1.5 ml-1">{t('auth.register.email_label')}</Text>
+              <TextInput
+                className={`w-full bg-surface-elevated rounded-xl px-4 py-3.5 text-white text-base border ${
+                  fieldErrors.email ? 'border-red-500' : 'border-surface-card'
+                }`}
+                placeholder={t('auth.register.email_placeholder')}
+                placeholderTextColor="#6b7280"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="email"
+                returnKeyType="next"
+                value={email}
+                onChangeText={(text: string) => {
+                  setEmail(text);
+                  if (fieldErrors.email) {
+                    setFieldErrors((prev: FieldErrors) => ({ ...prev, email: undefined }));
+                  }
+                }}
+                accessibilityLabel={t('auth.register.email_label')}
+                accessibilityHint={t('auth.register.email_hint')}
+              />
+              {fieldErrors.email && (
+                <Text
+                  className="text-red-400 text-xs mt-1 ml-1"
+                  accessibilityLiveRegion="polite"
+                >
+                  {fieldErrors.email}
+                </Text>
+              )}
+            </View>
+
+            {/* Campo contraseña */}
+            <View className="mb-8">
+              <Text className="text-gray-300 text-sm mb-1.5 ml-1">{t('auth.register.password_label')}</Text>
+              <TextInput
+                className={`w-full bg-surface-elevated rounded-xl px-4 py-3.5 text-white text-base border ${
+                  fieldErrors.password ? 'border-red-500' : 'border-surface-card'
+                }`}
+                placeholder={t('auth.register.password_placeholder')}
+                placeholderTextColor="#6b7280"
+                secureTextEntry
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="new-password"
+                returnKeyType="done"
+                value={password}
+                onChangeText={(text: string) => {
+                  setPassword(text);
+                  if (fieldErrors.password) {
+                    setFieldErrors((prev: FieldErrors) => ({ ...prev, password: undefined }));
+                  }
+                }}
+                onSubmitEditing={handleSubmit}
+                accessibilityLabel={t('auth.register.password_label')}
+                accessibilityHint={t('auth.register.password_hint')}
+              />
+              {fieldErrors.password && (
+                <Text
+                  className="text-red-400 text-xs mt-1 ml-1"
+                  accessibilityLiveRegion="polite"
+                >
+                  {fieldErrors.password}
+                </Text>
+              )}
+            </View>
+
+            {/* Botón de registro */}
+            <Pressable
+              className="w-full bg-primary rounded-xl py-4 items-center active:opacity-80"
+              onPress={handleSubmit}
+              disabled={isRegistering}
+              accessibilityRole="button"
+              accessibilityLabel={t('auth.register.submit')}
+              accessibilityHint={t('auth.register.submit_hint')}
+              accessibilityState={{ disabled: isRegistering, busy: isRegistering }}
+              style={{ minHeight: 52 }}
+            >
+              {isRegistering ? (
+                <ActivityIndicator
+                  color="#ffffff"
+                  accessibilityLabel={t('auth.register.loading_label')}
+                />
+              ) : (
+                <Text className="text-white font-semibold text-base">{t('auth.register.submit')}</Text>
+              )}
+            </Pressable>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

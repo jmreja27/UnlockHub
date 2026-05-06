@@ -1,14 +1,17 @@
 import { View, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 
 export default function FriendsScreen() {
+  const { t } = useTranslation();
+
   return (
     <SafeAreaView className="flex-1 bg-surface">
       <View className="flex-1 items-center justify-center px-6">
         <Text className="text-white text-2xl font-bold" accessibilityRole="header">
-          Amigos
+          {t('friends.title')}
         </Text>
-        <Text className="text-gray-400 mt-2 text-center">Tus amigos y su actividad aparecerán aquí</Text>
+        <Text className="text-gray-400 mt-2 text-center">{t('friends.empty')}</Text>
       </View>
     </SafeAreaView>
   );

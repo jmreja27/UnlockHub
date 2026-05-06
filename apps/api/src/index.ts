@@ -1,13 +1,21 @@
 import { validateEnv } from './config/env';
 import app from './app';
+import { startSyncWorker } from './jobs/sync.worker';
+import { restoreAutoSyncs } from './jobs/sync.scheduler';
 
 const env = validateEnv();
 
-const server = app.listen(env.PORT, () => {
+const syncWorker = startSyncWorker();
+
+const server = app.listen(env.PORT, async () => {
   console.warn(`API arrancada en el puerto ${env.PORT} (${env.NODE_ENV})`);
+  if (env.NODE_ENV !== 'test') {
+    await restoreAutoSyncs();
+  }
 });
 
-process.on('SIGTERM', () => {
+process.on('SIGTERM', async () => {
+  await syncWorker.close();
   server.close(() => {
     console.warn('Servidor cerrado.');
     process.exit(0);

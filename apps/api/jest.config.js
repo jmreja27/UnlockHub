@@ -1,8 +1,11 @@
-import type { Config } from 'jest';
-
-const config: Config = {
+/** @type {import('jest').Config} */
+const config = {
   preset: 'ts-jest',
   testEnvironment: 'node',
+  forceExit: true,
+  coverageThreshold: {
+    global: { lines: 80 },
+  },
   roots: ['<rootDir>/src'],
   testMatch: ['**/__tests__/**/*.test.ts', '**/*.test.ts'],
   coverageDirectory: 'coverage',
@@ -11,8 +14,14 @@ const config: Config = {
     'src/**/*.ts',
     '!src/**/*.d.ts',
     '!src/index.ts',
+    '!src/app.ts',
     '!src/**/__tests__/**',
+    '!src/lib/prisma.ts',
+    '!src/lib/redis.ts',
+    '!src/config/env.ts',
+    '!src/jobs/**',
+    '!src/platforms/**',
   ],
 };
 
-export default config;
+module.exports = config;

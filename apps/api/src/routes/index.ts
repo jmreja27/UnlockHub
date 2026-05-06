@@ -1,6 +1,11 @@
 import { Router } from 'express';
 
 import authRouter from './auth.routes';
+import syncRouter from './sync.routes';
+import rankingRouter from './ranking.routes';
+import userRouter from './user.routes';
+import platformRouter from './platform.routes';
+import subscriptionRouter from './subscription.routes';
 
 const router = Router();
 
@@ -9,11 +14,13 @@ router.get('/', (_req, res) => {
 });
 
 router.use('/auth', authRouter);
+router.use('/sync', syncRouter);
+router.use('/rankings', rankingRouter);
+router.use('/users', userRouter);
+router.use('/platforms', platformRouter);
+router.use('/subscriptions', subscriptionRouter);
 
 // Se irán añadiendo en los pasos siguientes:
-// router.use('/users', userRouter);
-// router.use('/platforms', platformRouter);
 // router.use('/achievements', achievementRouter);
-// router.use('/rankings', rankingRouter);
 
 export default router;
