@@ -11,7 +11,15 @@ const config: Config = {
     'src/**/*.ts',
     '!src/**/*.d.ts',
     '!src/index.ts',
+    '!src/app.ts',
     '!src/**/__tests__/**',
+    // Infraestructura: singletons de conexión y bootstrapping de entorno
+    '!src/lib/prisma.ts',
+    '!src/lib/redis.ts',
+    '!src/config/env.ts',
+    // Jobs BullMQ y adaptadores de plataformas — dependencias de sistemas externos
+    '!src/jobs/**',
+    '!src/platforms/**',
   ],
 };
 
