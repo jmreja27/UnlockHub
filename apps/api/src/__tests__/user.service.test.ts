@@ -1,0 +1,241 @@
+import * as userService from '../services/user.service';
+import { AppError } from '../middleware/errorHandler';
+
+// Mock de Prisma
+jest.mock('../lib/prisma', () => ({
+  prisma: {
+    user: {
+      findUnique: jest.fn(),
+      update: jest.fn(),
+    },
+    userPoint: {
+      create: jest.fn(),
+    },
+    platformAccount: {
+      findMany: jest.fn(),
+    },
+    $transaction: jest.fn(),
+  },
+}));
+
+// Mock del ranking service para evitar llamadas a Redis
+jest.mock('../services/ranking.service', () => ({
+  upsertUserScore: jest.fn().mockResolvedValue(undefined),
+}));
+
+import { prisma } from '../lib/prisma';
+import { upsertUserScore } from '../services/ranking.service';
+
+const mockPrisma = prisma as jest.Mocked<typeof prisma>;
+const mockUpsertUserScore = upsertUserScore as jest.Mock;
+
+// Usuario base para los tests
+const baseUser = {
+  id: 'user-1',
+  username: 'testuser',
+  email: 'test@example.com',
+  passwordHash: 'hash',
+  avatar: null,
+  banner: null,
+  bio: null,
+  level: 1,
+  xp: 0,
+  streakDays: 0,
+  countryCode: null,
+  isPremium: false,
+  premiumUntil: null,
+  lastSyncAt: null,
+  createdAt: new Date('2024-01-01T00:00:00.000Z'),
+  updatedAt: new Date('2024-01-01T00:00:00.000Z'),
+};
+
+// Cuenta de plataforma base para los tests
+const basePlatformAccount = {
+  id: 'acc-1',
+  userId: 'user-1',
+  platform: 'STEAM' as const,
+  externalId: '76561198000000000',
+  username: 'steamuser',
+  lastSyncedAt: null,
+};
+
+beforeEach(() => {
+  jest.clearAllMocks();
+});
+
+// ─── getProfile ───────────────────────────────────────────────────────────────
+
+describe('userService.getProfile', () => {
+  it('devuelve el perfil del usuario con sus cuentas de plataforma', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({
+      ...baseUser,
+      platformAccounts: [basePlatformAccount],
+    });
+
+    const profile = await userService.getProfile('user-1');
+
+    expect(profile.id).toBe('user-1');
+    expect(profile.username).toBe('testuser');
+    expect(profile.platformAccounts).toHaveLength(1);
+    expect(profile.platformAccounts[0]?.platform).toBe('STEAM');
+    // Verificar que no se expone el passwordHash
+    expect((profile as unknown as Record<string, unknown>)['passwordHash']).toBeUndefined();
+  });
+
+  it('lanza USER_NOT_FOUND si el usuario no existe', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+
+    await expect(userService.getProfile('noexiste')).rejects.toMatchObject({
+      code: 'USER_NOT_FOUND',
+      statusCode: 404,
+    });
+  });
+
+  it('serializa fechas como strings ISO', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({
+      ...baseUser,
+      platformAccounts: [],
+    });
+
+    const profile = await userService.getProfile('user-1');
+
+    expect(typeof profile.createdAt).toBe('string');
+    expect(profile.premiumUntil).toBeNull();
+    expect(profile.lastSyncAt).toBeNull();
+  });
+});
+
+// ─── getPublicProfile ─────────────────────────────────────────────────────────
+
+describe('userService.getPublicProfile', () => {
+  it('devuelve el perfil público buscando por username', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({
+      ...baseUser,
+      platformAccounts: [],
+    });
+
+    const profile = await userService.getPublicProfile('testuser');
+
+    expect(profile.username).toBe('testuser');
+  });
+
+  it('lanza USER_NOT_FOUND si el username no existe', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+
+    await expect(userService.getPublicProfile('noexiste')).rejects.toMatchObject({
+      code: 'USER_NOT_FOUND',
+      statusCode: 404,
+    });
+  });
+});
+
+// ─── updateProfile ────────────────────────────────────────────────────────────
+
+describe('userService.updateProfile', () => {
+  it('actualiza los campos permitidos y devuelve el usuario actualizado', async () => {
+    const updatedUser = { ...baseUser, bio: 'Mi nueva bio', countryCode: 'ES' };
+    (mockPrisma.user.update as jest.Mock).mockResolvedValue(updatedUser);
+
+    const result = await userService.updateProfile('user-1', {
+      bio: 'Mi nueva bio',
+      countryCode: 'ES',
+    });
+
+    expect(result.bio).toBe('Mi nueva bio');
+    expect(result.countryCode).toBe('ES');
+    expect(mockPrisma.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: { bio: 'Mi nueva bio', countryCode: 'ES' },
+    });
+  });
+
+  it('permite actualización parcial sin pasar todos los campos', async () => {
+    (mockPrisma.user.update as jest.Mock).mockResolvedValue({ ...baseUser, bio: 'Solo bio' });
+
+    const result = await userService.updateProfile('user-1', { bio: 'Solo bio' });
+
+    expect(result.bio).toBe('Solo bio');
+  });
+});
+
+// ─── addXp ────────────────────────────────────────────────────────────────────
+
+describe('userService.addXp', () => {
+  it('añade XP y no sube de nivel si no se alcanzan los 1000 XP', async () => {
+    // Usuario con 500 XP en nivel 1
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({ ...baseUser, xp: 500, level: 1 });
+    (mockPrisma.$transaction as jest.Mock).mockResolvedValue([]);
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
+
+    const result = await userService.addXp('user-1', 100, 'ACHIEVEMENT');
+
+    expect(result.newXp).toBe(600);
+    expect(result.newLevel).toBe(1);
+    expect(result.leveledUp).toBe(false);
+  });
+
+  it('sube de nivel cuando el XP supera el umbral de 1000', async () => {
+    // Usuario con 950 XP en nivel 1, suma 100 -> 1050 XP -> nivel 2
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({ ...baseUser, xp: 950, level: 1 });
+    (mockPrisma.$transaction as jest.Mock).mockResolvedValue([]);
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
+
+    const result = await userService.addXp('user-1', 100, 'ACHIEVEMENT');
+
+    expect(result.newXp).toBe(1050);
+    expect(result.newLevel).toBe(2);
+    expect(result.leveledUp).toBe(true);
+  });
+
+  it('no supera el nivel máximo 100 aunque el XP sea muy alto', async () => {
+    // Usuario con 98999 XP en nivel 99, suma 5000 -> 103999 XP -> máx nivel 100
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({
+      ...baseUser,
+      xp: 98999,
+      level: 99,
+    });
+    (mockPrisma.$transaction as jest.Mock).mockResolvedValue([]);
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
+
+    const result = await userService.addXp('user-1', 5000, 'STREAK');
+
+    expect(result.newLevel).toBe(100);
+    expect(result.leveledUp).toBe(true);
+  });
+
+  it('llama a upsertUserScore para actualizar el ranking en Redis', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({
+      ...baseUser,
+      xp: 0,
+      countryCode: 'ES',
+    });
+    (mockPrisma.$transaction as jest.Mock).mockResolvedValue([]);
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([
+      { platform: 'STEAM' },
+    ]);
+
+    await userService.addXp('user-1', 200, 'CHALLENGE');
+
+    expect(mockUpsertUserScore).toHaveBeenCalledWith('user-1', 200, 'ES', ['STEAM']);
+  });
+
+  it('lanza USER_NOT_FOUND si el usuario no existe', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+
+    await expect(userService.addXp('noexiste', 100, 'ACHIEVEMENT')).rejects.toMatchObject({
+      code: 'USER_NOT_FOUND',
+      statusCode: 404,
+    });
+  });
+
+  it('es instancia de AppError con el código correcto', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+
+    try {
+      await userService.addXp('noexiste', 100, 'ACHIEVEMENT');
+    } catch (err) {
+      expect(err).toBeInstanceOf(AppError);
+      expect((err as AppError).code).toBe('USER_NOT_FOUND');
+    }
+  });
+});
