@@ -10,6 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useSessionStore } from '../../stores/sessionStore';
 import { useAuth } from '../../hooks/useAuth';
 import { SkeletonBox } from '../../components/SkeletonBox';
+import { PremiumBanner } from '../../components/PremiumBanner';
 import { api } from '../../lib/api';
 import type { PlatformAccount } from '@unlockhub/types';
 
@@ -260,6 +261,9 @@ export default function ProfileScreen() {
             </View>
           )}
         </View>
+
+        {/* Banner de suscripción premium */}
+        {isAuthenticated && <PremiumBanner />}
 
         {/* Botón cerrar sesión */}
         <View className="px-6">
