@@ -59,8 +59,10 @@ model User {
   subscriptions     Subscription[]
   refreshTokens     RefreshToken[]
   rankingSnapshots  RankingSnapshot[]
-  sentFriendships   Friendship[]      @relation("FriendshipSender")
-  receivedFriendships Friendship[]    @relation("FriendshipReceiver")
+  sentFriendships     Friendship[]      @relation("FriendshipSender")
+  receivedFriendships Friendship[]      @relation("FriendshipReceiver")
+  activityEvents      ActivityEvent[]
+  userChallenges      UserChallenge[]
 
   @@index([email])
   @@index([username])
@@ -224,7 +226,7 @@ model RankingSnapshot {
   @@index([countryCode])
 }
 
-// ─── Social (Fase 2, schema preparado) ───────────────────────────────────────
+// ─── Social ───────────────────────────────────────────────────────────────────
 
 enum FriendshipStatus {
   PENDING
@@ -247,4 +249,74 @@ model Friendship {
   @@index([senderId])
   @@index([receiverId])
   @@index([status])
+}
+
+// ─── Feed de actividad ────────────────────────────────────────────────────────
+
+enum ActivityEventType {
+  ACHIEVEMENT_UNLOCKED
+  FRIEND_ADDED
+  LEVEL_UP
+  CHALLENGE_COMPLETED
+  STREAK_MILESTONE
+  GAME_COMPLETED
+}
+
+model ActivityEvent {
+  id        String            @id @default(cuid())
+  userId    String
+  type      ActivityEventType
+  // JSON con datos específicos del evento (achievementId, gameId, etc.)
+  payload   Json              @default("{}")
+  createdAt DateTime          @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([type])
+}
+
+// ─── Retos semanales ──────────────────────────────────────────────────────────
+
+enum ChallengeMetric {
+  ACHIEVEMENTS_UNLOCKED
+  XP_GAINED
+  GAMES_PLAYED
+  STREAK_MAINTAINED
+}
+
+model WeeklyChallenge {
+  id          String          @id @default(cuid())
+  title       String
+  description String
+  metric      ChallengeMetric
+  targetValue Int
+  xpReward    Int             @default(500)
+  startAt     DateTime
+  endAt       DateTime
+  createdAt   DateTime        @default(now())
+
+  userChallenges UserChallenge[]
+
+  @@index([startAt])
+  @@index([endAt])
+}
+
+model UserChallenge {
+  id          String          @id @default(cuid())
+  userId      String
+  challengeId String
+  progress    Int             @default(0)
+  completedAt DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge WeeklyChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, challengeId])
+  @@index([userId])
+  @@index([challengeId])
+  @@index([completedAt])
 }

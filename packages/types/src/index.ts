@@ -105,6 +105,63 @@ export interface SyncCooldownConfig {
   dailyManualSyncLimit: number | null;
 }
 
+// ─── Social ───────────────────────────────────────────────────────────────────
+
+export type FriendshipStatus = 'PENDING' | 'ACCEPTED' | 'BLOCKED';
+
+export interface Friendship {
+  id: string;
+  senderId: string;
+  receiverId: string;
+  status: FriendshipStatus;
+  createdAt: string;
+  sender?: Pick<User, 'id' | 'username' | 'avatar' | 'level' | 'xp'>;
+  receiver?: Pick<User, 'id' | 'username' | 'avatar' | 'level' | 'xp'>;
+}
+
+export type ActivityEventType =
+  | 'ACHIEVEMENT_UNLOCKED'
+  | 'FRIEND_ADDED'
+  | 'LEVEL_UP'
+  | 'CHALLENGE_COMPLETED'
+  | 'STREAK_MILESTONE'
+  | 'GAME_COMPLETED';
+
+export interface ActivityEvent {
+  id: string;
+  userId: string;
+  type: ActivityEventType;
+  payload: Record<string, unknown>;
+  createdAt: string;
+  user?: Pick<User, 'id' | 'username' | 'avatar'>;
+}
+
+export type ChallengeMetric =
+  | 'ACHIEVEMENTS_UNLOCKED'
+  | 'XP_GAINED'
+  | 'GAMES_PLAYED'
+  | 'STREAK_MAINTAINED';
+
+export interface WeeklyChallenge {
+  id: string;
+  title: string;
+  description: string;
+  metric: ChallengeMetric;
+  targetValue: number;
+  xpReward: number;
+  startAt: string;
+  endAt: string;
+}
+
+export interface UserChallenge {
+  id: string;
+  userId: string;
+  challengeId: string;
+  progress: number;
+  completedAt: string | null;
+  challenge?: WeeklyChallenge;
+}
+
 export const SYNC_COOLDOWNS: Record<SyncTier, SyncCooldownConfig> = {
   free: {
     autoSyncIntervalMinutes: 60,
