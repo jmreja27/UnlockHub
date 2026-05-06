@@ -132,6 +132,13 @@
     "metric_GAMES_PLAYED": "Juegos jugados",
     "metric_STREAK_MAINTAINED": "Días de racha"
   },
+  "public_profile": {
+    "error_title": "Perfil no encontrado",
+    "error_message": "Este usuario no existe o ha sido eliminado.",
+    "avatar_label": "Avatar de {{username}}",
+    "level": "Nivel {{level}}",
+    "platforms": "Plataformas vinculadas"
+  },
   "rankings": {
     "title": "Rankings",
     "subtitle": "Top jugadores globales",
