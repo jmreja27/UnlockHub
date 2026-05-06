@@ -55,7 +55,7 @@ describe('GET /api/v1/users/me', () => {
 
     const res = await request(app)
       .get('/api/v1/users/me')
-      .set('Cookie', [`access_token=${validToken}`]);
+      .set('Authorization', `Bearer ${validToken}`);
 
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ id: 'user-1', username: 'testuser' });
@@ -76,7 +76,7 @@ describe('PATCH /api/v1/users/me', () => {
 
     const res = await request(app)
       .patch('/api/v1/users/me')
-      .set('Cookie', [`access_token=${validToken}`])
+      .set('Authorization', `Bearer ${validToken}`)
       .send({ bio: 'nueva bio' });
 
     expect(res.status).toBe(200);
@@ -87,7 +87,7 @@ describe('PATCH /api/v1/users/me', () => {
   it('400 VALIDATION_ERROR con datos inválidos', async () => {
     const res = await request(app)
       .patch('/api/v1/users/me')
-      .set('Cookie', [`access_token=${validToken}`])
+      .set('Authorization', `Bearer ${validToken}`)
       .send({ countryCode: 'DEMASIADO_LARGO' });
 
     expect(res.status).toBe(400);

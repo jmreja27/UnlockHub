@@ -35,7 +35,7 @@ beforeEach(() => {
 // ─── POST /register ───────────────────────────────────────────────────────────
 
 describe('POST /api/v1/auth/register', () => {
-  it('201 con cookie cuando los datos son válidos', async () => {
+  it('201 con accessToken y refreshToken en body cuando los datos son válidos', async () => {
     mockAuthService.register.mockResolvedValue({
       user: baseUser as any,
       accessToken: 'access-tok',
@@ -49,8 +49,9 @@ describe('POST /api/v1/auth/register', () => {
     });
 
     expect(res.status).toBe(201);
-    expect(res.body).toMatchObject({ id: 'user-1', username: 'testuser' });
-    expect(res.headers['set-cookie']).toBeDefined();
+    expect(res.body.accessToken).toBe('access-tok');
+    expect(res.body.refreshToken).toBe('refresh-tok');
+    expect(res.body.user).toMatchObject({ id: 'user-1', username: 'testuser' });
   });
 
   it('400 VALIDATION_ERROR con body inválido', async () => {
@@ -81,7 +82,7 @@ describe('POST /api/v1/auth/register', () => {
 // ─── POST /login ──────────────────────────────────────────────────────────────
 
 describe('POST /api/v1/auth/login', () => {
-  it('200 con cookies cuando las credenciales son válidas', async () => {
+  it('200 con accessToken y refreshToken en body cuando las credenciales son válidas', async () => {
     mockAuthService.login.mockResolvedValue({
       user: baseUser as any,
       accessToken: 'access-tok',
@@ -93,8 +94,9 @@ describe('POST /api/v1/auth/login', () => {
       .send({ email: 'test@example.com', password: 'Password1!' });
 
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ id: 'user-1' });
-    expect(res.headers['set-cookie']).toBeDefined();
+    expect(res.body.accessToken).toBe('access-tok');
+    expect(res.body.refreshToken).toBe('refresh-tok');
+    expect(res.body.user).toMatchObject({ id: 'user-1' });
   });
 
   it('400 con body vacío', async () => {
@@ -121,13 +123,13 @@ describe('POST /api/v1/auth/login', () => {
 // ─── POST /refresh ────────────────────────────────────────────────────────────
 
 describe('POST /api/v1/auth/refresh', () => {
-  it('401 si no se envía refresh_token cookie', async () => {
-    const res = await request(app).post('/api/v1/auth/refresh');
+  it('401 si no se envía refreshToken en body', async () => {
+    const res = await request(app).post('/api/v1/auth/refresh').send({});
     expect(res.status).toBe(401);
     expect(res.body.code).toBe('MISSING_REFRESH_TOKEN');
   });
 
-  it('200 y nuevas cookies cuando el refresh token es válido', async () => {
+  it('200 con nuevos tokens cuando el refresh token es válido', async () => {
     mockAuthService.refresh.mockResolvedValue({
       accessToken: 'nuevo-access',
       refreshToken: 'nuevo-refresh',
@@ -135,29 +137,31 @@ describe('POST /api/v1/auth/refresh', () => {
 
     const res = await request(app)
       .post('/api/v1/auth/refresh')
-      .set('Cookie', ['refresh_token=valid-raw-token']);
+      .send({ refreshToken: 'valid-raw-token' });
 
     expect(res.status).toBe(200);
-    expect(res.body.ok).toBe(true);
+    expect(res.body.accessToken).toBe('nuevo-access');
+    expect(res.body.refreshToken).toBe('nuevo-refresh');
   });
 });
 
 // ─── POST /logout ─────────────────────────────────────────────────────────────
 
 describe('POST /api/v1/auth/logout', () => {
-  it('200 y limpia las cookies', async () => {
+  it('200 cuando se envía refreshToken en body', async () => {
     mockAuthService.logout.mockResolvedValue(undefined);
 
     const res = await request(app)
       .post('/api/v1/auth/logout')
-      .set('Cookie', ['refresh_token=tok']);
+      .send({ refreshToken: 'tok' });
 
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
+    expect(mockAuthService.logout).toHaveBeenCalledWith('tok');
   });
 
-  it('200 aunque no haya refresh_token cookie', async () => {
-    const res = await request(app).post('/api/v1/auth/logout');
+  it('200 aunque no se envíe refreshToken', async () => {
+    const res = await request(app).post('/api/v1/auth/logout').send({});
     expect(res.status).toBe(200);
     expect(mockAuthService.logout).not.toHaveBeenCalled();
   });
@@ -171,12 +175,12 @@ describe('GET /api/v1/auth/me', () => {
     expect(res.status).toBe(401);
   });
 
-  it('200 con el payload del usuario cuando el token es válido', async () => {
+  it('200 con el payload del usuario cuando el token es válido en Authorization header', async () => {
     const token = signAccessToken({ sub: 'user-1', email: 'test@example.com', isPremium: false });
 
     const res = await request(app)
       .get('/api/v1/auth/me')
-      .set('Cookie', [`access_token=${token}`]);
+      .set('Authorization', `Bearer ${token}`);
 
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ id: 'user-1', email: 'test@example.com' });

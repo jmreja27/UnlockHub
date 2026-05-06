@@ -25,8 +25,8 @@ function mockRes() {
   return res as any;
 }
 
-function mockReq(opts: { cookies?: Record<string, string> } = {}) {
-  return { cookies: opts.cookies ?? {} } as any;
+function mockReq(opts: { authorization?: string } = {}) {
+  return { headers: { authorization: opts.authorization } } as any;
 }
 
 // ─── AppError ─────────────────────────────────────────────────────────────────
@@ -102,8 +102,8 @@ describe('errorHandler', () => {
 // ─── authenticate ─────────────────────────────────────────────────────────────
 
 describe('authenticate', () => {
-  it('llama a next con AppError UNAUTHORIZED si no hay cookie', () => {
-    const req = mockReq({ cookies: {} });
+  it('llama a next con AppError UNAUTHORIZED si no hay header Authorization', () => {
+    const req = mockReq({});
     const res = mockRes();
     const next = jest.fn();
 
@@ -113,7 +113,7 @@ describe('authenticate', () => {
   });
 
   it('llama a next con AppError INVALID_TOKEN si el token es inválido', () => {
-    const req = mockReq({ cookies: { access_token: 'token-invalido' } });
+    const req = mockReq({ authorization: 'Bearer token-invalido' });
     const res = mockRes();
     const next = jest.fn();
 
@@ -124,7 +124,7 @@ describe('authenticate', () => {
 
   it('adjunta user a req y llama a next sin errores con token válido', () => {
     const token = signAccessToken({ sub: 'user-1', email: 'a@b.com', isPremium: true });
-    const req = mockReq({ cookies: { access_token: token } });
+    const req = mockReq({ authorization: `Bearer ${token}` });
     const res = mockRes();
     const next = jest.fn();
 

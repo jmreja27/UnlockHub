@@ -12,7 +12,8 @@ export interface AuthenticatedRequest extends Request {
 }
 
 export function authenticate(req: Request, _res: Response, next: NextFunction): void {
-  const token = req.cookies['access_token'] as string | undefined;
+  const authHeader = req.headers['authorization'];
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
 
   if (!token) {
     return next(new AppError('No autenticado', 'UNAUTHORIZED', 401));
