@@ -11,6 +11,7 @@ const FEED_KEY = ['feed'] as const;
 export function useFeed() {
   const queryClient = useQueryClient();
   const isAuthenticated = useSessionStore((s) => s.isAuthenticated);
+  const accessToken = useSessionStore((s) => s.accessToken);
   const socketRef = useRef<Socket | null>(null);
 
   const query = useQuery({
@@ -23,11 +24,9 @@ export function useFeed() {
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    // Nota: el token de sesión viaja en cookie httpOnly; el servidor acepta
-    // la conexión WebSocket cuando la cookie es válida.
     const socket = io(`${API_URL}/activity`, {
       transports: ['websocket'],
-      withCredentials: true,
+      auth: { token: accessToken },
     });
     socketRef.current = socket;
 
@@ -46,7 +45,7 @@ export function useFeed() {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [isAuthenticated, queryClient]);
+  }, [isAuthenticated, accessToken, queryClient]);
 
   return {
     events: query.data?.data ?? [],
