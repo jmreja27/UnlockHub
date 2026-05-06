@@ -5,6 +5,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import '../global.css';
+// Inicializa i18next con el idioma del dispositivo al arrancar la app
+import '../i18n';
 
 SplashScreen.preventAutoHideAsync();
 

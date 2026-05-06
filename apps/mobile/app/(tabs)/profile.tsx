@@ -6,6 +6,7 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 
 import { useSessionStore } from '../../stores/sessionStore';
 import { useAuth } from '../../hooks/useAuth';
@@ -58,6 +59,7 @@ function ProfileSkeleton() {
 }
 
 export default function ProfileScreen() {
+  const { t } = useTranslation();
   const { user, isAuthenticated } = useSessionStore();
   const { logout, isLoggingOut } = useAuth();
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -83,15 +85,15 @@ export default function ProfileScreen() {
   function handleLogout() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     Alert.alert(
-      'Cerrar sesión',
-      '¿Estás seguro de que quieres cerrar sesión?',
+      t('profile.logout_dialog_title'),
+      t('profile.logout_dialog_message'),
       [
         {
-          text: 'Cancelar',
+          text: t('common.cancel'),
           style: 'cancel',
         },
         {
-          text: 'Cerrar sesión',
+          text: t('profile.logout'),
           style: 'destructive',
           onPress: () => {
             void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -112,20 +114,20 @@ export default function ProfileScreen() {
             className="text-white text-2xl font-bold mb-3 text-center"
             accessibilityRole="header"
           >
-            Tu perfil
+            {t('profile.title')}
           </Text>
           <Text className="text-gray-400 text-base text-center mb-8">
-            Inicia sesión para ver tu perfil, estadísticas y logros.
+            {t('profile.unauthenticated_message')}
           </Text>
           <Pressable
             className="w-full bg-primary rounded-xl py-4 items-center active:opacity-80"
             onPress={() => router.push('/(auth)/login')}
             accessibilityRole="button"
-            accessibilityLabel="Iniciar sesión"
-            accessibilityHint="Navega a la pantalla de inicio de sesión"
+            accessibilityLabel={t('profile.login')}
+            accessibilityHint={t('profile.login_hint')}
             style={{ minHeight: 52 }}
           >
-            <Text className="text-white font-semibold text-base">Iniciar sesión</Text>
+            <Text className="text-white font-semibold text-base">{t('profile.login')}</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -152,7 +154,7 @@ export default function ProfileScreen() {
             onRefresh={() => { void handleRefresh(); }}
             tintColor="#818cf8"
             colors={['#4f46e5']}
-            accessibilityLabel="Actualizar perfil"
+            accessibilityLabel={t('profile.refresh_label')}
           />
         }
       >
@@ -160,7 +162,11 @@ export default function ProfileScreen() {
         <View
           className="items-center pt-8 pb-6 px-6"
           accessible
-          accessibilityLabel={`Perfil de ${user.username}. Nivel ${user.level}. ${user.xp.toLocaleString()} XP acumulados.`}
+          accessibilityLabel={t('profile.profile_aria', {
+            username: user.username,
+            level: user.level,
+            xp: user.xp.toLocaleString(),
+          })}
         >
           <Image
             source={user.avatar ?? undefined}
@@ -181,9 +187,9 @@ export default function ProfileScreen() {
             <View className="bg-primary/30 border border-primary/50 rounded-full px-3 py-1 mt-2">
               <Text
                 className="text-primary-light text-xs font-semibold"
-                accessibilityLabel="Usuario premium"
+                accessibilityLabel={t('profile.premium_label')}
               >
-                Premium
+                {t('profile.premium_badge')}
               </Text>
             </View>
           )}
@@ -193,28 +199,32 @@ export default function ProfileScreen() {
         <View
           className="flex-row mx-6 mb-6 bg-surface-elevated rounded-2xl py-4"
           accessible
-          accessibilityLabel={`Estadísticas: Nivel ${user.level}, ${user.xp.toLocaleString()} XP, racha de ${user.streakDays} días`}
+          accessibilityLabel={t('profile.stats_aria', {
+            level: user.level,
+            xp: user.xp.toLocaleString(),
+            streak: user.streakDays,
+          })}
         >
           <View className="flex-1 items-center">
             <Text className="text-white text-xl font-bold">{user.level}</Text>
-            <Text className="text-gray-400 text-xs mt-1">Nivel</Text>
+            <Text className="text-gray-400 text-xs mt-1">{t('profile.stat_level')}</Text>
           </View>
           <View className="w-px bg-surface-card" />
           <View className="flex-1 items-center">
             <Text className="text-white text-xl font-bold">{user.xp.toLocaleString()}</Text>
-            <Text className="text-gray-400 text-xs mt-1">XP</Text>
+            <Text className="text-gray-400 text-xs mt-1">{t('profile.stat_xp')}</Text>
           </View>
           <View className="w-px bg-surface-card" />
           <View className="flex-1 items-center">
             <Text className="text-white text-xl font-bold">{user.streakDays}</Text>
-            <Text className="text-gray-400 text-xs mt-1">Racha</Text>
+            <Text className="text-gray-400 text-xs mt-1">{t('profile.stat_streak')}</Text>
           </View>
         </View>
 
         {/* Plataformas vinculadas */}
         <View className="px-6 mb-6">
           <Text className="text-gray-300 text-sm font-semibold mb-3 uppercase tracking-wider">
-            Plataformas vinculadas
+            {t('profile.platforms_section')}
           </Text>
 
           {platforms && platforms.length > 0 ? (
@@ -243,7 +253,7 @@ export default function ProfileScreen() {
                 </View>
                 {account.lastSyncedAt && (
                   <Text className="text-gray-500 text-xs">
-                    Sync: {new Date(account.lastSyncedAt).toLocaleDateString('es-ES')}
+                    {t('profile.sync_prefix')} {new Date(account.lastSyncedAt).toLocaleDateString()}
                   </Text>
                 )}
               </View>
@@ -255,8 +265,7 @@ export default function ProfileScreen() {
               accessibilityLiveRegion="polite"
             >
               <Text className="text-gray-400 text-sm text-center">
-                No tienes plataformas vinculadas todavía.{'\n'}
-                Vincúlalas desde los ajustes para sincronizar tus logros.
+                {t('profile.platforms_empty')}
               </Text>
             </View>
           )}
@@ -272,13 +281,13 @@ export default function ProfileScreen() {
             onPress={handleLogout}
             disabled={isLoggingOut}
             accessibilityRole="button"
-            accessibilityLabel="Cerrar sesión"
-            accessibilityHint="Cierra tu sesión en este dispositivo. Se te pedirá confirmación."
+            accessibilityLabel={t('profile.logout')}
+            accessibilityHint={t('profile.logout_hint')}
             accessibilityState={{ disabled: isLoggingOut, busy: isLoggingOut }}
             style={{ minHeight: 52 }}
           >
             <Text className="text-red-400 font-semibold text-base">
-              {isLoggingOut ? 'Cerrando sesión…' : 'Cerrar sesión'}
+              {isLoggingOut ? t('profile.logging_out') : t('profile.logout')}
             </Text>
           </Pressable>
         </View>

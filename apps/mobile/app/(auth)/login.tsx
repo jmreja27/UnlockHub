@@ -13,10 +13,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '../../hooks/useAuth';
 
 export default function LoginScreen() {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const { login, isLoggingIn, loginError } = useAuth();
@@ -28,13 +30,13 @@ export default function LoginScreen() {
     const errors: { email?: string; password?: string } = {};
 
     if (!email.trim()) {
-      errors.email = 'El email es obligatorio.';
+      errors.email = t('auth.login.error_email_required');
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      errors.email = 'Introduce un email válido.';
+      errors.email = t('auth.login.error_email_invalid');
     }
 
     if (!password) {
-      errors.password = 'La contraseña es obligatoria.';
+      errors.password = t('auth.login.error_password_required');
     }
 
     setFieldErrors(errors);
@@ -70,10 +72,10 @@ export default function LoginScreen() {
               className="text-4xl font-bold text-white mb-2"
               accessibilityRole="header"
             >
-              UnlockHub
+              {t('auth.login.title')}
             </Text>
             <Text className="text-primary-light text-base mb-12">
-              Tu hub de logros
+              {t('auth.login.subtitle')}
             </Text>
 
             {/* Error global del servidor */}
@@ -90,12 +92,12 @@ export default function LoginScreen() {
 
             {/* Campo email */}
             <View className="w-full mb-4">
-              <Text className="text-gray-300 text-sm mb-1.5 ml-1">Email</Text>
+              <Text className="text-gray-300 text-sm mb-1.5 ml-1">{t('auth.login.email_label')}</Text>
               <TextInput
                 className={`w-full bg-surface-elevated rounded-xl px-4 py-3.5 text-white text-base border ${
                   fieldErrors.email ? 'border-red-500' : 'border-surface-card'
                 }`}
-                placeholder="tu@email.com"
+                placeholder={t('auth.login.email_placeholder')}
                 placeholderTextColor="#6b7280"
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -107,8 +109,8 @@ export default function LoginScreen() {
                   setEmail(text);
                   if (fieldErrors.email) setFieldErrors((prev: { email?: string; password?: string }) => ({ ...prev, email: undefined }));
                 }}
-                accessibilityLabel="Email"
-                accessibilityHint="Introduce tu dirección de correo electrónico"
+                accessibilityLabel={t('auth.login.email_label')}
+                accessibilityHint={t('auth.login.email_hint')}
               />
               {fieldErrors.email && (
                 <Text
@@ -122,7 +124,7 @@ export default function LoginScreen() {
 
             {/* Campo contraseña */}
             <View className="w-full mb-8">
-              <Text className="text-gray-300 text-sm mb-1.5 ml-1">Contraseña</Text>
+              <Text className="text-gray-300 text-sm mb-1.5 ml-1">{t('auth.login.password_label')}</Text>
               <TextInput
                 className={`w-full bg-surface-elevated rounded-xl px-4 py-3.5 text-white text-base border ${
                   fieldErrors.password ? 'border-red-500' : 'border-surface-card'
@@ -140,8 +142,8 @@ export default function LoginScreen() {
                   if (fieldErrors.password) setFieldErrors((prev: { email?: string; password?: string }) => ({ ...prev, password: undefined }));
                 }}
                 onSubmitEditing={handleSubmit}
-                accessibilityLabel="Contraseña"
-                accessibilityHint="Introduce tu contraseña"
+                accessibilityLabel={t('auth.login.password_label')}
+                accessibilityHint={t('auth.login.password_hint')}
               />
               {fieldErrors.password && (
                 <Text
@@ -159,18 +161,18 @@ export default function LoginScreen() {
               onPress={handleSubmit}
               disabled={isLoggingIn}
               accessibilityRole="button"
-              accessibilityLabel="Iniciar sesión"
-              accessibilityHint="Envía el formulario para iniciar sesión con tu cuenta"
+              accessibilityLabel={t('auth.login.submit')}
+              accessibilityHint={t('auth.login.submit_hint')}
               accessibilityState={{ disabled: isLoggingIn, busy: isLoggingIn }}
               style={{ minHeight: 52 }}
             >
               {isLoggingIn ? (
                 <ActivityIndicator
                   color="#ffffff"
-                  accessibilityLabel="Iniciando sesión, por favor espera"
+                  accessibilityLabel={t('auth.login.loading_label')}
                 />
               ) : (
-                <Text className="text-white font-semibold text-base">Iniciar sesión</Text>
+                <Text className="text-white font-semibold text-base">{t('auth.login.submit')}</Text>
               )}
             </Pressable>
 
@@ -179,12 +181,12 @@ export default function LoginScreen() {
               <Pressable
                 className="w-full border border-primary rounded-xl py-4 items-center active:opacity-80"
                 accessibilityRole="button"
-                accessibilityLabel="Crear cuenta nueva"
-                accessibilityHint="Navega a la pantalla de registro para crear una nueva cuenta"
+                accessibilityLabel={t('auth.login.create_account_label')}
+                accessibilityHint={t('auth.login.create_account_hint')}
                 style={{ minHeight: 52 }}
               >
                 <Text className="text-primary-light font-semibold text-base">
-                  Crear cuenta
+                  {t('auth.login.create_account')}
                 </Text>
               </Pressable>
             </Link>

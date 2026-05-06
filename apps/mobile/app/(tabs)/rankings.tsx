@@ -3,6 +3,7 @@ import { useCallback } from 'react';
 import { View, Text, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
+import { useTranslation } from 'react-i18next';
 
 import { useGlobalRankings, useMyRanking } from '../../hooks/useRankings';
 import { useSessionStore } from '../../stores/sessionStore';
@@ -42,6 +43,7 @@ function RankingSkeletonList() {
 }
 
 export default function RankingsScreen() {
+  const { t } = useTranslation();
   const { user } = useSessionStore();
   const {
     data: rankingsData,
@@ -72,9 +74,9 @@ export default function RankingsScreen() {
       {/* Cabecera */}
       <View className="px-4 pt-4 pb-2">
         <Text className="text-white text-2xl font-bold" accessibilityRole="header">
-          Rankings
+          {t('rankings.title')}
         </Text>
-        <Text className="text-gray-400 text-sm mt-1">Top jugadores globales</Text>
+        <Text className="text-gray-400 text-sm mt-1">{t('rankings.subtitle')}</Text>
       </View>
 
       {/* Tarjeta con la posición del usuario autenticado */}
@@ -84,11 +86,11 @@ export default function RankingsScreen() {
           accessible
           accessibilityLabel={
             myRanking.rank
-              ? `Tu posición: #${myRanking.rank} con ${myRanking.xp.toLocaleString()} XP`
-              : `Todavía no tienes posición en el ranking. XP acumulado: ${myRanking.xp.toLocaleString()}`
+              ? t('rankings.my_position_aria', { rank: myRanking.rank, xp: myRanking.xp.toLocaleString() })
+              : t('rankings.my_position_unranked_aria', { xp: myRanking.xp.toLocaleString() })
           }
         >
-          <Text className="text-gray-400 text-xs mb-1">Tu posición</Text>
+          <Text className="text-gray-400 text-xs mb-1">{t('rankings.my_position_label')}</Text>
           <View className="flex-row items-center justify-between">
             <Text className="text-primary-light font-bold text-lg">
               {myRanking.rank ? `#${myRanking.rank}` : '—'}
@@ -112,18 +114,18 @@ export default function RankingsScreen() {
           accessibilityRole="alert"
         >
           <Text className="text-red-400 text-lg font-semibold mb-2">
-            No se pudo cargar el ranking
+            {t('rankings.error_title')}
           </Text>
           <Text className="text-gray-400 text-sm text-center mb-6">
-            Comprueba tu conexión a internet e inténtalo de nuevo.
+            {t('rankings.error_message')}
           </Text>
           <Text
             className="text-primary-light text-base"
             onPress={() => void refetch()}
             accessibilityRole="button"
-            accessibilityLabel="Reintentar carga del ranking"
+            accessibilityLabel={t('rankings.retry_label')}
           >
-            Reintentar
+            {t('common.retry')}
           </Text>
         </View>
       )}
@@ -136,14 +138,14 @@ export default function RankingsScreen() {
           keyExtractor={keyExtractor}
           estimatedItemSize={68}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}
-          accessibilityLabel="Lista del ranking global"
+          accessibilityLabel={t('rankings.list_label')}
           refreshControl={
             <RefreshControl
               refreshing={isRefetching}
               onRefresh={handleRefresh}
               tintColor="#818cf8"
               colors={['#4f46e5']}
-              accessibilityLabel="Actualizar ranking"
+              accessibilityLabel={t('rankings.refresh_label')}
             />
           }
           ListEmptyComponent={
@@ -153,7 +155,7 @@ export default function RankingsScreen() {
               accessibilityLiveRegion="polite"
             >
               <Text className="text-gray-400 text-base text-center">
-                El ranking todavía no tiene jugadores.{'\n'}¡Sé el primero en aparecer!
+                {t('rankings.empty')}
               </Text>
             </View>
           }
