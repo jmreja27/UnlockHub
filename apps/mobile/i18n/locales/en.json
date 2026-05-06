@@ -56,6 +56,7 @@
   "tabs": {
     "home": "Home",
     "rankings": "Rankings",
+    "challenges": "Challenges",
     "friends": "Friends",
     "profile": "Profile"
   },
@@ -112,6 +113,24 @@
     "error_message": "Check your connection and try again.",
     "remove_confirm_title": "Remove friend",
     "remove_confirm_message": "Are you sure you want to remove {{username}} from your friends list?"
+  },
+  "challenges": {
+    "title": "Weekly Challenge",
+    "loading_label": "Loading weekly challenge",
+    "refresh_label": "Refresh challenge",
+    "no_challenge": "No active challenge this week.\nCheck back soon!",
+    "error_title": "Could not load challenge",
+    "error_message": "Check your connection and try again.",
+    "xp_reward": "{{xp}} XP on completion",
+    "progress_label": "Your progress: {{progress}} / {{target}}",
+    "progress_pct": "{{pct}}% complete",
+    "completed": "Challenge completed!",
+    "completed_label": "You have completed this challenge",
+    "ends_at": "Ends on {{date}}",
+    "metric_ACHIEVEMENTS_UNLOCKED": "Achievements unlocked",
+    "metric_XP_GAINED": "XP gained",
+    "metric_GAMES_PLAYED": "Games played",
+    "metric_STREAK_MAINTAINED": "Streak days"
   },
   "rankings": {
     "title": "Rankings",

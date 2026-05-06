@@ -56,6 +56,7 @@
   "tabs": {
     "home": "Inicio",
     "rankings": "Rankings",
+    "challenges": "Retos",
     "friends": "Amigos",
     "profile": "Perfil"
   },
@@ -112,6 +113,24 @@
     "error_message": "Comprueba tu conexión e inténtalo de nuevo.",
     "remove_confirm_title": "Eliminar amigo",
     "remove_confirm_message": "¿Seguro que quieres eliminar a {{username}} de tu lista de amigos?"
+  },
+  "challenges": {
+    "title": "Reto de la semana",
+    "loading_label": "Cargando reto semanal",
+    "refresh_label": "Actualizar reto",
+    "no_challenge": "No hay reto activo esta semana.\n¡Vuelve pronto!",
+    "error_title": "No se pudo cargar el reto",
+    "error_message": "Comprueba tu conexión e inténtalo de nuevo.",
+    "xp_reward": "{{xp}} XP al completar",
+    "progress_label": "Tu progreso: {{progress}} / {{target}}",
+    "progress_pct": "{{pct}}% completado",
+    "completed": "¡Reto completado!",
+    "completed_label": "Has completado este reto",
+    "ends_at": "Termina el {{date}}",
+    "metric_ACHIEVEMENTS_UNLOCKED": "Logros desbloqueados",
+    "metric_XP_GAINED": "XP ganados",
+    "metric_GAMES_PLAYED": "Juegos jugados",
+    "metric_STREAK_MAINTAINED": "Días de racha"
   },
   "rankings": {
     "title": "Rankings",
