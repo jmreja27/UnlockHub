@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@prisma/client": "^5.19.1",
+    "bullmq": "^5.13.2",
     "@unlockhub/types": "*",
     "@unlockhub/validators": "*",
     "axios": "^1.7.7",
