@@ -6,10 +6,18 @@ jest.mock('../lib/redis', () => ({
     ttl: jest.fn(),
     get: jest.fn(),
     set: jest.fn(),
+    incr: jest.fn(),
+    decr: jest.fn(),
+    expire: jest.fn(),
   },
 }));
 
-jest.mock('../lib/prisma', () => ({ prisma: { platformAccount: { findUnique: jest.fn(), update: jest.fn() }, user: { update: jest.fn() } } }));
+jest.mock('../lib/prisma', () => ({
+  prisma: {
+    platformAccount: { findUnique: jest.fn(), update: jest.fn() },
+    user: { update: jest.fn() },
+  },
+}));
 
 jest.mock('../jobs/sync.queue', () => ({
   syncQueue: { add: jest.fn().mockResolvedValue({ id: 'job-1' }) },
@@ -39,7 +47,9 @@ beforeEach(() => jest.clearAllMocks());
 describe('syncService.triggerManualSync', () => {
   it('encola el job y devuelve jobId cuando no hay cooldown', async () => {
     mockRedis.ttl.mockResolvedValue(-1);
-    mockRedis.get.mockResolvedValue(null);
+    // INCR devuelve 1 (primer sync del día) → dentro del límite
+    mockRedis.incr.mockResolvedValue(1);
+    mockRedis.expire.mockResolvedValue(1);
     mockRedis.set.mockResolvedValue('OK');
     (mockPrisma.platformAccount.findUnique as jest.Mock).mockResolvedValue(account);
 
@@ -57,36 +67,63 @@ describe('syncService.triggerManualSync', () => {
     ).rejects.toMatchObject({ code: 'SYNC_COOLDOWN', statusCode: 429 });
   });
 
-  it('lanza DAILY_SYNC_LIMIT_EXCEEDED para free con 5 syncs ya realizados', async () => {
+  it('lanza DAILY_SYNC_LIMIT_EXCEEDED para free con 5 syncs ya realizados (INCR devuelve 6)', async () => {
     mockRedis.ttl.mockResolvedValue(-1);
-    mockRedis.get.mockResolvedValue('5');
+    // INCR devuelve 6 → supera el límite de 5
+    mockRedis.incr.mockResolvedValue(6);
+    mockRedis.decr.mockResolvedValue(5);
 
     await expect(
       syncService.triggerManualSync('user-1', 'STEAM', false),
     ).rejects.toMatchObject({ code: 'DAILY_SYNC_LIMIT_EXCEEDED', statusCode: 429 });
+
+    // Verifica que se revierte el contador
+    expect(mockRedis.decr).toHaveBeenCalled();
   });
 
-  it('premium no tiene límite diario', async () => {
+  it('premium no llama a incr (sin límite diario)', async () => {
     mockRedis.ttl.mockResolvedValue(-1);
-    mockRedis.get.mockResolvedValue(null);
     mockRedis.set.mockResolvedValue('OK');
     (mockPrisma.platformAccount.findUnique as jest.Mock).mockResolvedValue(account);
 
     const result = await syncService.triggerManualSync('user-1', 'STEAM', true);
 
     expect(result.jobId).toBe('job-1');
-    // No se llama a get con la clave de dailyCount para premium
-    expect(mockRedis.get).not.toHaveBeenCalled();
+    expect(mockRedis.incr).not.toHaveBeenCalled();
   });
 
   it('lanza PLATFORM_NOT_LINKED si no hay cuenta vinculada', async () => {
     mockRedis.ttl.mockResolvedValue(-1);
-    mockRedis.get.mockResolvedValue(null);
+    mockRedis.incr.mockResolvedValue(1);
+    mockRedis.expire.mockResolvedValue(1);
     (mockPrisma.platformAccount.findUnique as jest.Mock).mockResolvedValue(null);
 
     await expect(
       syncService.triggerManualSync('user-1', 'STEAM', false),
     ).rejects.toMatchObject({ code: 'PLATFORM_NOT_LINKED', statusCode: 404 });
+  });
+
+  it('fija el TTL con expire solo en el primer sync del día (INCR = 1)', async () => {
+    mockRedis.ttl.mockResolvedValue(-1);
+    mockRedis.incr.mockResolvedValue(1);
+    mockRedis.expire.mockResolvedValue(1);
+    mockRedis.set.mockResolvedValue('OK');
+    (mockPrisma.platformAccount.findUnique as jest.Mock).mockResolvedValue(account);
+
+    await syncService.triggerManualSync('user-1', 'STEAM', false);
+
+    expect(mockRedis.expire).toHaveBeenCalledTimes(1);
+  });
+
+  it('no llama a expire si el contador ya existía (INCR > 1)', async () => {
+    mockRedis.ttl.mockResolvedValue(-1);
+    mockRedis.incr.mockResolvedValue(3);
+    mockRedis.set.mockResolvedValue('OK');
+    (mockPrisma.platformAccount.findUnique as jest.Mock).mockResolvedValue(account);
+
+    await syncService.triggerManualSync('user-1', 'STEAM', false);
+
+    expect(mockRedis.expire).not.toHaveBeenCalled();
   });
 });
 

@@ -29,6 +29,11 @@ describe('encrypt / decrypt', () => {
     expect(() => encrypt('texto')).toThrow('ENCRYPTION_KEY');
   });
 
+  it('lanza error si ENCRYPTION_KEY contiene caracteres no hexadecimales', () => {
+    process.env['ENCRYPTION_KEY'] = 'z'.repeat(64); // 'z' no es hex válido
+    expect(() => encrypt('texto')).toThrow('ENCRYPTION_KEY');
+  });
+
   it('lanza error al descifrar texto inválido', () => {
     expect(() => decrypt('no-es-hex-valido')).toThrow();
   });

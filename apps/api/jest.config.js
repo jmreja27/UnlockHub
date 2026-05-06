@@ -1,8 +1,11 @@
-import type { Config } from 'jest';
-
-const config: Config = {
+/** @type {import('jest').Config} */
+const config = {
   preset: 'ts-jest',
   testEnvironment: 'node',
+  forceExit: true,
+  coverageThreshold: {
+    global: { lines: 80 },
+  },
   roots: ['<rootDir>/src'],
   testMatch: ['**/__tests__/**/*.test.ts', '**/*.test.ts'],
   coverageDirectory: 'coverage',
@@ -13,14 +16,12 @@ const config: Config = {
     '!src/index.ts',
     '!src/app.ts',
     '!src/**/__tests__/**',
-    // Infraestructura: singletons de conexión y bootstrapping de entorno
     '!src/lib/prisma.ts',
     '!src/lib/redis.ts',
     '!src/config/env.ts',
-    // Jobs BullMQ y adaptadores de plataformas — dependencias de sistemas externos
     '!src/jobs/**',
     '!src/platforms/**',
   ],
 };
 
-export default config;
+module.exports = config;

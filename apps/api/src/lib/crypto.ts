@@ -6,7 +6,9 @@ const TAG_LENGTH = 16;
 
 function getKey(): Buffer {
   const hex = process.env['ENCRYPTION_KEY'] ?? '';
-  if (hex.length !== 64) throw new Error('ENCRYPTION_KEY debe ser una clave hex de 64 caracteres');
+  if (!/^[0-9a-fA-F]{64}$/.test(hex)) {
+    throw new Error('ENCRYPTION_KEY debe ser exactamente 64 caracteres hexadecimales válidos');
+  }
   return Buffer.from(hex, 'hex');
 }
 

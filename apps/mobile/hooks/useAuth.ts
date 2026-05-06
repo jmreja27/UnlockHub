@@ -49,7 +49,8 @@ export function useAuth() {
       api.post<AuthResponse>('/api/v1/auth/login', credentials),
     onSuccess: (data) => {
       setUser(data.user);
-      // Feedback háptico de éxito al iniciar sesión
+      // Limpiar caché de otro usuario anterior antes de navegar
+      queryClient.removeQueries();
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace('/(tabs)');
     },
@@ -61,6 +62,7 @@ export function useAuth() {
       api.post<AuthResponse>('/api/v1/auth/register', input),
     onSuccess: (data) => {
       setUser(data.user);
+      queryClient.removeQueries();
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace('/(tabs)');
     },
