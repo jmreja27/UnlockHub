@@ -63,6 +63,28 @@
     "title": "Inicio",
     "empty": "Tus logros recientes aparecerán aquí"
   },
+  "feed": {
+    "title": "Feed",
+    "empty": "Nada por aquí todavía.\n¡Conecta con amigos para ver su actividad!",
+    "loading_label": "Cargando feed de actividad",
+    "refresh_label": "Actualizar feed",
+    "error_title": "No se pudo cargar el feed",
+    "error_message": "Comprueba tu conexión e inténtalo de nuevo.",
+    "just_now": "Ahora mismo",
+    "minutes_ago_one": "Hace 1 minuto",
+    "minutes_ago_other": "Hace {{count}} minutos",
+    "hours_ago_one": "Hace 1 hora",
+    "hours_ago_other": "Hace {{count}} horas",
+    "days_ago_one": "Hace 1 día",
+    "days_ago_other": "Hace {{count}} días",
+    "event_achievement": "{{username}} desbloqueó el logro «{{title}}»",
+    "event_friend": "{{username}} y {{friend}} ahora son amigos",
+    "event_level": "{{username}} alcanzó el nivel {{level}}",
+    "event_challenge": "{{username}} completó el reto «{{challenge}}»",
+    "event_streak": "{{username}} lleva {{days}} días de racha",
+    "event_game": "{{username}} completó el juego «{{game}}»",
+    "event_generic": "{{username}} tuvo actividad reciente"
+  },
   "friends": {
     "title": "Amigos",
     "tab_friends": "Amigos",

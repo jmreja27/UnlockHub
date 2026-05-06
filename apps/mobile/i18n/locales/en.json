@@ -63,6 +63,28 @@
     "title": "Home",
     "empty": "Your recent achievements will appear here"
   },
+  "feed": {
+    "title": "Feed",
+    "empty": "Nothing here yet.\nConnect with friends to see their activity!",
+    "loading_label": "Loading activity feed",
+    "refresh_label": "Refresh feed",
+    "error_title": "Could not load feed",
+    "error_message": "Check your connection and try again.",
+    "just_now": "Just now",
+    "minutes_ago_one": "1 minute ago",
+    "minutes_ago_other": "{{count}} minutes ago",
+    "hours_ago_one": "1 hour ago",
+    "hours_ago_other": "{{count}} hours ago",
+    "days_ago_one": "1 day ago",
+    "days_ago_other": "{{count}} days ago",
+    "event_achievement": "{{username}} unlocked achievement «{{title}}»",
+    "event_friend": "{{username}} and {{friend}} are now friends",
+    "event_level": "{{username}} reached level {{level}}",
+    "event_challenge": "{{username}} completed challenge «{{challenge}}»",
+    "event_streak": "{{username}} is on a {{days}}-day streak",
+    "event_game": "{{username}} completed game «{{game}}»",
+    "event_generic": "{{username}} had recent activity"
+  },
   "friends": {
     "title": "Friends",
     "tab_friends": "Friends",
