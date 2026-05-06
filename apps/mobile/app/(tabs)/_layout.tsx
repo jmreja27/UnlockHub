@@ -15,6 +15,7 @@ interface TabConfig {
 const TABS: TabConfig[] = [
   { name: 'index', titleKey: 'tabs.home', icon: 'home-outline', iconFocused: 'home' },
   { name: 'rankings', titleKey: 'tabs.rankings', icon: 'trophy-outline', iconFocused: 'trophy' },
+  { name: 'challenges', titleKey: 'tabs.challenges', icon: 'ribbon-outline', iconFocused: 'ribbon' },
   { name: 'friends', titleKey: 'tabs.friends', icon: 'people-outline', iconFocused: 'people' },
   { name: 'profile', titleKey: 'tabs.profile', icon: 'person-outline', iconFocused: 'person' },
 ];
