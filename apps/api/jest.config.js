@@ -2,6 +2,9 @@
 const config = {
   preset: 'ts-jest',
   testEnvironment: 'node',
+  globals: {
+    'ts-jest': { tsconfig: 'tsconfig.test.json' },
+  },
   forceExit: true,
   coverageThreshold: {
     global: { lines: 80 },
