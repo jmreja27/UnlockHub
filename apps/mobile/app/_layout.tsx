@@ -8,6 +8,7 @@ import '../global.css';
 import '../i18n';
 import { api } from '../lib/api';
 import { useSessionStore } from '../stores/sessionStore';
+import { usePushNotifications } from '../hooks/usePushNotifications';
 import type { User } from '@unlockhub/types';
 
 SplashScreen.preventAutoHideAsync();
@@ -38,6 +39,11 @@ function SessionRestorer({ onReady }: { onReady: () => void }) {
   return null;
 }
 
+function PushNotificationsInit() {
+  usePushNotifications();
+  return null;
+}
+
 export default function RootLayout() {
   const [ready, setReady] = useState(false);
 
@@ -49,6 +55,7 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <SessionRestorer onReady={handleReady} />
+      <PushNotificationsInit />
       <StatusBar style="light" />
       {ready && <Stack screenOptions={{ headerShown: false }} />}
     </QueryClientProvider>

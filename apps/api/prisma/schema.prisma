@@ -63,6 +63,7 @@ model User {
   receivedFriendships Friendship[]      @relation("FriendshipReceiver")
   activityEvents      ActivityEvent[]
   userChallenges      UserChallenge[]
+  deviceTokens        DeviceToken[]
 
   @@index([email])
   @@index([username])
@@ -319,4 +320,19 @@ model UserChallenge {
   @@index([userId])
   @@index([challengeId])
   @@index([completedAt])
+}
+
+// ─── Push notifications ───────────────────────────────────────────────────────
+
+model DeviceToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  platform  String   // "ios" | "android"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
