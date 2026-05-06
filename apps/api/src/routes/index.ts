@@ -7,6 +7,7 @@ import userRouter from './user.routes';
 import platformRouter from './platform.routes';
 import subscriptionRouter from './subscription.routes';
 import friendshipRouter from './friendship.routes';
+import pointsRouter from './points.routes';
 
 const router = Router();
 
@@ -21,5 +22,6 @@ router.use('/users', userRouter);
 router.use('/platforms', platformRouter);
 router.use('/subscriptions', subscriptionRouter);
 router.use('/friends', friendshipRouter);
+router.use('/users/me/points', pointsRouter);
 
 export default router;
