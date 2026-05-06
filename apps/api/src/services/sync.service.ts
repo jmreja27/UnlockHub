@@ -33,19 +33,22 @@ export async function triggerManualSync(
     );
   }
 
-  // Comprobar límite diario de syncs manuales (solo tier free)
+  // Comprobar límite diario de syncs manuales (solo tier free) — INCR atómico
   if (!isPremium && config.dailyManualSyncLimit !== null) {
     const countKey = dailyCountKey(userId, platform);
-    const count = parseInt((await redis.get(countKey)) ?? '0', 10);
-    if (count >= config.dailyManualSyncLimit) {
+    const newCount = await redis.incr(countKey);
+    if (newCount === 1) {
+      // Primera petición del día: fijar TTL hasta medianoche
+      await redis.expire(countKey, getSecondsUntilMidnight());
+    }
+    if (newCount > config.dailyManualSyncLimit) {
+      await redis.decr(countKey);
       throw new AppError(
         `Límite diario de ${config.dailyManualSyncLimit} syncs manuales alcanzado.`,
         'DAILY_SYNC_LIMIT_EXCEEDED',
         429,
       );
     }
-    const secondsUntilMidnight = getSecondsUntilMidnight();
-    await redis.set(countKey, count + 1, 'EX', secondsUntilMidnight);
   }
 
   const account = await prisma.platformAccount.findUnique({
@@ -95,6 +98,7 @@ export async function getSyncStatus(userId: string, platform: Platform) {
 function getSecondsUntilMidnight(): number {
   const now = new Date();
   const midnight = new Date(now);
-  midnight.setHours(23, 59, 59, 999);
-  return Math.floor((midnight.getTime() - now.getTime()) / 1000);
+  midnight.setDate(midnight.getDate() + 1);
+  midnight.setHours(0, 0, 0, 0);
+  return Math.max(1, Math.floor((midnight.getTime() - now.getTime()) / 1000));
 }

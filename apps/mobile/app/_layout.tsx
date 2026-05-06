@@ -1,12 +1,14 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import '../global.css';
-// Inicializa i18next con el idioma del dispositivo al arrancar la app
 import '../i18n';
+import { api } from '../lib/api';
+import { useSessionStore } from '../stores/sessionStore';
+import type { User } from '@unlockhub/types';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -20,15 +22,35 @@ const queryClient = new QueryClient({
   },
 });
 
-export default function RootLayout() {
+// Comprueba en el arranque si la cookie de sesión sigue siendo válida
+function SessionRestorer({ onReady }: { onReady: () => void }) {
+  const { setUser } = useSessionStore();
+
   useEffect(() => {
-    SplashScreen.hideAsync();
+    api
+      .get<User>('/api/v1/users/me')
+      .then((user) => setUser(user))
+      .catch(() => { /* sin sesión activa, el store queda vacío */ })
+      .finally(onReady);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  return null;
+}
+
+export default function RootLayout() {
+  const [ready, setReady] = useState(false);
+
+  function handleReady() {
+    setReady(true);
+    void SplashScreen.hideAsync();
+  }
 
   return (
     <QueryClientProvider client={queryClient}>
+      <SessionRestorer onReady={handleReady} />
       <StatusBar style="light" />
-      <Stack screenOptions={{ headerShown: false }} />
+      {ready && <Stack screenOptions={{ headerShown: false }} />}
     </QueryClientProvider>
   );
 }

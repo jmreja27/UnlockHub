@@ -97,6 +97,7 @@ export async function takeRankingSnapshot() {
     for (let i = 0; i < entries.length; i += 2) {
       const userId = entries[i] as string;
       const xp = parseInt(entries[i + 1] as string, 10);
+      if (!userId || Number.isNaN(xp)) continue;
       const rank = offset + i / 2 + 1;
       snapshots.push({ userId, rank, xp, snapshotAt: now });
     }
@@ -142,8 +143,10 @@ async function getRankingFromKey(
 
   for (let i = 0; i < entries.length; i += 2) {
     const uid = entries[i] as string;
+    const xp = parseInt(entries[i + 1] as string, 10);
+    if (!uid || Number.isNaN(xp)) continue;
     userIds.push(uid);
-    scores[uid] = parseInt(entries[i + 1] as string, 10);
+    scores[uid] = xp;
   }
 
   const users = await prisma.user.findMany({
