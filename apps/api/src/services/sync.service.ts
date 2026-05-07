@@ -5,6 +5,7 @@ import { redis } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 import { syncQueue } from '../jobs/sync.queue';
 import { AppError } from '../middleware/errorHandler';
+import { FEATURES } from '../config/features';
 
 function cooldownKey(userId: string, platform: Platform) {
   return `sync:cooldown:${userId}:${platform}`;
@@ -20,7 +21,9 @@ export async function triggerManualSync(
   platform: Platform,
   isPremium: boolean,
 ) {
-  const config = SYNC_COOLDOWNS[isPremium ? 'premium' : 'free'];
+  // Mientras premium esté desactivado todos usan el tier free
+  const effectivePremium = FEATURES.premium && isPremium;
+  const config = SYNC_COOLDOWNS[effectivePremium ? 'premium' : 'free'];
 
   // Comprobar cooldown de Redis (más rápido que consultar la BD)
   const ttl = await redis.ttl(cooldownKey(userId, platform));
@@ -34,7 +37,7 @@ export async function triggerManualSync(
   }
 
   // Comprobar límite diario de syncs manuales (solo tier free) — INCR atómico
-  if (!isPremium && config.dailyManualSyncLimit !== null) {
+  if (!effectivePremium && config.dailyManualSyncLimit !== null) {
     const countKey = dailyCountKey(userId, platform);
     const newCount = await redis.incr(countKey);
     if (newCount === 1) {

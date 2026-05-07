@@ -12,6 +12,7 @@ import { useSessionStore } from '../../stores/sessionStore';
 import { useAuth } from '../../hooks/useAuth';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { PremiumBanner } from '../../components/PremiumBanner';
+import { FEATURES } from '../../lib/featureFlags';
 import { api } from '../../lib/api';
 import type { PlatformAccount } from '@unlockhub/types';
 
@@ -183,7 +184,7 @@ export default function ProfileScreen() {
             <Text className="text-gray-400 text-sm text-center mt-1 mb-2">{user.bio}</Text>
           )}
 
-          {user.isPremium && (
+          {FEATURES.premium && user.isPremium && (
             <View className="bg-primary/30 border border-primary/50 rounded-full px-3 py-1 mt-2">
               <Text
                 className="text-primary-light text-xs font-semibold"
@@ -271,8 +272,8 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        {/* Banner de suscripción premium */}
-        {isAuthenticated && <PremiumBanner />}
+        {/* Banner de suscripción premium — visible solo cuando FEATURES.premium está activo */}
+        {FEATURES.premium && isAuthenticated && <PremiumBanner />}
 
         {/* Botón cerrar sesión */}
         <View className="px-6">

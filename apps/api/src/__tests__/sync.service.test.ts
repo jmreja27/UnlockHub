@@ -81,15 +81,18 @@ describe('syncService.triggerManualSync', () => {
     expect(mockRedis.decr).toHaveBeenCalled();
   });
 
-  it('premium no llama a incr (sin límite diario)', async () => {
+  // Con FEATURES.premium = false todos los usuarios siguen el tier free (incluidos isPremium=true)
+  it('isPremium=true aplica límite diario mientras premium está desactivado por feature flag', async () => {
     mockRedis.ttl.mockResolvedValue(-1);
+    mockRedis.incr.mockResolvedValue(1);
+    mockRedis.expire.mockResolvedValue(1);
     mockRedis.set.mockResolvedValue('OK');
     (mockPrisma.platformAccount.findUnique as jest.Mock).mockResolvedValue(account);
 
     const result = await syncService.triggerManualSync('user-1', 'STEAM', true);
 
     expect(result.jobId).toBe('job-1');
-    expect(mockRedis.incr).not.toHaveBeenCalled();
+    expect(mockRedis.incr).toHaveBeenCalled();
   });
 
   it('lanza PLATFORM_NOT_LINKED si no hay cuenta vinculada', async () => {

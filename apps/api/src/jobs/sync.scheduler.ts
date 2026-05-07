@@ -1,6 +1,7 @@
 import { syncQueue } from './sync.queue';
 import { prisma } from '../lib/prisma';
 import { SYNC_COOLDOWNS } from '@unlockhub/types';
+import { FEATURES } from '../config/features';
 
 // Programa syncs automáticos repetibles para un usuario y plataforma
 export async function scheduleAutoSync(
@@ -9,7 +10,7 @@ export async function scheduleAutoSync(
   platform: string,
   isPremium: boolean,
 ) {
-  const tier = isPremium ? 'premium' : 'free';
+  const tier = (FEATURES.premium && isPremium) ? 'premium' : 'free';
   const intervalMinutes = SYNC_COOLDOWNS[tier].autoSyncIntervalMinutes;
 
   const jobId = `auto-sync:${userId}:${platform}`;
