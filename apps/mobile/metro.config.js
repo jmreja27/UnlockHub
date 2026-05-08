@@ -7,8 +7,8 @@ const workspaceRoot = path.resolve(projectRoot, '../..');
 
 const config = getDefaultConfig(projectRoot);
 
-// Monorepo: observar el workspace raíz para cambios en paquetes compartidos
-config.watchFolders = [workspaceRoot];
+// Monorepo: añadir workspace raíz a los watchFolders por defecto de Expo
+config.watchFolders = [...(config.watchFolders ?? []), workspaceRoot];
 
 // Resolver dependencias desde el node_modules del workspace raíz
 config.resolver.nodeModulesPaths = [
