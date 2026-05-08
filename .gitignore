@@ -28,7 +28,7 @@ ios/
 PRODUCTION_ACCOUNTS.md
 SCALING_GUIDE.md
 
-# Credenciales de Firebase / Google Services — contienen claves de API
+# Credenciales de Firebase / Google Services — contienen claves de API reales
 google-services.json
 GoogleService-Info.plist
 
