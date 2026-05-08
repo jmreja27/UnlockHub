@@ -63,15 +63,6 @@ jest.mock('expo-splash-screen', () => ({
   preventAutoHideAsync: jest.fn(),
 }));
 
-// expo-notifications
-jest.mock('expo-notifications', () => ({
-  setNotificationHandler: jest.fn(),
-  getExpoPushTokenAsync: jest.fn(() => Promise.resolve({ data: 'ExponentPushToken[test]' })),
-  requestPermissionsAsync: jest.fn(() => Promise.resolve({ status: 'granted' })),
-  addNotificationReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
-  addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
-}));
-
 // react-native-safe-area-context
 jest.mock('react-native-safe-area-context', () => {
   const ReactNative = jest.requireActual<typeof import('react-native')>('react-native');
