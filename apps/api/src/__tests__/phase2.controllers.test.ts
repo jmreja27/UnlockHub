@@ -165,7 +165,7 @@ describe('notification controller', () => {
   it('removeDeviceTokenHandler elimina el token', async () => {
     const res = makeRes();
     await removeDeviceTokenHandler(makeReq({ body: { token: 'tok' } }), res, makeNext());
-    expect(mockRemoveDeviceToken).toHaveBeenCalledWith('tok');
+    expect(mockRemoveDeviceToken).toHaveBeenCalledWith('u1', 'tok');
     expect(res.json).toHaveBeenCalledWith({ ok: true });
   });
 });

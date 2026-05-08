@@ -14,14 +14,25 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.unlockhub.app"
+      "bundleIdentifier": "com.unlockhub.app",
+      "infoPlist": {
+        "NSUserTrackingUsageDescription": "Usamos el identificador de publicidad para mostrarte anuncios más relevantes y medir su efectividad."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#1a1a2e"
       },
-      "package": "com.unlockhub.app"
+      "package": "com.unlockhub.app",
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.VIBRATE",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "com.google.android.gms.permission.AD_ID",
+        "com.android.vending.BILLING"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -36,10 +47,25 @@
         {
           "color": "#4f46e5"
         }
+      ],
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "note": "Configurar SENTRY_AUTH_TOKEN, project y organization tras crear la cuenta en sentry.io"
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "13b5c86a-75d1-442e-92c3-26d76db4fb94"
+      }
     }
   }
 }

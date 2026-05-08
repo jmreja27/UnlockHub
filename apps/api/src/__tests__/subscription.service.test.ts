@@ -138,6 +138,42 @@ describe('subscriptionService.createOrUpdateSubscription', () => {
     });
   });
 
+  it('activa LIFETIME con premiumUntil=null y fecha centinela en la suscripción', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(baseUser);
+    (mockPrisma.subscription.updateMany as jest.Mock).mockResolvedValue({ count: 0 });
+    (mockPrisma.subscription.upsert as jest.Mock).mockResolvedValue({
+      ...baseSubscription,
+      plan: 'LIFETIME',
+      expiresAt: new Date('2099-12-31T23:59:59Z'),
+    });
+    (mockPrisma.user.update as jest.Mock).mockResolvedValue({
+      ...baseUser,
+      isPremium: true,
+      premiumUntil: null,
+    });
+
+    await subscriptionService.createOrUpdateSubscription('user-1', {
+      plan: 'LIFETIME',
+      provider: 'GOOGLE_PLAY',
+      storeTransactionId: 'txn-lifetime-001',
+    });
+
+    expect(mockPrisma.subscription.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          plan: 'LIFETIME',
+          expiresAt: new Date('2099-12-31T23:59:59Z'),
+        }),
+      }),
+    );
+
+    // premiumUntil debe ser null para LIFETIME — el acceso es permanente
+    expect(mockPrisma.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: { isPremium: true, premiumUntil: null },
+    });
+  });
+
   it('lanza AppError con código USER_NOT_FOUND', async () => {
     (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(null);
 
@@ -193,6 +229,22 @@ describe('subscriptionService.cancelSubscription', () => {
       code: 'NO_ACTIVE_SUBSCRIPTION',
       statusCode: 404,
     });
+  });
+
+  it('lanza LIFETIME_NOT_CANCELLABLE al intentar cancelar una suscripción LIFETIME', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({ ...baseUser, isPremium: true });
+    (mockPrisma.subscription.findFirst as jest.Mock).mockResolvedValue({
+      ...baseSubscription,
+      plan: 'LIFETIME',
+      expiresAt: new Date('2099-12-31T23:59:59Z'),
+    });
+
+    await expect(subscriptionService.cancelSubscription('user-1')).rejects.toMatchObject({
+      code: 'LIFETIME_NOT_CANCELLABLE',
+      statusCode: 400,
+    });
+
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
   });
 });
 
@@ -272,6 +324,22 @@ describe('subscriptionService.expireOldSubscriptions', () => {
         expect.anything(), // subscription.updateMany
         expect.anything(), // user.updateMany
       ]),
+    );
+  });
+
+  it('no expira suscripciones LIFETIME (la query excluye el plan LIFETIME)', async () => {
+    // findMany devuelve vacío porque la query ya excluye LIFETIME con `plan: { not: 'LIFETIME' }`
+    (mockPrisma.subscription.findMany as jest.Mock).mockResolvedValue([]);
+
+    const count = await subscriptionService.expireOldSubscriptions();
+
+    expect(count).toBe(0);
+    expect(mockPrisma.subscription.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          plan: { not: 'LIFETIME' },
+        }),
+      }),
     );
   });
 

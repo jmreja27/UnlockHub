@@ -18,7 +18,7 @@ export async function verifySubscriptionHandler(
       plan: data.plan,
       provider: data.provider,
       storeTransactionId: data.storeTransactionId,
-      expiresAt: new Date(data.expiresAt),
+      expiresAt: data.expiresAt ? new Date(data.expiresAt) : undefined,
     });
 
     res.status(200).json({ message: 'Suscripción activada correctamente' });

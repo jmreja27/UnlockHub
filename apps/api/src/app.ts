@@ -1,3 +1,13 @@
+import * as Sentry from '@sentry/node';
+
+// Inicializar Sentry antes que cualquier otro módulo para capturar errores desde el arranque
+Sentry.init({
+  dsn: process.env['SENTRY_DSN'],
+  environment: process.env['NODE_ENV'] ?? 'production',
+  tracesSampleRate: 0.1,
+  enabled: !!process.env['SENTRY_DSN'],
+});
+
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
@@ -28,7 +38,12 @@ app.use(globalRateLimiter);
 app.use('/api/v1', router);
 
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  const maintenance = process.env['MAINTENANCE_MODE'] === 'true';
+  res.status(maintenance ? 503 : 200).json({
+    status: maintenance ? 'maintenance' : 'ok',
+    maintenance,
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // El error handler siempre va al final

@@ -1,14 +1,18 @@
 import { Worker } from 'bullmq';
 
-import { redis } from '../lib/redis';
+import { createWorkerConnection } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 import { steamAdapter } from '../platforms/steam.adapter';
 import { retroAchievementsAdapter } from '../platforms/retroachievements.adapter';
+import { psnAdapter } from '../platforms/psn.adapter';
+import { xboxAdapter } from '../platforms/xbox.adapter';
 import type { SyncJobData, SyncJobResult } from './sync.queue';
 
 const ADAPTERS = {
   STEAM: steamAdapter,
   RA: retroAchievementsAdapter,
+  PSN: psnAdapter,
+  XBOX: xboxAdapter,
 } as const;
 
 export function startSyncWorker() {
@@ -43,7 +47,7 @@ export function startSyncWorker() {
         syncedAt: result.syncedAt,
       };
     },
-    { connection: redis, concurrency: 5 },
+    { connection: createWorkerConnection(), concurrency: 5 },
   );
 
   worker.on('completed', (job) => {

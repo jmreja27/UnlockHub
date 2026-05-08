@@ -4,12 +4,20 @@ const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12;
 const TAG_LENGTH = 16;
 
+let cachedHex = '';
+let cachedKey: Buffer | null = null;
+
 function getKey(): Buffer {
-  const hex = process.env['ENCRYPTION_KEY'] ?? '';
-  if (!/^[0-9a-fA-F]{64}$/.test(hex)) {
+  const hex = process.env['ENCRYPTION_KEY'];
+  if (!hex || !/^[0-9a-fA-F]{64}$/.test(hex)) {
     throw new Error('ENCRYPTION_KEY debe ser exactamente 64 caracteres hexadecimales válidos');
   }
-  return Buffer.from(hex, 'hex');
+  // Solo rebuffer si la clave cambió (normal en producción es invariante)
+  if (hex !== cachedHex) {
+    cachedHex = hex;
+    cachedKey = Buffer.from(hex, 'hex');
+  }
+  return cachedKey!;
 }
 
 export function encrypt(plaintext: string): string {

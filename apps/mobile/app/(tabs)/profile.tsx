@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 
 import { useSessionStore } from '../../stores/sessionStore';
@@ -15,6 +15,19 @@ import { PremiumBanner } from '../../components/PremiumBanner';
 import { FEATURES } from '../../lib/featureFlags';
 import { api } from '../../lib/api';
 import type { PlatformAccount } from '@unlockhub/types';
+
+function isWrappedAvailable(): boolean {
+  return new Date().getMonth() >= 11; // Disponible desde diciembre (mes 11 en base 0)
+}
+
+function getWrappedYears(): number[] {
+  const currentYear = new Date().getFullYear();
+  const years: number[] = [];
+  // Años pasados siempre accesibles; año actual solo desde diciembre
+  for (let y = currentYear - 1; y >= 2024; y--) years.push(y);
+  if (isWrappedAvailable()) years.unshift(currentYear);
+  return years;
+}
 
 const AVATAR_BLURHASH = 'L6PZfSi_.AyE_3t7t7R**0o#DgR4';
 
@@ -66,6 +79,8 @@ export default function ProfileScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Obtiene las plataformas vinculadas del usuario
+  const queryClient = useQueryClient();
+
   const {
     data: platforms,
     isLoading: isLoadingPlatforms,
@@ -77,10 +92,42 @@ export default function ProfileScreen() {
     staleTime: 1000 * 60 * 5,
   });
 
+  const unlinkMutation = useMutation({
+    mutationFn: (platform: string) =>
+      api.delete(`/api/v1/platforms/${platform.toLowerCase()}/unlink`),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['platforms', user?.id] });
+      void queryClient.invalidateQueries({ queryKey: ['linkedPlatforms'] });
+    },
+  });
+
+  function handleUnlink(platform: string, label: string) {
+    const platformKey = platform.toLowerCase();
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Alert.alert(
+      label,
+      t(`link_platform.${platformKey}.unlink_confirm`),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t(`link_platform.${platformKey}.unlink`),
+          style: 'destructive',
+          onPress: () => {
+            void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            unlinkMutation.mutate(platform);
+          },
+        },
+      ],
+    );
+  }
+
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    await refetchPlatforms();
-    setIsRefreshing(false);
+    try {
+      await refetchPlatforms();
+    } finally {
+      setIsRefreshing(false);
+    }
   }, [refetchPlatforms]);
 
   function handleLogout() {
@@ -229,36 +276,52 @@ export default function ProfileScreen() {
           </Text>
 
           {platforms && platforms.length > 0 ? (
-            platforms.map((account) => (
-              <View
-                key={account.id}
-                className="flex-row items-center bg-surface-elevated rounded-xl px-4 py-3 mb-2"
-                accessible
-                accessibilityLabel={`${PLATFORM_LABELS[account.platform] ?? account.platform}: ${account.username}`}
-              >
+            platforms.map((account) => {
+              const canUnlink = account.platform === 'PSN' || account.platform === 'XBOX';
+              const label = PLATFORM_LABELS[account.platform] ?? account.platform;
+              return (
                 <View
-                  style={{
-                    width: 10,
-                    height: 10,
-                    borderRadius: 5,
-                    backgroundColor: PLATFORM_COLORS[account.platform] ?? '#6b7280',
-                    marginRight: 12,
-                  }}
-                  accessibilityElementsHidden
-                />
-                <View className="flex-1">
-                  <Text className="text-white font-semibold text-sm">
-                    {PLATFORM_LABELS[account.platform] ?? account.platform}
-                  </Text>
-                  <Text className="text-gray-400 text-xs mt-0.5">{account.username}</Text>
+                  key={account.id}
+                  className="flex-row items-center bg-surface-elevated rounded-xl px-4 py-3 mb-2"
+                  accessible
+                  accessibilityLabel={`${label}: ${account.username}`}
+                >
+                  <View
+                    style={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: 5,
+                      backgroundColor: PLATFORM_COLORS[account.platform] ?? '#6b7280',
+                      marginRight: 12,
+                    }}
+                    accessibilityElementsHidden
+                  />
+                  <View className="flex-1">
+                    <Text className="text-white font-semibold text-sm">{label}</Text>
+                    <Text className="text-gray-400 text-xs mt-0.5">{account.username}</Text>
+                  </View>
+                  {account.lastSyncedAt && (
+                    <Text className="text-gray-500 text-xs mr-2">
+                      {t('profile.sync_prefix')} {new Date(account.lastSyncedAt).toLocaleDateString()}
+                    </Text>
+                  )}
+                  {canUnlink && (
+                    <Pressable
+                      onPress={() => handleUnlink(account.platform, label)}
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        account.platform === 'PSN'
+                          ? t('link_platform.psn.unlink')
+                          : t('link_platform.xbox.unlink')
+                      }
+                      style={{ minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'flex-end' }}
+                    >
+                      <Text className="text-red-400 text-xs">✕</Text>
+                    </Pressable>
+                  )}
                 </View>
-                {account.lastSyncedAt && (
-                  <Text className="text-gray-500 text-xs">
-                    {t('profile.sync_prefix')} {new Date(account.lastSyncedAt).toLocaleDateString()}
-                  </Text>
-                )}
-              </View>
-            ))
+              );
+            })
           ) : (
             <View
               className="bg-surface-elevated rounded-xl px-4 py-6 items-center"
@@ -270,10 +333,81 @@ export default function ProfileScreen() {
               </Text>
             </View>
           )}
+
+          {/* Botones para vincular PSN / Xbox si aún no están vinculados */}
+          {(() => {
+            const linked = new Set(platforms?.map((p) => p.platform) ?? []);
+            return (
+              <View className="mt-2 gap-2">
+                {!linked.has('PSN') && (
+                  <Pressable
+                    onPress={() => router.push('/link-platform/psn')}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('link_platform.psn.submit_label')}
+                    className="flex-row items-center bg-surface-elevated border border-[#003791]/60 rounded-xl px-4 py-3 active:opacity-80"
+                    style={{ minHeight: 52 }}
+                  >
+                    <View
+                      style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#003791', marginRight: 12 }}
+                      accessibilityElementsHidden
+                    />
+                    <Text className="text-white font-semibold text-sm flex-1">
+                      {t('link_platform.psn.submit')}
+                    </Text>
+                    <Text className="text-gray-400 text-lg">›</Text>
+                  </Pressable>
+                )}
+                {!linked.has('XBOX') && (
+                  <Pressable
+                    onPress={() => router.push('/link-platform/xbox')}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('link_platform.xbox.submit_label')}
+                    className="flex-row items-center bg-surface-elevated border border-[#107c10]/60 rounded-xl px-4 py-3 active:opacity-80"
+                    style={{ minHeight: 52 }}
+                  >
+                    <View
+                      style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#107c10', marginRight: 12 }}
+                      accessibilityElementsHidden
+                    />
+                    <Text className="text-white font-semibold text-sm flex-1">
+                      {t('link_platform.xbox.submit')}
+                    </Text>
+                    <Text className="text-gray-400 text-lg">›</Text>
+                  </Pressable>
+                )}
+              </View>
+            );
+          })()}
         </View>
 
         {/* Banner de suscripción premium — visible solo cuando FEATURES.premium está activo */}
         {FEATURES.premium && isAuthenticated && <PremiumBanner />}
+
+        {/* Gaming Wrapped — accesible en diciembre (año actual) y siempre para años pasados */}
+        {(() => {
+          const years = getWrappedYears();
+          if (years.length === 0) return null;
+          return (
+            <View className="px-6 mb-4">
+              <Text className="text-gray-300 text-sm font-semibold mb-3 uppercase tracking-wider">
+                {t('wrapped.section_title')}
+              </Text>
+              {years.map((y) => (
+                <Pressable
+                  key={y}
+                  className="flex-row items-center justify-between bg-surface-elevated rounded-xl px-4 py-3 mb-2 active:opacity-80"
+                  onPress={() => router.push(`/wrapped/${y}`)}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('wrapped.open_year', { year: y })}
+                  style={{ minHeight: 52 }}
+                >
+                  <Text className="text-white font-semibold">Gaming Wrapped {y}</Text>
+                  <Text className="text-gray-400 text-lg">›</Text>
+                </Pressable>
+              ))}
+            </View>
+          );
+        })()}
 
         {/* Botón cerrar sesión */}
         <View className="px-6">
@@ -290,6 +424,18 @@ export default function ProfileScreen() {
             <Text className="text-red-400 font-semibold text-base">
               {isLoggingOut ? t('profile.logging_out') : t('profile.logout')}
             </Text>
+          </Pressable>
+        </View>
+
+        {/* Enlace a la política de privacidad — requerido por Google Play y RGPD */}
+        <View className="px-6 mt-4 mb-2 items-center">
+          <Pressable
+            onPress={() => router.push('/privacy')}
+            accessibilityRole="link"
+            accessibilityLabel={t('privacy.link_label')}
+            style={{ minHeight: 44, justifyContent: 'center' }}
+          >
+            <Text className="text-gray-500 text-sm">{t('privacy.link_label')}</Text>
           </Pressable>
         </View>
       </ScrollView>

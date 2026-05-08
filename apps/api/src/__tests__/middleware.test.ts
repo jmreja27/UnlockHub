@@ -2,6 +2,7 @@ import { ZodError } from 'zod';
 
 import { AppError, errorHandler } from '../middleware/errorHandler';
 import { authenticate } from '../middleware/authenticate';
+import { adminAuth } from '../middleware/adminAuth';
 import { signAccessToken } from '../lib/jwt';
 
 beforeEach(() => {
@@ -132,5 +133,59 @@ describe('authenticate', () => {
 
     expect(next).toHaveBeenCalledWith();
     expect((req as any).user).toMatchObject({ id: 'user-1', email: 'a@b.com', isPremium: true });
+  });
+});
+
+// ─── adminAuth ────────────────────────────────────────────────────────────────
+
+describe('adminAuth', () => {
+  const next = jest.fn();
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    delete process.env['ADMIN_SECRET'];
+  });
+
+  it('devuelve 503 si ADMIN_SECRET no está configurado', () => {
+    const req = { headers: {} } as any;
+    const res = mockRes();
+
+    adminAuth(req, res, next);
+
+    expect(res.statusCode).toBe(503);
+    expect(res.jsonBody).toMatchObject({ code: 'ADMIN_NOT_CONFIGURED' });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('devuelve 401 si el header Authorization no coincide con el secret', () => {
+    process.env['ADMIN_SECRET'] = 'supersecret';
+    const req = { headers: { authorization: 'Bearer wrong-secret' } } as any;
+    const res = mockRes();
+
+    adminAuth(req, res, next);
+
+    expect(res.statusCode).toBe(401);
+    expect(res.jsonBody).toMatchObject({ code: 'UNAUTHORIZED' });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('llama a next si el header Authorization es correcto', () => {
+    process.env['ADMIN_SECRET'] = 'supersecret';
+    const req = { headers: { authorization: 'Bearer supersecret' } } as any;
+    const res = mockRes();
+
+    adminAuth(req, res, next);
+
+    expect(next).toHaveBeenCalledWith();
+  });
+
+  it('devuelve 401 si no hay header Authorization', () => {
+    process.env['ADMIN_SECRET'] = 'supersecret';
+    const req = { headers: {} } as any;
+    const res = mockRes();
+
+    adminAuth(req, res, next);
+
+    expect(res.statusCode).toBe(401);
   });
 });

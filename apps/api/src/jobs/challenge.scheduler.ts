@@ -1,5 +1,5 @@
 import { Queue, Worker } from 'bullmq';
-import { redis } from '../lib/redis';
+import { redis, createWorkerConnection } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 import { updateProgress } from '../services/challenge.service';
 
@@ -34,7 +34,7 @@ async function evaluatePreviousChallenge(): Promise<void> {
 export const challengeWorker = new Worker(
   'challenge',
   async () => { await evaluatePreviousChallenge(); },
-  { connection: redis, concurrency: 1 },
+  { connection: createWorkerConnection(), concurrency: 1 },
 );
 
 challengeWorker.on('failed', (job, err) => {

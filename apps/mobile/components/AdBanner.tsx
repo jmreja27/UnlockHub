@@ -1,7 +1,9 @@
 // Componente de banner publicitario.
 // Muestra un anuncio de AdMob si la librería está disponible,
 // o un placeholder visual con las dimensiones de un banner estándar (320x50).
+// Los usuarios premium no ven anuncios — devuelve null si isPremium.
 import { View, Text } from 'react-native';
+import { useSessionStore } from '../stores/sessionStore';
 
 // Dimensiones estándar de un banner de AdMob
 const BANNER_WIDTH = 320;
@@ -49,9 +51,12 @@ try {
 const AD_UNIT_ID =
   process.env['EXPO_PUBLIC_ADMOB_BANNER_ID'] ?? 'ca-app-pub-3940256099942544/6300978111'; // ID de prueba de Google
 
-// Renderiza banner de AdMob o placeholder. Cuando premium esté activo (FEATURES.premium),
-// los usuarios premium no verán anuncios — ver lib/featureFlags.ts.
+// Renderiza banner de AdMob o placeholder. Usuarios premium no ven anuncios.
 export function AdBanner() {
+  const { user } = useSessionStore();
+
+  if (user?.isPremium) return null;
+
   // Si AdMob está disponible, mostrar el banner real
   if (AdMobBanner !== null && BannerAdSize !== null) {
     const BannerComponent = AdMobBanner;

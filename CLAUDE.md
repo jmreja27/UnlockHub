@@ -213,7 +213,25 @@ Si la API externa falla → mostrar última respuesta cacheada, nunca error en b
 
 ---
 
-## Seguridad — Prioridad máxima
+## Seguridad — Pilar fundamental de la aplicación
+
+La seguridad no es una característica opcional: es el requisito más importante de UnlockHub. Cualquier código generado debe cumplir estas reglas sin excepción. Si existe conflicto entre velocidad de desarrollo y seguridad, **siempre gana la seguridad**.
+
+### Gestión de secrets y credenciales — Regla absoluta
+
+**Ningún secret, contraseña, clave de API, token o dato sensible puede aparecer jamás en el código fuente, en ningún fichero del repositorio ni en ningún mensaje de commit.**
+
+Reglas concretas e innegociables:
+
+- **Ficheros `.env`** con valores reales: solo existen en la máquina local del desarrollador y en el servidor de hosting. Nunca se suben a git. El `.gitignore` debe bloquearlos siempre: `.env`, `.env.local`, `.env.production`, `*.env`.
+- **Ficheros `.env.example`**: solo contienen placeholders (`TU_CLAVE_AQUI`, `GENERAR_SECRETO`). Son los únicos ficheros de entorno que se suben al repositorio.
+- **Secrets de producción**: se guardan exclusivamente en el proveedor de hosting (Fly.io → `fly secrets set`). Nunca en ficheros del repo, nunca en comentarios, nunca en logs.
+- **Secrets de CI/CD** (EAS Build, GitHub Actions): se configuran en el dashboard del servicio (expo.dev, GitHub Secrets). Nunca se escriben en ficheros del repositorio.
+- **Claves de API de terceros** (Steam, AdMob, Cloudinary, Sentry): ídem — solo en variables de entorno del servidor o del build, nunca hardcodeadas.
+- **Verificación antes de cada commit**: comprobar que ningún fichero staged contiene secrets reales. Si Claude detecta un secret real en cualquier fichero que vaya a escribir, debe negarse y pedir al usuario que lo proporcione por variable de entorno.
+- **Rotación inmediata**: si se detecta que un secret ha sido expuesto en el repositorio por error, considerarlo comprometido y rotarlo inmediatamente aunque el commit haya sido eliminado (git history puede haberse cloneado).
+
+### Seguridad en el código
 
 Estas reglas son innegociables en todo el código generado:
 
@@ -229,6 +247,7 @@ Estas reglas son innegociables en todo el código generado:
 - **Variables de entorno**: nunca en código. `.env` validado con Zod al arrancar el servidor.
 - **Logs de seguridad**: registrar intentos fallidos de login, cambios de contraseña y vinculaciones.
 - **CI**: `npm audit --audit-level=high` en cada PR.
+- **Sin secrets en logs**: nunca loguear contraseñas, tokens, claves de API ni datos personales.
 
 ---
 

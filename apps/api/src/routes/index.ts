@@ -11,6 +11,8 @@ import pointsRouter from './points.routes';
 import activityRouter from './activity.routes';
 import challengeRouter from './challenge.routes';
 import notificationRouter from './notification.routes';
+import wrappedRouter from './wrapped.routes';
+import adminRouter from './admin.routes';
 
 const router = Router();
 
@@ -29,5 +31,7 @@ router.use('/users/me/points', pointsRouter);
 router.use('/activity', activityRouter);
 router.use('/challenges', challengeRouter);
 router.use('/notifications', notificationRouter);
+router.use('/wrapped', wrappedRouter);
+router.use('/admin', adminRouter);
 
 export default router;

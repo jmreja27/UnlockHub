@@ -6,6 +6,10 @@ import {
   unlinkSteamHandler,
   linkRetroAchievementsHandler,
   unlinkRetroAchievementsHandler,
+  linkPsnHandler,
+  unlinkPsnHandler,
+  linkXboxHandler,
+  unlinkXboxHandler,
   getLinkedPlatformsHandler,
 } from '../controllers/platform.controller';
 
@@ -16,6 +20,10 @@ router.post('/steam/link', authenticate, linkSteamHandler);
 router.delete('/steam/unlink', authenticate, unlinkSteamHandler);
 router.post('/ra/link', authenticate, linkRetroAchievementsHandler);
 router.delete('/ra/unlink', authenticate, unlinkRetroAchievementsHandler);
+router.post('/psn/link', authenticate, linkPsnHandler);
+router.delete('/psn/unlink', authenticate, unlinkPsnHandler);
+router.post('/xbox/link', authenticate, linkXboxHandler);
+router.delete('/xbox/unlink', authenticate, unlinkXboxHandler);
 router.get('/', authenticate, getLinkedPlatformsHandler);
 
 export default router;

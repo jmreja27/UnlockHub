@@ -3,7 +3,7 @@ export type Platform = 'STEAM' | 'RA' | 'XBOX' | 'PSN';
 
 export type PointReason = 'CHALLENGE' | 'STREAK' | 'ACHIEVEMENT';
 
-export type SubscriptionPlan = 'MONTHLY' | 'ANNUAL';
+export type SubscriptionPlan = 'MONTHLY' | 'ANNUAL' | 'LIFETIME';
 
 export type StoreProvider = 'GOOGLE_PLAY' | 'APP_STORE';
 
@@ -160,6 +160,30 @@ export interface UserChallenge {
   progress: number;
   completedAt: string | null;
   challenge?: WeeklyChallenge;
+}
+
+export interface GamingWrapped {
+  year: number;
+  totalAchievements: number;
+  totalXpGained: number;
+  topGame: {
+    title: string;
+    iconUrl: string | null;
+    achievementsCount: number;
+    platform: Platform;
+  } | null;
+  rarestAchievement: {
+    title: string;
+    iconUrl: string | null;
+    rarity: number;
+    gameName: string;
+  } | null;
+  bestStreak: number;
+  previousYear: {
+    totalAchievements: number;
+    totalXpGained: number;
+    bestStreak: number;
+  } | null;
 }
 
 export const SYNC_COOLDOWNS: Record<SyncTier, SyncCooldownConfig> = {

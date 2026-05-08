@@ -43,9 +43,9 @@ describe('saveDeviceToken', () => {
 });
 
 describe('removeDeviceToken', () => {
-  it('elimina el token por valor', async () => {
-    await removeDeviceToken('ExponentPushToken[xxx]');
-    expect(mockDeleteMany).toHaveBeenCalledWith({ where: { token: 'ExponentPushToken[xxx]' } });
+  it('elimina el token solo del usuario propietario', async () => {
+    await removeDeviceToken('u1', 'ExponentPushToken[xxx]');
+    expect(mockDeleteMany).toHaveBeenCalledWith({ where: { token: 'ExponentPushToken[xxx]', userId: 'u1' } });
   });
 });
 

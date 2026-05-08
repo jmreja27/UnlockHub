@@ -42,8 +42,8 @@ export async function saveDeviceToken(userId: string, token: string, platform: s
   });
 }
 
-export async function removeDeviceToken(token: string): Promise<void> {
-  await prisma.deviceToken.deleteMany({ where: { token } });
+export async function removeDeviceToken(userId: string, token: string): Promise<void> {
+  await prisma.deviceToken.deleteMany({ where: { token, userId } });
 }
 
 export async function sendPush(
@@ -58,6 +58,21 @@ export async function sendPush(
   });
   const messages: ExpoPushMessage[] = tokens.map((t) => ({ to: t.token, title, body, data }));
   await sendToExpo(messages);
+}
+
+export async function sendAll(
+  title: string,
+  body: string,
+  data?: Record<string, unknown>,
+): Promise<void> {
+  const tokens = await prisma.deviceToken.findMany({ select: { token: true } });
+  // Expo limita a 100 mensajes por request — procesar en lotes
+  const BATCH_SIZE = 100;
+  for (let i = 0; i < tokens.length; i += BATCH_SIZE) {
+    const batch = tokens.slice(i, i + BATCH_SIZE);
+    const messages: ExpoPushMessage[] = batch.map((t) => ({ to: t.token, title, body, data }));
+    await sendToExpo(messages);
+  }
 }
 
 export async function sendBulk(

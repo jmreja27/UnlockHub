@@ -158,7 +158,7 @@ export default function FriendsScreen() {
     return (
       <View className="gap-2 mt-4">
         {Array.from({ length: 5 }).map((_, i) => (
-          <SkeletonBox key={i} className="h-16 mx-4 rounded-xl" />
+          <SkeletonBox key={i} height={64} className="mx-4 rounded-xl" />
         ))}
       </View>
     );

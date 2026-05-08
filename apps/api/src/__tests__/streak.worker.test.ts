@@ -5,6 +5,7 @@ jest.mock('../lib/redis', () => ({
   redis: { set: jest.fn(), del: jest.fn(), get: jest.fn(), on: jest.fn(), pipeline: jest.fn(() => ({ zadd: jest.fn(), exec: jest.fn() })) },
 }));
 jest.mock('../services/user.service', () => ({ addXp: jest.fn() }));
+jest.mock('../services/activity.service', () => ({ createEvent: jest.fn() }));
 jest.mock('bullmq', () => ({
   Worker: jest.fn().mockImplementation(() => ({ on: jest.fn(), close: jest.fn() })),
   Queue: jest.fn().mockImplementation(() => ({

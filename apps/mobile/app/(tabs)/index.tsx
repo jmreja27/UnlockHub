@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useFeed } from '../../hooks/useFeed';
 import { ActivityCard } from '../../components/ActivityCard';
 import { SkeletonBox } from '../../components/SkeletonBox';
+import { AdBanner } from '../../components/AdBanner';
 import type { ActivityEvent } from '@unlockhub/types';
 
 function FeedSkeleton() {
@@ -78,6 +79,7 @@ export default function FeedScreen() {
               </Text>
             </View>
           }
+          ListFooterComponent={<AdBanner />}
         />
       )}
     </SafeAreaView>

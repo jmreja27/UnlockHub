@@ -11,11 +11,34 @@ build/
 android/
 ios/
 
-# Variables de entorno
+# Variables de entorno — NUNCA subir ficheros con secrets reales
 .env
 .env.local
 .env.*.local
+.env.production
+.env.staging
+.env.development
 !.env.example
+!.env.*.example
+
+# Claude Code — configuración local del agente (no subir)
+.claude/
+
+# Documentación privada local — no subir al repositorio
+PRODUCTION_ACCOUNTS.md
+SCALING_GUIDE.md
+
+# Credenciales de Firebase / Google Services — contienen claves de API
+google-services.json
+GoogleService-Info.plist
+
+# Service account key de Google Play (usada por EAS Submit)
+google-play-service-account.json
+*.serviceaccount.json
+
+# Certificados y claves privadas
+*.pem
+*.p7s
 
 # Logs
 *.log

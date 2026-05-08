@@ -1,16 +1,18 @@
 import { AppError } from '../middleware/errorHandler';
 import { prisma } from '../lib/prisma';
 
-// Estado activo de suscripción
 const ACTIVE_STATUS = 'active';
 const CANCELLED_STATUS = 'cancelled';
 const EXPIRED_STATUS = 'expired';
 
+// Fecha centinela para suscripciones LIFETIME — nunca vencen
+const LIFETIME_EXPIRES_AT = new Date('2099-12-31T23:59:59Z');
+
 interface CreateOrUpdateSubscriptionData {
-  plan: 'MONTHLY' | 'ANNUAL';
+  plan: 'MONTHLY' | 'ANNUAL' | 'LIFETIME';
   provider: 'GOOGLE_PLAY' | 'APP_STORE';
   storeTransactionId: string;
-  expiresAt: Date;
+  expiresAt?: Date;
 }
 
 interface SubscriptionStatus {
@@ -42,7 +44,9 @@ export async function createOrUpdateSubscription(
     data: { status: EXPIRED_STATUS },
   });
 
-  // Upsert de la suscripción por storeTransactionId (idempotente)
+  const isLifetime = data.plan === 'LIFETIME';
+  const expiresAt = isLifetime ? LIFETIME_EXPIRES_AT : (data.expiresAt as Date);
+
   await prisma.subscription.upsert({
     where: { storeTransactionId: data.storeTransactionId },
     create: {
@@ -52,22 +56,22 @@ export async function createOrUpdateSubscription(
       storeTransactionId: data.storeTransactionId,
       status: ACTIVE_STATUS,
       startedAt: new Date(),
-      expiresAt: data.expiresAt,
+      expiresAt,
     },
     update: {
       plan: data.plan,
       provider: data.provider,
       status: ACTIVE_STATUS,
-      expiresAt: data.expiresAt,
+      expiresAt,
     },
   });
 
-  // Marcar al usuario como premium con fecha de vencimiento
+  // LIFETIME: premiumUntil=null (permanente). MONTHLY/ANNUAL: premiumUntil=fecha de expiración.
   await prisma.user.update({
     where: { id: userId },
     data: {
       isPremium: true,
-      premiumUntil: data.expiresAt,
+      premiumUntil: isLifetime ? null : expiresAt,
     },
   });
 }
@@ -87,6 +91,15 @@ export async function cancelSubscription(userId: string): Promise<void> {
 
   if (!activeSubscription) {
     throw new AppError('No tienes una suscripción activa', 'NO_ACTIVE_SUBSCRIPTION', 404);
+  }
+
+  // LIFETIME no se puede cancelar — es un pago único permanente
+  if (activeSubscription.plan === 'LIFETIME') {
+    throw new AppError(
+      'El acceso de por vida no puede cancelarse',
+      'LIFETIME_NOT_CANCELLABLE',
+      400,
+    );
   }
 
   // Marcar la suscripción como cancelada y revocar el premium del usuario
@@ -144,10 +157,11 @@ export async function getSubscriptionStatus(userId: string): Promise<Subscriptio
 export async function expireOldSubscriptions(): Promise<number> {
   const now = new Date();
 
-  // Buscar suscripciones activas que ya hayan vencido
+  // Buscar suscripciones activas vencidas — excluir LIFETIME (nunca vencen)
   const expiredSubscriptions = await prisma.subscription.findMany({
     where: {
       status: ACTIVE_STATUS,
+      plan: { not: 'LIFETIME' },
       expiresAt: { lt: now },
     },
     select: { id: true, userId: true },

@@ -8,6 +8,8 @@ import { restoreAutoSyncs } from './jobs/sync.scheduler';
 import { streakWorker } from './jobs/streak.worker';
 import { scheduleStreakJob } from './jobs/streak.scheduler';
 import { challengeWorker, scheduleChallengeEvaluation } from './jobs/challenge.scheduler';
+import { redis } from './lib/redis';
+import { prisma } from './lib/prisma';
 
 const env = validateEnv();
 
@@ -19,7 +21,7 @@ const io = initSocketServer(server);
 registerActivityHandler(io);
 
 server.listen(env.PORT, async () => {
-  console.warn(`API arrancada en el puerto ${env.PORT} (${env.NODE_ENV})`);
+  console.log(`API arrancada en el puerto ${env.PORT} (${env.NODE_ENV})`);
   if (env.NODE_ENV !== 'test') {
     await restoreAutoSyncs();
     await scheduleStreakJob();
@@ -32,8 +34,10 @@ process.on('SIGTERM', async () => {
   await streakWorker.close();
   await challengeWorker.close();
   io.close();
+  await prisma.$disconnect();
+  await redis.quit();
   server.close(() => {
-    console.warn('Servidor cerrado.');
+    console.log('Servidor cerrado.');
     process.exit(0);
   });
 });

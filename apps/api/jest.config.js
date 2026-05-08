@@ -9,6 +9,10 @@ const config = {
   coverageThreshold: {
     global: { lines: 80 },
   },
+  moduleNameMapper: {
+    '^@unlockhub/types$': '<rootDir>/../../packages/types/src/index.ts',
+    '^@unlockhub/validators$': '<rootDir>/../../packages/validators/src/index.ts',
+  },
   roots: ['<rootDir>/src'],
   testMatch: ['**/__tests__/**/*.test.ts', '**/*.test.ts'],
   coverageDirectory: 'coverage',

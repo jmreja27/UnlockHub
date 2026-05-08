@@ -3,8 +3,10 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // directUrl es la conexión directa (sin pooler) requerida por Neon para migraciones Prisma
+  directUrl = env("DIRECT_URL")
 }
 
 // ─── Enums ───────────────────────────────────────────────────────────────────
@@ -26,6 +28,7 @@ enum PointReason {
 enum SubscriptionPlan {
   MONTHLY
   ANNUAL
+  LIFETIME
 }
 
 enum StoreProvider {

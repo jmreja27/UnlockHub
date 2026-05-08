@@ -7,7 +7,20 @@ describe('Health check', () => {
     const res = await request(app).get('/health');
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty('status', 'ok');
+    expect(res.body).toHaveProperty('maintenance', false);
     expect(res.body).toHaveProperty('timestamp');
+  });
+
+  it('GET /health devuelve 503 en modo mantenimiento', async () => {
+    const original = process.env['MAINTENANCE_MODE'];
+    process.env['MAINTENANCE_MODE'] = 'true';
+
+    const res = await request(app).get('/health');
+    expect(res.status).toBe(503);
+    expect(res.body).toHaveProperty('status', 'maintenance');
+    expect(res.body).toHaveProperty('maintenance', true);
+
+    process.env['MAINTENANCE_MODE'] = original;
   });
 
   it('GET /api/v1 devuelve info de la API', async () => {

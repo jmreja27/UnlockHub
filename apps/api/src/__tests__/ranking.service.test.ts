@@ -99,3 +99,127 @@ describe('rankingService.upsertUserScore', () => {
     expect(pipelineMock.zadd).toHaveBeenCalledTimes(2); // global + steam
   });
 });
+
+describe('rankingService.removeUserFromRankings', () => {
+  it('llama a zrem para global, país y plataformas', async () => {
+    const execMock = jest.fn().mockResolvedValue([]);
+    const pipelineMock = { zrem: jest.fn().mockReturnThis(), exec: execMock };
+    mockRedis.pipeline.mockReturnValue(pipelineMock as never);
+
+    await rankingService.removeUserFromRankings('u1', 'ES', ['STEAM', 'RA']);
+
+    expect(pipelineMock.zrem).toHaveBeenCalledTimes(4); // global + ES + steam + ra
+    expect(execMock).toHaveBeenCalled();
+  });
+
+  it('no llama a zrem de país si countryCode es null', async () => {
+    const execMock = jest.fn().mockResolvedValue([]);
+    const pipelineMock = { zrem: jest.fn().mockReturnThis(), exec: execMock };
+    mockRedis.pipeline.mockReturnValue(pipelineMock as never);
+
+    await rankingService.removeUserFromRankings('u1', null, ['STEAM']);
+
+    expect(pipelineMock.zrem).toHaveBeenCalledTimes(2); // global + steam
+  });
+});
+
+describe('rankingService.getCountryRanking', () => {
+  it('devuelve ranking paginado por país', async () => {
+    mockRedis.zcard.mockResolvedValue(1);
+    mockRedis.zrevrange.mockResolvedValue(['u1', '200'] as never);
+    (mockPrisma.user.findMany as jest.Mock).mockResolvedValue([
+      { id: 'u1', username: 'alpha', avatar: null, countryCode: 'ES' },
+    ]);
+
+    const result = await rankingService.getCountryRanking('ES', 1, 20);
+
+    expect(result.total).toBe(1);
+    expect(result.data[0]?.username).toBe('alpha');
+  });
+
+  it('devuelve lista vacía si no hay usuarios en el ranking de país', async () => {
+    mockRedis.zcard.mockResolvedValue(0);
+
+    const result = await rankingService.getCountryRanking('JP', 1, 20);
+
+    expect(result.data).toHaveLength(0);
+  });
+});
+
+describe('rankingService.getPlatformRanking', () => {
+  it('devuelve ranking paginado por plataforma', async () => {
+    mockRedis.zcard.mockResolvedValue(2);
+    mockRedis.zrevrange.mockResolvedValue(['u1', '400', 'u2', '100'] as never);
+    (mockPrisma.user.findMany as jest.Mock).mockResolvedValue(users);
+
+    const result = await rankingService.getPlatformRanking('STEAM', 1, 20);
+
+    expect(result.total).toBe(2);
+    expect(result.data[0]?.rank).toBe(1);
+  });
+
+  it('devuelve lista vacía si no hay usuarios en la plataforma', async () => {
+    mockRedis.zcard.mockResolvedValue(0);
+
+    const result = await rankingService.getPlatformRanking('PSN', 1, 20);
+
+    expect(result.data).toHaveLength(0);
+  });
+});
+
+describe('rankingService.takeRankingSnapshot', () => {
+  it('no hace nada si el ranking global está vacío', async () => {
+    mockRedis.zcard.mockResolvedValue(0);
+
+    await rankingService.takeRankingSnapshot();
+
+    expect(mockRedis.zrevrange).not.toHaveBeenCalled();
+    expect(mockPrisma.rankingSnapshot.createMany).not.toHaveBeenCalled();
+  });
+
+  it('crea snapshots desde las entradas del ranking global', async () => {
+    mockRedis.zcard.mockResolvedValue(2);
+    mockRedis.zrevrange.mockResolvedValue(['u1', '500', 'u2', '300'] as never);
+    (mockPrisma.rankingSnapshot.createMany as jest.Mock).mockResolvedValue({ count: 2 });
+
+    await rankingService.takeRankingSnapshot();
+
+    expect(mockPrisma.rankingSnapshot.createMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.arrayContaining([
+          expect.objectContaining({ userId: 'u1', rank: 1, xp: 500 }),
+          expect.objectContaining({ userId: 'u2', rank: 2, xp: 300 }),
+        ]),
+        skipDuplicates: true,
+      }),
+    );
+  });
+
+  it('ignora entradas con userId vacío o xp NaN', async () => {
+    mockRedis.zcard.mockResolvedValue(2);
+    mockRedis.zrevrange.mockResolvedValue(['', '500', 'u2', 'abc'] as never);
+    (mockPrisma.rankingSnapshot.createMany as jest.Mock).mockResolvedValue({ count: 0 });
+
+    await rankingService.takeRankingSnapshot();
+
+    const call = (mockPrisma.rankingSnapshot.createMany as jest.Mock).mock.calls[0]?.[0];
+    expect(call?.data).toHaveLength(0);
+  });
+});
+
+describe('rankingService.seedRankingsFromDb', () => {
+  it('reconstruye el ranking en Redis desde todos los usuarios de la BD', async () => {
+    (mockPrisma.user.findMany as jest.Mock).mockResolvedValue([
+      { id: 'u1', xp: 500, countryCode: 'ES', platformAccounts: [{ platform: 'STEAM' }] },
+      { id: 'u2', xp: 200, countryCode: null, platformAccounts: [] },
+    ]);
+    const execMock = jest.fn().mockResolvedValue([]);
+    const pipelineMock = { zadd: jest.fn().mockReturnThis(), exec: execMock };
+    mockRedis.pipeline.mockReturnValue(pipelineMock as never);
+
+    await rankingService.seedRankingsFromDb();
+
+    // u1: global + ES + steam = 3 zadd; u2: global = 1 zadd
+    expect(pipelineMock.zadd).toHaveBeenCalledTimes(4);
+  });
+});

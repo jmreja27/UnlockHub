@@ -1,5 +1,5 @@
 import { Worker } from 'bullmq';
-import { redis } from '../lib/redis';
+import { redis, createWorkerConnection } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 import { addXp } from '../services/user.service';
 import { createEvent } from '../services/activity.service';
@@ -66,7 +66,7 @@ export const streakWorker = new Worker(
   async () => {
     await processStreaks();
   },
-  { connection: redis, concurrency: 1 },
+  { connection: createWorkerConnection(), concurrency: 1 },
 );
 
 streakWorker.on('failed', (job, err) => {

@@ -9,6 +9,7 @@ import { useGlobalRankings, useMyRanking } from '../../hooks/useRankings';
 import { useSessionStore } from '../../stores/sessionStore';
 import { RankingItem } from '../../components/RankingItem';
 import { SkeletonBox } from '../../components/SkeletonBox';
+import { AdBanner } from '../../components/AdBanner';
 import type { RankingEntry } from '@unlockhub/types';
 
 // Número de ítems skeleton que se muestran durante la carga inicial
@@ -159,6 +160,7 @@ export default function RankingsScreen() {
               </Text>
             </View>
           }
+          ListFooterComponent={<AdBanner />}
         />
       )}
     </SafeAreaView>
