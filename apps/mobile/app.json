@@ -47,13 +47,6 @@
         {
           "color": "#4f46e5"
         }
-      ],
-      [
-        "@sentry/react-native/expo",
-        {
-          "url": "https://sentry.io/",
-          "note": "Configurar SENTRY_AUTH_TOKEN, project y organization tras crear la cuenta en sentry.io"
-        }
       ]
     ],
     "experiments": {
