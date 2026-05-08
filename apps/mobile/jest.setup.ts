@@ -108,19 +108,6 @@ jest.mock('socket.io-client', () => ({
   })),
 }));
 
-// react-native-iap
-jest.mock('react-native-iap', () => ({
-  initConnection: jest.fn(() => Promise.resolve(true)),
-  endConnection: jest.fn(() => Promise.resolve()),
-  getSubscriptions: jest.fn(() => Promise.resolve([])),
-  getProducts: jest.fn(() => Promise.resolve([])),
-  requestSubscription: jest.fn(() => Promise.resolve()),
-  requestPurchase: jest.fn(() => Promise.resolve()),
-  finishTransaction: jest.fn(() => Promise.resolve()),
-  purchaseUpdatedListener: jest.fn(() => ({ remove: jest.fn() })),
-  purchaseErrorListener: jest.fn(() => ({ remove: jest.fn() })),
-}));
-
 // react-native-google-mobile-ads — no disponible en entorno de test
 jest.mock('react-native-google-mobile-ads', () => ({
   BannerAd: null,
