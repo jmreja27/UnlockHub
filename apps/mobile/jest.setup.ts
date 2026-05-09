@@ -99,12 +99,6 @@ jest.mock('socket.io-client', () => ({
   })),
 }));
 
-// react-native-google-mobile-ads — no disponible en entorno de test
-jest.mock('react-native-google-mobile-ads', () => ({
-  BannerAd: null,
-  BannerAdSize: { BANNER: 'BANNER' },
-}));
-
 // react-native-reanimated — el preset jest-expo ya lo maneja, pero lo forzamos por si acaso
 jest.mock('react-native-reanimated', () => {
   const Reanimated = jest.requireActual('react-native-reanimated/mock');

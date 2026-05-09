@@ -55,7 +55,7 @@ export function GameCard({ game }: Props) {
       <View
         className="px-2 py-0.5 rounded-full ml-2"
         style={{ backgroundColor: platformColor + '33' }}
-        accessibilityElementsHidden
+        importantForAccessibility="no"
       >
         <Text className="text-xs font-medium" style={{ color: platformColor }}>
           {platformLabel}
