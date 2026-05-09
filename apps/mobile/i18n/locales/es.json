@@ -121,6 +121,7 @@
     "add_friend_hint": "Enviar solicitud de amistad a {{username}}",
     "remove_friend": "Eliminar amigo",
     "remove_friend_hint": "Eliminar a {{username}} de tu lista de amigos",
+    "view_profile_hint": "Pulsa para ver el perfil de este jugador",
     "accept": "Aceptar",
     "accept_hint": "Aceptar solicitud de {{username}}",
     "reject": "Rechazar",
@@ -173,7 +174,14 @@
     "error_title": "No se pudo cargar el ranking",
     "error_message": "Comprueba tu conexión a internet e inténtalo de nuevo.",
     "retry_label": "Reintentar carga del ranking",
-    "empty": "El ranking todavía no tiene jugadores.\n¡Sé el primero en aparecer!"
+    "empty": "El ranking todavía no tiene jugadores.\n¡Sé el primero en aparecer!",
+    "filter_label": "Filtrar ranking",
+    "filter_global": "Global",
+    "filter_national": "Nacional",
+    "filter_steam": "Steam",
+    "filter_ra": "RetroAchievements",
+    "filter_psn": "PlayStation",
+    "national_no_country": "Configura tu país en el perfil para ver el ranking nacional"
   },
   "wrapped": {
     "section_title": "Gaming Wrapped",

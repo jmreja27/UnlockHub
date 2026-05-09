@@ -10,29 +10,50 @@ interface MyRankingResponse {
   xp: number;
 }
 
-// Claves de caché para TanStack Query
 const RANKING_KEYS = {
   global: (page: number, limit: number) => ['rankings', 'global', page, limit] as const,
+  country: (code: string, page: number, limit: number) => ['rankings', 'country', code, page, limit] as const,
+  platform: (platform: string, page: number, limit: number) => ['rankings', 'platform', platform, page, limit] as const,
   me: ['rankings', 'me'] as const,
 };
 
-// Obtiene el top N del ranking global con paginación
+const RANKING_STALE = 1000 * 60 * 2;
+const RANKING_GC = 1000 * 60 * 15;
+
 export function useGlobalRankings(page: number = 1, limit: number = 50) {
   return useQuery({
     queryKey: RANKING_KEYS.global(page, limit),
     queryFn: () =>
-      api.get<PaginatedResponse<RankingEntry>>(
-        `/api/v1/rankings/global?page=${page}&limit=${limit}`,
-      ),
-    // Los rankings son relativamente estables: stale a los 2 minutos
-    staleTime: 1000 * 60 * 2,
-    gcTime: 1000 * 60 * 15,
-    // Mantener datos anteriores durante la paginación
+      api.get<PaginatedResponse<RankingEntry>>(`/api/v1/rankings/global?page=${page}&limit=${limit}`),
+    staleTime: RANKING_STALE,
+    gcTime: RANKING_GC,
     placeholderData: (previousData) => previousData,
   });
 }
 
-// Obtiene la posición del usuario autenticado en el ranking
+export function useCountryRanking(countryCode: string, page: number = 1, limit: number = 50) {
+  return useQuery({
+    queryKey: RANKING_KEYS.country(countryCode, page, limit),
+    queryFn: () =>
+      api.get<PaginatedResponse<RankingEntry>>(`/api/v1/rankings/country/${countryCode}?page=${page}&limit=${limit}`),
+    enabled: !!countryCode,
+    staleTime: RANKING_STALE,
+    gcTime: RANKING_GC,
+    placeholderData: (previousData) => previousData,
+  });
+}
+
+export function usePlatformRanking(platform: string, page: number = 1, limit: number = 50) {
+  return useQuery({
+    queryKey: RANKING_KEYS.platform(platform, page, limit),
+    queryFn: () =>
+      api.get<PaginatedResponse<RankingEntry>>(`/api/v1/rankings/platform/${platform}?page=${page}&limit=${limit}`),
+    staleTime: RANKING_STALE,
+    gcTime: RANKING_GC,
+    placeholderData: (previousData) => previousData,
+  });
+}
+
 export function useMyRanking() {
   const { isAuthenticated } = useSessionStore();
 
@@ -40,7 +61,7 @@ export function useMyRanking() {
     queryKey: RANKING_KEYS.me,
     queryFn: () => api.get<MyRankingResponse>('/api/v1/rankings/me'),
     enabled: isAuthenticated,
-    staleTime: 1000 * 60 * 2,
-    gcTime: 1000 * 60 * 15,
+    staleTime: RANKING_STALE,
+    gcTime: RANKING_GC,
   });
 }

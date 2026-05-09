@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, Alert, RefreshControl } from '
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import { useTranslation } from 'react-i18next';
+import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 
 import { useFriends } from '../../hooks/useFriends';
@@ -17,11 +18,13 @@ function FriendItem({
   currentUserId,
   onRemove,
   isRemoving,
+  onPress,
 }: {
   item: Friendship;
   currentUserId: string;
   onRemove: (id: string) => void;
   isRemoving: boolean;
+  onPress: (username: string) => void;
 }) {
   const { t } = useTranslation();
   const friend = item.senderId === currentUserId ? item.receiver : item.sender;
@@ -43,10 +46,13 @@ function FriendItem({
   }
 
   return (
-    <View
+    <TouchableOpacity
+      onPress={() => onPress(friend.username)}
       className="flex-row items-center bg-surface-2 mx-4 mb-2 px-4 py-3 rounded-xl"
       accessible
+      accessibilityRole="button"
       accessibilityLabel={`${friend.username}, ${t('friends.level_short')} ${friend.level}, ${friend.xp} ${t('friends.xp_short')}`}
+      accessibilityHint={t('friends.view_profile_hint')}
     >
       <View className="w-10 h-10 rounded-full bg-primary items-center justify-center mr-3">
         <Text className="text-white font-bold text-base">
@@ -69,7 +75,7 @@ function FriendItem({
       >
         <Text className="text-red-400 text-xs font-medium">{t('friends.remove_friend')}</Text>
       </TouchableOpacity>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -135,6 +141,7 @@ function PendingItem({
 
 export default function FriendsScreen() {
   const { t } = useTranslation();
+  const router = useRouter();
   const { user } = useSessionStore();
   const [activeTab, setActiveTab] = useState<Tab>('friends');
   const [search, setSearch] = useState('');
@@ -245,6 +252,7 @@ export default function FriendsScreen() {
                 currentUserId={user?.id ?? ''}
                 onRemove={removeFriend}
                 isRemoving={isRemoving}
+                onPress={(username) => router.push(`/profile/${username}`)}
               />
             )}
             ListFooterComponent={<View className="h-6" />}
