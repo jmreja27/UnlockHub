@@ -18,6 +18,12 @@ const express = require('express');
 const app = express();
 app.use(express.json());
 
+// ─── REQUEST LOG ─────────────────────────────────────────────────────────────
+app.use((req, _res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  next();
+});
+
 // ─── CORS — necesario para el cliente mobile ────────────────────────────────
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
