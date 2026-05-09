@@ -25,6 +25,7 @@
         "backgroundColor": "#1a1a2e"
       },
       "package": "com.unlockhub.app",
+      "usesCleartextTraffic": true,
       "permissions": [
         "android.permission.INTERNET",
         "android.permission.VIBRATE",
