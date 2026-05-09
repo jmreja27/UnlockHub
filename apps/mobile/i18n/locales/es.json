@@ -103,7 +103,10 @@
     "refresh_label": "Actualizar biblioteca",
     "error_title": "No se pudo cargar la biblioteca",
     "error_message": "Comprueba tu conexión e inténtalo de nuevo.",
-    "empty": "Vincula una plataforma en tu perfil para ver tus juegos aquí."
+    "empty": "Vincula una plataforma en tu perfil para ver tus juegos aquí.",
+    "search_placeholder": "Buscar en tu biblioteca…",
+    "search_label": "Buscar juegos en tu biblioteca",
+    "no_results": "Sin resultados. Prueba con otro título."
   },
   "feed": {
     "title": "Feed",

@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react';
-import { View, Text, RefreshControl, ScrollView, Pressable } from 'react-native';
+import { useCallback, useState, useMemo } from 'react';
+import { View, Text, RefreshControl, ScrollView, Pressable, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import { useTranslation } from 'react-i18next';
@@ -48,14 +48,21 @@ export default function LibraryScreen() {
   const { t } = useTranslation();
   const { user } = useSessionStore();
   const [activeFilter, setActiveFilter] = useState<PlatformFilter>('ALL');
+  const [search, setSearch] = useState('');
 
   const platform = activeFilter === 'ALL' ? undefined : activeFilter;
   const { data, isLoading, isError, refetch, isRefetching } = useMyGames(platform);
 
-  const games = data?.data ?? [];
+  const allGames = data?.data ?? [];
 
-  const totalEarned = games.reduce((sum, g) => sum + g.earnedAchievements, 0);
-  const totalAchievements = games.reduce((sum, g) => sum + g.totalAchievements, 0);
+  const games = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return allGames;
+    return allGames.filter((g) => g.title.toLowerCase().includes(q));
+  }, [allGames, search]);
+
+  const totalEarned = allGames.reduce((sum, g) => sum + g.earnedAchievements, 0);
+  const totalAchievements = allGames.reduce((sum, g) => sum + g.totalAchievements, 0);
 
   const renderItem = useCallback(
     ({ item }: { item: LibraryGame }) => <LibraryGameCard game={item} />,
@@ -82,6 +89,20 @@ export default function LibraryScreen() {
             <Text className="text-gray-500 text-xs">/ {totalAchievements} logros</Text>
           </View>
         )}
+      </View>
+
+      {/* Buscador */}
+      <View className="mx-4 mb-2">
+        <TextInput
+          value={search}
+          onChangeText={setSearch}
+          placeholder={t('library.search_placeholder')}
+          placeholderTextColor="#6b7280"
+          accessibilityLabel={t('library.search_label')}
+          className="bg-surface-2 text-white px-4 py-3 rounded-xl text-sm"
+          returnKeyType="search"
+          clearButtonMode="while-editing"
+        />
       </View>
 
       {/* Filtros por plataforma */}
@@ -151,7 +172,9 @@ export default function LibraryScreen() {
           }
           ListEmptyComponent={
             <View className="items-center justify-center py-20" accessible accessibilityLiveRegion="polite">
-              <Text className="text-gray-400 text-base text-center">{t('library.empty')}</Text>
+              <Text className="text-gray-400 text-base text-center">
+                {search.trim() ? t('library.no_results') : t('library.empty')}
+              </Text>
             </View>
           }
           ListFooterComponent={<AdBanner />}

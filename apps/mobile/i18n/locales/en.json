@@ -103,7 +103,10 @@
     "refresh_label": "Refresh library",
     "error_title": "Could not load library",
     "error_message": "Check your connection and try again.",
-    "empty": "Link a platform in your profile to see your games here."
+    "empty": "Link a platform in your profile to see your games here.",
+    "search_placeholder": "Search your library…",
+    "search_label": "Search games in your library",
+    "no_results": "No results. Try a different title."
   },
   "feed": {
     "title": "Feed",
