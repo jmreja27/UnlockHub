@@ -482,6 +482,40 @@ app.get('/api/v1/platforms', auth, (_req, res) => res.json(DEMO_PLATFORMS));
 // Ruta alternativa que también llama el perfil
 app.get('/api/v1/users/me/platforms', auth, (_req, res) => res.json(DEMO_PLATFORMS));
 
+// Biblioteca de juegos del usuario con progreso de logros
+const LIBRARY_PROGRESS = {
+  g_hl2:       { earned: 15 },
+  g_portal2:   { earned: 30 },
+  g_witcher3:  { earned: 20 },
+  g_darksouls: { earned: 5  },
+  g_smb3:      { earned: 40 },
+  g_megamanx:  { earned: 18 },
+  g_soniccd:   { earned: 8  },
+  g_celeste:   { earned: 3  },
+  g_lastofus2: { earned: 20 },
+  g_spiderman: { earned: 35 },
+  g_bloodborne:{ earned: 12 },
+  g_godofwar:  { earned: 37 },
+  g_horizon:   { earned: 10 },
+};
+const USER_LIBRARY = MOCK_GAMES.map((game, i) => {
+  const earned = LIBRARY_PROGRESS[game.id]?.earned ?? 0;
+  return {
+    ...game,
+    earnedAchievements: earned,
+    completionPct: game.totalAchievements > 0 ? Math.round((earned / game.totalAchievements) * 100) : 0,
+    lastSyncedAt: new Date(Date.now() - 1000 * 60 * 60 * (i * 4 + 1)).toISOString(),
+  };
+});
+
+app.get('/api/v1/users/me/games', auth, (req, res) => {
+  const platform = req.query.platform;
+  const games = platform
+    ? USER_LIBRARY.filter(g => g.platform === platform.toString().toUpperCase())
+    : USER_LIBRARY;
+  res.json({ data: games, total: games.length, page: 1, limit: 50 });
+});
+
 app.post('/api/v1/platforms/steam/link', auth, (req, res) => {
   res.status(201).json({ message: 'Steam vinculado', account: { ...DEMO_PLATFORMS[0], username: req.body.username ?? 'steam_user' } });
 });

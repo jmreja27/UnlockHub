@@ -12,8 +12,10 @@ import { useSessionStore } from '../../stores/sessionStore';
 import { useAuth } from '../../hooks/useAuth';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { PremiumBanner } from '../../components/PremiumBanner';
+import { ActivityCard } from '../../components/ActivityCard';
 import { FEATURES } from '../../lib/featureFlags';
 import { api } from '../../lib/api';
+import { useFeed } from '../../hooks/useFeed';
 import type { PlatformAccount } from '@unlockhub/types';
 
 function isWrappedAvailable(): boolean {
@@ -80,6 +82,8 @@ export default function ProfileScreen() {
 
   // Obtiene las plataformas vinculadas del usuario
   const queryClient = useQueryClient();
+
+  const { events } = useFeed();
 
   const {
     data: platforms,
@@ -408,6 +412,18 @@ export default function ProfileScreen() {
             </View>
           );
         })()}
+
+        {/* Actividad reciente */}
+        {events.length > 0 && (
+          <View className="px-6 mb-6">
+            <Text className="text-gray-300 text-sm font-semibold mb-3 uppercase tracking-wider">
+              {t('profile.recent_activity')}
+            </Text>
+            {events.slice(0, 5).map((event) => (
+              <ActivityCard key={event.id} event={event} />
+            ))}
+          </View>
+        )}
 
         {/* Botón cerrar sesión */}
         <View className="px-6">

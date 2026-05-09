@@ -1,22 +1,42 @@
-import { View, Text, RefreshControl } from 'react-native';
+import { useCallback, useState } from 'react';
+import { View, Text, RefreshControl, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import { useTranslation } from 'react-i18next';
-import { useFeed } from '../../hooks/useFeed';
-import { ActivityCard } from '../../components/ActivityCard';
+
+import { useMyGames } from '../../hooks/useMyGames';
+import { useSessionStore } from '../../stores/sessionStore';
+import { LibraryGameCard } from '../../components/LibraryGameCard';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { AdBanner } from '../../components/AdBanner';
-import type { ActivityEvent } from '@unlockhub/types';
+import type { LibraryGame } from '../../hooks/useMyGames';
 
-function FeedSkeleton() {
+type PlatformFilter = 'ALL' | 'STEAM' | 'RA' | 'PSN' | 'XBOX';
+
+const FILTERS: { key: PlatformFilter; label: string }[] = [
+  { key: 'ALL',   label: 'library.filter_all' },
+  { key: 'STEAM', label: 'library.filter_steam' },
+  { key: 'RA',    label: 'library.filter_ra' },
+  { key: 'PSN',   label: 'library.filter_psn' },
+  { key: 'XBOX',  label: 'library.filter_xbox' },
+];
+
+function LibrarySkeleton() {
   return (
-    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <View key={i} className="flex-row items-center px-4 py-3 border-b border-gray-800">
-          <SkeletonBox width={44} height={44} borderRadius={22} />
-          <View className="flex-1 ml-3">
-            <SkeletonBox height={14} width="80%" style={{ marginBottom: 6 }} />
-            <SkeletonBox height={10} width="40%" />
+    <View className="px-4 pt-2">
+      {Array.from({ length: 7 }).map((_, i) => (
+        <View
+          key={i}
+          className="flex-row items-center bg-surface-card rounded-xl px-4 py-3 mb-2"
+          style={{ minHeight: 68 }}
+          accessible={false}
+          accessibilityElementsHidden
+        >
+          <SkeletonBox width={44} height={44} borderRadius={8} style={{ marginRight: 12 }} />
+          <View className="flex-1">
+            <SkeletonBox width="70%" height={14} borderRadius={4} style={{ marginBottom: 6 }} />
+            <SkeletonBox width="45%" height={11} borderRadius={4} style={{ marginBottom: 6 }} />
+            <SkeletonBox width="100%" height={6} borderRadius={3} />
           </View>
         </View>
       ))}
@@ -24,59 +44,114 @@ function FeedSkeleton() {
   );
 }
 
-export default function FeedScreen() {
+export default function LibraryScreen() {
   const { t } = useTranslation();
-  const { events, isLoading, isError, refetch } = useFeed();
+  const { user } = useSessionStore();
+  const [activeFilter, setActiveFilter] = useState<PlatformFilter>('ALL');
+
+  const platform = activeFilter === 'ALL' ? undefined : activeFilter;
+  const { data, isLoading, isError, refetch, isRefetching } = useMyGames(platform);
+
+  const games = data?.data ?? [];
+
+  const totalEarned = games.reduce((sum, g) => sum + g.earnedAchievements, 0);
+  const totalAchievements = games.reduce((sum, g) => sum + g.totalAchievements, 0);
+
+  const renderItem = useCallback(
+    ({ item }: { item: LibraryGame }) => <LibraryGameCard game={item} />,
+    [],
+  );
 
   return (
     <SafeAreaView className="flex-1 bg-surface">
-      <View className="px-4 py-3 border-b border-gray-800">
-        <Text
-          className="text-white text-xl font-bold"
-          accessibilityRole="header"
-        >
-          {t('feed.title')}
-        </Text>
+      {/* Cabecera */}
+      <View className="px-4 pt-4 pb-2 flex-row items-baseline justify-between">
+        <View>
+          <Text className="text-white text-2xl font-bold" accessibilityRole="header">
+            {t('library.title')}
+          </Text>
+          {user && (
+            <Text className="text-gray-400 text-sm mt-0.5">
+              {t('library.subtitle', { username: user.username })}
+            </Text>
+          )}
+        </View>
+        {!isLoading && !isError && games.length > 0 && (
+          <View className="items-end">
+            <Text className="text-primary-light font-bold text-base">{totalEarned}</Text>
+            <Text className="text-gray-500 text-xs">/ {totalAchievements} logros</Text>
+          </View>
+        )}
       </View>
 
-      {isLoading ? (
-        <FeedSkeleton />
-      ) : isError ? (
-        <View className="flex-1 items-center justify-center px-6">
-          <Text
-            className="text-white text-lg font-semibold text-center"
-            accessibilityRole="alert"
-            accessibilityLiveRegion="polite"
+      {/* Filtros por plataforma */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 8, gap: 8 }}
+        accessibilityRole="tablist"
+        accessibilityLabel={t('library.filter_label')}
+      >
+        {FILTERS.map(({ key, label }) => (
+          <Pressable
+            key={key}
+            onPress={() => setActiveFilter(key)}
+            className={`px-4 py-2 rounded-full ${activeFilter === key ? 'bg-primary' : 'bg-surface-2'}`}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeFilter === key }}
+            accessibilityLabel={t(label)}
           >
-            {t('feed.error_title')}
-          </Text>
-          <Text className="text-gray-400 mt-2 text-center">
-            {t('feed.error_message')}
+            <Text className={`font-semibold text-sm ${activeFilter === key ? 'text-white' : 'text-gray-400'}`}>
+              {t(label)}
+            </Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+
+      {/* Skeleton */}
+      {isLoading && <LibrarySkeleton />}
+
+      {/* Error */}
+      {isError && !isLoading && (
+        <View
+          className="flex-1 items-center justify-center px-6"
+          accessible
+          accessibilityLiveRegion="polite"
+          accessibilityRole="alert"
+        >
+          <Text className="text-red-400 text-lg font-semibold mb-2">{t('library.error_title')}</Text>
+          <Text className="text-gray-400 text-sm text-center mb-6">{t('library.error_message')}</Text>
+          <Text
+            className="text-primary-light text-base"
+            onPress={() => void refetch()}
+            accessibilityRole="button"
+          >
+            {t('common.retry')}
           </Text>
         </View>
-      ) : (
+      )}
+
+      {/* Lista de juegos */}
+      {!isLoading && !isError && (
         <FlashList
-          data={events}
-          keyExtractor={(item: ActivityEvent) => item.id}
-          renderItem={({ item }: { item: ActivityEvent }) => <ActivityCard event={item} />}
-          estimatedItemSize={72}
-          accessibilityLabel={t('feed.loading_label')}
+          data={games}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id}
+          estimatedItemSize={76}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}
+          accessibilityLabel={t('library.list_label')}
           refreshControl={
             <RefreshControl
-              refreshing={false}
+              refreshing={isRefetching}
               onRefresh={() => void refetch()}
-              accessibilityLabel={t('feed.refresh_label')}
-              tintColor="#fff"
+              tintColor="#818cf8"
+              colors={['#4f46e5']}
+              accessibilityLabel={t('library.refresh_label')}
             />
           }
           ListEmptyComponent={
-            <View className="flex-1 items-center justify-center px-6 mt-20">
-              <Text
-                className="text-gray-400 text-center text-base"
-                accessibilityLiveRegion="polite"
-              >
-                {t('feed.empty')}
-              </Text>
+            <View className="items-center justify-center py-20" accessible accessibilityLiveRegion="polite">
+              <Text className="text-gray-400 text-base text-center">{t('library.empty')}</Text>
             </View>
           }
           ListFooterComponent={<AdBanner />}

@@ -87,6 +87,24 @@
     "title": "Inicio",
     "empty": "Tus logros recientes aparecerán aquí"
   },
+  "library": {
+    "title": "Mi Biblioteca",
+    "subtitle": "Hola, {{username}}",
+    "filter_label": "Filtrar por plataforma",
+    "filter_all": "Todo",
+    "filter_steam": "Steam",
+    "filter_ra": "RetroAchievements",
+    "filter_psn": "PlayStation",
+    "filter_xbox": "Xbox",
+    "achievements_short": "logros",
+    "complete": "100% ✓",
+    "game_label": "{{title}}: {{earned}} de {{total}} logros, {{pct}}%",
+    "list_label": "Lista de juegos",
+    "refresh_label": "Actualizar biblioteca",
+    "error_title": "No se pudo cargar la biblioteca",
+    "error_message": "Comprueba tu conexión e inténtalo de nuevo.",
+    "empty": "Vincula una plataforma en tu perfil para ver tus juegos aquí."
+  },
   "feed": {
     "title": "Feed",
     "empty": "Nada por aquí todavía.\n¡Conecta con amigos para ver su actividad!",
@@ -220,6 +238,7 @@
     "stats_aria": "Estadísticas: Nivel {{level}}, {{xp}} XP, racha de {{streak}} días",
     "profile_aria": "Perfil de {{username}}. Nivel {{level}}. {{xp}} XP acumulados.",
     "platforms_section": "Plataformas vinculadas",
+    "recent_activity": "Actividad reciente",
     "sync_prefix": "Sync:",
     "platforms_empty": "No tienes plataformas vinculadas todavía.\nVincúlalas desde los ajustes para sincronizar tus logros.",
     "logout": "Cerrar sesión",

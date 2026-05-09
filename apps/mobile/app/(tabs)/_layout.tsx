@@ -13,7 +13,7 @@ interface TabConfig {
 
 // Configuración de tabs con claves de traducción
 const TABS: TabConfig[] = [
-  { name: 'index', titleKey: 'tabs.home', icon: 'home-outline', iconFocused: 'home' },
+  { name: 'index', titleKey: 'tabs.home', icon: 'game-controller-outline', iconFocused: 'game-controller' },
   { name: 'search', titleKey: 'tabs.search', icon: 'search-outline', iconFocused: 'search' },
   { name: 'rankings', titleKey: 'tabs.rankings', icon: 'trophy-outline', iconFocused: 'trophy' },
   { name: 'friends', titleKey: 'tabs.friends', icon: 'people-outline', iconFocused: 'people' },

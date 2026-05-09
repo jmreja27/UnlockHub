@@ -87,6 +87,24 @@
     "title": "Home",
     "empty": "Your recent achievements will appear here"
   },
+  "library": {
+    "title": "My Library",
+    "subtitle": "Hello, {{username}}",
+    "filter_label": "Filter by platform",
+    "filter_all": "All",
+    "filter_steam": "Steam",
+    "filter_ra": "RetroAchievements",
+    "filter_psn": "PlayStation",
+    "filter_xbox": "Xbox",
+    "achievements_short": "achievements",
+    "complete": "100% ✓",
+    "game_label": "{{title}}: {{earned}} of {{total}} achievements, {{pct}}%",
+    "list_label": "Games list",
+    "refresh_label": "Refresh library",
+    "error_title": "Could not load library",
+    "error_message": "Check your connection and try again.",
+    "empty": "Link a platform in your profile to see your games here."
+  },
   "feed": {
     "title": "Feed",
     "empty": "Nothing here yet.\nConnect with friends to see their activity!",
@@ -220,6 +238,7 @@
     "stats_aria": "Stats: Level {{level}}, {{xp}} XP, streak of {{streak}} days",
     "profile_aria": "Profile of {{username}}. Level {{level}}. {{xp}} accumulated XP.",
     "platforms_section": "Linked platforms",
+    "recent_activity": "Recent activity",
     "sync_prefix": "Sync:",
     "platforms_empty": "You have no linked platforms yet.\nLink them from settings to sync your achievements.",
     "logout": "Log out",
