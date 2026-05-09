@@ -137,6 +137,52 @@ const MOCK_GAMES = [
     headerUrl: null,
     totalAchievements: 25,
   },
+  // ─── PSN ───
+  {
+    id: 'g_lastofus2',
+    platform: 'PSN',
+    externalId: 'CUSA07820',
+    title: 'The Last of Us Part II',
+    iconUrl: null,
+    headerUrl: null,
+    totalAchievements: 26,
+  },
+  {
+    id: 'g_spiderman',
+    platform: 'PSN',
+    externalId: 'CUSA11995',
+    title: "Marvel's Spider-Man",
+    iconUrl: null,
+    headerUrl: null,
+    totalAchievements: 51,
+  },
+  {
+    id: 'g_bloodborne',
+    platform: 'PSN',
+    externalId: 'CUSA00207',
+    title: 'Bloodborne',
+    iconUrl: null,
+    headerUrl: null,
+    totalAchievements: 36,
+  },
+  {
+    id: 'g_godofwar',
+    platform: 'PSN',
+    externalId: 'CUSA11993',
+    title: 'God of War',
+    iconUrl: null,
+    headerUrl: null,
+    totalAchievements: 37,
+  },
+  {
+    id: 'g_horizon',
+    platform: 'PSN',
+    externalId: 'CUSA05572',
+    title: 'Horizon Zero Dawn',
+    iconUrl: null,
+    headerUrl: null,
+    totalAchievements: 56,
+  },
 ];
 
 // ─── Logros de ejemplo por juego ─────────────────────────────────────────────
@@ -186,6 +232,14 @@ const DEMO_PLATFORMS = [
     externalId: 'demo_retro',
     username: 'demo_retro_player',
     lastSyncedAt: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
+  },
+  {
+    id: 'pa_psn',
+    userId: DEMO_USER.id,
+    platform: 'PSN',
+    externalId: 'demo_psn_id',
+    username: 'demo_player_psn',
+    lastSyncedAt: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString(),
   },
 ];
 
@@ -338,8 +392,8 @@ const WRAPPED_2024 = {
   year: 2024,
   totalAchievements: 247,
   totalXpGained: 8900,
-  topGame: { title: 'The Witcher 3: Wild Hunt', iconUrl: null, achievementsCount: 62, platform: 'STEAM' },
-  rarestAchievement: { title: 'Al límite', iconUrl: null, rarity: 0.8, gameName: 'Dark Souls: Remastered' },
+  topGame: { title: 'God of War', iconUrl: null, achievementsCount: 37, platform: 'PSN' },
+  rarestAchievement: { title: 'Al límite', iconUrl: null, rarity: 0.8, gameName: 'Bloodborne' },
   bestStreak: 14,
   previousYear: { totalAchievements: 130, totalXpGained: 4200, bestStreak: 8 },
 };
