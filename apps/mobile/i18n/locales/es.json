@@ -55,10 +55,33 @@
   },
   "tabs": {
     "home": "Inicio",
+    "search": "Buscar",
     "rankings": "Rankings",
     "challenges": "Retos",
     "friends": "Amigos",
     "profile": "Perfil"
+  },
+  "search": {
+    "title": "Buscar",
+    "placeholder": "Juegos, jugadores…",
+    "input_label": "Buscar juegos o jugadores",
+    "clear_label": "Borrar búsqueda",
+    "filter_all": "Todo",
+    "filter_games": "Juegos",
+    "filter_users": "Personas",
+    "section_games": "Juegos",
+    "section_users": "Personas",
+    "hint": "Escribe al menos 2 caracteres para buscar",
+    "no_results": "Sin resultados. Prueba con otro término.",
+    "achievements_count": "{{count}} logros",
+    "game_item_label": "{{title}} en {{platform}}, {{count}} logros",
+    "user_item_label": "@{{username}}, nivel {{level}}",
+    "user_level": "Nivel {{level}}",
+    "game_not_found": "Juego no encontrado"
+  },
+  "game": {
+    "rarity": "{{pct}}% lo tienen",
+    "no_achievements": "Este juego aún no tiene logros registrados"
   },
   "home": {
     "title": "Inicio",

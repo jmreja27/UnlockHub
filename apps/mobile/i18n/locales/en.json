@@ -55,10 +55,33 @@
   },
   "tabs": {
     "home": "Home",
+    "search": "Search",
     "rankings": "Rankings",
     "challenges": "Challenges",
     "friends": "Friends",
     "profile": "Profile"
+  },
+  "search": {
+    "title": "Search",
+    "placeholder": "Games, players…",
+    "input_label": "Search games or players",
+    "clear_label": "Clear search",
+    "filter_all": "All",
+    "filter_games": "Games",
+    "filter_users": "People",
+    "section_games": "Games",
+    "section_users": "People",
+    "hint": "Type at least 2 characters to search",
+    "no_results": "No results. Try a different term.",
+    "achievements_count": "{{count}} achievements",
+    "game_item_label": "{{title}} on {{platform}}, {{count}} achievements",
+    "user_item_label": "@{{username}}, level {{level}}",
+    "user_level": "Level {{level}}",
+    "game_not_found": "Game not found"
+  },
+  "game": {
+    "rarity": "{{pct}}% have it",
+    "no_achievements": "This game has no achievements registered yet"
   },
   "home": {
     "title": "Home",

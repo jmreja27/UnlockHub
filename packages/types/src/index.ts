@@ -186,6 +186,35 @@ export interface GamingWrapped {
   } | null;
 }
 
+// Search
+export type SearchResultType = 'game' | 'user';
+
+export interface GameSearchResult {
+  type: 'game';
+  id: string;
+  platform: Platform;
+  title: string;
+  iconUrl: string | null;
+  totalAchievements: number;
+}
+
+export interface UserSearchResult {
+  type: 'user';
+  id: string;
+  username: string;
+  avatar: string | null;
+  level: number;
+  xp: number;
+}
+
+export type SearchResult = GameSearchResult | UserSearchResult;
+
+export interface SearchResponse {
+  games: GameSearchResult[];
+  users: UserSearchResult[];
+  total: number;
+}
+
 export const SYNC_COOLDOWNS: Record<SyncTier, SyncCooldownConfig> = {
   free: {
     autoSyncIntervalMinutes: 60,

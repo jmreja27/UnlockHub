@@ -13,6 +13,7 @@ import challengeRouter from './challenge.routes';
 import notificationRouter from './notification.routes';
 import wrappedRouter from './wrapped.routes';
 import adminRouter from './admin.routes';
+import searchRouter from './search.routes';
 
 const router = Router();
 
@@ -33,5 +34,6 @@ router.use('/challenges', challengeRouter);
 router.use('/notifications', notificationRouter);
 router.use('/wrapped', wrappedRouter);
 router.use('/admin', adminRouter);
+router.use('/search', searchRouter);
 
 export default router;

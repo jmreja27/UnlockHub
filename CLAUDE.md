@@ -358,7 +358,7 @@ Añadir una plataforma nueva = crear su adapter implementando esta interfaz + a�
 | Fase | Contenido | Estado |
 |---|---|---|
 | **Fase 1 — MVP** | Setup monorepo, auth, vinculación Steam + RA, tracking de logros, rankings, perfil, multiidioma, premium, AdMob | ✅ Completa |
-| **Fase 2 — Social** | Amigos, feed de actividad, retos semanales, sistema de puntos, racha diaria, push notifications, Gaming Wrapped, perfil público | 🔲 Pendiente |
+| **Fase 2 — Social** | Amigos, feed de actividad, retos semanales, sistema de puntos, racha diaria, push notifications, Gaming Wrapped, perfil público, **búsqueda de juegos y usuarios** | 🔲 Pendiente |
 | **Fase 3 — Producción y monetización** | Google Play Billing real, despliegue Railway, AdMob producción, Privacy Policy/GDPR, EAS Build, Play Store listing, Sentry | 🔲 Pendiente |
 | **Fase 4 — Avanzado** | Torneos con recompensas, canje de puntos, integración PS/Xbox | 🔲 Futuro |
 
@@ -452,10 +452,21 @@ Añadir una plataforma nueva = crear su adapter implementando esta interfaz + a�
     - Disponible a partir del 1 de diciembre, datos del año en curso
     - *(puede desarrollarse en paralelo con pasos 9-10)*
 
-12. **Tests y CI al 80% de cobertura para Fase 2**
-    - Tests unitarios para todos los nuevos services: friendship, activity, challenge, points, notification, wrapped
+12. **Búsqueda de juegos y usuarios** ✅ Implementado
+    - `GET /api/v1/search?q=&type=all|games|users` — búsqueda unificada con rate limit (60 req/min)
+    - `GET /api/v1/search/games/:id` — detalle de juego con lista completa de logros
+    - `search.service.ts`: búsqueda insensible a mayúsculas en `Game.title` y `User.username`
+    - Tab "Buscar" en `app/(tabs)/search.tsx`: barra de búsqueda + filtros Todo/Juegos/Personas
+    - `components/GameCard.tsx`: badge de plataforma con color diferenciado (Steam/RA/Xbox/PSN)
+    - `components/UserCard.tsx`: avatar, username, nivel y XP
+    - `app/game/[id].tsx`: lista de logros con imagen, descripción, XP y rareza
+    - `hooks/useSearch.ts`: TanStack Query + debounce 400ms, mínimo 2 caracteres
+    - Strings i18n ES/EN completos
+
+13. **Tests y CI al 80% de cobertura para Fase 2**
+    - Tests unitarios para todos los nuevos services: friendship, activity, challenge, points, notification, wrapped, **search**
     - Tests de integración supertest para todas las nuevas rutas
-    - Tests de componentes móvil con @testing-library/react-native para ActivityCard, ChallengeCard, FriendItem
+    - Tests de componentes móvil con @testing-library/react-native para ActivityCard, ChallengeCard, FriendItem, **GameCard, UserCard**
     - Actualizar `collectCoverageFrom` en `jest.config.js` si se añaden nuevas exclusiones
 
 ---
