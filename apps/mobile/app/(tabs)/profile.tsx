@@ -10,12 +10,15 @@ import { useTranslation } from 'react-i18next';
 
 import { useSessionStore } from '../../stores/sessionStore';
 import { useAuth } from '../../hooks/useAuth';
+import { usePreferencesStore } from '../../stores/preferencesStore';
+import { useLanguage } from '../../hooks/useLanguage';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { PremiumBanner } from '../../components/PremiumBanner';
 import { ActivityCard } from '../../components/ActivityCard';
 import { FEATURES } from '../../lib/featureFlags';
 import { api } from '../../lib/api';
 import { useFeed } from '../../hooks/useFeed';
+import { useColorScheme } from 'nativewind';
 import type { PlatformAccount } from '@unlockhub/types';
 
 function isWrappedAvailable(): boolean {
@@ -84,6 +87,9 @@ export default function ProfileScreen() {
   const queryClient = useQueryClient();
 
   const { events } = useFeed();
+  const { theme, setTheme } = usePreferencesStore();
+  const { currentLanguage, changeLanguage } = useLanguage();
+  const { setColorScheme } = useColorScheme();
 
   const {
     data: platforms,
@@ -412,6 +418,63 @@ export default function ProfileScreen() {
             </View>
           );
         })()}
+
+        {/* Ajustes */}
+        <View className="px-6 mb-6">
+          <Text className="text-gray-300 text-sm font-semibold mb-3 uppercase tracking-wider">
+            {t('profile.settings_section')}
+          </Text>
+
+          {/* Idioma */}
+          <View className="bg-surface-elevated rounded-xl px-4 py-3 mb-2">
+            <Text className="text-gray-400 text-xs mb-2">{t('profile.settings_language')}</Text>
+            <View className="flex-row gap-2">
+              {(['es', 'en'] as const).map((lang) => (
+                <Pressable
+                  key={lang}
+                  onPress={() => changeLanguage(lang)}
+                  className={`flex-1 py-2 rounded-lg items-center ${currentLanguage === lang ? 'bg-primary' : 'bg-surface-card'}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: currentLanguage === lang }}
+                  accessibilityLabel={lang === 'es' ? 'Español' : 'English'}
+                  style={{ minHeight: 36 }}
+                >
+                  <Text className={`text-sm font-semibold ${currentLanguage === lang ? 'text-white' : 'text-gray-400'}`}>
+                    {lang === 'es' ? '🇪🇸 Español' : '🇬🇧 English'}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          {/* Tema */}
+          <View className="bg-surface-elevated rounded-xl px-4 py-3">
+            <Text className="text-gray-400 text-xs mb-2">{t('profile.settings_theme')}</Text>
+            <View className="flex-row gap-2">
+              {([
+                { key: 'dark',   label: t('profile.theme_dark')   },
+                { key: 'system', label: t('profile.theme_system')  },
+              ] as const).map(({ key, label }) => (
+                <Pressable
+                  key={key}
+                  onPress={() => {
+                    setTheme(key);
+                    setColorScheme(key === 'system' ? 'system' : 'dark');
+                  }}
+                  className={`flex-1 py-2 rounded-lg items-center ${theme === key ? 'bg-primary' : 'bg-surface-card'}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: theme === key }}
+                  accessibilityLabel={label}
+                  style={{ minHeight: 36 }}
+                >
+                  <Text className={`text-sm font-semibold ${theme === key ? 'text-white' : 'text-gray-400'}`}>
+                    {label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        </View>
 
         {/* Actividad reciente */}
         {events.length > 0 && (

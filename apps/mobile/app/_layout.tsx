@@ -4,11 +4,13 @@ import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as Sentry from '@sentry/react-native';
+import { useColorScheme } from 'nativewind';
 
 import '../global.css';
 import '../i18n';
 import { api, getRefreshToken, saveRefreshToken, deleteRefreshToken } from '../lib/api';
 import { useSessionStore } from '../stores/sessionStore';
+import { usePreferencesStore } from '../stores/preferencesStore';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 import { useGdprConsent } from '../hooks/useGdprConsent';
 import { useMaintenanceCheck } from '../hooks/useMaintenanceCheck';
@@ -95,6 +97,21 @@ function GdprConsentInit() {
   return null;
 }
 
+function PreferencesInit() {
+  const { loadPreferences, theme } = usePreferencesStore();
+  const { setColorScheme } = useColorScheme();
+
+  useEffect(() => {
+    void loadPreferences();
+  }, [loadPreferences]);
+
+  useEffect(() => {
+    setColorScheme(theme === 'system' ? 'system' : 'dark');
+  }, [theme, setColorScheme]);
+
+  return null;
+}
+
 export default function RootLayout() {
   const [ready, setReady] = useState(false);
   const { isMaintenance, isChecking, retry } = useMaintenanceCheck();
@@ -115,6 +132,7 @@ export default function RootLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <PreferencesInit />
       <SessionRestorer onReady={handleReady} />
       <PushNotificationsInit />
       <GdprConsentInit />
