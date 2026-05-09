@@ -394,6 +394,7 @@ fly launch --name unlockhub-api-staging --copy-config
 
 ## Reglas generales de desarrollo
 
+- **EAS Build — REGLA ABSOLUTA**: Nunca lanzar ninguna build (`eas build`) sin que el usuario lo pida explícitamente en ese mismo mensaje. No importa si el código está listo, si los commits están hechos o si la sesión está terminando. Esperar siempre.
 - **TypeScript strict** en todo el código. Sin `any`. Sin excepciones.
 - **Comentarios en español**, código (variables, funciones, clases) en inglés.
 - Cada función de servicio debe tener su test unitario correspondiente.
