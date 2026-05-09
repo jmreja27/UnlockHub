@@ -22,8 +22,9 @@ export function useMaintenanceCheck() {
       const data = (await res.json()) as HealthResponse;
       setIsMaintenance(data.maintenance === true);
     } catch {
-      // API inaccesible — mostrar pantalla de mantenimiento como fallback
-      setIsMaintenance(true);
+      // API inaccesible (red caída, servidor apagado) — no es mantenimiento activo,
+      // dejar pasar al usuario. Solo bloqueamos si el servidor dice maintenance: true.
+      setIsMaintenance(false);
     } finally {
       setIsChecking(false);
     }
