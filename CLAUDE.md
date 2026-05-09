@@ -321,6 +321,23 @@ Todo componente de UI generado debe cumplir:
 
 **Merge bloqueado si cualquier paso falla.**
 
+### Pruebas en emulador Android — Mock server
+
+Para probar en el emulador Android sin infraestructura real:
+
+```bash
+cd apps/api && npm run mock   # arranca mock-server.js en :3000
+```
+
+**Cuenta de prueba**: `demo@unlockhub.test` / `Demo1234!`
+
+**Reglas críticas para que funcione:**
+- El APK **debe** tener `"usesCleartextTraffic": true` en `app.json > expo > android`. Sin esto, Android 9+ bloquea `http://` silenciosamente — `nc`/netcat llega pero `fetch()` no.
+- La URL del emulador al host es `http://10.0.2.2:3000` (no `localhost`). Configurado en `eas.json` perfil `preview`.
+- `adb reverse` no es fiable en todos los emuladores; preferir `10.0.2.2`.
+
+**EAS Build — cuota 30/mes**: No lanzar builds sin diagnosticar el problema primero. Verificar conectividad con `nc` + logs del servidor antes de compilar.
+
 ---
 
 ## Reglas generales de desarrollo
