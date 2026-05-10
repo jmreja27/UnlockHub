@@ -96,6 +96,77 @@ describe('PATCH /api/v1/users/me', () => {
   });
 });
 
+// ─── GET /me/games ────────────────────────────────────────────────────────────
+
+describe('GET /api/v1/users/me/games', () => {
+  const gamesResponse = {
+    data: [
+      {
+        id: 'game-1',
+        title: 'Portal',
+        platform: 'STEAM',
+        iconUrl: null,
+        totalAchievements: 4,
+        earnedAchievements: 2,
+        completionPct: 50,
+        lastSyncedAt: null,
+      },
+    ],
+    total: 1,
+  };
+
+  it('401 sin token de acceso', async () => {
+    const res = await request(app).get('/api/v1/users/me/games');
+    expect(res.status).toBe(401);
+  });
+
+  it('200 con la lista de juegos del usuario', async () => {
+    mockUserService.getMyGames.mockResolvedValue(gamesResponse as any);
+
+    const res = await request(app)
+      .get('/api/v1/users/me/games')
+      .set('Authorization', `Bearer ${validToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.total).toBe(1);
+    expect(mockUserService.getMyGames).toHaveBeenCalledWith('user-1', undefined);
+  });
+
+  it('pasa el filtro de plataforma al servicio cuando se especifica', async () => {
+    mockUserService.getMyGames.mockResolvedValue({ data: [], total: 0 });
+
+    const res = await request(app)
+      .get('/api/v1/users/me/games?platform=STEAM')
+      .set('Authorization', `Bearer ${validToken}`);
+
+    expect(res.status).toBe(200);
+    expect(mockUserService.getMyGames).toHaveBeenCalledWith('user-1', 'STEAM');
+  });
+
+  it('400 VALIDATION_ERROR con plataforma inválida', async () => {
+    const res = await request(app)
+      .get('/api/v1/users/me/games?platform=INVALID')
+      .set('Authorization', `Bearer ${validToken}`);
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('VALIDATION_ERROR');
+    expect(mockUserService.getMyGames).not.toHaveBeenCalled();
+  });
+
+  it('200 con lista vacía para usuario sin logros', async () => {
+    mockUserService.getMyGames.mockResolvedValue({ data: [], total: 0 });
+
+    const res = await request(app)
+      .get('/api/v1/users/me/games')
+      .set('Authorization', `Bearer ${validToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(0);
+    expect(res.body.total).toBe(0);
+  });
+});
+
 // ─── GET /:username ───────────────────────────────────────────────────────────
 
 describe('GET /api/v1/users/:username', () => {

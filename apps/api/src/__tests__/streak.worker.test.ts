@@ -3,6 +3,7 @@ jest.mock('../lib/prisma', () => ({
 }));
 jest.mock('../lib/redis', () => ({
   redis: { set: jest.fn(), del: jest.fn(), get: jest.fn(), on: jest.fn(), pipeline: jest.fn(() => ({ zadd: jest.fn(), exec: jest.fn() })) },
+  createWorkerConnection: jest.fn(() => ({ on: jest.fn() })),
 }));
 jest.mock('../services/user.service', () => ({ addXp: jest.fn() }));
 jest.mock('../services/activity.service', () => ({ createEvent: jest.fn() }));
