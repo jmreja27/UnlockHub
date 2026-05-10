@@ -23,9 +23,9 @@ registerActivityHandler(io);
 server.listen(env.PORT, async () => {
   console.log(`API arrancada en el puerto ${env.PORT} (${env.NODE_ENV})`);
   if (env.NODE_ENV !== 'test') {
-    await restoreAutoSyncs();
-    await scheduleStreakJob();
-    await scheduleChallengeEvaluation();
+    try { await restoreAutoSyncs(); } catch (e) { console.error('restoreAutoSyncs falló (no fatal):', e); }
+    try { await scheduleStreakJob(); } catch (e) { console.error('scheduleStreakJob falló (no fatal):', e); }
+    try { await scheduleChallengeEvaluation(); } catch (e) { console.error('scheduleChallengeEvaluation falló (no fatal):', e); }
   }
 });
 
