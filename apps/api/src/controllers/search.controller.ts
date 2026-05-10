@@ -20,7 +20,7 @@ export async function searchHandler(req: Request, res: Response, next: NextFunct
 
 export async function getGameHandler(req: Request, res: Response, next: NextFunction) {
   try {
-    const { id } = req.params;
+    const { id } = z.object({ id: z.string() }).parse(req.params);
     const game = await getGameWithAchievements(id);
     if (!game) throw new AppError('Juego no encontrado', 'GAME_NOT_FOUND', 404);
     res.json(game);
