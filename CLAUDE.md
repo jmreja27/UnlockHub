@@ -430,12 +430,12 @@ Entorno de preproducción operativo en Fly.io para probar en dispositivos reales
 
 Los 4 adaptadores están implementados en `apps/api/src/platforms/`:
 
-| Adapter | Fichero | Estado |
-|---|---|---|
-| Steam | `steam.adapter.ts` | ✅ Implementado |
-| RetroAchievements | `retroachievements.adapter.ts` | ✅ Implementado |
-| PlayStation Network | `psn.adapter.ts` | ✅ Implementado |
-| Xbox | `xbox.adapter.ts` | ✅ Implementado |
+| Adapter | Fichero | Estado | Fase |
+|---|---|---|---|
+| Steam | `steam.adapter.ts` | ✅ Implementado | Fase 1 |
+| RetroAchievements | `retroachievements.adapter.ts` | ✅ Implementado | Fase 1 |
+| PlayStation Network | `psn.adapter.ts` | ✅ Implementado | Fase 3 |
+| Xbox | `xbox.adapter.ts` | ✅ Código listo | Fase 4 (pendiente activar) |
 
 Todos implementan la interfaz común:
 
@@ -449,7 +449,7 @@ export interface PlatformAdapter {
 }
 ```
 
-Las rutas de vinculación (`/api/v1/platforms/{steam|ra|psn|xbox}/link`) y las pantallas mobile (`app/link-platform/`) están implementadas para las 4 plataformas.
+Las rutas de vinculación y pantallas mobile están implementadas para Steam, RA y PSN. Xbox tiene el adapter y rutas escritas pero no se activa hasta Fase 4.
 
 ---
 
@@ -458,9 +458,9 @@ Las rutas de vinculación (`/api/v1/platforms/{steam|ra|psn|xbox}/link`) y las p
 | Fase | Contenido | Estado |
 |---|---|---|
 | **Fase 1 — MVP** | Setup monorepo, auth, vinculación Steam + RA, tracking de logros, rankings, perfil, multiidioma, premium, AdMob | ✅ Completa |
-| **Fase 2 — Social** | Amigos, feed de actividad, retos semanales, sistema de puntos, racha diaria, push notifications, Gaming Wrapped, perfil público, búsqueda de juegos y usuarios, **vinculación PSN + Xbox (adaptadores, rutas API, pantallas mobile)** | ✅ Completa |
-| **Fase 3 — Producción y monetización** | Google Play Billing real, despliegue Fly.io, AdMob producción, Privacy Policy/GDPR, EAS Build, Play Store listing, Sentry | 🔄 En progreso |
-| **Fase 4 — Avanzado** | Torneos con recompensas, canje de puntos, App Store iOS | 🔲 Futuro |
+| **Fase 2 — Social** | Amigos, feed de actividad, retos semanales, sistema de puntos, racha diaria, push notifications, Gaming Wrapped, perfil público, búsqueda de juegos y usuarios | ✅ Completa |
+| **Fase 3 — Producción y monetización** | Google Play Billing real, despliegue Fly.io, AdMob producción, Privacy Policy/GDPR, EAS Build, Play Store listing, Sentry, **integración PlayStation Network** | 🔄 En progreso |
+| **Fase 4 — Avanzado** | Torneos con recompensas, canje de puntos, App Store iOS, **integración Xbox** | 🔲 Futuro |
 
 > **Aviso legal Fase 4**: Los torneos con recompensas reales pueden clasificarse como juegos de azar en España (Ley 13/2011). Consultar con abogado antes de implementar.
 
@@ -628,33 +628,46 @@ Las rutas de vinculación (`/api/v1/platforms/{steam|ra|psn|xbox}/link`) y las p
    - Configurar los secrets de producción en Railway y en GitHub Actions (para EAS Build en CI)
    - Rotar todos los secrets de desarrollo antes del lanzamiento
 
-9. **Smoke tests de producción**
-   - Registro, login y logout en el entorno de producción real
-   - Sync de Steam, RetroAchievements, PSN y Xbox con cuentas reales
-   - Flujo de compra de premium end-to-end (con tarjeta real o cuenta de test de Google Play)
-   - Verificar que AdMob muestra anuncios reales (no de test) en usuarios free
-   - Verificar que los rankings se actualizan en Redis
+9. **Integración PlayStation Network (PSN)** ✅ Código implementado
+   - `psn.adapter.ts`: autenticación NPSSO → Access Token, sync de trofeos (Bronce/Plata/Oro/Platino → XP)
+   - Rutas `/api/v1/platforms/psn/link` y `/psn/unlink` activas
+   - Pantalla `app/link-platform/psn.tsx`: input de NPSSO token
+   - Ranking con filtro PSN ya activo en `app/(tabs)/rankings.tsx`
+   - Verificar en producción con cuenta PSN real
+
+10. **Smoke tests de producción**
+    - Registro, login y logout en el entorno de producción real
+    - Sync de Steam, RetroAchievements y PSN con cuentas reales
+    - Flujo de compra de premium end-to-end (con tarjeta real o cuenta de test de Google Play)
+    - Verificar que AdMob muestra anuncios reales (no de test) en usuarios free
+    - Verificar que los rankings se actualizan en Redis
 
 ---
 
 ## Orden recomendado de desarrollo (Fase 4 — Avanzado)
 
 > Expansión post-lanzamiento. Partir de `develop` con Fase 3 estable en producción.
-> PSN y Xbox ya están implementados — esta fase es pura expansión de funcionalidad premium.
 
-1. **Sistema de torneos**
+1. **Integración Xbox** — el adapter y las rutas están escritos, solo falta activar
+   - Verificar y ajustar `xbox.adapter.ts`: OAuth2 Microsoft Identity Platform → XSTS Token
+   - Activar rutas `/api/v1/platforms/xbox/link` y `/xbox/unlink`
+   - Pantalla `app/link-platform/xbox.tsx` ya existe — revisar UX y i18n
+   - Añadir filtro Xbox al ranking si el volumen de usuarios lo justifica
+   - Smoke test con cuenta Xbox real
+
+2. **Sistema de torneos**
    - Modelo `Tournament` en Prisma: nombre, fechas, métrica (logros desbloqueados, XP ganado), premio
    - `tournament.service.ts`: crear torneo, inscribir usuario, evaluar clasificación, distribuir premios
    - Pantalla de torneos con cuenta atrás, clasificación en tiempo real (Socket.io), historial
    - > ⚠️ **Aviso legal**: los torneos con recompensas económicas pueden clasificarse como juegos de azar en España (Ley 13/2011). Consultar con abogado antes de implementar.
 
-2. **Canje de puntos (UserPoint)**
+3. **Canje de puntos (UserPoint)**
    - Catálogo de recompensas canjeables: skins de perfil, marcos de avatar, insignias exclusivas
    - `rewards.service.ts`: getRewardsCatalog, redeemReward (descuenta UserPoint + otorga recompensa)
    - Pantalla de tienda de recompensas en el perfil
    - Las recompensas son cosméticas — no afectan a rankings (modelo de negocio ético)
 
-3. **App Store iOS**
+4. **App Store iOS**
    - Apple Developer Program ($99/año)
    - Build iOS con EAS: `eas build --platform ios --profile production`
    - Configurar StoreKit 2 para in-app purchases en iOS (flujo diferente a Google Play Billing)
