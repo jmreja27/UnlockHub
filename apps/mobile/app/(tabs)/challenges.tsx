@@ -3,6 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useChallenges } from '../../hooks/useChallenges';
 import { SkeletonBox } from '../../components/SkeletonBox';
+import { EmptyState } from '../../components/EmptyState';
 import type { ChallengeMetric } from '@unlockhub/types';
 
 function metricKey(metric: ChallengeMetric): string {
@@ -88,14 +89,11 @@ export default function ChallengesScreen() {
             </Text>
           </View>
         ) : !challenge ? (
-          <View className="flex-1 items-center justify-center px-6 mt-20">
-            <Text
-              className="text-gray-400 text-center text-base"
-              accessibilityLiveRegion="polite"
-            >
-              {t('challenges.no_challenge')}
-            </Text>
-          </View>
+          <EmptyState
+            emoji="🏆"
+            title={t('challenges.empty_title')}
+            body={t('challenges.empty_body')}
+          />
         ) : (
           <View className="mx-4 mt-6 p-4 bg-surface-raised rounded-2xl">
             {isCompleted && (

@@ -6,7 +6,10 @@
     "error_generic": "Algo salió mal. Inténtalo de nuevo.",
     "cancel": "Cancelar",
     "offline": "Sin conexión a internet",
-    "offline_hint": "Mostrando datos guardados"
+    "offline_hint": "Mostrando datos guardados",
+    "error_boundary_title": "Algo salió mal",
+    "error_boundary_body": "Se produjo un error inesperado.",
+    "error_boundary_retry": "Reintentar"
   },
   "auth": {
     "login": {
@@ -107,7 +110,9 @@
   },
   "game": {
     "rarity": "{{pct}}% lo tienen",
-    "no_achievements": "Este juego aún no tiene logros registrados"
+    "no_achievements": "Este juego aún no tiene logros registrados",
+    "share_achievement": "Compartir logro",
+    "share_text": "¡Acabo de desbloquear \"{{title}}\" en UnlockHub!"
   },
   "home": {
     "title": "Inicio",
@@ -132,7 +137,13 @@
     "empty": "Vincula una plataforma en tu perfil para ver tus juegos aquí.",
     "search_placeholder": "Buscar en tu biblioteca…",
     "search_label": "Buscar juegos en tu biblioteca",
-    "no_results": "Sin resultados. Prueba con otro título."
+    "no_results": "Sin resultados. Prueba con otro título.",
+    "empty_title": "Sin juegos todavía",
+    "empty_body": "Vincula tu cuenta de Steam, RetroAchievements o PlayStation para empezar a trackear tus logros.",
+    "empty_cta": "Vincular plataforma",
+    "sync_button": "Sincronizar",
+    "sync_cooldown": "Espera {{min}} min",
+    "syncing": "Sincronizando…"
   },
   "feed": {
     "title": "Feed",
@@ -183,7 +194,12 @@
     "error_title": "No se pudo cargar la lista de amigos",
     "error_message": "Comprueba tu conexión e inténtalo de nuevo.",
     "remove_confirm_title": "Eliminar amigo",
-    "remove_confirm_message": "¿Seguro que quieres eliminar a {{username}} de tu lista de amigos?"
+    "remove_confirm_message": "¿Seguro que quieres eliminar a {{username}} de tu lista de amigos?",
+    "empty_title": "Sin amigos todavía",
+    "empty_body": "Busca jugadores por su nombre de usuario para añadirlos como amigos.",
+    "empty_cta": "Buscar amigos",
+    "empty_pending_title": "Sin solicitudes pendientes",
+    "empty_pending_body": "Las solicitudes de amistad que recibas aparecerán aquí."
   },
   "challenges": {
     "title": "Reto de la semana",
@@ -201,14 +217,18 @@
     "metric_ACHIEVEMENTS_UNLOCKED": "Logros desbloqueados",
     "metric_XP_GAINED": "XP ganados",
     "metric_GAMES_PLAYED": "Juegos jugados",
-    "metric_STREAK_MAINTAINED": "Días de racha"
+    "metric_STREAK_MAINTAINED": "Días de racha",
+    "empty_title": "Sin reto activo",
+    "empty_body": "Cada lunes aparece un nuevo reto semanal. ¡Vuelve pronto!"
   },
   "public_profile": {
     "error_title": "Perfil no encontrado",
     "error_message": "Este usuario no existe o ha sido eliminado.",
     "avatar_label": "Avatar de {{username}}",
     "level": "Nivel {{level}}",
-    "platforms": "Plataformas vinculadas"
+    "platforms": "Plataformas vinculadas",
+    "shared_achievements": "{{count}} logros en común",
+    "no_shared": "Aún no tenéis logros en común"
   },
   "rankings": {
     "title": "Rankings",
@@ -251,7 +271,8 @@
     "empty": "No tienes logros registrados en {{year}}.\n¡Sincroniza tus plataformas y empieza a jugar!",
     "invalid_year": "El año indicado no es válido.",
     "error_title": "No se pudo cargar el Wrapped",
-    "error_message": "Comprueba tu conexión e inténtalo de nuevo."
+    "error_message": "Comprueba tu conexión e inténtalo de nuevo.",
+    "coming_soon": "Gaming Wrapped llega en diciembre"
   },
   "profile": {
     "title": "Tu perfil",
@@ -287,7 +308,12 @@
     "delete_account_dialog_message": "Esta acción es irreversible. Se eliminarán tu perfil, logros, amigos y todo tu historial. ¿Continuar?",
     "delete_account_confirm": "Sí, eliminar mi cuenta",
     "deleting_account": "Eliminando cuenta…",
-    "delete_account_error": "No se pudo eliminar la cuenta. Inténtalo de nuevo."
+    "delete_account_error": "No se pudo eliminar la cuenta. Inténtalo de nuevo.",
+    "streak_badges_section": "Rachas conseguidas",
+    "streak_badge_week": "7 días",
+    "streak_badge_month": "30 días",
+    "streak_badge_century": "100 días",
+    "streak_badge_year": "365 días"
   },
   "premium": {
     "title": "Elige tu plan",
@@ -374,6 +400,8 @@
     "xbox": {
       "title": "Vincular Xbox",
       "description": "Conecta tu cuenta de Xbox Live con tu cuenta de Microsoft. Serás redirigido al login de Microsoft.",
+      "coming_soon_title": "Próximamente — Fase 4",
+      "coming_soon_body": "La integración con Xbox está en desarrollo y estará disponible en una próxima actualización.",
       "submit": "Conectar con Microsoft",
       "submit_label": "Abre el navegador para autenticarte con tu cuenta de Microsoft y vincular Xbox",
       "loading": "Vinculando tu cuenta de Xbox…",

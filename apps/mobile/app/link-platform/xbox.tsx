@@ -134,9 +134,24 @@ export default function LinkXboxScreen() {
           {t('link_platform.xbox.title')}
         </Text>
 
-        <Text className="text-gray-400 text-sm mb-8">
+        <Text className="text-gray-400 text-sm mb-6">
           {t('link_platform.xbox.description')}
         </Text>
+
+        {/* Banner próximamente — Xbox es Fase 4 */}
+        <View
+          className="bg-yellow-900/40 border border-yellow-600/50 rounded-xl p-4 mb-6"
+          accessible
+          accessibilityRole="text"
+          accessibilityLabel={`${t('link_platform.xbox.coming_soon_title')}: ${t('link_platform.xbox.coming_soon_body')}`}
+        >
+          <Text className="text-yellow-400 font-semibold text-sm mb-1">
+            {t('link_platform.xbox.coming_soon_title')}
+          </Text>
+          <Text className="text-yellow-200/80 text-xs leading-5">
+            {t('link_platform.xbox.coming_soon_body')}
+          </Text>
+        </View>
 
         {/* Nota de privacidad */}
         <View
@@ -158,33 +173,19 @@ export default function LinkXboxScreen() {
           </Text>
         ) : null}
 
-        {/* Botón de autenticación Microsoft */}
+        {/* Botón de autenticación Microsoft — desactivado hasta Fase 4 */}
         <Pressable
           onPress={handleConnect}
-          disabled={isBusy}
+          disabled={true}
           accessibilityRole="button"
           accessibilityLabel={t('link_platform.xbox.submit_label')}
-          accessibilityState={{ disabled: isBusy, busy: linkMutation.isPending }}
-          className={`rounded-xl py-4 items-center ${
-            isBusy ? 'bg-green-800' : 'bg-green-600'
-          }`}
+          accessibilityState={{ disabled: true }}
+          className="rounded-xl py-4 items-center bg-green-900/50"
           style={{ minHeight: 44 }}
         >
-          {linkMutation.isPending ? (
-            <View className="flex-row items-center">
-              <ActivityIndicator size="small" color="#fff" />
-              <Text
-                className="text-white font-semibold ml-2"
-                accessibilityLiveRegion="polite"
-              >
-                {t('link_platform.xbox.loading')}
-              </Text>
-            </View>
-          ) : (
-            <Text className="text-white font-semibold text-base">
-              {t('link_platform.xbox.submit')}
-            </Text>
-          )}
+          <Text className="text-green-600/70 font-semibold text-base">
+            {t('link_platform.xbox.submit')}
+          </Text>
         </Pressable>
       </ScrollView>
     </SafeAreaView>

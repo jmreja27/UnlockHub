@@ -10,7 +10,6 @@ import { useTranslation } from 'react-i18next';
 
 import { useSessionStore } from '../../stores/sessionStore';
 import { useAuth } from '../../hooks/useAuth';
-import { usePreferencesStore } from '../../stores/preferencesStore';
 import { useLanguage } from '../../hooks/useLanguage';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { PremiumBanner } from '../../components/PremiumBanner';
@@ -18,7 +17,6 @@ import { ActivityCard } from '../../components/ActivityCard';
 import { FEATURES } from '../../lib/featureFlags';
 import { api } from '../../lib/api';
 import { useFeed } from '../../hooks/useFeed';
-import { useColorScheme } from 'nativewind';
 import type { PlatformAccount } from '@unlockhub/types';
 
 function isWrappedAvailable(): boolean {
@@ -87,9 +85,7 @@ export default function ProfileScreen() {
   const queryClient = useQueryClient();
 
   const { events } = useFeed();
-  const { theme, setTheme } = usePreferencesStore();
   const { currentLanguage, changeLanguage } = useLanguage();
-  const { setColorScheme } = useColorScheme();
 
   const {
     data: platforms,
@@ -435,8 +431,55 @@ export default function ProfileScreen() {
         {/* Banner de suscripción premium — visible solo cuando FEATURES.premium está activo */}
         {FEATURES.premium && isAuthenticated && <PremiumBanner />}
 
-        {/* Gaming Wrapped — accesible en diciembre (año actual) y siempre para años pasados */}
-        {(() => {
+        {/* Rachas conseguidas — badges de hitos */}
+        {user.streakDays >= 7 && (
+          <View className="px-6 mb-4">
+            <Text className="text-gray-300 text-sm font-semibold mb-3 uppercase tracking-wider">
+              {t('profile.streak_badges_section')}
+            </Text>
+            <View className="flex-row flex-wrap gap-2">
+              {user.streakDays >= 7 && (
+                <View
+                  className="bg-orange-900/40 border border-orange-500/50 rounded-full px-3 py-1.5"
+                  accessible
+                  accessibilityLabel={`Racha de 7 días conseguida`}
+                >
+                  <Text className="text-orange-300 text-xs font-semibold">🔥 {t('profile.streak_badge_week')}</Text>
+                </View>
+              )}
+              {user.streakDays >= 30 && (
+                <View
+                  className="bg-amber-900/40 border border-amber-500/50 rounded-full px-3 py-1.5"
+                  accessible
+                  accessibilityLabel={`Racha de 30 días conseguida`}
+                >
+                  <Text className="text-amber-300 text-xs font-semibold">🔥 {t('profile.streak_badge_month')}</Text>
+                </View>
+              )}
+              {user.streakDays >= 100 && (
+                <View
+                  className="bg-yellow-900/40 border border-yellow-500/50 rounded-full px-3 py-1.5"
+                  accessible
+                  accessibilityLabel={`Racha de 100 días conseguida`}
+                >
+                  <Text className="text-yellow-300 text-xs font-semibold">⭐ {t('profile.streak_badge_century')}</Text>
+                </View>
+              )}
+              {user.streakDays >= 365 && (
+                <View
+                  className="bg-purple-900/40 border border-purple-500/50 rounded-full px-3 py-1.5"
+                  accessible
+                  accessibilityLabel={`Racha de 365 días conseguida`}
+                >
+                  <Text className="text-purple-300 text-xs font-semibold">👑 {t('profile.streak_badge_year')}</Text>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* Gaming Wrapped — solo cuando FEATURES.wrapped está activo */}
+        {FEATURES.wrapped && (() => {
           const years = getWrappedYears();
           if (years.length === 0) return null;
           return (
@@ -489,31 +532,11 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          {/* Tema */}
+          {/* Tema — por ahora solo Oscuro hasta implementar modo claro completo */}
           <View className="bg-surface-elevated rounded-xl px-4 py-3">
             <Text className="text-gray-400 text-xs mb-2">{t('profile.settings_theme')}</Text>
-            <View className="flex-row gap-2">
-              {([
-                { key: 'dark',   label: t('profile.theme_dark')   },
-                { key: 'system', label: t('profile.theme_system')  },
-              ] as const).map(({ key, label }) => (
-                <Pressable
-                  key={key}
-                  onPress={() => {
-                    setTheme(key);
-                    setColorScheme(key === 'system' ? 'system' : 'dark');
-                  }}
-                  className={`flex-1 py-2 rounded-lg items-center ${theme === key ? 'bg-primary' : 'bg-surface-card'}`}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: theme === key }}
-                  accessibilityLabel={label}
-                  style={{ minHeight: 36 }}
-                >
-                  <Text className={`text-sm font-semibold ${theme === key ? 'text-white' : 'text-gray-400'}`}>
-                    {label}
-                  </Text>
-                </Pressable>
-              ))}
+            <View className="bg-primary/20 border border-primary/40 rounded-lg px-4 py-2 items-center">
+              <Text className="text-primary-light text-sm font-semibold">{t('profile.theme_dark')}</Text>
             </View>
           </View>
         </View>

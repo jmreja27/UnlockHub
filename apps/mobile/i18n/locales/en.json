@@ -6,7 +6,10 @@
     "error_generic": "Something went wrong. Please try again.",
     "cancel": "Cancel",
     "offline": "No internet connection",
-    "offline_hint": "Showing cached data"
+    "offline_hint": "Showing cached data",
+    "error_boundary_title": "Something went wrong",
+    "error_boundary_body": "An unexpected error occurred.",
+    "error_boundary_retry": "Try again"
   },
   "auth": {
     "login": {
@@ -107,7 +110,9 @@
   },
   "game": {
     "rarity": "{{pct}}% have it",
-    "no_achievements": "This game has no achievements registered yet"
+    "no_achievements": "This game has no achievements registered yet",
+    "share_achievement": "Share achievement",
+    "share_text": "I just unlocked \"{{title}}\" in UnlockHub!"
   },
   "home": {
     "title": "Home",
@@ -132,7 +137,13 @@
     "empty": "Link a platform in your profile to see your games here.",
     "search_placeholder": "Search your library…",
     "search_label": "Search games in your library",
-    "no_results": "No results. Try a different title."
+    "no_results": "No results. Try a different title.",
+    "empty_title": "No games yet",
+    "empty_body": "Link your Steam, RetroAchievements or PlayStation account to start tracking your achievements.",
+    "empty_cta": "Link a platform",
+    "sync_button": "Sync",
+    "sync_cooldown": "Wait {{min}} min",
+    "syncing": "Syncing…"
   },
   "feed": {
     "title": "Feed",
@@ -183,7 +194,12 @@
     "error_title": "Could not load friends list",
     "error_message": "Check your connection and try again.",
     "remove_confirm_title": "Remove friend",
-    "remove_confirm_message": "Are you sure you want to remove {{username}} from your friends list?"
+    "remove_confirm_message": "Are you sure you want to remove {{username}} from your friends list?",
+    "empty_title": "No friends yet",
+    "empty_body": "Search for players by username to add them as friends.",
+    "empty_cta": "Find friends",
+    "empty_pending_title": "No pending requests",
+    "empty_pending_body": "Friend requests you receive will appear here."
   },
   "challenges": {
     "title": "Weekly Challenge",
@@ -201,14 +217,18 @@
     "metric_ACHIEVEMENTS_UNLOCKED": "Achievements unlocked",
     "metric_XP_GAINED": "XP gained",
     "metric_GAMES_PLAYED": "Games played",
-    "metric_STREAK_MAINTAINED": "Streak days"
+    "metric_STREAK_MAINTAINED": "Streak days",
+    "empty_title": "No active challenge",
+    "empty_body": "A new weekly challenge will appear every Monday. Come back soon!"
   },
   "public_profile": {
     "error_title": "Profile not found",
     "error_message": "This user does not exist or has been removed.",
     "avatar_label": "{{username}}'s avatar",
     "level": "Level {{level}}",
-    "platforms": "Linked platforms"
+    "platforms": "Linked platforms",
+    "shared_achievements": "{{count}} achievements in common",
+    "no_shared": "No achievements in common yet"
   },
   "rankings": {
     "title": "Rankings",
@@ -251,7 +271,8 @@
     "empty": "No achievements recorded in {{year}}.\nSync your platforms and start playing!",
     "invalid_year": "The provided year is not valid.",
     "error_title": "Could not load Wrapped",
-    "error_message": "Check your connection and try again."
+    "error_message": "Check your connection and try again.",
+    "coming_soon": "Gaming Wrapped is coming in December"
   },
   "profile": {
     "title": "Your profile",
@@ -287,7 +308,12 @@
     "delete_account_dialog_message": "This action is irreversible. Your profile, achievements, friends and all history will be deleted. Continue?",
     "delete_account_confirm": "Yes, delete my account",
     "deleting_account": "Deleting account…",
-    "delete_account_error": "Could not delete account. Please try again."
+    "delete_account_error": "Could not delete account. Please try again.",
+    "streak_badges_section": "Streak milestones",
+    "streak_badge_week": "7 days",
+    "streak_badge_month": "30 days",
+    "streak_badge_century": "100 days",
+    "streak_badge_year": "365 days"
   },
   "premium": {
     "title": "Choose your plan",
@@ -374,6 +400,8 @@
     "xbox": {
       "title": "Link Xbox",
       "description": "Connect your Xbox Live account with your Microsoft account. You'll be redirected to Microsoft login.",
+      "coming_soon_title": "Coming Soon — Phase 4",
+      "coming_soon_body": "Xbox integration is in development and will be available in an upcoming update.",
       "submit": "Connect with Microsoft",
       "submit_label": "Open browser to authenticate with your Microsoft account and link Xbox",
       "loading": "Linking your Xbox account…",

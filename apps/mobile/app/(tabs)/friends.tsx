@@ -9,6 +9,7 @@ import * as Haptics from 'expo-haptics';
 import { useFriends } from '../../hooks/useFriends';
 import { useSessionStore } from '../../stores/sessionStore';
 import { SkeletonBox } from '../../components/SkeletonBox';
+import { EmptyState } from '../../components/EmptyState';
 import type { Friendship } from '@unlockhub/types';
 
 type Tab = 'friends' | 'pending';
@@ -230,9 +231,13 @@ export default function FriendsScreen() {
             </TouchableOpacity>
           </View>
         ) : filteredFriends.length === 0 ? (
-          <View className="flex-1 items-center justify-center px-6">
-            <Text className="text-gray-400 text-center">{t('friends.empty_friends')}</Text>
-          </View>
+          <EmptyState
+            emoji="👥"
+            title={t('friends.empty_title')}
+            body={t('friends.empty_body')}
+            ctaLabel={t('friends.empty_cta')}
+            onCta={() => router.push('/(tabs)/search')}
+          />
         ) : (
           <FlashList
             data={filteredFriends}
@@ -262,9 +267,11 @@ export default function FriendsScreen() {
         isPendingLoading ? (
           renderSkeleton()
         ) : pendingRequests.length === 0 ? (
-          <View className="flex-1 items-center justify-center px-6">
-            <Text className="text-gray-400 text-center">{t('friends.empty_pending')}</Text>
-          </View>
+          <EmptyState
+            emoji="📬"
+            title={t('friends.empty_pending_title')}
+            body={t('friends.empty_pending_body')}
+          />
         ) : (
           <FlashList
             data={pendingRequests}

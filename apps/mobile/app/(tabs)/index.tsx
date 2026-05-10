@@ -1,13 +1,16 @@
 import { useCallback, useState, useMemo } from 'react';
-import { View, Text, RefreshControl, ScrollView, Pressable, TextInput } from 'react-native';
+import { View, Text, RefreshControl, ScrollView, Pressable, TextInput, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import { useTranslation } from 'react-i18next';
+import { router } from 'expo-router';
 
 import { useMyGames } from '../../hooks/useMyGames';
 import { useSessionStore } from '../../stores/sessionStore';
+import { useSyncAll } from '../../hooks/useSyncAll';
 import { LibraryGameCard } from '../../components/LibraryGameCard';
 import { SkeletonBox } from '../../components/SkeletonBox';
+import { EmptyState } from '../../components/EmptyState';
 import { AdBanner } from '../../components/AdBanner';
 import type { LibraryGame } from '../../hooks/useMyGames';
 
@@ -52,6 +55,7 @@ export default function LibraryScreen() {
 
   const platform = activeFilter === 'ALL' ? undefined : activeFilter;
   const { data, isLoading, isError, refetch, isRefetching } = useMyGames(platform);
+  const { sync, isSyncing, isInCooldown, cooldownRemaining, hasPlatforms } = useSyncAll(user?.id);
 
   const allGames = data?.data ?? [];
 
@@ -72,7 +76,7 @@ export default function LibraryScreen() {
   return (
     <SafeAreaView className="flex-1 bg-surface">
       {/* Cabecera */}
-      <View className="px-4 pt-4 pb-2 flex-row items-baseline justify-between">
+      <View className="px-4 pt-4 pb-2 flex-row items-center justify-between">
         <View>
           <Text className="text-white text-2xl font-bold" accessibilityRole="header">
             {t('library.title')}
@@ -83,12 +87,39 @@ export default function LibraryScreen() {
             </Text>
           )}
         </View>
-        {!isLoading && !isError && games.length > 0 && (
-          <View className="items-end">
-            <Text className="text-primary-light font-bold text-base">{totalEarned}</Text>
-            <Text className="text-gray-500 text-xs">/ {totalAchievements} logros</Text>
-          </View>
-        )}
+        <View className="flex-row items-center gap-3">
+          {!isLoading && !isError && games.length > 0 && (
+            <View className="items-end">
+              <Text className="text-primary-light font-bold text-base">{totalEarned}</Text>
+              <Text className="text-gray-500 text-xs">/ {totalAchievements} logros</Text>
+            </View>
+          )}
+          {hasPlatforms && (
+            <Pressable
+              onPress={() => sync()}
+              disabled={isSyncing || isInCooldown}
+              style={{ minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center' }}
+              accessibilityRole="button"
+              accessibilityLabel={
+                isInCooldown
+                  ? t('library.sync_cooldown', { min: cooldownRemaining })
+                  : t('library.sync_button')
+              }
+              accessibilityState={{ disabled: isSyncing || isInCooldown, busy: isSyncing }}
+            >
+              {isSyncing ? (
+                <ActivityIndicator size="small" color="#818cf8" />
+              ) : (
+                <View className="items-center">
+                  <Text className={`text-xl ${isInCooldown ? 'text-gray-600' : 'text-primary-light'}`}>⟳</Text>
+                  {isInCooldown && (
+                    <Text className="text-gray-600 text-xs leading-none">{cooldownRemaining}m</Text>
+                  )}
+                </View>
+              )}
+            </Pressable>
+          )}
+        </View>
       </View>
 
       {/* Buscador */}
@@ -171,11 +202,19 @@ export default function LibraryScreen() {
             />
           }
           ListEmptyComponent={
-            <View className="items-center justify-center py-8" accessible accessibilityLiveRegion="polite">
-              <Text className="text-gray-400 text-base text-center">
-                {search.trim() ? t('library.no_results') : t('library.empty')}
-              </Text>
-            </View>
+            search.trim() ? (
+              <View className="items-center justify-center py-8" accessible accessibilityLiveRegion="polite">
+                <Text className="text-gray-400 text-base text-center">{t('library.no_results')}</Text>
+              </View>
+            ) : (
+              <EmptyState
+                emoji="🎮"
+                title={t('library.empty_title')}
+                body={t('library.empty_body')}
+                ctaLabel={t('library.empty_cta')}
+                onCta={() => router.push('/(tabs)/profile')}
+              />
+            )
           }
           ListFooterComponent={<AdBanner />}
         />

@@ -16,6 +16,7 @@ import { useGdprConsent } from '../hooks/useGdprConsent';
 import { useMaintenanceCheck } from '../hooks/useMaintenanceCheck';
 import { MaintenanceScreen } from '../components/MaintenanceScreen';
 import { OfflineBanner } from '../components/OfflineBanner';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import type { User } from '@unlockhub/types';
 
 // Inicializa Sentry — no-op si EXPO_PUBLIC_SENTRY_DSN no está definido
@@ -132,14 +133,16 @@ export default function RootLayout() {
   }
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <PreferencesInit />
-      <SessionRestorer onReady={handleReady} />
-      <PushNotificationsInit />
-      <GdprConsentInit />
-      <StatusBar style="light" />
-      <OfflineBanner />
-      {ready && <Stack screenOptions={{ headerShown: false }} />}
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <PreferencesInit />
+        <SessionRestorer onReady={handleReady} />
+        <PushNotificationsInit />
+        <GdprConsentInit />
+        <StatusBar style="light" />
+        <OfflineBanner />
+        {ready && <Stack screenOptions={{ headerShown: false }} />}
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
