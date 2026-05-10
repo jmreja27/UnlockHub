@@ -20,6 +20,9 @@ import router from './routes';
 
 const app = express();
 
+// Necesario para que express-rate-limit funcione correctamente detrás de Fly.io / proxies
+app.set('trust proxy', 1);
+
 app.use(helmet());
 app.use(
   cors({
