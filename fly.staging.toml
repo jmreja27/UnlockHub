@@ -11,7 +11,8 @@ primary_region = 'cdg'
   release_command = 'npx prisma migrate deploy'
 
 [env]
-  NODE_ENV = 'staging'
+  NODE_ENV = 'production'
+  ENVIRONMENT = 'staging'
   PORT = '3000'
 
 [http_service]
