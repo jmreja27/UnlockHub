@@ -167,6 +167,40 @@ describe('GET /api/v1/users/me/games', () => {
   });
 });
 
+// ─── DELETE /me ───────────────────────────────────────────────────────────────
+
+describe('DELETE /api/v1/users/me', () => {
+  it('401 sin token de acceso', async () => {
+    const res = await request(app).delete('/api/v1/users/me');
+    expect(res.status).toBe(401);
+  });
+
+  it('200 y limpia cookie cuando el token es válido', async () => {
+    mockUserService.deleteAccount.mockResolvedValue(undefined);
+
+    const res = await request(app)
+      .delete('/api/v1/users/me')
+      .set('Authorization', `Bearer ${validToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.message).toBeDefined();
+    expect(mockUserService.deleteAccount).toHaveBeenCalledWith('user-1');
+  });
+
+  it('404 USER_NOT_FOUND si el usuario no existe', async () => {
+    mockUserService.deleteAccount.mockRejectedValue(
+      new AppError('Usuario no encontrado', 'USER_NOT_FOUND', 404),
+    );
+
+    const res = await request(app)
+      .delete('/api/v1/users/me')
+      .set('Authorization', `Bearer ${validToken}`);
+
+    expect(res.status).toBe(404);
+    expect(res.body.code).toBe('USER_NOT_FOUND');
+  });
+});
+
 // ─── GET /:username ───────────────────────────────────────────────────────────
 
 describe('GET /api/v1/users/:username', () => {

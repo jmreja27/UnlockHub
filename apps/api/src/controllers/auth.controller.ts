@@ -4,6 +4,13 @@ import * as authService from '../services/auth.service';
 import { AppError } from '../middleware/errorHandler';
 import type { AuthenticatedRequest } from '../middleware/authenticate';
 import { registerSchema, loginSchema } from '@unlockhub/validators';
+import { z } from 'zod';
+
+const forgotPasswordSchema = z.object({ email: z.string().email() });
+const resetPasswordSchema = z.object({
+  token: z.string().min(1),
+  password: z.string().min(8).max(128),
+});
 
 export async function registerHandler(req: Request, res: Response, next: NextFunction) {
   try {
@@ -87,4 +94,25 @@ export async function logoutAllHandler(req: Request, res: Response, next: NextFu
 export function meHandler(req: Request, res: Response) {
   const { id, email, isPremium } = (req as AuthenticatedRequest).user;
   res.json({ id, email, isPremium });
+}
+
+export async function forgotPasswordHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { email } = forgotPasswordSchema.parse(req.body);
+    await authService.forgotPassword(email);
+    // Respuesta siempre igual para no revelar si el email existe
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function resetPasswordHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { token, password } = resetPasswordSchema.parse(req.body);
+    await authService.resetPassword(token, password);
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
 }

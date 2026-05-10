@@ -140,6 +140,34 @@ export default function ProfileScreen() {
     }
   }, [refetchPlatforms]);
 
+  const deleteAccountMutation = useMutation({
+    mutationFn: () => api.delete('/api/v1/users/me'),
+    onSuccess: () => {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      logout();
+    },
+  });
+
+  function handleDeleteAccount() {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    Alert.alert(
+      t('profile.delete_account_dialog_title'),
+      t('profile.delete_account_dialog_message'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('profile.delete_account_confirm'),
+          style: 'destructive',
+          onPress: () => {
+            void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            deleteAccountMutation.mutate();
+          },
+        },
+      ],
+      { cancelable: true },
+    );
+  }
+
   function handleLogout() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     Alert.alert(
@@ -516,6 +544,29 @@ export default function ProfileScreen() {
           >
             <Text className="text-red-400 font-semibold text-base">
               {isLoggingOut ? t('profile.logging_out') : t('profile.logout')}
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* Zona de peligro — eliminar cuenta */}
+        <View className="px-6 mt-6 mb-2">
+          <Text className="text-gray-500 text-xs font-semibold mb-3 uppercase tracking-wider">
+            {t('profile.danger_zone')}
+          </Text>
+          <Pressable
+            className="w-full border border-red-800/60 rounded-xl py-4 items-center active:opacity-80"
+            onPress={handleDeleteAccount}
+            disabled={deleteAccountMutation.isPending}
+            accessibilityRole="button"
+            accessibilityLabel={t('profile.delete_account')}
+            accessibilityHint={t('profile.delete_account_hint')}
+            accessibilityState={{ disabled: deleteAccountMutation.isPending, busy: deleteAccountMutation.isPending }}
+            style={{ minHeight: 52 }}
+          >
+            <Text className="text-red-700 font-semibold text-base">
+              {deleteAccountMutation.isPending
+                ? t('profile.deleting_account')
+                : t('profile.delete_account')}
             </Text>
           </Pressable>
         </View>

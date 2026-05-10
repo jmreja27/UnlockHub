@@ -176,6 +176,20 @@ export default function LoginScreen() {
               )}
             </Pressable>
 
+            {/* Enlace a recuperación de contraseña */}
+            <Link href="/(auth)/forgot-password" asChild>
+              <Pressable
+                className="w-full items-center py-2 mb-2"
+                accessibilityRole="link"
+                accessibilityLabel={t('auth.forgot_password.title')}
+                style={{ minHeight: 44, justifyContent: 'center' }}
+              >
+                <Text className="text-gray-500 text-sm">
+                  {t('auth.forgot_password.title')}
+                </Text>
+              </Pressable>
+            </Link>
+
             {/* Enlace a registro */}
             <Link href="/(auth)/register" asChild>
               <Pressable

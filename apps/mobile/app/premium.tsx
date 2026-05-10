@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { useSubscription } from '../hooks/useSubscription';
 import { useSessionStore } from '../stores/sessionStore';
 import { PLAN_PRICES, type PurchasablePlan } from '../lib/iap';
+import { FEATURES } from '../lib/featureFlags';
 
 interface FeatureRowProps {
   label: string;
@@ -192,6 +193,21 @@ export default function PremiumScreen() {
           {t('premium.subtitle')}
         </Text>
 
+        {/* Banner "próximamente" cuando el billing no está activo */}
+        {!FEATURES.premium && (
+          <View
+            className="bg-primary/10 border border-primary/30 rounded-2xl p-4 mb-5 items-center"
+            accessibilityLiveRegion="polite"
+          >
+            <Text className="text-primary-light font-bold text-base mb-1">
+              {t('premium.coming_soon_title')}
+            </Text>
+            <Text className="text-gray-400 text-sm text-center leading-5">
+              {t('premium.coming_soon_subtitle')}
+            </Text>
+          </View>
+        )}
+
         {/* Plan gratuito */}
         <PlanCard
           title={t('premium.plan_free')}
@@ -200,6 +216,7 @@ export default function PremiumScreen() {
           ctaLabel={isPremium ? t('premium.not_your_plan') : t('premium.your_current_plan')}
           isCurrent={!isPremium}
           onPress={() => undefined}
+          disabled={!FEATURES.premium}
         />
 
         {/* Plan mensual */}
@@ -210,10 +227,16 @@ export default function PremiumScreen() {
           featured
           isCurrent={isMonthly}
           features={MONTHLY_FEATURES}
-          ctaLabel={isMonthly ? t('premium.your_current_plan') : t('premium.subscribe_monthly')}
+          ctaLabel={
+            !FEATURES.premium
+              ? t('premium.coming_soon_cta')
+              : isMonthly
+              ? t('premium.your_current_plan')
+              : t('premium.subscribe_monthly')
+          }
           onPress={() => { void handlePurchase('MONTHLY'); }}
           isLoading={isPurchasing && activePlan === 'MONTHLY'}
-          disabled={isPurchasing || isLifetime}
+          disabled={!FEATURES.premium || isPurchasing || isLifetime}
         />
 
         {/* Plan de por vida */}
@@ -223,16 +246,24 @@ export default function PremiumScreen() {
           badge={t('premium.badge_best_value')}
           isCurrent={isLifetime}
           features={LIFETIME_FEATURES}
-          ctaLabel={isLifetime ? t('premium.your_current_plan') : t('premium.buy_lifetime')}
+          ctaLabel={
+            !FEATURES.premium
+              ? t('premium.coming_soon_cta')
+              : isLifetime
+              ? t('premium.your_current_plan')
+              : t('premium.buy_lifetime')
+          }
           onPress={() => { void handlePurchase('LIFETIME'); }}
           isLoading={isPurchasing && activePlan === 'LIFETIME'}
-          disabled={isPurchasing || isLifetime}
+          disabled={!FEATURES.premium || isPurchasing || isLifetime}
         />
 
-        {/* Nota legal */}
-        <Text className="text-gray-600 text-xs text-center mt-2 leading-5">
-          {t('premium.legal_note')}
-        </Text>
+        {/* Nota legal — solo visible cuando el billing está activo */}
+        {FEATURES.premium && (
+          <Text className="text-gray-600 text-xs text-center mt-2 leading-5">
+            {t('premium.legal_note')}
+          </Text>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

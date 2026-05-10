@@ -20,7 +20,6 @@
   },
   "dependencies": {
     "@prisma/client": "^5.19.1",
-    "prisma": "^5.19.1",
     "@sentry/node": "^10.51.0",
     "@unlockhub/types": "*",
     "@unlockhub/validators": "*",
@@ -35,7 +34,9 @@
     "helmet": "^7.1.0",
     "ioredis": "^5.4.1",
     "jsonwebtoken": "^9.0.2",
+    "prisma": "^5.19.1",
     "psn-api": "^2.18.0",
+    "resend": "^6.12.3",
     "socket.io": "^4.8.3",
     "zod": "^3.23.8"
   },

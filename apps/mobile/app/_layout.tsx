@@ -15,6 +15,7 @@ import { usePushNotifications } from '../hooks/usePushNotifications';
 import { useGdprConsent } from '../hooks/useGdprConsent';
 import { useMaintenanceCheck } from '../hooks/useMaintenanceCheck';
 import { MaintenanceScreen } from '../components/MaintenanceScreen';
+import { OfflineBanner } from '../components/OfflineBanner';
 import type { User } from '@unlockhub/types';
 
 // Inicializa Sentry — no-op si EXPO_PUBLIC_SENTRY_DSN no está definido
@@ -137,6 +138,7 @@ export default function RootLayout() {
       <PushNotificationsInit />
       <GdprConsentInit />
       <StatusBar style="light" />
+      <OfflineBanner />
       {ready && <Stack screenOptions={{ headerShown: false }} />}
     </QueryClientProvider>
   );

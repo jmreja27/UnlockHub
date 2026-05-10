@@ -11,7 +11,7 @@ import Animated, {
 
 interface SkeletonBoxProps {
   width?: number | `${number}%`;
-  height: number;
+  height?: number;
   borderRadius?: number;
   style?: ViewStyle;
   className?: string;
@@ -19,7 +19,7 @@ interface SkeletonBoxProps {
 
 export function SkeletonBox({
   width,
-  height,
+  height = 20,
   borderRadius = 8,
   style,
   className,

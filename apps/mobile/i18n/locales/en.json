@@ -4,7 +4,9 @@
     "retry": "Retry",
     "loading": "Loading...",
     "error_generic": "Something went wrong. Please try again.",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "offline": "No internet connection",
+    "offline_hint": "Showing cached data"
   },
   "auth": {
     "login": {
@@ -51,6 +53,30 @@
       "error_password_min": "Password must be at least 8 characters.",
       "error_password_uppercase": "Password must contain at least one uppercase letter.",
       "error_password_number": "Password must contain at least one number."
+    },
+    "forgot_password": {
+      "title": "Forgot password",
+      "subtitle": "Enter your email and we'll send you a link to reset your password.",
+      "email_label": "Email",
+      "email_placeholder": "your@email.com",
+      "cta": "Send reset link",
+      "loading": "Sending…",
+      "success_title": "Check your email",
+      "success_body": "If an account exists with that email, you'll receive a reset link shortly.",
+      "back_to_login": "Back to login",
+      "error_invalid_email": "Enter a valid email address."
+    },
+    "reset_password": {
+      "title": "Create new password",
+      "subtitle": "Choose a strong password for your account.",
+      "password_label": "New password",
+      "password_placeholder": "At least 8 characters",
+      "cta": "Reset password",
+      "loading": "Resetting…",
+      "success_title": "Password updated",
+      "success_body": "Your password has been changed. You can now log in with your new password.",
+      "error_invalid_token": "This link has expired or is invalid. Request a new one.",
+      "error_generic": "Could not reset your password. Please try again."
     }
   },
   "tabs": {
@@ -253,7 +279,15 @@
     "logout_hint": "Log out of your account on this device. Confirmation will be requested.",
     "logging_out": "Logging out…",
     "logout_dialog_title": "Log out",
-    "logout_dialog_message": "Are you sure you want to log out?"
+    "logout_dialog_message": "Are you sure you want to log out?",
+    "danger_zone": "Danger zone",
+    "delete_account": "Delete account",
+    "delete_account_hint": "Permanently delete your account and all your data",
+    "delete_account_dialog_title": "Delete account",
+    "delete_account_dialog_message": "This action is irreversible. Your profile, achievements, friends and all history will be deleted. Continue?",
+    "delete_account_confirm": "Yes, delete my account",
+    "deleting_account": "Deleting account…",
+    "delete_account_error": "Could not delete account. Please try again."
   },
   "premium": {
     "title": "Choose your plan",
@@ -292,7 +326,10 @@
     "active_expires": "Expires on {{date}}",
     "active_aria": "You are Premium",
     "active_lifetime_aria": "You have lifetime access active",
-    "active_monthly_aria": "Premium active. Expires on {{date}}"
+    "active_monthly_aria": "Premium active. Expires on {{date}}",
+    "coming_soon_title": "Coming soon",
+    "coming_soon_subtitle": "Premium subscriptions will be available shortly. All features are free during the beta.",
+    "coming_soon_cta": "Coming soon"
   },
   "maintenance": {
     "title": "Under maintenance",
@@ -399,5 +436,16 @@
       "unlink_confirm": "Are you sure you want to unlink your RetroAchievements account? Sync data will be removed.",
       "linked_as": "Linked as {{username}}"
     }
+  },
+  "onboarding": {
+    "step1_title": "Welcome to UnlockHub",
+    "step1_body": "The unified tracker for your gaming achievements. Connect Steam, RetroAchievements and PlayStation in one place.",
+    "step2_title": "Link your platforms",
+    "step2_body": "Connect your gaming accounts and we'll sync all your achievements automatically. Start with Steam or RetroAchievements.",
+    "step3_title": "Ready to unlock!",
+    "step3_body": "Compete in global rankings, challenge your friends, and track your gaming legacy. Your journey starts now.",
+    "cta_next": "Next",
+    "cta_start": "Get started",
+    "cta_skip": "Skip"
   }
 }

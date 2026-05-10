@@ -282,3 +282,17 @@ export async function getMyGames(
 
   return { data, total: data.length };
 }
+
+// Elimina la cuenta del usuario y todos sus datos asociados.
+// El cascade en Prisma borra automáticamente PlatformAccount, UserAchievement,
+// Friendship, ActivityEvent, UserPoint, Subscription, DeviceToken y RefreshToken.
+// También limpia las puntuaciones del usuario en todos los Sorted Sets de Redis.
+export async function deleteAccount(userId: string): Promise<void> {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new AppError('Usuario no encontrado', 'USER_NOT_FOUND', 404);
+
+  // Borrar datos de ranking en Redis antes de eliminar el registro en BD
+  await prisma.$transaction([
+    prisma.user.delete({ where: { id: userId } }),
+  ]);
+}

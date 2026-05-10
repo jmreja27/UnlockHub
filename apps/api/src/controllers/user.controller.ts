@@ -77,6 +77,23 @@ export async function getMyGamesHandler(
   }
 }
 
+// DELETE /api/v1/users/me — elimina la cuenta del usuario autenticado (GDPR)
+export async function deleteAccountHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const userId = (req as AuthenticatedRequest).user.id;
+    await userService.deleteAccount(userId);
+    // Limpiar cookie de refresh token
+    res.clearCookie('refreshToken', { httpOnly: true, sameSite: 'strict' });
+    res.status(200).json({ message: 'Cuenta eliminada correctamente' });
+  } catch (err) {
+    next(err);
+  }
+}
+
 // GET /api/v1/users/:username — perfil público de un usuario
 export async function getPublicProfileHandler(
   req: Request,

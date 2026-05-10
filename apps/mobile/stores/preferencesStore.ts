@@ -5,7 +5,9 @@ export type ThemePreference = 'dark' | 'system';
 
 interface PreferencesState {
   theme: ThemePreference;
+  onboardingCompleted: boolean;
   setTheme: (theme: ThemePreference) => void;
+  completeOnboarding: () => void;
   loadPreferences: () => Promise<void>;
 }
 
@@ -13,10 +15,22 @@ const STORAGE_KEY = '@unlockhub_preferences';
 
 export const usePreferencesStore = create<PreferencesState>((set) => ({
   theme: 'dark',
+  onboardingCompleted: false,
 
   setTheme: (theme) => {
     set({ theme });
-    void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ theme }));
+    void AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
+      const current = raw ? (JSON.parse(raw) as object) : {};
+      void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ ...current, theme }));
+    });
+  },
+
+  completeOnboarding: () => {
+    set({ onboardingCompleted: true });
+    void AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
+      const current = raw ? (JSON.parse(raw) as object) : {};
+      void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ ...current, onboardingCompleted: true }));
+    });
   },
 
   loadPreferences: async () => {
@@ -26,6 +40,9 @@ export const usePreferencesStore = create<PreferencesState>((set) => ({
         const parsed = JSON.parse(raw) as Partial<PreferencesState>;
         if (parsed.theme === 'dark' || parsed.theme === 'system') {
           set({ theme: parsed.theme });
+        }
+        if (parsed.onboardingCompleted === true) {
+          set({ onboardingCompleted: true });
         }
       }
     } catch {

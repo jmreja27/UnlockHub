@@ -7,6 +7,7 @@ jest.mock('../lib/prisma', () => ({
     user: {
       findUnique: jest.fn(),
       update: jest.fn(),
+      delete: jest.fn(),
     },
     userPoint: {
       create: jest.fn(),
@@ -351,5 +352,39 @@ describe('userService.getMyGames', () => {
 
     const result = await userService.getMyGames('user-1');
     expect(result.data.map((g) => g.title)).toEqual(['Elden Ring', 'Hollow Knight', 'Zelda']);
+  });
+});
+
+// ─── deleteAccount ────────────────────────────────────────────────────────────
+
+describe('userService.deleteAccount', () => {
+  it('elimina el usuario cuando existe', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(baseUser);
+    (mockPrisma.$transaction as jest.Mock).mockResolvedValue([]);
+
+    await userService.deleteAccount('user-1');
+
+    expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('lanza USER_NOT_FOUND cuando el usuario no existe', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+
+    await expect(userService.deleteAccount('noexiste')).rejects.toMatchObject({
+      code: 'USER_NOT_FOUND',
+      statusCode: 404,
+    });
+
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('la transacción incluye prisma.user.delete con el userId correcto', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(baseUser);
+    (mockPrisma.$transaction as jest.Mock).mockResolvedValue([]);
+
+    await userService.deleteAccount('user-1');
+
+    const transactionArg = (mockPrisma.$transaction as jest.Mock).mock.calls[0][0] as unknown[];
+    expect(transactionArg).toHaveLength(1);
   });
 });

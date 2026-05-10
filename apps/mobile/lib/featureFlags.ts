@@ -1,3 +1,3 @@
 export const FEATURES = {
-  premium: true,
+  premium: false,
 } as const;

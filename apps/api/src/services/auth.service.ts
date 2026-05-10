@@ -1,4 +1,5 @@
 import bcrypt from 'bcrypt';
+import crypto from 'crypto';
 
 import { AppError } from '../middleware/errorHandler';
 import * as userRepo from '../repositories/user.repository';
@@ -7,7 +8,11 @@ import {
   signAccessToken,
   signRefreshToken,
 } from '../lib/jwt';
+import { prisma } from '../lib/prisma';
+import { sendPasswordResetEmail } from './email.service';
 import type { RegisterInput, LoginInput } from '@unlockhub/validators';
+
+const RESET_TOKEN_EXPIRY_MS = 60 * 60 * 1000; // 1 hora
 
 const BCRYPT_ROUNDS = 12;
 
@@ -92,4 +97,51 @@ export async function logout(rawRefreshToken: string) {
 
 export async function logoutAll(userId: string) {
   await tokenRepo.revokeAllUserTokens(userId);
+}
+
+// Genera un token de reset, lo persiste hasheado y envía el email
+export async function forgotPassword(email: string): Promise<void> {
+  const user = await userRepo.findUserByEmail(email);
+
+  // Responder siempre igual para no revelar si el email existe (user enumeration)
+  if (!user) return;
+
+  // Eliminar tokens previos del usuario
+  await prisma.passwordResetToken.deleteMany({ where: { userId: user.id } });
+
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+  const expiresAt = new Date(Date.now() + RESET_TOKEN_EXPIRY_MS);
+
+  await prisma.passwordResetToken.create({
+    data: { userId: user.id, tokenHash, expiresAt },
+  });
+
+  const APP_SCHEME = process.env['APP_SCHEME'] ?? 'unlockhub';
+  const resetUrl = `${APP_SCHEME}://reset-password?token=${rawToken}`;
+
+  await sendPasswordResetEmail(user.email, resetUrl);
+}
+
+// Valida el token y actualiza la contraseña
+export async function resetPassword(rawToken: string, newPassword: string): Promise<void> {
+  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+  const record = await prisma.passwordResetToken.findUnique({ where: { tokenHash } });
+
+  if (!record || record.usedAt || record.expiresAt < new Date()) {
+    throw new AppError('El enlace de recuperación no es válido o ha expirado', 'INVALID_RESET_TOKEN', 400);
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: record.userId }, data: { passwordHash } }),
+    prisma.passwordResetToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
+    // Revocar todos los refresh tokens para forzar re-login
+    prisma.refreshToken.updateMany({
+      where: { userId: record.userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    }),
+  ]);
 }

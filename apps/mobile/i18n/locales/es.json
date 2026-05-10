@@ -4,7 +4,9 @@
     "retry": "Reintentar",
     "loading": "Cargando...",
     "error_generic": "Algo salió mal. Inténtalo de nuevo.",
-    "cancel": "Cancelar"
+    "cancel": "Cancelar",
+    "offline": "Sin conexión a internet",
+    "offline_hint": "Mostrando datos guardados"
   },
   "auth": {
     "login": {
@@ -51,6 +53,30 @@
       "error_password_min": "La contraseña debe tener al menos 8 caracteres.",
       "error_password_uppercase": "La contraseña debe contener al menos una mayúscula.",
       "error_password_number": "La contraseña debe contener al menos un número."
+    },
+    "forgot_password": {
+      "title": "¿Olvidaste tu contraseña?",
+      "subtitle": "Introduce tu email y te enviaremos un enlace para restablecerla.",
+      "email_label": "Email",
+      "email_placeholder": "tu@email.com",
+      "cta": "Enviar enlace",
+      "loading": "Enviando…",
+      "success_title": "Revisa tu email",
+      "success_body": "Si existe una cuenta con ese email, recibirás un enlace en breve.",
+      "back_to_login": "Volver al inicio de sesión",
+      "error_invalid_email": "Introduce un email válido."
+    },
+    "reset_password": {
+      "title": "Nueva contraseña",
+      "subtitle": "Elige una contraseña segura para tu cuenta.",
+      "password_label": "Nueva contraseña",
+      "password_placeholder": "Mínimo 8 caracteres",
+      "cta": "Restablecer contraseña",
+      "loading": "Restableciendo…",
+      "success_title": "Contraseña actualizada",
+      "success_body": "Tu contraseña ha sido cambiada. Ya puedes iniciar sesión con tu nueva contraseña.",
+      "error_invalid_token": "Este enlace ha expirado o no es válido. Solicita uno nuevo.",
+      "error_generic": "No se pudo restablecer la contraseña. Por favor, inténtalo de nuevo."
     }
   },
   "tabs": {
@@ -253,7 +279,15 @@
     "logout_hint": "Cierra tu sesión en este dispositivo. Se te pedirá confirmación.",
     "logging_out": "Cerrando sesión…",
     "logout_dialog_title": "Cerrar sesión",
-    "logout_dialog_message": "¿Estás seguro de que quieres cerrar sesión?"
+    "logout_dialog_message": "¿Estás seguro de que quieres cerrar sesión?",
+    "danger_zone": "Zona de peligro",
+    "delete_account": "Eliminar cuenta",
+    "delete_account_hint": "Elimina permanentemente tu cuenta y todos tus datos",
+    "delete_account_dialog_title": "Eliminar cuenta",
+    "delete_account_dialog_message": "Esta acción es irreversible. Se eliminarán tu perfil, logros, amigos y todo tu historial. ¿Continuar?",
+    "delete_account_confirm": "Sí, eliminar mi cuenta",
+    "deleting_account": "Eliminando cuenta…",
+    "delete_account_error": "No se pudo eliminar la cuenta. Inténtalo de nuevo."
   },
   "premium": {
     "title": "Elige tu plan",
@@ -292,7 +326,10 @@
     "active_expires": "Vence el {{date}}",
     "active_aria": "Eres Premium",
     "active_lifetime_aria": "Tienes acceso de por vida activo",
-    "active_monthly_aria": "Premium activo. Vence el {{date}}"
+    "active_monthly_aria": "Premium activo. Vence el {{date}}",
+    "coming_soon_title": "Próximamente",
+    "coming_soon_subtitle": "Las suscripciones premium estarán disponibles en breve. Durante la beta, todas las funcionalidades son gratuitas.",
+    "coming_soon_cta": "Próximamente"
   },
   "maintenance": {
     "title": "En mantenimiento",
@@ -399,5 +436,16 @@
       "unlink_confirm": "¿Seguro que quieres desvincular RetroAchievements? Se eliminarán los datos de sincronización.",
       "linked_as": "Vinculado como {{username}}"
     }
+  },
+  "onboarding": {
+    "step1_title": "Bienvenido a UnlockHub",
+    "step1_body": "El tracker unificado de logros de videojuegos. Conecta Steam, RetroAchievements y PlayStation en un solo lugar.",
+    "step2_title": "Vincula tus plataformas",
+    "step2_body": "Conecta tus cuentas de gaming y sincronizaremos todos tus logros automáticamente. Empieza con Steam o RetroAchievements.",
+    "step3_title": "¡Listo para desbloquear!",
+    "step3_body": "Compite en rankings globales, reta a tus amigos y registra tu legado gaming. Tu aventura comienza ahora.",
+    "cta_next": "Siguiente",
+    "cta_start": "Empezar",
+    "cta_skip": "Omitir"
   }
 }

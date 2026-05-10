@@ -63,7 +63,7 @@ export function useAuth() {
       setSession(data.user, data.accessToken);
       queryClient.removeQueries();
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.replace('/(tabs)');
+      router.replace('/onboarding');
     },
   });
 

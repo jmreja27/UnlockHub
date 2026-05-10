@@ -27,6 +27,7 @@ Modelo de negocio: app gratuita con anuncios (AdMob) + suscripción premium para
 | expo-image | Imágenes con caché automática y blurhash placeholder |
 | expo-haptics | Feedback háptico en acciones importantes |
 | expo-notifications | Push notifications iOS y Android |
+| expo-network | Detección de conectividad (OfflineBanner global) |
 
 ### Backend — `apps/api`
 | Tecnología | Uso |
@@ -39,6 +40,7 @@ Modelo de negocio: app gratuita con anuncios (AdMob) + suscripción premium para
 | BullMQ + Redis | Cola de tareas: sync de logros, rankings, notificaciones batch |
 | Helmet.js | Headers de seguridad HTTP |
 | express-rate-limit | Rate limiting en todos los endpoints |
+| Resend | Email transaccional (recuperación de contraseña) — requiere `RESEND_API_KEY` |
 
 ### Infraestructura
 | Servicio | Uso |
@@ -391,8 +393,11 @@ cd apps/api && npm run mock   # arranca mock-server.js en :3000
 | `app/link-platform/psn.tsx` | Vinculación de cuenta PSN (NPSSO token) |
 | `app/link-platform/xbox.tsx` | Vinculación de cuenta Xbox (OAuth2 Microsoft) |
 | `app/privacy.tsx` | Política de privacidad + GDPR |
-| `app/premium.tsx` | Planes premium (desactivados en v1 — solo AdMob) |
+| `app/premium.tsx` | Planes premium (desactivados en v1 — solo AdMob). Billing activable con `FEATURES.premium = true` |
 | `app/wrapped/[year].tsx` | Gaming Wrapped anual |
+| `app/onboarding.tsx` | Flujo de bienvenida 3 pasos — solo en primer login tras registro |
+| `app/(auth)/forgot-password.tsx` | Recuperación de contraseña — envía email con Resend |
+| `app/reset-password.tsx` | Restablece contraseña desde deep link `unlockhub://reset-password?token=…` |
 
 ### Preferencias de usuario (persistentes)
 
@@ -459,7 +464,7 @@ Las rutas de vinculación y pantallas mobile están implementadas para Steam, RA
 |---|---|---|
 | **Fase 1 — MVP** | Setup monorepo, auth, vinculación Steam + RA, tracking de logros, rankings, perfil, multiidioma, premium, AdMob | ✅ Completa |
 | **Fase 2 — Social** | Amigos, feed de actividad, retos semanales, sistema de puntos, racha diaria, push notifications, Gaming Wrapped, perfil público, búsqueda de juegos y usuarios | ✅ Completa |
-| **Fase 3 — Producción y monetización** | Google Play Billing real, despliegue Fly.io, AdMob producción, Privacy Policy/GDPR, EAS Build, Play Store listing, Sentry, **integración PlayStation Network** | 🔄 En progreso |
+| **Fase 3 — Producción y monetización** | Google Play Billing real, despliegue Fly.io, AdMob producción, Privacy Policy/GDPR, EAS Build, Play Store listing, Sentry, **integración PlayStation Network**, borrado de cuenta GDPR ✅, recuperación de contraseña ✅, OfflineBanner ✅, onboarding ✅ | 🔄 En progreso |
 | **Fase 4 — Avanzado** | Torneos con recompensas, canje de puntos, App Store iOS, **integración Xbox** | 🔲 Futuro |
 
 > **Aviso legal Fase 4**: Los torneos con recompensas reales pueden clasificarse como juegos de azar en España (Ley 13/2011). Consultar con abogado antes de implementar.
