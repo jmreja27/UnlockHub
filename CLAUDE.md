@@ -6,7 +6,7 @@ Documento de contexto persistente para Claude Code. Léelo completo al inicio de
 
 ## ¿Qué es UnlockHub?
 
-Aplicación móvil (iOS + Android) para tracking unificado de logros de videojuegos. En la v1 integra **Steam** y **RetroAchievements**. La arquitectura está diseñada para añadir PlayStation y Xbox en el futuro sin romper el código existente.
+Aplicación móvil (iOS + Android) para tracking unificado de logros de videojuegos. Integra **Steam**, **RetroAchievements**, **PlayStation Network (PSN)** y **Xbox**. La arquitectura de adaptadores permite añadir nuevas plataformas sin modificar código existente.
 
 Modelo de negocio: app gratuita con anuncios (AdMob) + suscripción premium para eliminar anuncios. Rankings y funcionalidades sociales disponibles para todos los usuarios — sin ventajas de pago en competición.
 
@@ -80,7 +80,9 @@ unlockhub/
 │       │   └── platforms/       # Adaptadores de plataformas externas
 │       │       ├── platform.interface.ts   # Contrato común
 │       │       ├── steam.adapter.ts
-│       │       └── retroachievements.adapter.ts
+│       │       ├── retroachievements.adapter.ts
+│       │       ├── psn.adapter.ts
+│       │       └── xbox.adapter.ts
 │       └── prisma/
 │           ├── schema.prisma
 │           └── migrations/
@@ -199,6 +201,25 @@ Snapshot diario a PostgreSQL para histórico de posiciones.
 - `getUserSummary`, `getUserCompletedGames`, `getGameInfoAndUserProgress`
 - Sin garantías SLA — cachear última respuesta válida siempre.
 - Requisito: username + API key del usuario.
+- Sin endpoint de búsqueda por título — los juegos RA solo aparecen en search tras un sync real.
+
+### PlayStation Network (PSN) API
+- Librería: `psn-api` (npm) — wrapper tipado de la API no oficial de Sony.
+- Flujo de autenticación: NPSSO token (cookie de sesión) → Authorization Code → Access Token + Refresh Token.
+- `getUserTitles` — lista de juegos con trofeos del usuario.
+- `getTitleTrophies` — metadatos de trofeos de un juego (Bronce/Plata/Oro/Platino).
+- `getUserTrophiesEarnedForTitle` — trofeos obtenidos por el usuario en un juego concreto.
+- Normalización: Bronce → 15 XP, Plata → 30 XP, Oro → 90 XP, Platino → 300 XP.
+- Caché en Redis: metadatos de trofeos 24h, lista de juegos del usuario 1h.
+- Requisito del usuario: NPSSO token (obtenible desde `my.playstation.com`).
+
+### Xbox Live / Microsoft API
+- OAuth2 con Microsoft Identity Platform → Xbox Live Token → XSTS Token.
+- `GET /users/me/profile/settings` — perfil Xbox del usuario.
+- `GET /users/xuid({xuid})/achievements` — lista de logros.
+- Normalización de Gamerscore → XP con escala proporcional.
+- Caché en Redis: logros 30 min.
+- Requisito del usuario: Microsoft account con Xbox Live.
 
 ### Sincronización — Cooldowns por tier
 
@@ -344,17 +365,18 @@ cd apps/api && npm run mock   # arranca mock-server.js en :3000
 
 ---
 
-## Estado de las pantallas — Fase 2 + UX completado
+## Estado de las pantallas — Fase 2 + PSN + Xbox completado
 
 ### Tabs principales
 
 | Tab | Ruta | Contenido |
 |---|---|---|
 | Home | `app/(tabs)/index.tsx` | **Biblioteca de juegos** del usuario con buscador + filtros por plataforma (ALL/STEAM/RA/PSN/XBOX). Icono: `game-controller`. |
-| Search | `app/(tabs)/search.tsx` | Búsqueda unificada juegos + usuarios. |
+| Search | `app/(tabs)/search.tsx` | Búsqueda unificada juegos + usuarios. Híbrida: DB local + Steam Store API si < 10 resultados locales. |
 | Rankings | `app/(tabs)/rankings.tsx` | Ranking con filtros Global / Nacional / Steam / RetroAchievements / PlayStation. Tap en jugador → perfil público. |
 | Friends | `app/(tabs)/friends.tsx` | Lista de amigos + solicitudes pendientes. Tap en amigo → perfil público. |
-| Profile | `app/(tabs)/profile.tsx` | Perfil + stats + plataformas + actividad reciente (últimos 5 eventos del feed) + **Ajustes** (idioma ES/EN, tema Oscuro/Sistema) + logout. |
+| Challenges | `app/(tabs)/challenges.tsx` | Reto semanal activo con barra de progreso y ranking del reto. |
+| Profile | `app/(tabs)/profile.tsx` | Perfil + stats + plataformas vinculadas (Steam/RA/PSN/Xbox) + actividad reciente (últimos 5 eventos del feed) + **Ajustes** (idioma ES/EN, tema Oscuro/Sistema) + logout. |
 
 ### Pantallas adicionales
 
@@ -364,6 +386,10 @@ cd apps/api && npm run mock   # arranca mock-server.js en :3000
 | `app/(auth)/register.tsx` | Registro |
 | `app/game/[id].tsx` | Detalle de juego con lista de logros |
 | `app/profile/[username].tsx` | Perfil público de otro usuario |
+| `app/link-platform/steam.tsx` | Vinculación de cuenta Steam (SteamID64 + API Key) |
+| `app/link-platform/ra.tsx` | Vinculación de cuenta RetroAchievements (username + API Key) |
+| `app/link-platform/psn.tsx` | Vinculación de cuenta PSN (NPSSO token) |
+| `app/link-platform/xbox.tsx` | Vinculación de cuenta Xbox (OAuth2 Microsoft) |
 | `app/privacy.tsx` | Política de privacidad + GDPR |
 | `app/premium.tsx` | Planes premium (desactivados en v1 — solo AdMob) |
 | `app/wrapped/[year].tsx` | Gaming Wrapped anual |
@@ -375,20 +401,15 @@ cd apps/api && npm run mock   # arranca mock-server.js en :3000
 - **Tema**: Oscuro / Sistema (sigue OS) — cambiable desde Profile → Ajustes
 - **Modo claro completo**: PENDIENTE — todos los componentes usan `text-white` hardcoded. Requiere añadir variantes `dark:` a cada componente.
 
-### Staging environment — PENDIENTE antes de producción
+### Staging environment — ✅ Montado
 
-Antes de lanzar a Google Play, montar entorno de preproducción para probar en dispositivos reales:
+Entorno de preproducción operativo en Fly.io para probar en dispositivos reales:
 
-```bash
-# Fly.io — segunda app copiando configuración
-fly launch --name unlockhub-api-staging --copy-config
-
-# Neon — branch staging desde main (2 clicks en consola)
-# Upstash — mismo Redis con prefijo staging: en las keys
-```
-
-- `eas.json` perfil `preview` → apuntar a `https://unlockhub-api-staging.fly.dev`
-- Permite probar registro, sync y compras sin contaminar datos de producción
+- **API staging**: `https://unlockhub-api-staging.fly.dev` (app `unlockhub-api-staging` en Fly.io)
+- **DB staging**: Neon branch staging
+- **`eas.json` perfil `preview`** → apunta a la URL de staging
+- Cuenta demo: `demo@unlockhub.test` / `Demo1234!`
+- Los juegos y logros en staging vienen exclusivamente de syncs reales con APIs externas (seed solo crea el usuario demo)
 
 ---
 
@@ -407,7 +428,16 @@ fly launch --name unlockhub-api-staging --copy-config
 
 ## Plataformas — Patrón de extensibilidad
 
-Cualquier nueva plataforma (PlayStation, Xbox) debe implementar esta interfaz:
+Los 4 adaptadores están implementados en `apps/api/src/platforms/`:
+
+| Adapter | Fichero | Estado |
+|---|---|---|
+| Steam | `steam.adapter.ts` | ✅ Implementado |
+| RetroAchievements | `retroachievements.adapter.ts` | ✅ Implementado |
+| PlayStation Network | `psn.adapter.ts` | ✅ Implementado |
+| Xbox | `xbox.adapter.ts` | ✅ Implementado |
+
+Todos implementan la interfaz común:
 
 ```typescript
 // apps/api/src/platforms/platform.interface.ts
@@ -419,7 +449,7 @@ export interface PlatformAdapter {
 }
 ```
 
-Añadir una plataforma nueva = crear su adapter implementando esta interfaz + añadir el valor al enum `Platform`. Sin tocar ningún otro código.
+Las rutas de vinculación (`/api/v1/platforms/{steam|ra|psn|xbox}/link`) y las pantallas mobile (`app/link-platform/`) están implementadas para las 4 plataformas.
 
 ---
 
@@ -428,9 +458,9 @@ Añadir una plataforma nueva = crear su adapter implementando esta interfaz + a�
 | Fase | Contenido | Estado |
 |---|---|---|
 | **Fase 1 — MVP** | Setup monorepo, auth, vinculación Steam + RA, tracking de logros, rankings, perfil, multiidioma, premium, AdMob | ✅ Completa |
-| **Fase 2 — Social** | Amigos, feed de actividad, retos semanales, sistema de puntos, racha diaria, push notifications, Gaming Wrapped, perfil público, **búsqueda de juegos y usuarios** | ✅ Completa |
+| **Fase 2 — Social** | Amigos, feed de actividad, retos semanales, sistema de puntos, racha diaria, push notifications, Gaming Wrapped, perfil público, búsqueda de juegos y usuarios, **vinculación PSN + Xbox (adaptadores, rutas API, pantallas mobile)** | ✅ Completa |
 | **Fase 3 — Producción y monetización** | Google Play Billing real, despliegue Fly.io, AdMob producción, Privacy Policy/GDPR, EAS Build, Play Store listing, Sentry | 🔄 En progreso |
-| **Fase 4 — Avanzado** | Torneos con recompensas, canje de puntos, integración PS/Xbox | 🔲 Futuro |
+| **Fase 4 — Avanzado** | Torneos con recompensas, canje de puntos, App Store iOS | 🔲 Futuro |
 
 > **Aviso legal Fase 4**: Los torneos con recompensas reales pueden clasificarse como juegos de azar en España (Ley 13/2011). Consultar con abogado antes de implementar.
 
@@ -600,7 +630,7 @@ Añadir una plataforma nueva = crear su adapter implementando esta interfaz + a�
 
 9. **Smoke tests de producción**
    - Registro, login y logout en el entorno de producción real
-   - Sync de Steam y RetroAchievements con cuentas reales
+   - Sync de Steam, RetroAchievements, PSN y Xbox con cuentas reales
    - Flujo de compra de premium end-to-end (con tarjeta real o cuenta de test de Google Play)
    - Verificar que AdMob muestra anuncios reales (no de test) en usuarios free
    - Verificar que los rankings se actualizan en Redis
@@ -610,32 +640,21 @@ Añadir una plataforma nueva = crear su adapter implementando esta interfaz + a�
 ## Orden recomendado de desarrollo (Fase 4 — Avanzado)
 
 > Expansión post-lanzamiento. Partir de `develop` con Fase 3 estable en producción.
+> PSN y Xbox ya están implementados — esta fase es pura expansión de funcionalidad premium.
 
-1. **Integración PlayStation Network (PSN)**
-   - Crear `psn.adapter.ts` implementando `PlatformAdapter`
-   - OAuth2 con la PSN API para obtener logros (trofeos)
-   - Añadir `PSN` al enum `Platform` en Prisma + migración
-   - Normalización de puntos: trofeos Bronce/Plata/Oro/Platino → XP
-
-2. **Integración Xbox (Xbox Live / Microsoft)**
-   - Crear `xbox.adapter.ts` implementando `PlatformAdapter`
-   - OAuth2 con Microsoft Identity Platform
-   - Añadir `XBOX` al enum `Platform` en Prisma + migración
-   - Normalización de Gamerscore → XP
-
-3. **Sistema de torneos**
+1. **Sistema de torneos**
    - Modelo `Tournament` en Prisma: nombre, fechas, métrica (logros desbloqueados, XP ganado), premio
    - `tournament.service.ts`: crear torneo, inscribir usuario, evaluar clasificación, distribuir premios
    - Pantalla de torneos con cuenta atrás, clasificación en tiempo real (Socket.io), historial
    - > ⚠️ **Aviso legal**: los torneos con recompensas económicas pueden clasificarse como juegos de azar en España (Ley 13/2011). Consultar con abogado antes de implementar.
 
-4. **Canje de puntos (UserPoint)**
+2. **Canje de puntos (UserPoint)**
    - Catálogo de recompensas canjeables: skins de perfil, marcos de avatar, insignias exclusivas
    - `rewards.service.ts`: getRewardsCatalog, redeemReward (descuenta UserPoint + otorga recompensa)
    - Pantalla de tienda de recompensas en el perfil
    - Las recompensas son cosméticas — no afectan a rankings (modelo de negocio ético)
 
-5. **App Store iOS**
+3. **App Store iOS**
    - Apple Developer Program ($99/año)
    - Build iOS con EAS: `eas build --platform ios --profile production`
    - Configurar StoreKit 2 para in-app purchases en iOS (flujo diferente a Google Play Billing)
