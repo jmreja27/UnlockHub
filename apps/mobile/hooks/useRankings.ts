@@ -48,6 +48,7 @@ export function usePlatformRanking(platform: string, page: number = 1, limit: nu
     queryKey: RANKING_KEYS.platform(platform, page, limit),
     queryFn: () =>
       api.get<PaginatedResponse<RankingEntry>>(`/api/v1/rankings/platform/${platform}?page=${page}&limit=${limit}`),
+    enabled: !!platform,
     staleTime: RANKING_STALE,
     gcTime: RANKING_GC,
     placeholderData: (previousData) => previousData,

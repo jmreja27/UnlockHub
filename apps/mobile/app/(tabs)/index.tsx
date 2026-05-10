@@ -171,7 +171,7 @@ export default function LibraryScreen() {
             />
           }
           ListEmptyComponent={
-            <View className="items-center justify-center py-20" accessible accessibilityLiveRegion="polite">
+            <View className="items-center justify-center py-8" accessible accessibilityLiveRegion="polite">
               <Text className="text-gray-400 text-base text-center">
                 {search.trim() ? t('library.no_results') : t('library.empty')}
               </Text>

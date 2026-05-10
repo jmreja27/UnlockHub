@@ -97,7 +97,7 @@ export default function ProfileScreen() {
     refetch: refetchPlatforms,
   } = useQuery({
     queryKey: ['platforms', user?.id],
-    queryFn: () => api.get<PlatformAccount[]>('/api/v1/users/me/platforms'),
+    queryFn: () => api.get<PlatformAccount[]>('/api/v1/platforms/'),
     enabled: isAuthenticated,
     staleTime: 1000 * 60 * 5,
   });
@@ -287,7 +287,7 @@ export default function ProfileScreen() {
 
           {platforms && platforms.length > 0 ? (
             platforms.map((account) => {
-              const canUnlink = account.platform === 'PSN' || account.platform === 'XBOX';
+              const canUnlink = account.platform === 'PSN' || account.platform === 'STEAM' || account.platform === 'RA';
               const label = PLATFORM_LABELS[account.platform] ?? account.platform;
               return (
                 <View
@@ -319,11 +319,7 @@ export default function ProfileScreen() {
                     <Pressable
                       onPress={() => handleUnlink(account.platform, label)}
                       accessibilityRole="button"
-                      accessibilityLabel={
-                        account.platform === 'PSN'
-                          ? t('link_platform.psn.unlink')
-                          : t('link_platform.xbox.unlink')
-                      }
+                      accessibilityLabel={t(`link_platform.${account.platform.toLowerCase()}.unlink`)}
                       style={{ minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'flex-end' }}
                     >
                       <Text className="text-red-400 text-xs">✕</Text>
@@ -344,7 +340,7 @@ export default function ProfileScreen() {
             </View>
           )}
 
-          {/* Botones para vincular PSN / Xbox si aún no están vinculados */}
+          {/* Botones para vincular PSN / Steam / RA si aún no están vinculados */}
           {(() => {
             const linked = new Set(platforms?.map((p) => p.platform) ?? []);
             return (
@@ -367,20 +363,38 @@ export default function ProfileScreen() {
                     <Text className="text-gray-400 text-lg">›</Text>
                   </Pressable>
                 )}
-                {!linked.has('XBOX') && (
+                {!linked.has('STEAM') && (
                   <Pressable
-                    onPress={() => router.push('/link-platform/xbox')}
+                    onPress={() => router.push('/link-platform/steam')}
                     accessibilityRole="button"
-                    accessibilityLabel={t('link_platform.xbox.submit_label')}
-                    className="flex-row items-center bg-surface-elevated border border-[#107c10]/60 rounded-xl px-4 py-3 active:opacity-80"
+                    accessibilityLabel={t('link_platform.steam.submit_label')}
+                    className="flex-row items-center bg-surface-elevated border border-[#1b2838]/80 rounded-xl px-4 py-3 active:opacity-80"
                     style={{ minHeight: 52 }}
                   >
                     <View
-                      style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#107c10', marginRight: 12 }}
+                      style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#1b9fff', marginRight: 12 }}
                       accessibilityElementsHidden
                     />
                     <Text className="text-white font-semibold text-sm flex-1">
-                      {t('link_platform.xbox.submit')}
+                      {t('link_platform.steam.submit')}
+                    </Text>
+                    <Text className="text-gray-400 text-lg">›</Text>
+                  </Pressable>
+                )}
+                {!linked.has('RA') && (
+                  <Pressable
+                    onPress={() => router.push('/link-platform/ra')}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('link_platform.ra.submit_label')}
+                    className="flex-row items-center bg-surface-elevated border border-[#c0392b]/60 rounded-xl px-4 py-3 active:opacity-80"
+                    style={{ minHeight: 52 }}
+                  >
+                    <View
+                      style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#c0392b', marginRight: 12 }}
+                      accessibilityElementsHidden
+                    />
+                    <Text className="text-white font-semibold text-sm flex-1">
+                      {t('link_platform.ra.submit')}
                     </Text>
                     <Text className="text-gray-400 text-lg">›</Text>
                   </Pressable>

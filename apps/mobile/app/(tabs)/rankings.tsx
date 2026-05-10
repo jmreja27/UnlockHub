@@ -139,7 +139,7 @@ function RankingList({
         />
       }
       ListEmptyComponent={
-        <View className="items-center justify-center py-16" accessible accessibilityLiveRegion="polite">
+        <View className="items-center justify-center py-8" accessible accessibilityLiveRegion="polite">
           <Text className="text-gray-400 text-base text-center">{t('rankings.empty')}</Text>
         </View>
       }

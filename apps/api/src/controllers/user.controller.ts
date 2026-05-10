@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
+import { z } from 'zod';
 
 import * as userService from '../services/user.service';
 import type { AuthenticatedRequest } from '../middleware/authenticate';
@@ -51,6 +52,26 @@ export async function getStreakMilestoneHandler(
     // Eliminar tras leer para que solo se muestre una vez
     await redis.del(key);
     res.json({ milestone: parseInt(raw, 10) });
+  } catch (err) {
+    next(err);
+  }
+}
+
+const myGamesQuerySchema = z.object({
+  platform: z.enum(['STEAM', 'RA', 'XBOX', 'PSN']).optional(),
+});
+
+// GET /api/v1/users/me/games — juegos con logros del usuario autenticado
+export async function getMyGamesHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const userId = (req as AuthenticatedRequest).user.id;
+    const { platform } = myGamesQuerySchema.parse(req.query);
+    const result = await userService.getMyGames(userId, platform);
+    res.json(result);
   } catch (err) {
     next(err);
   }

@@ -1,7 +1,7 @@
 import { AppError } from '../middleware/errorHandler';
 import { prisma } from '../lib/prisma';
 import { upsertUserScore } from './ranking.service';
-import type { User, PlatformAccount, PointReason } from '@unlockhub/types';
+import type { User, PlatformAccount, PointReason, Platform } from '@unlockhub/types';
 
 // XP necesario por nivel — cada 1000 XP sube un nivel, máximo nivel 100
 const XP_PER_LEVEL = 1000;
@@ -184,4 +184,101 @@ export async function addXp(
   );
 
   return { newXp, newLevel, leveledUp };
+}
+
+// Devuelve los juegos con logros del usuario, agrupados por juego con stats de completado
+export async function getMyGames(
+  userId: string,
+  platform?: Platform,
+): Promise<{
+  data: Array<{
+    id: string;
+    title: string;
+    platform: string;
+    iconUrl: string | null;
+    totalAchievements: number;
+    earnedAchievements: number;
+    completionPct: number;
+    lastSyncedAt: string | null;
+  }>;
+  total: number;
+}> {
+  const userAchievements = await prisma.userAchievement.findMany({
+    where: {
+      userId,
+      achievement: platform ? { platform } : undefined,
+    },
+    select: {
+      achievement: {
+        select: {
+          gameId: true,
+          game: {
+            select: {
+              id: true,
+              title: true,
+              platform: true,
+              iconUrl: true,
+              totalAchievements: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const platformAccounts = await prisma.platformAccount.findMany({
+    where: { userId },
+    select: { platform: true, lastSyncedAt: true },
+  });
+  const syncMap = new Map<string, string | null>();
+  for (const pa of platformAccounts) {
+    syncMap.set(pa.platform, pa.lastSyncedAt?.toISOString() ?? null);
+  }
+
+  const gameMap = new Map<
+    string,
+    {
+      id: string;
+      title: string;
+      platform: string;
+      iconUrl: string | null;
+      totalAchievements: number;
+      earnedAchievements: number;
+    }
+  >();
+
+  for (const ua of userAchievements) {
+    const { gameId, game } = ua.achievement;
+    const entry = gameMap.get(gameId);
+    if (!entry) {
+      gameMap.set(gameId, {
+        id: game.id,
+        title: game.title,
+        platform: game.platform,
+        iconUrl: game.iconUrl,
+        totalAchievements: game.totalAchievements,
+        earnedAchievements: 1,
+      });
+    } else {
+      entry.earnedAchievements++;
+    }
+  }
+
+  const data = Array.from(gameMap.values())
+    .map((g) => ({
+      id: g.id,
+      title: g.title,
+      platform: g.platform,
+      iconUrl: g.iconUrl,
+      totalAchievements: g.totalAchievements,
+      earnedAchievements: g.earnedAchievements,
+      completionPct:
+        g.totalAchievements > 0
+          ? Math.round((g.earnedAchievements / g.totalAchievements) * 100)
+          : 0,
+      lastSyncedAt: syncMap.get(g.platform) ?? null,
+    }))
+    .sort((a, b) => a.title.localeCompare(b.title));
+
+  return { data, total: data.length };
 }
