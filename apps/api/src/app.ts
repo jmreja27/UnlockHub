@@ -1,4 +1,7 @@
+// Sentry debe inicializarse antes que cualquier otro módulo — el import split es intencional.
+/* eslint-disable import/order */
 import * as Sentry from '@sentry/node';
+/* eslint-enable import/order */
 
 // Inicializar Sentry antes que cualquier otro módulo para capturar errores desde el arranque
 Sentry.init({

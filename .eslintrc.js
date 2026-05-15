@@ -39,6 +39,15 @@ module.exports = {
         '@typescript-eslint/no-var-requires': 'off',
       },
     },
+    {
+      // Los tests usan jest.mock() entre imports (patrón Jest estándar). ESLint
+      // no puede auto-fixear esta mezcla de imports/código, así que desactivamos
+      // import/order solo en ficheros de test.
+      files: ['**/__tests__/**/*.ts', '**/*.test.ts', '**/*.spec.ts'],
+      rules: {
+        'import/order': 'off',
+      },
+    },
   ],
   ignorePatterns: ['node_modules/', 'dist/', '.expo/', 'coverage/', '*.tsbuildinfo'],
 };
