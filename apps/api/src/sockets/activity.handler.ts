@@ -1,7 +1,8 @@
 import type { Server, Socket } from 'socket.io';
+import type { ActivityEvent } from '@unlockhub/types';
+
 import { verifyAccessToken } from '../lib/jwt';
 import { friendshipRepository } from '../repositories/friendship.repository';
-import type { ActivityEvent } from '@unlockhub/types';
 
 // Cada usuario autenticado se une a su propia room para recibir eventos
 function userRoom(userId: string) {

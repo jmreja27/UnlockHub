@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { api } from '../lib/api';
 import type { User, PlatformAccount } from '@unlockhub/types';
+
+import { api } from '../lib/api';
 
 export type PublicProfile = User & { platformAccounts: PlatformAccount[] };
 

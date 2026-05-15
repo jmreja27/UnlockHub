@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
-import type { AuthenticatedRequest } from '../middleware/authenticate';
 import { paginationSchema } from '@unlockhub/validators';
+
+import type { AuthenticatedRequest } from '../middleware/authenticate';
 import { getPointsHistory, getPointsTotal } from '../services/points.service';
 
 export async function getHistoryHandler(req: Request, res: Response, next: NextFunction): Promise<void> {

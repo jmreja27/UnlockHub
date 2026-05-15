@@ -1,10 +1,10 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import type { User } from '@unlockhub/types';
 
 import { api, ApiRequestError, saveRefreshToken, getRefreshToken, deleteRefreshToken } from '../lib/api';
 import { useSessionStore } from '../stores/sessionStore';
-import type { User } from '@unlockhub/types';
 
 interface LoginInput {
   email: string;

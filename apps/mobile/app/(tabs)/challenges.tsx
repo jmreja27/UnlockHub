@@ -1,10 +1,11 @@
 import { View, Text, RefreshControl, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import type { ChallengeMetric } from '@unlockhub/types';
+
 import { useChallenges } from '../../hooks/useChallenges';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { EmptyState } from '../../components/EmptyState';
-import type { ChallengeMetric } from '@unlockhub/types';
 
 function metricKey(metric: ChallengeMetric): string {
   return `challenges.metric_${metric}`;

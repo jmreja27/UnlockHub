@@ -1,9 +1,9 @@
 // Hook para obtener los rankings globales y la posición del usuario actual
 import { useQuery } from '@tanstack/react-query';
+import type { PaginatedResponse, RankingEntry } from '@unlockhub/types';
 
 import { api } from '../lib/api';
 import { useSessionStore } from '../stores/sessionStore';
-import type { PaginatedResponse, RankingEntry } from '@unlockhub/types';
 
 interface MyRankingResponse {
   rank: number | null;

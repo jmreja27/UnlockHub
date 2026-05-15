@@ -1,4 +1,5 @@
 import { Router } from 'express';
+
 import { authenticate } from '../middleware/authenticate';
 import { getHistoryHandler, getTotalHandler } from '../controllers/points.controller';
 

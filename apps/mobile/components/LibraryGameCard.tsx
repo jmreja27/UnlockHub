@@ -2,6 +2,7 @@ import { Pressable, View, Text } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+
 import type { LibraryGame } from '../hooks/useMyGames';
 
 const PLATFORM_LABEL: Record<string, string> = {

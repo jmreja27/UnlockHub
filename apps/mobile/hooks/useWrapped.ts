@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
+import type { GamingWrapped } from '@unlockhub/types';
+
 import { api } from '../lib/api';
 import { useSessionStore } from '../stores/sessionStore';
-import type { GamingWrapped } from '@unlockhub/types';
 
 // Acepta tanto un año numérico (anual) como un string de período "YYYY-MM" (mensual).
 export function useWrapped(period: number | string) {

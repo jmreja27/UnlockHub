@@ -1,6 +1,7 @@
+import type { GamingWrapped, Platform } from '@unlockhub/types';
+
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
-import type { GamingWrapped, Platform } from '@unlockhub/types';
 
 function yearBounds(year: number): { start: Date; end: Date } {
   return {

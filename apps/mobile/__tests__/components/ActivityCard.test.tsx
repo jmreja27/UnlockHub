@@ -1,9 +1,9 @@
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 import * as Haptics from 'expo-haptics';
+import type { ActivityEvent } from '@unlockhub/types';
 
 import { ActivityCard } from '../../components/ActivityCard';
-import type { ActivityEvent } from '@unlockhub/types';
 
 const RECENT_DATE = new Date(Date.now() - 10000).toISOString(); // 10 segundos atrás
 

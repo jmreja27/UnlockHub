@@ -4,8 +4,9 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { Image } from 'expo-image';
 import { useTranslation } from 'react-i18next';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { useWrapped } from '../../hooks/useWrapped';
 import type { GamingWrapped } from '@unlockhub/types';
+
+import { useWrapped } from '../../hooks/useWrapped';
 
 const PLATFORM_LABELS: Record<string, string> = {
   STEAM: 'Steam',

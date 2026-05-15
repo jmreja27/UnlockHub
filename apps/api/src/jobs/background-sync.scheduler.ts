@@ -1,8 +1,10 @@
 import { Queue } from 'bullmq';
+
 import { redis } from '../lib/redis';
 import { prisma } from '../lib/prisma';
-import { syncQueue } from './sync.queue';
 import { logger } from '../lib/logger';
+
+import { syncQueue } from './sync.queue';
 
 const backgroundSyncQueue = new Queue('background-sync', { connection: redis });
 

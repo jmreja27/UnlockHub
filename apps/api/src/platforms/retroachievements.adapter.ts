@@ -6,6 +6,7 @@ import { prisma } from '../lib/prisma';
 import { redis } from '../lib/redis';
 import { decrypt } from '../lib/crypto';
 import { AppError } from '../middleware/errorHandler';
+
 import type { PlatformAdapter } from './platform.interface';
 
 // URL base de la API de RetroAchievements

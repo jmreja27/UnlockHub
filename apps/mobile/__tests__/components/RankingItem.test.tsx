@@ -1,9 +1,9 @@
 import React from 'react';
 import { Text } from 'react-native';
 import { render, fireEvent } from '@testing-library/react-native';
+import type { RankingEntry } from '@unlockhub/types';
 
 import { RankingItem } from '../../components/RankingItem';
-import type { RankingEntry } from '@unlockhub/types';
 
 function makeEntry(overrides: Partial<RankingEntry> = {}): RankingEntry {
   return {

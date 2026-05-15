@@ -1,6 +1,6 @@
 import { Queue } from 'bullmq';
-
 import type { Platform } from '@unlockhub/types';
+
 import { redis } from '../lib/redis';
 
 export interface SyncJobData {

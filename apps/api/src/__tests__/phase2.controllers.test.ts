@@ -16,6 +16,7 @@ jest.mock('../services/notification.service', () => ({
 }));
 
 import type { Request, Response, NextFunction } from 'express';
+
 import { getFriendsFeedHandler, getPublicFeedHandler } from '../controllers/activity.controller';
 import { getHistoryHandler, getTotalHandler } from '../controllers/points.controller';
 import { getActiveChallengeHandler, getMyChallengeStatusHandler } from '../controllers/challenge.controller';

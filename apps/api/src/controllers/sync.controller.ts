@@ -1,9 +1,10 @@
 import type { Request, Response, NextFunction } from 'express';
+import { platformSchema } from '@unlockhub/validators';
+import type { Platform } from '@unlockhub/types';
 
 import type { AuthenticatedRequest } from '../middleware/authenticate';
-import { platformSchema } from '@unlockhub/validators';
 import * as syncService from '../services/sync.service';
-import type { Platform } from '@unlockhub/types';
+
 
 export async function triggerSyncHandler(req: Request, res: Response, next: NextFunction) {
   try {

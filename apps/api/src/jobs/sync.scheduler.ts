@@ -1,8 +1,10 @@
-import { syncQueue } from './sync.queue';
-import { prisma } from '../lib/prisma';
 import { SYNC_COOLDOWNS } from '@unlockhub/types';
+
+import { prisma } from '../lib/prisma';
 import { FEATURES } from '../config/features';
 import { logger } from '../lib/logger';
+
+import { syncQueue } from './sync.queue';
 
 // Programa syncs automáticos repetibles para un usuario y plataforma
 export async function scheduleAutoSync(

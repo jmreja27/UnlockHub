@@ -1,5 +1,7 @@
-import bcrypt from 'bcrypt';
 import crypto from 'crypto';
+
+import bcrypt from 'bcrypt';
+import type { RegisterInput, LoginInput } from '@unlockhub/validators';
 
 import { AppError } from '../middleware/errorHandler';
 import * as userRepo from '../repositories/user.repository';
@@ -9,8 +11,8 @@ import {
   signRefreshToken,
 } from '../lib/jwt';
 import { prisma } from '../lib/prisma';
+
 import { sendPasswordResetEmail } from './email.service';
-import type { RegisterInput, LoginInput } from '@unlockhub/validators';
 
 const RESET_TOKEN_EXPIRY_MS = 60 * 60 * 1000; // 1 hora
 

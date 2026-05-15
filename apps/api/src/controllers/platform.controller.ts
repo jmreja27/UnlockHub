@@ -1,13 +1,13 @@
 import type { Request, Response, NextFunction } from 'express';
-
-import * as platformService from '../services/platform.service';
-import type { AuthenticatedRequest } from '../middleware/authenticate';
 import {
   linkSteamAccountSchema,
   linkRetroAchievementsSchema,
   linkPsnAccountSchema,
   linkXboxAccountSchema,
 } from '@unlockhub/validators';
+
+import * as platformService from '../services/platform.service';
+import type { AuthenticatedRequest } from '../middleware/authenticate';
 import { exchangeNpssoForPsnTokens } from '../platforms/psn.adapter';
 import { exchangeXboxCodeForTokens } from '../platforms/xbox.adapter';
 

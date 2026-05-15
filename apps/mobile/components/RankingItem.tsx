@@ -1,7 +1,6 @@
 // Componente reutilizable para un ítem del ranking global
 import { View, Text, Pressable } from 'react-native';
 import { Image } from 'expo-image';
-
 import type { RankingEntry } from '@unlockhub/types';
 
 // Placeholder blurhash para avatares mientras cargan

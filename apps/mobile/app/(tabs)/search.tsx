@@ -2,11 +2,13 @@ import { View, Text, TextInput, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import { useTranslation } from 'react-i18next';
+import type { GameSearchResult, UserSearchResult } from '@unlockhub/types';
+import { useState } from 'react';
+
 import { useSearch, type SearchFilter } from '../../hooks/useSearch';
 import { GameCard } from '../../components/GameCard';
 import { UserCard } from '../../components/UserCard';
 import { SkeletonBox } from '../../components/SkeletonBox';
-import type { GameSearchResult, UserSearchResult } from '@unlockhub/types';
 
 type FilterOption = { key: SearchFilter; labelKey: string };
 
@@ -159,4 +161,3 @@ function buildItems(
 }
 
 // Import diferido para evitar error de orden
-import { useState } from 'react';

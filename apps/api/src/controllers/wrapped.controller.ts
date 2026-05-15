@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
+
 import type { AuthenticatedRequest } from '../middleware/authenticate';
 import { getWrapped, getMonthlyWrapped } from '../services/wrapped.service';
 

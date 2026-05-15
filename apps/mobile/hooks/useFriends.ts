@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../lib/api';
 import type { Friendship, PaginatedResponse } from '@unlockhub/types';
+
+import { api } from '../lib/api';
 
 const KEYS = {
   friends: ['friends'] as const,

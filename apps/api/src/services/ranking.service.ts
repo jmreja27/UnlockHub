@@ -1,6 +1,7 @@
+import type { RankingEntry, PaginatedResponse } from '@unlockhub/types';
+
 import { redis } from '../lib/redis';
 import { prisma } from '../lib/prisma';
-import type { RankingEntry, PaginatedResponse } from '@unlockhub/types';
 import { logger } from '../lib/logger';
 
 // Claves de Redis Sorted Sets (score = XP, mayor score = mayor rango)

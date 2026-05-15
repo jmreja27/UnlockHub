@@ -1,7 +1,8 @@
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
-import { UserCard } from '../../components/UserCard';
 import type { UserSearchResult } from '@unlockhub/types';
+
+import { UserCard } from '../../components/UserCard';
 
 jest.mock('expo-router', () => ({
   router: { push: jest.fn() },

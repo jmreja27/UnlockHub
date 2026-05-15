@@ -1,5 +1,6 @@
-import { prisma } from '../lib/prisma';
 import type { FriendshipStatus } from '@prisma/client';
+
+import { prisma } from '../lib/prisma';
 
 export const friendshipRepository = {
   findBetween(userA: string, userB: string) {

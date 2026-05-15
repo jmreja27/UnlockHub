@@ -1,4 +1,5 @@
 import { Router } from 'express';
+
 import { authenticate } from '../middleware/authenticate';
 import { getFriendsFeedHandler, getPublicFeedHandler } from '../controllers/activity.controller';
 

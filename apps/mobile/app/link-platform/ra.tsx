@@ -15,9 +15,9 @@ import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import type { PlatformAccount } from '@unlockhub/types';
 
 import { api, ApiRequestError } from '../../lib/api';
-import type { PlatformAccount } from '@unlockhub/types';
 
 const RA_SETTINGS_URL = 'https://retroachievements.org/controlpanel.php';
 const RA_REGISTER_URL = 'https://retroachievements.org/createaccount.php';

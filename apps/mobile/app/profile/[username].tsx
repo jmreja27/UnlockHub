@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
+
 import { usePublicProfile } from '../../hooks/usePublicProfile';
 import { useFriends } from '../../hooks/useFriends';
 import { useSessionStore } from '../../stores/sessionStore';

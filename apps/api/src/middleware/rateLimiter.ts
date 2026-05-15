@@ -1,5 +1,4 @@
 import rateLimit from 'express-rate-limit';
-
 import type { ApiError } from '@unlockhub/types';
 
 function rateLimitMessage(message: string, code: string): ApiError {

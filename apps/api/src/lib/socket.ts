@@ -1,7 +1,9 @@
+import type { Server as HttpServer } from 'http';
+
 import { Server } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
-import type { Server as HttpServer } from 'http';
 import Redis from 'ioredis';
+
 import { logger } from './logger';
 
 let _io: Server | null = null;

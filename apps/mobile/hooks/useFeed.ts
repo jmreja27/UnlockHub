@@ -1,9 +1,10 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { io, type Socket } from 'socket.io-client';
+import type { ActivityEvent, PaginatedResponse } from '@unlockhub/types';
+
 import { api } from '../lib/api';
 import { useSessionStore } from '../stores/sessionStore';
-import type { ActivityEvent, PaginatedResponse } from '@unlockhub/types';
 
 const API_URL = process.env['EXPO_PUBLIC_API_URL'] ?? 'http://localhost:3000';
 const FEED_KEY = ['feed'] as const;

@@ -1,7 +1,8 @@
 import type { Request, Response, NextFunction } from 'express';
 
-import { AppError } from './errorHandler';
 import { verifyAccessToken } from '../lib/jwt';
+
+import { AppError } from './errorHandler';
 
 export interface AuthenticatedRequest extends Request {
   user: {

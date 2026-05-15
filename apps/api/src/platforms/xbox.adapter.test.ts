@@ -24,8 +24,10 @@ jest.mock('../lib/crypto', () => ({
 // ─── Imports (después de los mocks) ──────────────────────────────────────────
 
 import axios from 'axios';
+
 import { redis } from '../lib/redis';
 import { prisma } from '../lib/prisma';
+
 import { XboxAdapter, exchangeXboxCodeForTokens } from './xbox.adapter';
 
 const mockedAxios = axios as jest.Mocked<typeof axios>;

@@ -9,6 +9,7 @@ jest.mock('../middleware/rateLimiter', () => ({
 }));
 
 import request from 'supertest';
+
 import * as authService from '../services/auth.service';
 import app from '../app';
 import { signAccessToken } from '../lib/jwt';

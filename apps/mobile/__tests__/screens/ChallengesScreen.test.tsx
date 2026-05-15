@@ -1,10 +1,10 @@
 import React from 'react';
 import { Text } from 'react-native';
 import { render } from '@testing-library/react-native';
+import type { WeeklyChallenge, UserChallenge } from '@unlockhub/types';
 
 import ChallengesScreen from '../../app/(tabs)/challenges';
 import { useChallenges } from '../../hooks/useChallenges';
-import type { WeeklyChallenge, UserChallenge } from '@unlockhub/types';
 
 jest.mock('../../hooks/useChallenges');
 

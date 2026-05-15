@@ -1,10 +1,10 @@
 import type { Request, Response, NextFunction } from 'express';
+import { registerSchema, loginSchema } from '@unlockhub/validators';
+import { z } from 'zod';
 
 import * as authService from '../services/auth.service';
 import { AppError } from '../middleware/errorHandler';
 import type { AuthenticatedRequest } from '../middleware/authenticate';
-import { registerSchema, loginSchema } from '@unlockhub/validators';
-import { z } from 'zod';
 
 const forgotPasswordSchema = z.object({ email: z.string().email() });
 const resetPasswordSchema = z.object({

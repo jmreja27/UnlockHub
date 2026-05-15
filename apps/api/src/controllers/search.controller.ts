@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
+
 import { search, getGameWithAchievements } from '../services/search.service';
 import { AppError } from '../middleware/errorHandler';
 

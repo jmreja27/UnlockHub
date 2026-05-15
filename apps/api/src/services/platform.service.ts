@@ -1,9 +1,11 @@
+import type { Platform, PlatformAccount } from '@unlockhub/types';
+
 import { AppError } from '../middleware/errorHandler';
 import { prisma } from '../lib/prisma';
 import { encrypt } from '../lib/crypto';
 import { scheduleAutoSync, cancelAutoSync } from '../jobs/sync.scheduler';
+
 import { removeUserFromRankings } from './ranking.service';
-import type { Platform, PlatformAccount } from '@unlockhub/types';
 
 // Transforma una cuenta de plataforma de Prisma al tipo compartido (sin token cifrado)
 function mapPlatformAccount(dbAccount: {

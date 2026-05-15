@@ -30,10 +30,11 @@ jest.mock('../lib/crypto', () => ({
   decrypt: jest.fn((token: string) => token), // Devuelve el token tal cual en tests
 }));
 
-import { retroAchievementsAdapter } from './retroachievements.adapter';
 import { redis } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
+
+import { retroAchievementsAdapter } from './retroachievements.adapter';
 
 const mockAxios = axios as jest.Mocked<typeof axios>;
 const mockRedis = redis as jest.Mocked<typeof redis>;

@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
-
 import { paginationSchema, platformSchema } from '@unlockhub/validators';
+
 import * as rankingService from '../services/ranking.service';
 import type { AuthenticatedRequest } from '../middleware/authenticate';
 

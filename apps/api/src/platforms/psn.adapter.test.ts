@@ -35,8 +35,10 @@ jest.mock('../lib/crypto', () => ({
 // ─── Imports (después de los mocks) ──────────────────────────────────────────
 
 import * as psnApi from 'psn-api';
+
 import { redis } from '../lib/redis';
 import { prisma } from '../lib/prisma';
+
 import { PsnAdapter, exchangeNpssoForPsnTokens } from './psn.adapter';
 
 const mocked = {

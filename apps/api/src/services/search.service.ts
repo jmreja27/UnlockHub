@@ -1,6 +1,7 @@
+import type { GameSearchResult, UserSearchResult, SearchResponse } from '@unlockhub/types';
+
 import { prisma } from '../lib/prisma';
 import { redis } from '../lib/redis';
-import type { GameSearchResult, UserSearchResult, SearchResponse } from '@unlockhub/types';
 
 const MAX_RESULTS = 20;
 // Si la DB local tiene menos de este número de juegos para una query,

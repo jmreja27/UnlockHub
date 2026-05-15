@@ -1,8 +1,10 @@
+import type { WeeklyChallenge, UserChallenge } from '@unlockhub/types';
+
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
+
 import { awardPoints } from './points.service';
 import { createEvent } from './activity.service';
-import type { WeeklyChallenge, UserChallenge } from '@unlockhub/types';
 
 function challengeToDto(row: {
   id: string;

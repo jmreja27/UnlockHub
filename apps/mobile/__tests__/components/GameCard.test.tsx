@@ -1,7 +1,8 @@
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
-import { GameCard } from '../../components/GameCard';
 import type { GameSearchResult } from '@unlockhub/types';
+
+import { GameCard } from '../../components/GameCard';
 
 jest.mock('expo-router', () => ({
   router: { push: jest.fn() },

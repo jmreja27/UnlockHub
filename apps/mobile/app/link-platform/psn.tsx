@@ -15,9 +15,9 @@ import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import type { PlatformAccount } from '@unlockhub/types';
 
 import { api, ApiRequestError } from '../../lib/api';
-import type { PlatformAccount } from '@unlockhub/types';
 
 const PSN_LOGIN_URL = 'https://my.playstation.com/';
 const PSN_COOKIE_URL = 'https://ca.account.sony.com/api/v1/ssocookie';

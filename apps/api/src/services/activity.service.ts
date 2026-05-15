@@ -1,6 +1,7 @@
+import type { ActivityEvent, ActivityEventType, PaginatedResponse } from '@unlockhub/types';
+
 import { prisma } from '../lib/prisma';
 import { friendshipRepository } from '../repositories/friendship.repository';
-import type { ActivityEvent, ActivityEventType, PaginatedResponse } from '@unlockhub/types';
 
 function toDto(row: {
   id: string;

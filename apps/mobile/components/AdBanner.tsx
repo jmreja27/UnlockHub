@@ -3,6 +3,7 @@
 // o un placeholder visual con las dimensiones de un banner estándar (320x50).
 // Los usuarios premium no ven anuncios — devuelve null si isPremium.
 import { View, Text } from 'react-native';
+
 import { useSessionStore } from '../stores/sessionStore';
 
 // Dimensiones estándar de un banner de AdMob

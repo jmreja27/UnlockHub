@@ -1,6 +1,7 @@
+import type { PaginatedResponse, PointReason } from '@unlockhub/types';
+
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
-import type { PaginatedResponse, PointReason } from '@unlockhub/types';
 
 export interface PointEntry {
   id: string;

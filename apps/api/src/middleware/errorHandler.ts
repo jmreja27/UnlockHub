@@ -1,8 +1,8 @@
 import type { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
 import * as Sentry from '@sentry/node';
-
 import type { ApiError } from '@unlockhub/types';
+
 import { logger } from '../lib/logger';
 
 export class AppError extends Error {

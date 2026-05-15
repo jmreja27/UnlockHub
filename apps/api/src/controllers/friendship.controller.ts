@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { sendFriendRequestSchema, friendshipActionSchema, paginationSchema } from '@unlockhub/validators';
+
 import type { AuthenticatedRequest } from '../middleware/authenticate';
 import * as friendshipService from '../services/friendship.service';
 

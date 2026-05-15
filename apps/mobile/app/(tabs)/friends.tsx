@@ -5,12 +5,12 @@ import { FlashList } from '@shopify/flash-list';
 import { useTranslation } from 'react-i18next';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import type { Friendship } from '@unlockhub/types';
 
 import { useFriends } from '../../hooks/useFriends';
 import { useSessionStore } from '../../stores/sessionStore';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { EmptyState } from '../../components/EmptyState';
-import type { Friendship } from '@unlockhub/types';
 
 type Tab = 'friends' | 'pending';
 

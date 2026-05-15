@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+
 import type { Request, Response, NextFunction } from 'express';
 
 export function adminAuth(req: Request, res: Response, next: NextFunction): void {

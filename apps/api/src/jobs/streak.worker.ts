@@ -1,4 +1,5 @@
 import { Worker } from 'bullmq';
+
 import { redis, createWorkerConnection } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 import { addXp } from '../services/user.service';

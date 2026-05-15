@@ -4,13 +4,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import { useTranslation } from 'react-i18next';
 import { useRouter } from 'expo-router';
+import type { RankingEntry } from '@unlockhub/types';
 
 import { useGlobalRankings, useCountryRanking, usePlatformRanking, useMyRanking } from '../../hooks/useRankings';
 import { useSessionStore } from '../../stores/sessionStore';
 import { RankingItem } from '../../components/RankingItem';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { AdBanner } from '../../components/AdBanner';
-import type { RankingEntry } from '@unlockhub/types';
 
 type RankingFilter = 'global' | 'national' | 'STEAM' | 'RA' | 'PSN';
 

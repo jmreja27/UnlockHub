@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import type { SearchResponse } from '@unlockhub/types';
+
 import { api } from '../lib/api';
 import { useSessionStore } from '../stores/sessionStore';
-import type { SearchResponse } from '@unlockhub/types';
 
 export type SearchFilter = 'all' | 'games' | 'users';
 

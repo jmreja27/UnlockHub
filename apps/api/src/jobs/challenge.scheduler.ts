@@ -1,4 +1,5 @@
 import { Queue, Worker } from 'bullmq';
+
 import { redis, createWorkerConnection } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 import { updateProgress } from '../services/challenge.service';

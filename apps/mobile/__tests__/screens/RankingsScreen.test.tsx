@@ -1,10 +1,10 @@
 ﻿import React from 'react';
 import { render } from '@testing-library/react-native';
+import type { RankingEntry } from '@unlockhub/types';
 
 import RankingsScreen from '../../app/(tabs)/rankings';
 import { useGlobalRankings, useMyRanking } from '../../hooks/useRankings';
 import { useSessionStore } from '../../stores/sessionStore';
-import type { RankingEntry } from '@unlockhub/types';
 
 jest.mock('../../hooks/useRankings');
 jest.mock('../../stores/sessionStore');

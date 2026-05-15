@@ -16,11 +16,12 @@ import type {
 import type { PlatformAccount } from '@prisma/client';
 import type { Achievement, Game, SyncResult } from '@unlockhub/types';
 
-import type { PlatformAdapter } from './platform.interface';
 import { encrypt, decrypt } from '../lib/crypto';
 import { prisma } from '../lib/prisma';
 import { redis } from '../lib/redis';
 import { AppError } from '../middleware/errorHandler';
+
+import type { PlatformAdapter } from './platform.interface';
 
 // ─── Constantes ────────────────────────────────────────────────────────────────
 

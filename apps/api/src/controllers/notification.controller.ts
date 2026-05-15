@@ -1,7 +1,8 @@
 import type { Request, Response, NextFunction } from 'express';
+import { z } from 'zod';
+
 import type { AuthenticatedRequest } from '../middleware/authenticate';
 import { saveDeviceToken, removeDeviceToken } from '../services/notification.service';
-import { z } from 'zod';
 
 const registerSchema = z.object({
   token: z.string().min(1),

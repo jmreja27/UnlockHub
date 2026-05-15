@@ -6,11 +6,11 @@ import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import type { PaginatedResponse } from '@unlockhub/types';
 
 import { api } from '../lib/api';
 import { EmptyState } from '../components/EmptyState';
 import { SkeletonBox } from '../components/SkeletonBox';
-import type { PaginatedResponse } from '@unlockhub/types';
 
 interface AppNotification {
   id: string;

@@ -2,11 +2,11 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
+import type { PaginatedResponse, Friendship } from '@unlockhub/types';
 
 import { api } from '../../lib/api';
 import { useSessionStore } from '../../stores/sessionStore';
 import { NotificationBell } from '../../components/NotificationBell';
-import type { PaginatedResponse, Friendship } from '@unlockhub/types';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 

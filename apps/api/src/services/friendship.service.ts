@@ -1,7 +1,9 @@
+import type { Friendship, PaginatedResponse } from '@unlockhub/types';
+
 import { friendshipRepository } from '../repositories/friendship.repository';
 import { AppError } from '../middleware/errorHandler';
+
 import { createEvent } from './activity.service';
-import type { Friendship, PaginatedResponse } from '@unlockhub/types';
 
 function toFriendshipDto(row: {
   id: string;

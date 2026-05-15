@@ -7,8 +7,9 @@ import { retroAchievementsAdapter } from '../platforms/retroachievements.adapter
 import { psnAdapter } from '../platforms/psn.adapter';
 import { xboxAdapter } from '../platforms/xbox.adapter';
 import { sendPush } from '../services/notification.service';
-import type { SyncJobData, SyncJobResult } from './sync.queue';
 import { logger } from '../lib/logger';
+
+import type { SyncJobData, SyncJobResult } from './sync.queue';
 
 const ADAPTERS = {
   STEAM: steamAdapter,

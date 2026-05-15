@@ -1,9 +1,9 @@
 import type { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
+import { verifySubscriptionSchema } from '@unlockhub/validators';
 
 import * as subscriptionService from '../services/subscription.service';
 import type { AuthenticatedRequest } from '../middleware/authenticate';
-import { verifySubscriptionSchema } from '@unlockhub/validators';
 
 // Schema de validación para el canje de puntos
 const redeemPointsSchema = z.object({

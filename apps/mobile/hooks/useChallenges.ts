@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
+import type { WeeklyChallenge, UserChallenge } from '@unlockhub/types';
+
 import { api } from '../lib/api';
 import { useSessionStore } from '../stores/sessionStore';
-import type { WeeklyChallenge, UserChallenge } from '@unlockhub/types';
 
 interface ActiveChallengeResponse {
   challenge: WeeklyChallenge | null;
