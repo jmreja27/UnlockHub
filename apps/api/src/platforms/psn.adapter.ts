@@ -194,7 +194,7 @@ export class PsnAdapter implements PlatformAdapter {
     const cached = await redis.get(cacheKey);
     if (cached !== null) return JSON.parse(cached) as Game;
 
-    return {
+    const game: Game = {
       id: npCommunicationId,
       platform: 'PSN',
       externalId: npCommunicationId,
@@ -203,6 +203,9 @@ export class PsnAdapter implements PlatformAdapter {
       headerUrl: null,
       totalAchievements: 0,
     };
+
+    await redis.setex(cacheKey, TTL_TITLE_TROPHIES, JSON.stringify(game));
+    return game;
   }
 
   // ── syncUser ───────────────────────────────────────────────────────────────
@@ -378,6 +381,7 @@ export class PsnAdapter implements PlatformAdapter {
         let offset = 0;
         const limit = 800;
 
+        // eslint-disable-next-line no-constant-condition
         while (true) {
           const response = await getUserTitles(auth, 'me', { limit, offset });
           allTitles.push(...response.trophyTitles);

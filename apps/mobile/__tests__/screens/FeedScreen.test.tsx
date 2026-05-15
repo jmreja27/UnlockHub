@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { FlatList } from 'react-native';
 import { render } from '@testing-library/react-native';
 
@@ -13,7 +13,7 @@ jest.mock('../../stores/sessionStore');
 jest.mock('../../components/AdBanner', () => ({ AdBanner: () => null }));
 
 const mockUseFeed = useFeed as jest.Mock;
-const mockUseSessionStore = useSessionStore as jest.Mock;
+const mockUseSessionStore = useSessionStore as unknown as jest.Mock;
 
 const sampleEvents: ActivityEvent[] = [
   {
@@ -40,7 +40,7 @@ describe('FeedScreen', () => {
     mockUseSessionStore.mockReturnValue({ user: { isPremium: false } });
   });
 
-  it('renderiza el título del feed', () => {
+  it('renderiza el tÃ­tulo del feed', () => {
     mockUseFeed.mockReturnValue({ events: [], isLoading: false, isError: false, refetch: jest.fn() });
     const { getByRole } = render(<FeedScreen />);
     expect(getByRole('header')).toBeTruthy();
@@ -59,7 +59,7 @@ describe('FeedScreen', () => {
     expect(getByRole('alert')).toBeTruthy();
   });
 
-  it('muestra el título del error en el estado de error', () => {
+  it('muestra el tÃ­tulo del error en el estado de error', () => {
     mockUseFeed.mockReturnValue({ events: [], isLoading: false, isError: true, refetch: jest.fn() });
     const { getByText } = render(<FeedScreen />);
     expect(getByText('feed.error_title')).toBeTruthy();
@@ -71,7 +71,7 @@ describe('FeedScreen', () => {
     expect(getByText('feed.error_message')).toBeTruthy();
   });
 
-  it('muestra el estado vacío cuando no hay eventos', () => {
+  it('muestra el estado vacÃ­o cuando no hay eventos', () => {
     mockUseFeed.mockReturnValue({ events: [], isLoading: false, isError: false, refetch: jest.fn() });
     const { getByText } = render(<FeedScreen />);
     expect(getByText('feed.empty')).toBeTruthy();
@@ -99,9 +99,10 @@ describe('FeedScreen', () => {
       refetch,
     });
     const { UNSAFE_getByType } = render(<FeedScreen />);
-    // FlashList está mockeado como FlatList; accedemos al RefreshControl por sus props
+    // FlashList estÃ¡ mockeado como FlatList; accedemos al RefreshControl por sus props
     const list = UNSAFE_getByType(FlatList);
     list.props.refreshControl.props.onRefresh();
     expect(refetch).toHaveBeenCalledTimes(1);
   });
 });
+

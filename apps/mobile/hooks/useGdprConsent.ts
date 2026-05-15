@@ -9,7 +9,7 @@ let AdsConsentModule: {
 let ConsentStatus: { REQUIRED: string } | null = null;
 
 try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const admob = require('react-native-google-mobile-ads') as {
     AdsConsent: typeof AdsConsentModule;
     AdsConsentStatus: { REQUIRED: string };

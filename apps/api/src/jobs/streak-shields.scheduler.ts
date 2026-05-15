@@ -34,6 +34,7 @@ async function rechargeShields(): Promise<void> {
   let cursor = '';
   let total = 0;
 
+  // eslint-disable-next-line no-constant-condition
   while (true) {
     const users = await prisma.user.findMany({
       where: cursor ? { id: { gt: cursor } } : {},

@@ -37,7 +37,7 @@ beforeEach(() => {
 describe('POST /api/v1/auth/register', () => {
   it('201 con accessToken y refreshToken en body cuando los datos son válidos', async () => {
     mockAuthService.register.mockResolvedValue({
-      user: baseUser as any,
+      user: baseUser as unknown as never,
       accessToken: 'access-tok',
       refreshToken: 'refresh-tok',
     });
@@ -86,7 +86,7 @@ describe('POST /api/v1/auth/register', () => {
 describe('POST /api/v1/auth/login', () => {
   it('200 con accessToken y refreshToken en body cuando las credenciales son válidas', async () => {
     mockAuthService.login.mockResolvedValue({
-      user: baseUser as any,
+      user: baseUser as unknown as never,
       accessToken: 'access-tok',
       refreshToken: 'refresh-tok',
     });

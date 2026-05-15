@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { View } from 'react-native';
 import { render } from '@testing-library/react-native';
 
@@ -9,7 +9,7 @@ jest.mock('../../stores/sessionStore', () => ({
   useSessionStore: jest.fn(),
 }));
 
-const mockUseSessionStore = useSessionStore as jest.Mock;
+const mockUseSessionStore = useSessionStore as unknown as jest.Mock;
 
 describe('AdBanner', () => {
   beforeEach(() => {
@@ -65,3 +65,4 @@ describe('AdBanner', () => {
     expect(placeholder?.props.importantForAccessibility).toBe('no-hide-descendants');
   });
 });
+

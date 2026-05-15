@@ -51,7 +51,7 @@ describe('GET /api/v1/users/me', () => {
   });
 
   it('200 con perfil completo cuando el token es válido', async () => {
-    mockUserService.getProfile.mockResolvedValue(baseProfile as any);
+    mockUserService.getProfile.mockResolvedValue(baseProfile as unknown as never);
 
     const res = await request(app)
       .get('/api/v1/users/me')
@@ -72,7 +72,7 @@ describe('PATCH /api/v1/users/me', () => {
   });
 
   it('200 con usuario actualizado', async () => {
-    mockUserService.updateProfile.mockResolvedValue({ ...baseProfile, bio: 'nueva bio' } as any);
+    mockUserService.updateProfile.mockResolvedValue({ ...baseProfile, bio: 'nueva bio' } as unknown as never);
 
     const res = await request(app)
       .patch('/api/v1/users/me')
@@ -121,7 +121,7 @@ describe('GET /api/v1/users/me/games', () => {
   });
 
   it('200 con la lista de juegos del usuario', async () => {
-    mockUserService.getMyGames.mockResolvedValue(gamesResponse as any);
+    mockUserService.getMyGames.mockResolvedValue(gamesResponse as unknown as never);
 
     const res = await request(app)
       .get('/api/v1/users/me/games')
@@ -205,7 +205,7 @@ describe('DELETE /api/v1/users/me', () => {
 
 describe('GET /api/v1/users/:username', () => {
   it('200 con el perfil público del usuario', async () => {
-    mockUserService.getPublicProfile.mockResolvedValue(baseProfile as any);
+    mockUserService.getPublicProfile.mockResolvedValue(baseProfile as unknown as never);
 
     const res = await request(app).get('/api/v1/users/testuser');
 

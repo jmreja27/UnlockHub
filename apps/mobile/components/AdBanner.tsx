@@ -36,7 +36,7 @@ let AdMobBanner: React.ComponentType<{
 let BannerAdSize: { BANNER: string } | null = null;
 
 try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const admob = require('react-native-google-mobile-ads') as {
     BannerAd: NonNullable<typeof AdMobBanner>;
     BannerAdSize: NonNullable<typeof BannerAdSize>;

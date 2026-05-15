@@ -1,3 +1,4 @@
+import type { Request, Response } from 'express';
 import { ZodError } from 'zod';
 
 import { AppError, errorHandler } from '../middleware/errorHandler';
@@ -23,11 +24,11 @@ function mockRes() {
     res['jsonBody'] = body;
     return res;
   });
-  return res as any;
+  return res as unknown as Response;
 }
 
 function mockReq(opts: { authorization?: string } = {}) {
-  return { headers: { authorization: opts.authorization } } as any;
+  return { headers: { authorization: opts.authorization } } as unknown as Request;
 }
 
 // ─── AppError ─────────────────────────────────────────────────────────────────
@@ -132,7 +133,7 @@ describe('authenticate', () => {
     authenticate(req, res, next);
 
     expect(next).toHaveBeenCalledWith();
-    expect((req as any).user).toMatchObject({ id: 'user-1', email: 'a@b.com', isPremium: true });
+    expect((req as unknown as Record<string, unknown>).user).toMatchObject({ id: 'user-1', email: 'a@b.com', isPremium: true });
   });
 });
 
@@ -147,7 +148,7 @@ describe('adminAuth', () => {
   });
 
   it('devuelve 503 si ADMIN_SECRET no está configurado', () => {
-    const req = { headers: {} } as any;
+    const req = { headers: {} } as unknown as Request;
     const res = mockRes();
 
     adminAuth(req, res, next);
@@ -159,7 +160,7 @@ describe('adminAuth', () => {
 
   it('devuelve 401 si el header Authorization no coincide con el secret', () => {
     process.env['ADMIN_SECRET'] = 'supersecret';
-    const req = { headers: { authorization: 'Bearer wrong-secret' } } as any;
+    const req = { headers: { authorization: 'Bearer wrong-secret' } } as unknown as Request;
     const res = mockRes();
 
     adminAuth(req, res, next);
@@ -171,7 +172,7 @@ describe('adminAuth', () => {
 
   it('llama a next si el header Authorization es correcto', () => {
     process.env['ADMIN_SECRET'] = 'supersecret';
-    const req = { headers: { authorization: 'Bearer supersecret' } } as any;
+    const req = { headers: { authorization: 'Bearer supersecret' } } as unknown as Request;
     const res = mockRes();
 
     adminAuth(req, res, next);
@@ -181,7 +182,7 @@ describe('adminAuth', () => {
 
   it('devuelve 401 si no hay header Authorization', () => {
     process.env['ADMIN_SECRET'] = 'supersecret';
-    const req = { headers: {} } as any;
+    const req = { headers: {} } as unknown as Request;
     const res = mockRes();
 
     adminAuth(req, res, next);

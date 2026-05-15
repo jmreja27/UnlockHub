@@ -38,7 +38,6 @@ import * as psnApi from 'psn-api';
 import { redis } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 import { PsnAdapter, exchangeNpssoForPsnTokens } from './psn.adapter';
-import { AppError } from '../middleware/errorHandler';
 
 const mocked = {
   exchangeNpssoForAccessCode: psnApi.exchangeNpssoForAccessCode as jest.MockedFunction<typeof psnApi.exchangeNpssoForAccessCode>,

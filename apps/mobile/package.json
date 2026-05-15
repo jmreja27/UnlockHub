@@ -8,7 +8,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "lint": "eslint \"**/*.{ts,tsx}\" --ignore-path .gitignore",
+    "lint": "eslint \"**/*.{ts,tsx}\" --ignore-path ../../.gitignore",
     "typecheck": "tsc --noEmit",
     "test": "jest"
   },
@@ -37,6 +37,7 @@
     "expo-web-browser": "~13.0.3",
     "i18next": "^23.15.1",
     "nativewind": "^4.0.36",
+    "posthog-react-native": "^4.45.6",
     "react": "18.2.0",
     "react-i18next": "^15.0.2",
     "react-native": "0.74.5",

@@ -7,6 +7,7 @@ jest.mock('expo-router', () => ({
   router: { push: jest.fn() },
 }));
 
+// eslint-disable-next-line @typescript-eslint/no-var-requires
 const { router } = require('expo-router') as { router: { push: jest.Mock } };
 
 function makeGame(overrides: Partial<GameSearchResult> = {}): GameSearchResult {

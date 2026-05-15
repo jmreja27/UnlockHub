@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { Alert } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -14,7 +14,7 @@ jest.mock('../../hooks/useAuth');
 jest.mock('../../components/PremiumBanner', () => ({ PremiumBanner: () => null }));
 jest.mock('../../lib/api');
 
-const mockUseSessionStore = useSessionStore as jest.Mock;
+const mockUseSessionStore = useSessionStore as unknown as jest.Mock;
 const mockUseAuth = useAuth as jest.Mock;
 
 const baseUser: User = {
@@ -44,6 +44,7 @@ const steamAccount: PlatformAccount = {
 };
 
 function renderProfile(mockApiGet?: jest.Mock) {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { api } = require('../../lib/api') as { api: { get: jest.Mock } };
   api.get = mockApiGet ?? jest.fn(() => Promise.resolve([]));
 
@@ -69,7 +70,7 @@ describe('ProfileScreen', () => {
       mockUseSessionStore.mockReturnValue({ user: null, isAuthenticated: false });
     });
 
-    it('muestra el título con accessibilityRole="header"', () => {
+    it('muestra el tÃ­tulo con accessibilityRole="header"', () => {
       const { getByRole } = renderProfile();
       expect(getByRole('header')).toBeTruthy();
     });
@@ -79,12 +80,13 @@ describe('ProfileScreen', () => {
       expect(getByText('profile.unauthenticated_message')).toBeTruthy();
     });
 
-    it('renderiza el botón de inicio de sesión', () => {
+    it('renderiza el botÃ³n de inicio de sesiÃ³n', () => {
       const { getByRole } = renderProfile();
       expect(getByRole('button', { name: 'profile.login' })).toBeTruthy();
     });
 
-    it('navega a la pantalla de login al pulsar el botón', () => {
+    it('navega a la pantalla de login al pulsar el botÃ³n', () => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const { router } = require('expo-router') as typeof import('expo-router');
       const { getByRole } = renderProfile();
       fireEvent.press(getByRole('button', { name: 'profile.login' }));
@@ -109,12 +111,12 @@ describe('ProfileScreen', () => {
 
     it('muestra el XP del usuario', async () => {
       const { getByText } = renderProfile();
-      // toLocaleString() puede devolver '1,500' o '1500' según el entorno Node.js
+      // toLocaleString() puede devolver '1,500' o '1500' segÃºn el entorno Node.js
       const formattedXp = (1500).toLocaleString();
       await waitFor(() => expect(getByText(formattedXp)).toBeTruthy());
     });
 
-    it('muestra la racha de días', async () => {
+    it('muestra la racha de dÃ­as', async () => {
       const { getByText } = renderProfile();
       await waitFor(() => expect(getByText('3')).toBeTruthy());
     });
@@ -149,7 +151,7 @@ describe('ProfileScreen', () => {
       );
     });
 
-    it('muestra la sección de plataformas vinculadas', async () => {
+    it('muestra la secciÃ³n de plataformas vinculadas', async () => {
       const { getByText } = renderProfile();
       await waitFor(() => expect(getByText('profile.platforms_section')).toBeTruthy());
     });
@@ -163,7 +165,7 @@ describe('ProfileScreen', () => {
       });
     });
 
-    it('muestra el mensaje de plataformas vacías cuando no hay ninguna', async () => {
+    it('muestra el mensaje de plataformas vacÃ­as cuando no hay ninguna', async () => {
       const apiGet = jest.fn(() => Promise.resolve([]));
       const { getByText } = renderProfile(apiGet);
       await waitFor(() =>
@@ -171,14 +173,14 @@ describe('ProfileScreen', () => {
       );
     });
 
-    it('renderiza el botón de cerrar sesión', async () => {
+    it('renderiza el botÃ³n de cerrar sesiÃ³n', async () => {
       const { getByRole } = renderProfile();
       await waitFor(() =>
         expect(getByRole('button', { name: 'profile.logout' })).toBeTruthy(),
       );
     });
 
-    it('muestra el diálogo de confirmación al pulsar cerrar sesión', async () => {
+    it('muestra el diÃ¡logo de confirmaciÃ³n al pulsar cerrar sesiÃ³n', async () => {
       const alertSpy = jest.spyOn(Alert, 'alert');
       const { getByRole } = renderProfile();
       await waitFor(() => getByRole('button', { name: 'profile.logout' }));
@@ -191,7 +193,7 @@ describe('ProfileScreen', () => {
       );
     });
 
-    it('el botón de cerrar sesión está deshabilitado mientras se cierra sesión', async () => {
+    it('el botÃ³n de cerrar sesiÃ³n estÃ¡ deshabilitado mientras se cierra sesiÃ³n', async () => {
       mockUseAuth.mockReturnValue({ logout: jest.fn(), isLoggingOut: true });
       const { getByRole } = renderProfile();
       await waitFor(() => {
@@ -200,13 +202,13 @@ describe('ProfileScreen', () => {
       });
     });
 
-    it('muestra "Cerrando sesión…" cuando isLoggingOut=true', async () => {
+    it('muestra "Cerrando sesiÃ³nâ€¦" cuando isLoggingOut=true', async () => {
       mockUseAuth.mockReturnValue({ logout: jest.fn(), isLoggingOut: true });
       const { getByText } = renderProfile();
       await waitFor(() => expect(getByText('profile.logging_out')).toBeTruthy());
     });
 
-    it('renderiza el enlace a la política de privacidad', async () => {
+    it('renderiza el enlace a la polÃ­tica de privacidad', async () => {
       const { getByRole } = renderProfile();
       await waitFor(() =>
         expect(getByRole('link', { name: 'privacy.link_label' })).toBeTruthy(),
@@ -214,3 +216,4 @@ describe('ProfileScreen', () => {
     });
   });
 });
+

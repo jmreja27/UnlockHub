@@ -3,7 +3,6 @@ import {
   View,
   Text,
   Pressable,
-  ActivityIndicator,
   ScrollView,
   Alert,
 } from 'react-native';
@@ -103,8 +102,6 @@ export default function LinkXboxScreen() {
     setLinkError(null);
     void promptAsync();
   }
-
-  const isBusy = linkMutation.isPending || !request;
 
   return (
     <SafeAreaView

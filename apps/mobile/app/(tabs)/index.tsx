@@ -24,6 +24,13 @@ const FILTERS: { key: PlatformFilter; label: string }[] = [
   { key: 'XBOX',  label: 'library.filter_xbox' },
 ];
 
+function formatUpdatedAt(timestamp: number, t: (key: string, opts?: Record<string, unknown>) => string): string {
+  if (timestamp === 0) return '';
+  const diffMin = Math.floor((Date.now() - timestamp) / 60_000);
+  if (diffMin < 1) return t('library.just_updated');
+  return t('library.last_updated', { min: diffMin });
+}
+
 function LibrarySkeleton() {
   return (
     <View className="px-4 pt-2">
@@ -54,10 +61,19 @@ export default function LibraryScreen() {
   const [search, setSearch] = useState('');
 
   const platform = activeFilter === 'ALL' ? undefined : activeFilter;
-  const { data, isLoading, isError, refetch, isRefetching } = useMyGames(platform);
-  const { sync, isSyncing, isInCooldown, cooldownRemaining, hasPlatforms } = useSyncAll(user?.id);
+  const {
+    allGames,
+    isLoading,
+    isError,
+    refetch,
+    isRefetching,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    dataUpdatedAt,
+  } = useMyGames(platform);
 
-  const allGames = data?.data ?? [];
+  const { sync, isSyncing, isInCooldown, cooldownRemaining, hasPlatforms } = useSyncAll(user?.id);
 
   const games = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -67,6 +83,7 @@ export default function LibraryScreen() {
 
   const totalEarned = allGames.reduce((sum, g) => sum + g.earnedAchievements, 0);
   const totalAchievements = allGames.reduce((sum, g) => sum + g.totalAchievements, 0);
+  const updatedAtLabel = formatUpdatedAt(dataUpdatedAt, t);
 
   const renderItem = useCallback(
     ({ item }: { item: LibraryGame }) => <LibraryGameCard game={item} />,
@@ -86,9 +103,18 @@ export default function LibraryScreen() {
               {t('library.subtitle', { username: user.username })}
             </Text>
           )}
+          {updatedAtLabel ? (
+            <Text
+              className="text-gray-600 text-xs mt-0.5"
+              accessibilityLabel={updatedAtLabel}
+              accessible
+            >
+              {updatedAtLabel}
+            </Text>
+          ) : null}
         </View>
         <View className="flex-row items-center gap-3">
-          {!isLoading && !isError && games.length > 0 && (
+          {!isLoading && !isError && allGames.length > 0 && (
             <View className="items-end">
               <Text className="text-primary-light font-bold text-base">{totalEarned}</Text>
               <Text className="text-gray-500 text-xs">/ {totalAchievements} logros</Text>
@@ -192,6 +218,12 @@ export default function LibraryScreen() {
           estimatedItemSize={76}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}
           accessibilityLabel={t('library.list_label')}
+          onEndReached={() => {
+            if (hasNextPage && !isFetchingNextPage && !search.trim()) {
+              void fetchNextPage();
+            }
+          }}
+          onEndReachedThreshold={0.3}
           refreshControl={
             <RefreshControl
               refreshing={isRefetching}
@@ -216,7 +248,21 @@ export default function LibraryScreen() {
               />
             )
           }
-          ListFooterComponent={<AdBanner />}
+          ListFooterComponent={
+            <>
+              {isFetchingNextPage && (
+                <View
+                  className="py-4 items-center"
+                  accessible
+                  accessibilityLiveRegion="polite"
+                  accessibilityLabel={t('common.loading')}
+                >
+                  <ActivityIndicator size="small" color="#818cf8" />
+                </View>
+              )}
+              <AdBanner />
+            </>
+          }
         />
       )}
     </SafeAreaView>

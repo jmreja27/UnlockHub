@@ -148,7 +148,7 @@ export default function FriendsScreen() {
   const [search, setSearch] = useState('');
 
   const {
-    friends, friendsTotal, isFriendsLoading, friendsError, refetchFriends,
+    friends, isFriendsLoading, friendsError, refetchFriends,
     pendingRequests, pendingTotal, isPendingLoading,
     acceptRequest, isAccepting,
     rejectRequest, isRejecting,

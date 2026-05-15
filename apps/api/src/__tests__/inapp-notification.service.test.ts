@@ -1,5 +1,4 @@
 import * as notifService from '../services/inapp-notification.service';
-import { AppError } from '../middleware/errorHandler';
 
 jest.mock('../lib/prisma', () => ({
   prisma: {

@@ -27,8 +27,6 @@ const mockedRedis = redis as jest.Mocked<typeof redis>;
 
 const STEAM_ID = '76561198000000001';
 const API_KEY = 'fake-steam-api-key';
-const APP_ID = '730'; // CS:GO
-
 const steamGame = {
   appid: 730,
   name: 'Counter-Strike: Global Offensive',

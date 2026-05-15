@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { Text } from 'react-native';
 import { render, fireEvent } from '@testing-library/react-native';
 import { router } from 'expo-router';
@@ -10,7 +10,7 @@ import { useSubscription } from '../../hooks/useSubscription';
 jest.mock('../../stores/sessionStore');
 jest.mock('../../hooks/useSubscription');
 
-const mockUseSessionStore = useSessionStore as jest.Mock;
+const mockUseSessionStore = useSessionStore as unknown as jest.Mock;
 const mockUseSubscription = useSubscription as jest.Mock;
 
 function setupMocks(
@@ -31,13 +31,13 @@ describe('PremiumBanner', () => {
     jest.clearAllMocks();
   });
 
-  it('no renderiza nada cuando el usuario no está autenticado', () => {
+  it('no renderiza nada cuando el usuario no estÃ¡ autenticado', () => {
     setupMocks(false);
     const { toJSON } = render(<PremiumBanner />);
     expect(toJSON()).toBeNull();
   });
 
-  it('no renderiza nada mientras se carga el estado de suscripción', () => {
+  it('no renderiza nada mientras se carga el estado de suscripciÃ³n', () => {
     setupMocks(true, null, true);
     const { toJSON } = render(<PremiumBanner />);
     expect(toJSON()).toBeNull();
@@ -53,7 +53,7 @@ describe('PremiumBanner', () => {
     setupMocks(true, { isPremium: false });
     const { getByText, UNSAFE_getAllByType } = render(<PremiumBanner />);
     expect(getByText('premium.banner_title')).toBeTruthy();
-    // premium.banner_action está dentro de un View con accessibilityElementsHidden
+    // premium.banner_action estÃ¡ dentro de un View con accessibilityElementsHidden
     const texts = UNSAFE_getAllByType(Text);
     expect(texts.some((t) => t.props.children === 'premium.banner_action')).toBe(true);
   });
@@ -86,7 +86,7 @@ describe('PremiumBanner', () => {
     expect(getByText('premium.active_lifetime_desc')).toBeTruthy();
   });
 
-  it('el banner LIFETIME tiene accessibilityLabel específico', () => {
+  it('el banner LIFETIME tiene accessibilityLabel especÃ­fico', () => {
     setupMocks(true, {
       isPremium: true,
       plan: 'LIFETIME',
@@ -108,3 +108,4 @@ describe('PremiumBanner', () => {
     expect(getByLabelText('premium.active_monthly_aria')).toBeTruthy();
   });
 });
+
