@@ -3,6 +3,7 @@ import { ZodError } from 'zod';
 import * as Sentry from '@sentry/node';
 
 import type { ApiError } from '@unlockhub/types';
+import { logger } from '../lib/logger';
 
 export class AppError extends Error {
   constructor(
@@ -44,7 +45,7 @@ export function errorHandler(
 
   // Capturar en Sentry solo errores inesperados (no AppError ni ZodError, que son flujos controlados)
   Sentry.captureException(err);
-  console.error('Error no controlado:', err);
+  logger.error({ err }, 'Error no controlado');
   const response: ApiError = {
     error: 'Error interno del servidor',
     code: 'INTERNAL_SERVER_ERROR',

@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
+import { logger } from '../lib/logger';
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
@@ -30,7 +31,7 @@ async function sendToExpo(messages: ExpoPushMessage[]): Promise<void> {
   const json = (await res.json()) as { data: ExpoPushTicket[] };
   const failed = json.data.filter((t) => t.status === 'error');
   if (failed.length > 0) {
-    console.warn('[notification] Tokens con error:', failed.map((t) => t.message).join(', '));
+    logger.warn({ errors: failed.map((t) => t.message) }, '[notification] Tokens con error');
   }
 }
 
@@ -86,6 +87,10 @@ export async function sendBulk(
     where: { userId: { in: userIds } },
     select: { token: true },
   });
-  const messages: ExpoPushMessage[] = tokens.map((t) => ({ to: t.token, title, body, data }));
-  await sendToExpo(messages);
+  const BATCH_SIZE = 100;
+  for (let i = 0; i < tokens.length; i += BATCH_SIZE) {
+    const batch = tokens.slice(i, i + BATCH_SIZE);
+    const messages: ExpoPushMessage[] = batch.map((t) => ({ to: t.token, title, body, data }));
+    await sendToExpo(messages);
+  }
 }

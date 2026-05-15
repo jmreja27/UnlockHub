@@ -1,4 +1,5 @@
 import Redis from 'ioredis';
+import { logger } from './logger';
 
 const REDIS_URL = process.env['REDIS_URL'] ?? 'redis://localhost:6379';
 
@@ -11,7 +12,7 @@ function createRedisClient() {
     lazyConnect: false,
   });
   client.on('error', (err: Error) => {
-    console.error('[Redis] Error de conexión:', err.message);
+    logger.error({ err: err.message }, '[Redis] Error de conexión');
   });
   return client;
 }
@@ -29,7 +30,7 @@ export function createWorkerConnection(): Redis {
     enableReadyCheck: false,
   });
   client.on('error', (err: Error) => {
-    console.error('[Redis Worker] Error de conexión:', err.message);
+    logger.error({ err: err.message }, '[Redis Worker] Error de conexión');
   });
   return client;
 }

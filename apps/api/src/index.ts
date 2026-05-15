@@ -8,8 +8,11 @@ import { restoreAutoSyncs } from './jobs/sync.scheduler';
 import { streakWorker } from './jobs/streak.worker';
 import { scheduleStreakJob } from './jobs/streak.scheduler';
 import { challengeWorker, scheduleChallengeEvaluation } from './jobs/challenge.scheduler';
+import { scheduleBackgroundSyncJob } from './jobs/background-sync.scheduler';
+import { scheduleShieldRecharge, shieldWorker } from './jobs/streak-shields.scheduler';
 import { redis } from './lib/redis';
 import { prisma } from './lib/prisma';
+import { logger } from './lib/logger';
 
 const env = validateEnv();
 
@@ -21,11 +24,13 @@ const io = initSocketServer(server);
 registerActivityHandler(io);
 
 server.listen(env.PORT, async () => {
-  console.log(`API arrancada en el puerto ${env.PORT} (${env.NODE_ENV})`);
+  logger.info({ port: env.PORT, env: env.NODE_ENV }, 'API arrancada');
   if (env.NODE_ENV !== 'test') {
-    try { await restoreAutoSyncs(); } catch (e) { console.error('restoreAutoSyncs falló (no fatal):', e); }
-    try { await scheduleStreakJob(); } catch (e) { console.error('scheduleStreakJob falló (no fatal):', e); }
-    try { await scheduleChallengeEvaluation(); } catch (e) { console.error('scheduleChallengeEvaluation falló (no fatal):', e); }
+    try { await restoreAutoSyncs(); } catch (e) { logger.error({ err: e }, 'restoreAutoSyncs falló (no fatal)'); }
+    try { await scheduleStreakJob(); } catch (e) { logger.error({ err: e }, 'scheduleStreakJob falló (no fatal)'); }
+    try { await scheduleChallengeEvaluation(); } catch (e) { logger.error({ err: e }, 'scheduleChallengeEvaluation falló (no fatal)'); }
+    try { await scheduleBackgroundSyncJob(); } catch (e) { logger.error({ err: e }, 'scheduleBackgroundSyncJob falló (no fatal)'); }
+    try { await scheduleShieldRecharge(); } catch (e) { logger.error({ err: e }, 'scheduleShieldRecharge falló (no fatal)'); }
   }
 });
 
@@ -33,11 +38,12 @@ process.on('SIGTERM', async () => {
   await syncWorker.close();
   await streakWorker.close();
   await challengeWorker.close();
+  await shieldWorker.close();
   io.close();
   await prisma.$disconnect();
   await redis.quit();
   server.close(() => {
-    console.log('Servidor cerrado.');
+    logger.info('Servidor cerrado.');
     process.exit(0);
   });
 });

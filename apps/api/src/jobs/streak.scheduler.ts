@@ -1,5 +1,6 @@
 import { Queue } from 'bullmq';
 import { redis } from '../lib/redis';
+import { logger } from '../lib/logger';
 
 const streakQueue = new Queue('streak', { connection: redis });
 
@@ -20,5 +21,5 @@ export async function scheduleStreakJob(): Promise<void> {
     },
   );
 
-  console.warn('[StreakScheduler] Job de racha diaria programado (0 0 * * * UTC)');
+  logger.info('[StreakScheduler] Job de racha diaria programado (0 0 * * * UTC)');
 }

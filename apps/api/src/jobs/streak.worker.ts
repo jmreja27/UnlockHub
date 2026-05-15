@@ -3,15 +3,15 @@ import { redis, createWorkerConnection } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 import { addXp } from '../services/user.service';
 import { createEvent } from '../services/activity.service';
+import { logger } from '../lib/logger';
 
 const STREAK_XP_REWARD = 50;
-const STREAK_MILESTONES = new Set([7, 30, 100]);
+const STREAK_MILESTONES = new Set([7, 30, 100, 365]);
 
 export async function processStreaks(): Promise<void> {
   const now = new Date();
   const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-  // Procesar en lotes para evitar cargar todos los usuarios en memoria
   const BATCH = 200;
   let cursor = '';
   let processed = 0;
@@ -19,7 +19,7 @@ export async function processStreaks(): Promise<void> {
   while (true) {
     const users = await prisma.user.findMany({
       where: cursor ? { id: { gt: cursor } } : {},
-      select: { id: true, streakDays: true, countryCode: true, lastSyncAt: true },
+      select: { id: true, streakDays: true, streakShields: true, countryCode: true, lastSyncAt: true },
       orderBy: { id: 'asc' },
       take: BATCH,
     });
@@ -36,15 +36,20 @@ export async function processStreaks(): Promise<void> {
           data: { streakDays: newStreak },
         });
 
-        // +50 XP por mantener la racha
         await addXp(user.id, STREAK_XP_REWARD, 'STREAK');
 
         if (STREAK_MILESTONES.has(newStreak)) {
           await redis.set(`streak:milestone:${user.id}`, newStreak, 'EX', 7 * 24 * 3600);
           void createEvent(user.id, 'STREAK_MILESTONE', { days: newStreak });
         }
+      } else if (user.streakShields > 0) {
+        // Consume un escudo — la racha se mantiene, el escudo se descuenta
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { streakShields: { decrement: 1 } },
+        });
       } else {
-        // Sin actividad — reset de racha
+        // Sin actividad ni escudos — reset de racha
         await prisma.user.update({
           where: { id: user.id },
           data: { streakDays: 0 },
@@ -58,7 +63,7 @@ export async function processStreaks(): Promise<void> {
     if (users.length < BATCH) break;
   }
 
-  console.warn(`[StreakWorker] Rachas procesadas: ${processed} usuarios`);
+  logger.info({ processed }, '[StreakWorker] Rachas procesadas');
 }
 
 export const streakWorker = new Worker(
@@ -70,5 +75,5 @@ export const streakWorker = new Worker(
 );
 
 streakWorker.on('failed', (job, err) => {
-  console.error(`[StreakWorker] Job ${job?.id ?? 'unknown'} fallido:`, err.message);
+  logger.error({ jobId: job?.id ?? 'unknown', err: err.message }, '[StreakWorker] Job fallido');
 });

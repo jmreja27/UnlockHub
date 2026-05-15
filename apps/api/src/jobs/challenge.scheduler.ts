@@ -2,6 +2,7 @@ import { Queue, Worker } from 'bullmq';
 import { redis, createWorkerConnection } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 import { updateProgress } from '../services/challenge.service';
+import { logger } from '../lib/logger';
 
 const challengeQueue = new Queue('challenge', { connection: redis });
 
@@ -28,7 +29,7 @@ async function evaluatePreviousChallenge(): Promise<void> {
     }
   }
 
-  console.warn(`[ChallengeScheduler] Evaluados ${pending.length} participantes del reto anterior`);
+  logger.info({ count: pending.length }, '[ChallengeScheduler] Participantes evaluados del reto anterior');
 }
 
 export const challengeWorker = new Worker(
@@ -38,7 +39,7 @@ export const challengeWorker = new Worker(
 );
 
 challengeWorker.on('failed', (job, err) => {
-  console.error(`[ChallengeWorker] Job ${job?.id ?? 'unknown'} fallido:`, err.message);
+  logger.error({ jobId: job?.id ?? 'unknown', err: err.message }, '[ChallengeWorker] Job fallido');
 });
 
 export async function scheduleChallengeEvaluation(): Promise<void> {
@@ -54,5 +55,5 @@ export async function scheduleChallengeEvaluation(): Promise<void> {
     { repeat: { pattern: '0 0 * * 1', tz: 'UTC' }, jobId: 'weekly-challenge-eval' },
   );
 
-  console.warn('[ChallengeScheduler] Evaluación semanal programada (0 0 * * 1 UTC)');
+  logger.info('[ChallengeScheduler] Evaluación semanal programada (0 0 * * 1 UTC)');
 }

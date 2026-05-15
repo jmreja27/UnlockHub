@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { logger } from '../lib/logger';
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -20,7 +21,7 @@ export type Env = z.infer<typeof envSchema>;
 export function validateEnv(): Env {
   const result = envSchema.safeParse(process.env);
   if (!result.success) {
-    console.error('Variables de entorno inválidas:', result.error.flatten());
+    logger.error({ errors: result.error.flatten() }, 'Variables de entorno inválidas');
     process.exit(1);
   }
   return result.data;
