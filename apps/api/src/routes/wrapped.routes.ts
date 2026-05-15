@@ -4,6 +4,6 @@ import { getWrappedHandler } from '../controllers/wrapped.controller';
 
 const router = Router();
 
-router.get('/:year', authenticate, getWrappedHandler);
+router.get('/:period', authenticate, getWrappedHandler);
 
 export default router;

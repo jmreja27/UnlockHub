@@ -1,4 +1,4 @@
-// Pantalla de registro con formulario completo y validación por campo
+// Pantalla de registro con formulario completo, validación por campo y verificación de edad mínima GDPR
 import { useState } from 'react';
 import {
   View,
@@ -17,22 +17,33 @@ import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '../../hooks/useAuth';
 
+const MIN_AGE = 16;
+
 type FieldErrors = {
   username?: string;
   email?: string;
   password?: string;
+  birthDate?: string;
 };
+
+function isOldEnough(dateStr: string): boolean {
+  const birth = new Date(dateStr);
+  if (isNaN(birth.getTime())) return false;
+  const today = new Date();
+  const cutoff = new Date(today.getFullYear() - MIN_AGE, today.getMonth(), today.getDate());
+  return birth <= cutoff;
+}
 
 export default function RegisterScreen() {
   const { t } = useTranslation();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [birthDate, setBirthDate] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
   const { register, isRegistering, registerError } = useAuth();
 
-  // Validación de campos en cliente antes de llamar a la API
   function validateFields(): boolean {
     const errors: FieldErrors = {};
 
@@ -62,6 +73,14 @@ export default function RegisterScreen() {
       errors.password = t('auth.register.error_password_number');
     }
 
+    if (!birthDate.trim()) {
+      errors.birthDate = t('auth.register.error_birthdate_required');
+    } else if (!/^\d{4}-\d{2}-\d{2}$/.test(birthDate.trim())) {
+      errors.birthDate = t('auth.register.error_birthdate_format');
+    } else if (!isOldEnough(birthDate.trim())) {
+      errors.birthDate = t('auth.register.error_birthdate_underage', { age: MIN_AGE });
+    }
+
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   }
@@ -78,6 +97,7 @@ export default function RegisterScreen() {
       username: username.trim(),
       email: email.trim().toLowerCase(),
       password,
+      birthDate: birthDate.trim(),
     });
   }
 
@@ -193,7 +213,7 @@ export default function RegisterScreen() {
             </View>
 
             {/* Campo contraseña */}
-            <View className="mb-8">
+            <View className="mb-4">
               <Text className="text-gray-300 text-sm mb-1.5 ml-1">{t('auth.register.password_label')}</Text>
               <TextInput
                 className={`w-full bg-surface-elevated rounded-xl px-4 py-3.5 text-white text-base border ${
@@ -205,7 +225,7 @@ export default function RegisterScreen() {
                 autoCapitalize="none"
                 autoCorrect={false}
                 autoComplete="new-password"
-                returnKeyType="done"
+                returnKeyType="next"
                 value={password}
                 onChangeText={(text: string) => {
                   setPassword(text);
@@ -213,7 +233,6 @@ export default function RegisterScreen() {
                     setFieldErrors((prev: FieldErrors) => ({ ...prev, password: undefined }));
                   }
                 }}
-                onSubmitEditing={handleSubmit}
                 accessibilityLabel={t('auth.register.password_label')}
                 accessibilityHint={t('auth.register.password_hint')}
               />
@@ -223,6 +242,45 @@ export default function RegisterScreen() {
                   accessibilityLiveRegion="polite"
                 >
                   {fieldErrors.password}
+                </Text>
+              )}
+            </View>
+
+            {/* Campo fecha de nacimiento — requerido por GDPR España (≥16 años) */}
+            <View className="mb-8">
+              <Text className="text-gray-300 text-sm mb-1.5 ml-1">
+                {t('auth.register.birthdate_label')}
+              </Text>
+              <TextInput
+                className={`w-full bg-surface-elevated rounded-xl px-4 py-3.5 text-white text-base border ${
+                  fieldErrors.birthDate ? 'border-red-500' : 'border-surface-card'
+                }`}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor="#6b7280"
+                keyboardType="numbers-and-punctuation"
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="done"
+                value={birthDate}
+                onChangeText={(text: string) => {
+                  setBirthDate(text);
+                  if (fieldErrors.birthDate) {
+                    setFieldErrors((prev: FieldErrors) => ({ ...prev, birthDate: undefined }));
+                  }
+                }}
+                onSubmitEditing={handleSubmit}
+                accessibilityLabel={t('auth.register.birthdate_label')}
+                accessibilityHint={t('auth.register.birthdate_hint')}
+              />
+              <Text className="text-gray-500 text-xs mt-1 ml-1">
+                {t('auth.register.birthdate_gdpr_note', { age: MIN_AGE })}
+              </Text>
+              {fieldErrors.birthDate && (
+                <Text
+                  className="text-red-400 text-xs mt-1 ml-1"
+                  accessibilityLiveRegion="polite"
+                >
+                  {fieldErrors.birthDate}
                 </Text>
               )}
             </View>

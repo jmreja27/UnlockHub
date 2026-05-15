@@ -55,7 +55,13 @@
       "error_password_required": "La contraseña es obligatoria.",
       "error_password_min": "La contraseña debe tener al menos 8 caracteres.",
       "error_password_uppercase": "La contraseña debe contener al menos una mayúscula.",
-      "error_password_number": "La contraseña debe contener al menos un número."
+      "error_password_number": "La contraseña debe contener al menos un número.",
+      "birthdate_label": "Fecha de nacimiento",
+      "birthdate_hint": "Introduce tu fecha de nacimiento en formato AAAA-MM-DD",
+      "birthdate_gdpr_note": "Debes tener al menos {{age}} años para registrarte (RGPD)",
+      "error_birthdate_required": "La fecha de nacimiento es obligatoria.",
+      "error_birthdate_format": "El formato debe ser AAAA-MM-DD (ej. 1990-05-14).",
+      "error_birthdate_underage": "Debes tener al menos {{age}} años para registrarte."
     },
     "forgot_password": {
       "title": "¿Olvidaste tu contraseña?",
@@ -111,8 +117,30 @@
   "game": {
     "rarity": "{{pct}}% lo tienen",
     "no_achievements": "Este juego aún no tiene logros registrados",
+    "no_filtered_achievements": "Sin logros para este filtro",
     "share_achievement": "Compartir logro",
-    "share_text": "¡Acabo de desbloquear \"{{title}}\" en UnlockHub!"
+    "share_text": "¡Acabo de desbloquear \"{{title}}\" en UnlockHub!",
+    "filter_all": "Todos",
+    "filter_earned": "Desbloqueados",
+    "filter_pending": "Pendientes",
+    "filter_label": "Filtrar logros",
+    "sort_by_rarity": "Ordenar por rareza",
+    "challenge_friend": "Retar a un amigo a desbloquear este logro",
+    "challenge_friend_label": "Retar a un amigo",
+    "challenge_select_friend": "Selecciona un amigo para retar",
+    "no_friends": "Aún no tienes amigos. ¡Añade alguno primero!",
+    "guides_expand": "Ver guías",
+    "guides_collapse": "Ocultar guías",
+    "guides_empty": "Aún no hay guías. ¡Sé el primero en escribir una!",
+    "guides_write": "✏ Escribir una guía",
+    "guides_written_by": "por {{username}}",
+    "guides_upvote": "Votar esta guía",
+    "guides_report": "Reportar",
+    "guides_report_confirm_title": "Guía reportada",
+    "guides_report_confirmed": "Gracias por tu reporte. Lo revisaremos pronto.",
+    "guide_placeholder": "Comparte consejos, trucos o pistas para este logro…",
+    "guide_submit": "Publicar guía",
+    "guide_min_length": "La guía debe tener al menos 20 caracteres."
   },
   "home": {
     "title": "Inicio",
@@ -143,7 +171,9 @@
     "empty_cta": "Vincular plataforma",
     "sync_button": "Sincronizar",
     "sync_cooldown": "Espera {{min}} min",
-    "syncing": "Sincronizando…"
+    "syncing": "Sincronizando…",
+    "last_updated": "Actualizado hace {{min}} min",
+    "just_updated": "Actualizado ahora"
   },
   "feed": {
     "title": "Feed",
@@ -228,7 +258,11 @@
     "level": "Nivel {{level}}",
     "platforms": "Plataformas vinculadas",
     "shared_achievements": "{{count}} logros en común",
-    "no_shared": "Aún no tenéis logros en común"
+    "no_shared": "Aún no tenéis logros en común",
+    "compare_title": "Comparación",
+    "compare_shared_achievements": "Logros en común",
+    "compare_shared_games": "Juegos en común",
+    "compare_xp_label": "Diferencia XP"
   },
   "rankings": {
     "title": "Rankings",
@@ -249,6 +283,17 @@
     "filter_ra": "RetroAchievements",
     "filter_psn": "PlayStation",
     "national_no_country": "Configura tu país en el perfil para ver el ranking nacional"
+  },
+  "notifications": {
+    "title": "Notificaciones",
+    "bell_label": "Notificaciones",
+    "bell_label_unread": "{{count}} notificación sin leer",
+    "bell_label_unread_other": "{{count}} notificaciones sin leer",
+    "bell_hint": "Abrir centro de notificaciones",
+    "mark_all_read": "Marcar todo como leído",
+    "empty_title": "Sin notificaciones",
+    "empty_body": "Aquí aparecerán tus solicitudes de amistad, retos y logros de la comunidad.",
+    "list_label": "Lista de notificaciones"
   },
   "wrapped": {
     "section_title": "Gaming Wrapped",
@@ -313,7 +358,19 @@
     "streak_badge_week": "7 días",
     "streak_badge_month": "30 días",
     "streak_badge_century": "100 días",
-    "streak_badge_year": "365 días"
+    "streak_badge_year": "365 días",
+    "streak_shields_label": "{{count}} escudo de racha activo",
+    "streak_shields_label_other": "{{count}} escudos de racha activos",
+    "advanced_stats_section": "Estadísticas avanzadas",
+    "advanced_stats_locked": "Hazte Premium para ver estadísticas detalladas sobre tu historial de juego.",
+    "advanced_stats_premium_cta": "Hazte Premium",
+    "stats_total_xp": "XP total",
+    "stats_total_achievements": "Logros",
+    "stats_completed_games": "Juegos completados",
+    "stats_best_streak": "Mejor racha",
+    "stats_favorite_platform": "Plataforma favorita",
+    "stats_rarest_achievement": "Logro más raro",
+    "stats_rarity_pct": "{{pct}}% lo tienen"
   },
   "premium": {
     "title": "Elige tu plan",
@@ -377,12 +434,20 @@
     "full_policy_label": "Abrir la política de privacidad completa en el navegador"
   },
   "link_platform": {
+    "guide_title": "¿Cómo obtengo los datos?",
+    "guide_expand": "Ver instrucciones paso a paso",
+    "guide_collapse": "Ocultar instrucciones",
     "psn": {
       "title": "Vincular PlayStation",
-      "description": "Para conectar tu cuenta de PSN necesitas tu token NPSSO. Sigue estos pasos:",
+      "description": "Para conectar tu cuenta de PSN necesitas tu token NPSSO. Es el método oficial y seguro.",
       "step1": "1. Abre un navegador e inicia sesión en PlayStation.",
       "step2": "2. Visita: ca.account.sony.com/api/v1/ssocookie",
       "step3": "3. Copia el valor del campo «npsso» y pégalo aquí.",
+      "guide_step1": "Abre un navegador (Chrome, Safari, Firefox) e inicia sesión en my.playstation.com con tu cuenta de PSN.",
+      "guide_step2": "Una vez iniciada la sesión, en el mismo navegador visita la siguiente URL de Sony:",
+      "guide_step3": "El navegador mostrará un JSON con el campo «npsso». Copia el valor (cadena de ~64 caracteres).",
+      "guide_step4": "Pega ese valor en el campo de abajo y pulsa «Vincular PlayStation».",
+      "guide_tip": "El token NPSSO caduca. Si ves un error de autenticación más adelante, repite el proceso para obtener uno nuevo.",
       "npsso_label": "Token NPSSO",
       "npsso_placeholder": "Pega aquí tu token NPSSO (64+ caracteres)",
       "npsso_hint": "El token NPSSO obtenido desde ca.account.sony.com",
@@ -419,6 +484,15 @@
       "step1": "1. Ve a steamcommunity.com/dev/apikey e inicia sesión.",
       "step2": "2. Crea una API key con cualquier nombre de dominio.",
       "step3": "3. Tu SteamID64 aparece en tu perfil de Steam (17 dígitos).",
+      "guide_section_id": "Obtener tu SteamID64",
+      "guide_step1": "Visita steamid.io. En el buscador escribe tu nombre de usuario de Steam o la URL de tu perfil.",
+      "guide_step2": "Busca el campo «steamID64». Es un número de 17 dígitos (ej. 76561198000000000). Cópialo.",
+      "guide_step3": "También puedes verlo en tu perfil de Steam → Editar perfil → URL personalizada (si está configurada).",
+      "guide_section_key": "Obtener tu Steam API Key",
+      "guide_step4": "Inicia sesión en Steam y visita store.steampowered.com/dev/apikey. Rellena el campo «Nombre de dominio» con cualquier texto (ej. «unlockhub») y haz clic en «Registrar».",
+      "guide_step5": "Copia la clave generada. Es una cadena de 32 caracteres en mayúsculas y números.",
+      "guide_public_warning": "Tu perfil de Steam debe ser público para que la sincronización funcione. Si es privado, los logros no se cargarán.",
+      "guide_privacy_link": "Cambiar visibilidad del perfil en Steam",
       "steam_id_label": "SteamID64",
       "steam_id_placeholder": "76561198000000000",
       "steam_id_hint": "El ID numérico de 17 dígitos de tu perfil de Steam",
@@ -445,6 +519,11 @@
       "step1": "1. Inicia sesión en retroachievements.org.",
       "step2": "2. Ve a Settings → Keys para obtener tu Web API Key.",
       "step3": "3. Introduce tu nombre de usuario y pega la API key aquí.",
+      "guide_step1": "Si aún no tienes cuenta, créala gratis en retroachievements.org. Es necesario para sincronizar tus logros retro.",
+      "guide_step2": "Inicia sesión con tu cuenta de RetroAchievements.",
+      "guide_step3": "Ve a tu Panel de Control (retroachievements.org/controlpanel.php). Desplázate hasta la sección «Keys».",
+      "guide_step4": "Copia el valor de «Web API Key». Es una cadena alfanumérica de 32 caracteres. Pégala en el campo de abajo.",
+      "guide_tip": "La API key es personal y no caduca salvo que la regeneres. No la compartas con nadie.",
       "username_label": "Nombre de usuario de RA",
       "username_placeholder": "Tu username en RetroAchievements",
       "username_hint": "El nombre de usuario que usas en retroachievements.org",

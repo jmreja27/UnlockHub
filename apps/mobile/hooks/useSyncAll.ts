@@ -33,7 +33,7 @@ export function useSyncAll(userId: string | undefined) {
     },
     onSuccess: () => {
       setLastSyncedAt(new Date());
-      void queryClient.invalidateQueries({ queryKey: ['myGames'] });
+      void queryClient.invalidateQueries({ queryKey: ['my-games'] });
     },
   });
 

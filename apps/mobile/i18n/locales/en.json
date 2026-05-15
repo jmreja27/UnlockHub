@@ -55,7 +55,13 @@
       "error_password_required": "Password is required.",
       "error_password_min": "Password must be at least 8 characters.",
       "error_password_uppercase": "Password must contain at least one uppercase letter.",
-      "error_password_number": "Password must contain at least one number."
+      "error_password_number": "Password must contain at least one number.",
+      "birthdate_label": "Date of birth",
+      "birthdate_hint": "Enter your date of birth in YYYY-MM-DD format",
+      "birthdate_gdpr_note": "You must be at least {{age}} years old to register (GDPR)",
+      "error_birthdate_required": "Date of birth is required.",
+      "error_birthdate_format": "Format must be YYYY-MM-DD (e.g. 1990-05-14).",
+      "error_birthdate_underage": "You must be at least {{age}} years old to register."
     },
     "forgot_password": {
       "title": "Forgot password",
@@ -111,8 +117,30 @@
   "game": {
     "rarity": "{{pct}}% have it",
     "no_achievements": "This game has no achievements registered yet",
+    "no_filtered_achievements": "No achievements for this filter",
     "share_achievement": "Share achievement",
-    "share_text": "I just unlocked \"{{title}}\" in UnlockHub!"
+    "share_text": "I just unlocked \"{{title}}\" in UnlockHub!",
+    "filter_all": "All",
+    "filter_earned": "Unlocked",
+    "filter_pending": "Pending",
+    "filter_label": "Filter achievements",
+    "sort_by_rarity": "Sort by rarity",
+    "challenge_friend": "Challenge a friend to unlock this achievement",
+    "challenge_friend_label": "Challenge a friend",
+    "challenge_select_friend": "Select a friend to challenge",
+    "no_friends": "No friends yet. Add some friends first!",
+    "guides_expand": "See guides",
+    "guides_collapse": "Hide guides",
+    "guides_empty": "No guides yet. Be the first to write one!",
+    "guides_write": "✏ Write a guide",
+    "guides_written_by": "by {{username}}",
+    "guides_upvote": "Upvote this guide",
+    "guides_report": "Report",
+    "guides_report_confirm_title": "Guide reported",
+    "guides_report_confirmed": "Thanks for your report. We'll review it soon.",
+    "guide_placeholder": "Share tips, walkthroughs or hints for this achievement…",
+    "guide_submit": "Submit guide",
+    "guide_min_length": "Guide must be at least 20 characters."
   },
   "home": {
     "title": "Home",
@@ -143,7 +171,9 @@
     "empty_cta": "Link a platform",
     "sync_button": "Sync",
     "sync_cooldown": "Wait {{min}} min",
-    "syncing": "Syncing…"
+    "syncing": "Syncing…",
+    "last_updated": "Updated {{min}} min ago",
+    "just_updated": "Just updated"
   },
   "feed": {
     "title": "Feed",
@@ -228,7 +258,11 @@
     "level": "Level {{level}}",
     "platforms": "Linked platforms",
     "shared_achievements": "{{count}} achievements in common",
-    "no_shared": "No achievements in common yet"
+    "no_shared": "No achievements in common yet",
+    "compare_title": "Comparison",
+    "compare_shared_achievements": "Achievements in common",
+    "compare_shared_games": "Games in common",
+    "compare_xp_label": "XP difference"
   },
   "rankings": {
     "title": "Rankings",
@@ -249,6 +283,17 @@
     "filter_ra": "RetroAchievements",
     "filter_psn": "PlayStation",
     "national_no_country": "Set your country in your profile to see the national ranking"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "bell_label": "Notifications",
+    "bell_label_unread": "{{count}} unread notification",
+    "bell_label_unread_other": "{{count}} unread notifications",
+    "bell_hint": "Open notification center",
+    "mark_all_read": "Mark all as read",
+    "empty_title": "No notifications",
+    "empty_body": "Friend requests, challenges and community achievements will appear here.",
+    "list_label": "Notifications list"
   },
   "wrapped": {
     "section_title": "Gaming Wrapped",
@@ -313,7 +358,19 @@
     "streak_badge_week": "7 days",
     "streak_badge_month": "30 days",
     "streak_badge_century": "100 days",
-    "streak_badge_year": "365 days"
+    "streak_badge_year": "365 days",
+    "streak_shields_label": "{{count}} streak shield active",
+    "streak_shields_label_other": "{{count}} streak shields active",
+    "advanced_stats_section": "Advanced Stats",
+    "advanced_stats_locked": "Upgrade to Premium to unlock detailed stats about your gaming history.",
+    "advanced_stats_premium_cta": "Upgrade to Premium",
+    "stats_total_xp": "Total XP",
+    "stats_total_achievements": "Achievements",
+    "stats_completed_games": "Games Completed",
+    "stats_best_streak": "Best Streak",
+    "stats_favorite_platform": "Favorite Platform",
+    "stats_rarest_achievement": "Rarest Achievement",
+    "stats_rarity_pct": "{{pct}}% have it"
   },
   "premium": {
     "title": "Choose your plan",
@@ -377,12 +434,20 @@
     "full_policy_label": "Open the full privacy policy in the browser"
   },
   "link_platform": {
+    "guide_title": "How do I get the credentials?",
+    "guide_expand": "Show step-by-step instructions",
+    "guide_collapse": "Hide instructions",
     "psn": {
       "title": "Link PlayStation",
-      "description": "To connect your PSN account you need your NPSSO token. Follow these steps:",
+      "description": "To connect your PSN account you need your NPSSO token. This is the official secure method.",
       "step1": "1. Open a browser and sign in to PlayStation.",
       "step2": "2. Visit: ca.account.sony.com/api/v1/ssocookie",
       "step3": "3. Copy the value of the «npsso» field and paste it below.",
+      "guide_step1": "Open a browser (Chrome, Safari, Firefox) and sign in to my.playstation.com with your PSN account.",
+      "guide_step2": "While still signed in, visit the following Sony URL in the same browser:",
+      "guide_step3": "The browser will display a JSON with an «npsso» field. Copy its value (~64 characters long).",
+      "guide_step4": "Paste that value in the field below and tap «Link PlayStation».",
+      "guide_tip": "The NPSSO token expires. If you see an authentication error later, repeat the process to get a new one.",
       "npsso_label": "NPSSO Token",
       "npsso_placeholder": "Paste your NPSSO token here (64+ characters)",
       "npsso_hint": "The NPSSO token obtained from ca.account.sony.com",
@@ -419,6 +484,15 @@
       "step1": "1. Go to steamcommunity.com/dev/apikey and sign in.",
       "step2": "2. Create an API key with any domain name.",
       "step3": "3. Your SteamID64 appears on your Steam profile (17 digits).",
+      "guide_section_id": "Get your SteamID64",
+      "guide_step1": "Visit steamid.io. In the search box, enter your Steam username or the URL of your Steam profile.",
+      "guide_step2": "Find the «steamID64» field. It's a 17-digit number (e.g. 76561198000000000). Copy it.",
+      "guide_step3": "You can also find it on your Steam profile → Edit Profile → Custom URL (if set).",
+      "guide_section_key": "Get your Steam API Key",
+      "guide_step4": "Sign in to Steam and visit store.steampowered.com/dev/apikey. Fill in any domain name (e.g. «unlockhub») and click «Register».",
+      "guide_step5": "Copy the generated key. It's a 32-character string of uppercase letters and numbers.",
+      "guide_public_warning": "Your Steam profile must be set to Public for sync to work. If it's private, achievements won't load.",
+      "guide_privacy_link": "Change Steam profile visibility",
       "steam_id_label": "SteamID64",
       "steam_id_placeholder": "76561198000000000",
       "steam_id_hint": "The 17-digit numeric ID from your Steam profile",
@@ -445,6 +519,11 @@
       "step1": "1. Sign in to retroachievements.org.",
       "step2": "2. Go to Settings → Keys to get your Web API Key.",
       "step3": "3. Enter your username and paste your API key below.",
+      "guide_step1": "If you don't have an account yet, register for free at retroachievements.org. It's required to sync your retro achievements.",
+      "guide_step2": "Sign in with your RetroAchievements account.",
+      "guide_step3": "Go to your Control Panel (retroachievements.org/controlpanel.php). Scroll down to the «Keys» section.",
+      "guide_step4": "Copy your «Web API Key» value — a 32-character alphanumeric string. Paste it in the field below.",
+      "guide_tip": "Your API key is personal and doesn't expire unless you regenerate it. Don't share it with anyone.",
       "username_label": "RetroAchievements username",
       "username_placeholder": "Your RetroAchievements username",
       "username_hint": "The username you use on retroachievements.org",

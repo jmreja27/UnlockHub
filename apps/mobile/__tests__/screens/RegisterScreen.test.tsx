@@ -105,6 +105,7 @@ describe('RegisterScreen', () => {
       fireEvent.changeText(getByLabelText('auth.register.username_label'), 'gamer_pro-99');
       fireEvent.changeText(getByLabelText('auth.register.email_label'), 'test@test.com');
       fireEvent.changeText(getByLabelText('auth.register.password_label'), 'Password1');
+      fireEvent.changeText(getByLabelText('auth.register.birthdate_label'), '1995-06-15');
       fireEvent.press(getByRole('button', { name: 'auth.register.submit' }));
 
       await waitFor(() => expect(register).toHaveBeenCalled());
@@ -172,6 +173,7 @@ describe('RegisterScreen', () => {
       fireEvent.changeText(getByLabelText('auth.register.username_label'), 'nuevo_gamer');
       fireEvent.changeText(getByLabelText('auth.register.email_label'), 'nuevo@test.com');
       fireEvent.changeText(getByLabelText('auth.register.password_label'), 'Password1');
+      fireEvent.changeText(getByLabelText('auth.register.birthdate_label'), '1995-06-15');
       fireEvent.press(getByRole('button', { name: 'auth.register.submit' }));
 
       await waitFor(() => {
@@ -179,6 +181,7 @@ describe('RegisterScreen', () => {
           username: 'nuevo_gamer',
           email: 'nuevo@test.com',
           password: 'Password1',
+          birthDate: '1995-06-15',
         });
       });
     });

@@ -59,9 +59,11 @@ export async function getStreakMilestoneHandler(
 
 const myGamesQuerySchema = z.object({
   platform: z.enum(['STEAM', 'RA', 'XBOX', 'PSN']).optional(),
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(50).default(20),
 });
 
-// GET /api/v1/users/me/games — juegos con logros del usuario autenticado
+// GET /api/v1/users/me/games — juegos con logros del usuario autenticado (paginado)
 export async function getMyGamesHandler(
   req: Request,
   res: Response,
@@ -69,8 +71,40 @@ export async function getMyGamesHandler(
 ): Promise<void> {
   try {
     const userId = (req as AuthenticatedRequest).user.id;
-    const { platform } = myGamesQuerySchema.parse(req.query);
-    const result = await userService.getMyGames(userId, platform);
+    const { platform, page, limit } = myGamesQuerySchema.parse(req.query);
+    const result = await userService.getMyGames(userId, platform, page, limit);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// GET /api/v1/users/me/games/:gameId/achievements — logros del usuario en un juego
+export async function getMyGameAchievementsHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const userId = (req as AuthenticatedRequest).user.id;
+    const { gameId } = req.params as { gameId: string };
+    const result = await userService.getMyGameAchievements(userId, gameId);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// GET /api/v1/users/:username/compare — comparación de perfiles
+export async function compareProfilesHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const myUserId = (req as AuthenticatedRequest).user.id;
+    const { username } = req.params as { username: string };
+    const result = await userService.compareProfiles(myUserId, username);
     res.json(result);
   } catch (err) {
     next(err);

@@ -19,6 +19,16 @@ import { api } from '../../lib/api';
 import { useFeed } from '../../hooks/useFeed';
 import type { PlatformAccount } from '@unlockhub/types';
 
+interface UserStats {
+  xpByWeek: { week: string; xp: number }[];
+  rarestAchievement: { id: string; title: string; iconUrl: string | null; rarity: number; platform: string } | null;
+  favoritePlatform: string | null;
+  bestStreak: number;
+  completedGames: number;
+  totalAchievements: number;
+  totalXp: number;
+}
+
 function isWrappedAvailable(): boolean {
   return new Date().getMonth() >= 11; // Disponible desde diciembre (mes 11 en base 0)
 }
@@ -84,8 +94,15 @@ export default function ProfileScreen() {
   // Obtiene las plataformas vinculadas del usuario
   const queryClient = useQueryClient();
 
-  const { events } = useFeed();
+  const { events, isError: isFeedError, refetch: refetchFeed } = useFeed();
   const { currentLanguage, changeLanguage } = useLanguage();
+
+  const { data: statsData, isLoading: statsLoading } = useQuery({
+    queryKey: ['user-stats'],
+    queryFn: () => api.get<UserStats>('/api/v1/users/me/stats'),
+    enabled: isAuthenticated && FEATURES.advancedStats && (user?.isPremium ?? false),
+    staleTime: 1000 * 60 * 60,
+  });
 
   const {
     data: platforms,
@@ -298,7 +315,23 @@ export default function ProfileScreen() {
           </View>
           <View className="w-px bg-surface-card" />
           <View className="flex-1 items-center">
-            <Text className="text-white text-xl font-bold">{user.streakDays}</Text>
+            <View className="flex-row items-center gap-1">
+              <Text className="text-white text-xl font-bold">{user.streakDays}</Text>
+              {(user as unknown as { streakShields?: number }).streakShields != null &&
+                (user as unknown as { streakShields: number }).streakShields > 0 && (
+                  <View
+                    className="bg-indigo-900/60 border border-indigo-500/50 rounded-full px-1.5 py-0.5"
+                    accessible
+                    accessibilityLabel={t('profile.streak_shields_label', {
+                      count: (user as unknown as { streakShields: number }).streakShields,
+                    })}
+                  >
+                    <Text className="text-indigo-300 text-xs font-bold">
+                      🛡 {(user as unknown as { streakShields: number }).streakShields}
+                    </Text>
+                  </View>
+                )}
+            </View>
             <Text className="text-gray-400 text-xs mt-1">{t('profile.stat_streak')}</Text>
           </View>
         </View>
@@ -478,6 +511,123 @@ export default function ProfileScreen() {
           </View>
         )}
 
+        {/* Estadísticas avanzadas (F1) — premium-only con paywall para usuarios free */}
+        {FEATURES.advancedStats && (
+          <View className="px-6 mb-4">
+            <Text className="text-gray-300 text-sm font-semibold mb-3 uppercase tracking-wider">
+              {t('profile.advanced_stats_section')}
+            </Text>
+
+            {user.isPremium ? (
+              statsLoading ? (
+                <SkeletonBox width={'100%'} height={140} borderRadius={12} />
+              ) : statsData ? (
+                <View className="gap-2">
+                  {/* Grid 2×2 de métricas principales */}
+                  <View className="flex-row gap-2">
+                    <View className="flex-1 bg-surface-elevated rounded-xl p-3">
+                      <Text className="text-white text-base font-bold">
+                        {new Intl.NumberFormat().format(statsData.totalXp)}
+                      </Text>
+                      <Text className="text-gray-400 text-xs mt-0.5">
+                        {t('profile.stats_total_xp')}
+                      </Text>
+                    </View>
+                    <View className="flex-1 bg-surface-elevated rounded-xl p-3">
+                      <Text className="text-white text-base font-bold">
+                        {new Intl.NumberFormat().format(statsData.totalAchievements)}
+                      </Text>
+                      <Text className="text-gray-400 text-xs mt-0.5">
+                        {t('profile.stats_total_achievements')}
+                      </Text>
+                    </View>
+                  </View>
+                  <View className="flex-row gap-2">
+                    <View className="flex-1 bg-surface-elevated rounded-xl p-3">
+                      <Text className="text-white text-base font-bold">
+                        {statsData.completedGames}
+                      </Text>
+                      <Text className="text-gray-400 text-xs mt-0.5">
+                        {t('profile.stats_completed_games')}
+                      </Text>
+                    </View>
+                    <View className="flex-1 bg-surface-elevated rounded-xl p-3">
+                      <Text className="text-white text-base font-bold">
+                        {statsData.bestStreak} 🔥
+                      </Text>
+                      <Text className="text-gray-400 text-xs mt-0.5">
+                        {t('profile.stats_best_streak')}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Plataforma favorita */}
+                  {statsData.favoritePlatform && (
+                    <View className="bg-surface-elevated rounded-xl px-4 py-3 flex-row items-center justify-between">
+                      <Text className="text-gray-400 text-sm">
+                        {t('profile.stats_favorite_platform')}
+                      </Text>
+                      <Text className="text-white font-semibold text-sm">
+                        {PLATFORM_LABELS[statsData.favoritePlatform] ?? statsData.favoritePlatform}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Logro más raro */}
+                  {statsData.rarestAchievement && (
+                    <View className="bg-surface-elevated rounded-xl px-4 py-3 flex-row items-center">
+                      <Image
+                        source={
+                          statsData.rarestAchievement.iconUrl ??
+                          require('../../assets/images/icon.png')
+                        }
+                        style={{ width: 36, height: 36, borderRadius: 6 }}
+                        contentFit="cover"
+                        accessibilityElementsHidden
+                      />
+                      <View className="flex-1 ml-3">
+                        <Text className="text-gray-400 text-xs">
+                          {t('profile.stats_rarest_achievement')}
+                        </Text>
+                        <Text className="text-white text-sm font-semibold" numberOfLines={1}>
+                          {statsData.rarestAchievement.title}
+                        </Text>
+                      </View>
+                      <Text className="text-gray-500 text-xs ml-2">
+                        {t('profile.stats_rarity_pct', {
+                          pct: statsData.rarestAchievement.rarity.toFixed(1),
+                        })}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              ) : null
+            ) : (
+              /* Paywall para usuarios free */
+              <View className="bg-surface-elevated rounded-2xl px-5 py-6 items-center">
+                <Text className="text-3xl mb-3">📊</Text>
+                <Text className="text-white text-sm font-semibold text-center mb-2">
+                  {t('profile.advanced_stats_section')}
+                </Text>
+                <Text className="text-gray-400 text-xs text-center mb-4">
+                  {t('profile.advanced_stats_locked')}
+                </Text>
+                <Pressable
+                  onPress={() => router.push('/premium')}
+                  className="bg-primary rounded-xl px-6 py-2.5"
+                  accessibilityRole="button"
+                  accessibilityLabel={t('profile.advanced_stats_premium_cta')}
+                  style={{ minHeight: 44, justifyContent: 'center' }}
+                >
+                  <Text className="text-white font-semibold text-sm">
+                    {t('profile.advanced_stats_premium_cta')}
+                  </Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
+        )}
+
         {/* Gaming Wrapped — solo cuando FEATURES.wrapped está activo */}
         {FEATURES.wrapped && (() => {
           const years = getWrappedYears();
@@ -542,14 +692,40 @@ export default function ProfileScreen() {
         </View>
 
         {/* Actividad reciente */}
-        {events.length > 0 && (
+        {(events.length > 0 || isFeedError) && (
           <View className="px-6 mb-6">
             <Text className="text-gray-300 text-sm font-semibold mb-3 uppercase tracking-wider">
               {t('profile.recent_activity')}
             </Text>
-            {events.slice(0, 5).map((event) => (
-              <ActivityCard key={event.id} event={event} />
-            ))}
+            {isFeedError ? (
+              <View
+                className="bg-surface-elevated rounded-xl px-4 py-5 items-center"
+                accessible
+                accessibilityLiveRegion="polite"
+                accessibilityRole="alert"
+              >
+                <Text className="text-red-400 text-sm font-semibold mb-1">
+                  {t('feed.error_title')}
+                </Text>
+                <Text className="text-gray-400 text-xs text-center mb-4">
+                  {t('feed.error_message')}
+                </Text>
+                <Pressable
+                  onPress={() => void refetchFeed()}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('common.retry')}
+                  style={{ minHeight: 44, justifyContent: 'center' }}
+                >
+                  <Text className="text-primary-light text-sm font-medium">
+                    {t('common.retry')}
+                  </Text>
+                </Pressable>
+              </View>
+            ) : (
+              events.slice(0, 5).map((event) => (
+                <ActivityCard key={event.id} event={event} />
+              ))
+            )}
           </View>
         )}
 

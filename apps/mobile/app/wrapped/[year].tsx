@@ -79,18 +79,44 @@ function buildShareText(wrapped: GamingWrapped, t: (key: string, opts?: Record<s
   return lines.join('\n');
 }
 
+// Parsea el param que puede ser "2025" (anual) o "2025-01" (mensual)
+function parsePeriod(raw: string): { year: number; month: number | undefined; isMonthly: boolean } {
+  const monthlyMatch = /^(\d{4})-(\d{2})$/.exec(raw);
+  if (monthlyMatch) {
+    const year = parseInt(monthlyMatch[1]!, 10);
+    const month = parseInt(monthlyMatch[2]!, 10);
+    if (!isNaN(year) && month >= 1 && month <= 12) {
+      return { year, month, isMonthly: true };
+    }
+  }
+  const year = parseInt(raw, 10);
+  return { year, month: undefined, isMonthly: false };
+}
+
+const MONTH_NAMES: Record<string, string[]> = {
+  es: ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'],
+  en: ['January','February','March','April','May','June','July','August','September','October','November','December'],
+};
+
 export default function WrappedScreen() {
-  const { year: yearParam } = useLocalSearchParams<{ year: string }>();
-  const year = parseInt(yearParam ?? '', 10);
-  const { t } = useTranslation();
-  const { data: wrapped, isLoading, isError } = useWrapped(year);
+  const { year: periodParam } = useLocalSearchParams<{ year: string }>();
+  const { year, month, isMonthly } = parsePeriod(periodParam ?? '');
+  const { t, i18n } = useTranslation();
+
+  const period = isMonthly ? `${year}-${String(month!).padStart(2, '0')}` : String(year);
+  const { data: wrapped, isLoading, isError } = useWrapped(isMonthly ? period : year);
+
+  const monthNames = MONTH_NAMES[i18n.language] ?? MONTH_NAMES['en']!;
+  const periodLabel = isMonthly
+    ? `${monthNames[month! - 1]} ${year}`
+    : String(year);
 
   function handleShare() {
     if (!wrapped) return;
     Share.share({ message: buildShareText(wrapped, t) }).catch(() => undefined);
   }
 
-  if (isNaN(year)) {
+  if (isNaN(year) || (isMonthly && (month === undefined || month < 1 || month > 12))) {
     return (
       <SafeAreaView className="flex-1 bg-surface items-center justify-center px-6">
         <Text className="text-white text-lg font-bold text-center" accessibilityRole="alert">
@@ -122,7 +148,7 @@ export default function WrappedScreen() {
         </Pressable>
 
         <Text className="text-white text-lg font-bold" accessibilityRole="header">
-          {t('wrapped.title', { year })}
+          {t('wrapped.title', { year: periodLabel })}
         </Text>
 
         <Pressable

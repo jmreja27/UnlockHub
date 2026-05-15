@@ -3,13 +3,22 @@ import { api } from '../lib/api';
 import { useSessionStore } from '../stores/sessionStore';
 import type { GamingWrapped } from '@unlockhub/types';
 
-export function useWrapped(year: number) {
+// Acepta tanto un año numérico (anual) como un string de período "YYYY-MM" (mensual).
+export function useWrapped(period: number | string) {
   const { isAuthenticated } = useSessionStore();
 
+  const periodStr = String(period);
+  const isValid = typeof period === 'number'
+    ? period >= 2024
+    : /^\d{4}(-\d{2})?$/.test(periodStr);
+
   return useQuery({
-    queryKey: ['wrapped', year],
-    queryFn: () => api.get<{ wrapped: GamingWrapped }>(`/api/v1/wrapped/${year}`).then((r) => r.wrapped),
-    enabled: isAuthenticated && year >= 2024,
-    staleTime: 1000 * 60 * 60, // 1 hora — los datos del wrapped no cambian frecuentemente
+    queryKey: ['wrapped', periodStr],
+    queryFn: () =>
+      api
+        .get<{ wrapped: GamingWrapped }>(`/api/v1/wrapped/${periodStr}`)
+        .then((r) => r.wrapped),
+    enabled: isAuthenticated && isValid,
+    staleTime: 1000 * 60 * 60,
   });
 }

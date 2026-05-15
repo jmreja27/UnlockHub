@@ -1,6 +1,9 @@
 import { AppError } from '../middleware/errorHandler';
 import { prisma } from '../lib/prisma';
 
+const POINTS_PER_WEEK = 300;
+const DAYS_PER_REDEMPTION = 7;
+
 const ACTIVE_STATUS = 'active';
 const CANCELLED_STATUS = 'cancelled';
 const EXPIRED_STATUS = 'expired';
@@ -149,6 +152,100 @@ export async function getSubscriptionStatus(userId: string): Promise<Subscriptio
     plan: activeSubscription?.plan ?? null,
     expiresAt: activeSubscription?.expiresAt ?? user.premiumUntil ?? null,
     provider: activeSubscription?.provider ?? null,
+  };
+}
+
+interface RedeemPointsResult {
+  daysAdded: number;
+  premiumUntil: Date;
+  pointsSpent: number;
+  newBalance: number;
+}
+
+// Canjea puntos por días premium. 300 puntos = 7 días.
+// Usa transacción para garantizar consistencia entre deducción de puntos y activación de premium.
+export async function redeemPointsForPremium(
+  userId: string,
+  pointsToRedeem: number,
+): Promise<RedeemPointsResult> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, isPremium: true, premiumUntil: true },
+  });
+
+  if (!user) {
+    throw new AppError('Usuario no encontrado', 'USER_NOT_FOUND', 404);
+  }
+
+  // Validar que sea múltiplo de POINTS_PER_WEEK y al menos 300
+  if (pointsToRedeem < POINTS_PER_WEEK || pointsToRedeem % POINTS_PER_WEEK !== 0) {
+    throw new AppError(
+      `Los puntos deben ser múltiplo de ${POINTS_PER_WEEK} y al menos ${POINTS_PER_WEEK}`,
+      'INVALID_POINTS_AMOUNT',
+      400,
+    );
+  }
+
+  // Calcular saldo actual sumando todos los movimientos del historial
+  const balanceResult = await prisma.userPoint.aggregate({
+    where: { userId },
+    _sum: { amount: true },
+  });
+  const currentBalance = balanceResult._sum.amount ?? 0;
+
+  if (currentBalance < pointsToRedeem) {
+    throw new AppError(
+      `Saldo insuficiente. Tienes ${currentBalance} puntos y necesitas ${pointsToRedeem}`,
+      'INSUFFICIENT_POINTS',
+      400,
+    );
+  }
+
+  const daysToAdd = (pointsToRedeem / POINTS_PER_WEEK) * DAYS_PER_REDEMPTION;
+  const now = new Date();
+
+  // Calcular nueva fecha de expiración: max(ahora, premiumUntil actual) + días a añadir
+  const baseDate = user.premiumUntil && user.premiumUntil > now ? user.premiumUntil : now;
+  const newPremiumUntil = new Date(baseDate.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
+
+  const transactionId = `points-${userId}-${Date.now()}`;
+
+  // Ejecutar en transacción: deducir puntos, actualizar usuario y crear registro de suscripción
+  await prisma.$transaction([
+    prisma.userPoint.create({
+      data: {
+        userId,
+        amount: -pointsToRedeem,
+        reason: 'REDEEM',
+      },
+    }),
+    prisma.user.update({
+      where: { id: userId },
+      data: {
+        isPremium: true,
+        premiumUntil: newPremiumUntil,
+      },
+    }),
+    prisma.subscription.create({
+      data: {
+        userId,
+        plan: 'POINTS_REDEEM',
+        provider: 'INTERNAL',
+        storeTransactionId: transactionId,
+        status: ACTIVE_STATUS,
+        startedAt: now,
+        expiresAt: newPremiumUntil,
+      },
+    }),
+  ]);
+
+  const newBalance = currentBalance - pointsToRedeem;
+
+  return {
+    daysAdded: daysToAdd,
+    premiumUntil: newPremiumUntil,
+    pointsSpent: pointsToRedeem,
+    newBalance,
   };
 }
 

@@ -164,6 +164,8 @@ export interface UserChallenge {
 
 export interface GamingWrapped {
   year: number;
+  month?: number;  // 1-12 si es wrapped mensual; undefined si es anual
+  period: string;  // "YYYY" para anual, "YYYY-MM" para mensual
   totalAchievements: number;
   totalXpGained: number;
   topGame: {

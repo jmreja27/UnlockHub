@@ -21,6 +21,7 @@
   "dependencies": {
     "@prisma/client": "^5.19.1",
     "@sentry/node": "^10.51.0",
+    "@socket.io/redis-adapter": "^8.3.0",
     "@unlockhub/types": "*",
     "@unlockhub/validators": "*",
     "axios": "^1.7.7",

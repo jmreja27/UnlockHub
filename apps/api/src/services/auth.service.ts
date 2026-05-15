@@ -34,6 +34,7 @@ export async function register(input: RegisterInput) {
     username: input.username,
     email: input.email,
     passwordHash,
+    birthDate: input.birthDate,
   });
 
   const rawRefreshToken = signRefreshToken();

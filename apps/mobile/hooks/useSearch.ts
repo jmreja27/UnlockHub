@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
+import { useSessionStore } from '../stores/sessionStore';
 import type { SearchResponse } from '@unlockhub/types';
 
 export type SearchFilter = 'all' | 'games' | 'users';
@@ -43,6 +44,21 @@ export function useGameDetail(gameId: string | null) {
     enabled: !!gameId,
     staleTime: 1000 * 60 * 10,
     gcTime: 1000 * 60 * 30,
+  });
+}
+
+// Logros ganados por el usuario en un juego concreto — para filtros Desbloqueados/Pendientes
+export function useMyGameAchievements(gameId: string | null) {
+  const { isAuthenticated } = useSessionStore();
+  return useQuery({
+    queryKey: ['my-game-achievements', gameId],
+    queryFn: () =>
+      api.get<{ achievementId: string; unlockedAt: string }[]>(
+        `/api/v1/users/me/games/${gameId}/achievements`,
+      ),
+    enabled: !!gameId && isAuthenticated,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 15,
   });
 }
 

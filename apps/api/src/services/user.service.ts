@@ -1,6 +1,6 @@
 import { AppError } from '../middleware/errorHandler';
 import { prisma } from '../lib/prisma';
-import { upsertUserScore } from './ranking.service';
+import { upsertUserScore, removeUserFromRankings } from './ranking.service';
 import type { User, PlatformAccount, PointReason, Platform } from '@unlockhub/types';
 
 // XP necesario por nivel — cada 1000 XP sube un nivel, máximo nivel 100
@@ -186,50 +186,60 @@ export async function addXp(
   return { newXp, newLevel, leveledUp };
 }
 
-// Devuelve los juegos con logros del usuario, agrupados por juego con stats de completado
+type LibraryGame = {
+  id: string;
+  title: string;
+  platform: string;
+  iconUrl: string | null;
+  totalAchievements: number;
+  earnedAchievements: number;
+  completionPct: number;
+  lastSyncedAt: string | null;
+};
+
+// Devuelve los juegos con logros del usuario, agrupados por juego con stats de completado.
+// Soporta paginación via page/limit — la agregación ocurre en memoria para evitar
+// GROUP BY complejo en Prisma. Suficiente para la escala esperada por usuario.
 export async function getMyGames(
   userId: string,
   platform?: Platform,
+  page = 1,
+  limit = 20,
 ): Promise<{
-  data: Array<{
-    id: string;
-    title: string;
-    platform: string;
-    iconUrl: string | null;
-    totalAchievements: number;
-    earnedAchievements: number;
-    completionPct: number;
-    lastSyncedAt: string | null;
-  }>;
+  data: LibraryGame[];
   total: number;
+  page: number;
+  limit: number;
 }> {
-  const userAchievements = await prisma.userAchievement.findMany({
-    where: {
-      userId,
-      achievement: platform ? { platform } : undefined,
-    },
-    select: {
-      achievement: {
-        select: {
-          gameId: true,
-          game: {
-            select: {
-              id: true,
-              title: true,
-              platform: true,
-              iconUrl: true,
-              totalAchievements: true,
+  const [userAchievements, platformAccounts] = await Promise.all([
+    prisma.userAchievement.findMany({
+      where: {
+        userId,
+        achievement: platform ? { platform } : undefined,
+      },
+      select: {
+        achievement: {
+          select: {
+            gameId: true,
+            game: {
+              select: {
+                id: true,
+                title: true,
+                platform: true,
+                iconUrl: true,
+                totalAchievements: true,
+              },
             },
           },
         },
       },
-    },
-  });
+    }),
+    prisma.platformAccount.findMany({
+      where: { userId },
+      select: { platform: true, lastSyncedAt: true },
+    }),
+  ]);
 
-  const platformAccounts = await prisma.platformAccount.findMany({
-    where: { userId },
-    select: { platform: true, lastSyncedAt: true },
-  });
   const syncMap = new Map<string, string | null>();
   for (const pa of platformAccounts) {
     syncMap.set(pa.platform, pa.lastSyncedAt?.toISOString() ?? null);
@@ -264,7 +274,7 @@ export async function getMyGames(
     }
   }
 
-  const data = Array.from(gameMap.values())
+  const sorted: LibraryGame[] = Array.from(gameMap.values())
     .map((g) => ({
       id: g.id,
       title: g.title,
@@ -280,7 +290,83 @@ export async function getMyGames(
     }))
     .sort((a, b) => a.title.localeCompare(b.title));
 
-  return { data, total: data.length };
+  const total = sorted.length;
+  const start = (page - 1) * limit;
+  const data = sorted.slice(start, start + limit);
+
+  return { data, total, page, limit };
+}
+
+// Devuelve los achievementIds ganados por el usuario en un juego específico.
+// Usado para mostrar el estado Desbloqueado/Pendiente en la pantalla de logros.
+export async function getMyGameAchievements(
+  userId: string,
+  gameId: string,
+): Promise<{ achievementId: string; unlockedAt: string }[]> {
+  const earned = await prisma.userAchievement.findMany({
+    where: { userId, achievement: { gameId } },
+    select: { achievementId: true, unlockedAt: true },
+  });
+  return earned.map((e) => ({
+    achievementId: e.achievementId,
+    unlockedAt: e.unlockedAt.toISOString(),
+  }));
+}
+
+// Compara el perfil del usuario autenticado con otro usuario por username.
+export async function compareProfiles(
+  myUserId: string,
+  targetUsername: string,
+): Promise<{
+  targetUser: { username: string; level: number; xp: number; avatar: string | null };
+  xpDiff: number;
+  sharedAchievementCount: number;
+  sharedGameCount: number;
+}> {
+  const targetUser = await prisma.user.findUnique({
+    where: { username: targetUsername },
+    select: { id: true, username: true, level: true, xp: true, avatar: true },
+  });
+  if (!targetUser) throw new AppError('Usuario no encontrado', 'USER_NOT_FOUND', 404);
+
+  const myUser = await prisma.user.findUnique({
+    where: { id: myUserId },
+    select: { xp: true },
+  });
+  if (!myUser) throw new AppError('Usuario no encontrado', 'USER_NOT_FOUND', 404);
+
+  const [myAchievements, theirAchievements] = await Promise.all([
+    prisma.userAchievement.findMany({
+      where: { userId: myUserId },
+      select: { achievementId: true, achievement: { select: { gameId: true } } },
+    }),
+    prisma.userAchievement.findMany({
+      where: { userId: targetUser.id },
+      select: { achievementId: true, achievement: { select: { gameId: true } } },
+    }),
+  ]);
+
+  const myAchievementIds = new Set(myAchievements.map((a) => a.achievementId));
+  const myGameIds = new Set(myAchievements.map((a) => a.achievement.gameId));
+  const theirGameIds = new Set(theirAchievements.map((a) => a.achievement.gameId));
+
+  const sharedAchievementCount = theirAchievements.filter((a) =>
+    myAchievementIds.has(a.achievementId),
+  ).length;
+
+  const sharedGameCount = [...theirGameIds].filter((id) => myGameIds.has(id)).length;
+
+  return {
+    targetUser: {
+      username: targetUser.username,
+      level: targetUser.level,
+      xp: targetUser.xp,
+      avatar: targetUser.avatar,
+    },
+    xpDiff: myUser.xp - targetUser.xp,
+    sharedAchievementCount,
+    sharedGameCount,
+  };
 }
 
 // Elimina la cuenta del usuario y todos sus datos asociados.
@@ -288,10 +374,17 @@ export async function getMyGames(
 // Friendship, ActivityEvent, UserPoint, Subscription, DeviceToken y RefreshToken.
 // También limpia las puntuaciones del usuario en todos los Sorted Sets de Redis.
 export async function deleteAccount(userId: string): Promise<void> {
-  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { platformAccounts: { select: { platform: true } } },
+  });
   if (!user) throw new AppError('Usuario no encontrado', 'USER_NOT_FOUND', 404);
 
-  // Borrar datos de ranking en Redis antes de eliminar el registro en BD
+  const platforms = user.platformAccounts.map((a) => a.platform);
+
+  // Limpiar Redis antes de borrar BD para evitar datos huérfanos si falla la transacción
+  await removeUserFromRankings(userId, user.countryCode, platforms);
+
   await prisma.$transaction([
     prisma.user.delete({ where: { id: userId } }),
   ]);

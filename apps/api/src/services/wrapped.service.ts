@@ -9,6 +9,13 @@ function yearBounds(year: number): { start: Date; end: Date } {
   };
 }
 
+function monthBounds(year: number, month: number): { start: Date; end: Date } {
+  const start = new Date(Date.UTC(year, month - 1, 1));
+  // El día 0 del mes siguiente es el último día del mes actual
+  const end = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
+  return { start, end };
+}
+
 async function computeStats(
   userId: string,
   start: Date,
@@ -121,6 +128,68 @@ export async function getWrapped(userId: string, year: number): Promise<GamingWr
 
   return {
     year,
+    period: String(year),
+    totalAchievements: stats.totalAchievements,
+    totalXpGained: stats.totalXpGained,
+    topGame: stats.topGame,
+    rarestAchievement: stats.rarestAchievement,
+    bestStreak: stats.bestStreak,
+    previousYear,
+  };
+}
+
+// Wrapped mensual: stats del mes especificado y comparación con el mismo mes del año anterior.
+export async function getMonthlyWrapped(
+  userId: string,
+  year: number,
+  month: number,
+): Promise<GamingWrapped> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, streakDays: true },
+  });
+  if (!user) throw new AppError('Usuario no encontrado.', 'USER_NOT_FOUND', 404);
+
+  const currentDate = new Date();
+  const currentYear = currentDate.getFullYear();
+  const currentMonth = currentDate.getMonth() + 1;
+
+  if (year > currentYear || (year === currentYear && month > currentMonth)) {
+    throw new AppError(
+      'El período solicitado aún no ha ocurrido.',
+      'WRAPPED_PERIOD_FUTURE',
+      400,
+    );
+  }
+
+  const { start, end } = monthBounds(year, month);
+  const stats = await computeStats(userId, start, end);
+
+  // Para el mes actual en curso, usar racha actual si no hay eventos de hito
+  const isCurrentMonth = year === currentYear && month === currentMonth;
+  if (stats.bestStreak === 0 && isCurrentMonth) {
+    stats.bestStreak = user.streakDays;
+  }
+
+  // Comparación con el mismo mes del año anterior
+  const prevBounds = monthBounds(year - 1, month);
+  const prevStats = await computeStats(userId, prevBounds.start, prevBounds.end);
+
+  const previousYear =
+    prevStats.totalAchievements > 0 || prevStats.totalXpGained > 0
+      ? {
+          totalAchievements: prevStats.totalAchievements,
+          totalXpGained: prevStats.totalXpGained,
+          bestStreak: prevStats.bestStreak,
+        }
+      : null;
+
+  const paddedMonth = String(month).padStart(2, '0');
+
+  return {
+    year,
+    month,
+    period: `${year}-${paddedMonth}`,
     totalAchievements: stats.totalAchievements,
     totalXpGained: stats.totalXpGained,
     topGame: stats.topGame,

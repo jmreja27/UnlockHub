@@ -20,60 +20,77 @@ enum Platform {
   PSN
 }
 
+enum UserRole {
+  USER
+  MODERATOR
+  ADMIN
+}
+
 enum PointReason {
   CHALLENGE
   STREAK
   ACHIEVEMENT
+  REDEEM
 }
 
 enum SubscriptionPlan {
   MONTHLY
   ANNUAL
   LIFETIME
+  POINTS_REDEEM
 }
 
 enum StoreProvider {
   GOOGLE_PLAY
   APP_STORE
+  INTERNAL
 }
 
 // ─── Usuarios ─────────────────────────────────────────────────────────────────
 
 model User {
-  id           String    @id @default(cuid())
-  username     String    @unique
-  email        String    @unique
-  passwordHash String
-  avatar       String?
-  banner       String?
-  bio          String?
-  level        Int       @default(1)
-  xp           Int       @default(0)
-  streakDays   Int       @default(0)
-  countryCode  String?
-  isPremium    Boolean   @default(false)
-  premiumUntil DateTime?
-  lastSyncAt   DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id            String    @id @default(cuid())
+  username      String    @unique
+  email         String    @unique
+  passwordHash  String
+  birthDate     DateTime?
+  avatar        String?
+  banner        String?
+  bio           String?
+  level         Int       @default(1)
+  xp            Int       @default(0)
+  streakDays    Int       @default(0)
+  streakShields Int       @default(0)
+  countryCode   String?
+  role          UserRole  @default(USER)
+  isPremium     Boolean   @default(false)
+  premiumUntil  DateTime?
+  lastSyncAt    DateTime?
+  deletedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  platformAccounts  PlatformAccount[]
-  userAchievements  UserAchievement[]
-  points            UserPoint[]
-  subscriptions     Subscription[]
-  refreshTokens     RefreshToken[]
-  rankingSnapshots  RankingSnapshot[]
-  sentFriendships     Friendship[]      @relation("FriendshipSender")
-  receivedFriendships Friendship[]      @relation("FriendshipReceiver")
+  platformAccounts    PlatformAccount[]
+  userAchievements    UserAchievement[]
+  points              UserPoint[]
+  subscriptions       Subscription[]
+  refreshTokens       RefreshToken[]
+  rankingSnapshots    RankingSnapshot[]
+  sentFriendships     Friendship[]       @relation("FriendshipSender")
+  receivedFriendships Friendship[]       @relation("FriendshipReceiver")
   activityEvents      ActivityEvent[]
   userChallenges      UserChallenge[]
   deviceTokens        DeviceToken[]
   passwordResetTokens PasswordResetToken[]
+  notifications       Notification[]
+  achievementGuides   AchievementGuide[]
 
   @@index([email])
   @@index([username])
   @@index([xp])
   @@index([countryCode])
+  @@index([deletedAt])
+  @@index([role])
 }
 
 // ─── Plataformas ──────────────────────────────────────────────────────────────
@@ -136,6 +153,7 @@ model Achievement {
 
   game             Game              @relation(fields: [gameId], references: [id], onDelete: Cascade)
   userAchievements UserAchievement[]
+  guides           AchievementGuide[]
 
   @@unique([platform, externalId])
   @@index([gameId])
@@ -357,4 +375,44 @@ model PasswordResetToken {
   @@index([userId])
   @@index([tokenHash])
   @@index([expiresAt])
+}
+
+// ─── Notificaciones in-app ────────────────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  // FRIEND_REQUEST | ACHIEVEMENT_CHALLENGE | RANKING_UP | CHALLENGE_COMPLETED | STREAK_RISK
+  type      String
+  title     String
+  body      String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([read])
+  @@index([createdAt])
+}
+
+// ─── Guías UGC de logros ──────────────────────────────────────────────────────
+
+model AchievementGuide {
+  id            String   @id @default(cuid())
+  achievementId String
+  userId        String
+  content       String
+  upvotes       Int      @default(0)
+  reported      Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  achievement Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([achievementId])
+  @@index([userId])
+  @@index([reported])
+  @@index([upvotes])
 }

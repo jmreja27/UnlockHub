@@ -109,6 +109,16 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     return retryResponse.json() as Promise<T>;
   }
 
+  if (response.status === 429) {
+    const retryAfterHeader = response.headers.get('Retry-After');
+    const retryAfterSeconds = retryAfterHeader ? parseInt(retryAfterHeader, 10) : undefined;
+    const errorData = (await response.json().catch(() => ({
+      error: 'Demasiadas solicitudes. Espera antes de reintentar.',
+      code: 'RATE_LIMITED',
+    }))) as ApiError;
+    throw new ApiRequestError(errorData, 429, retryAfterSeconds);
+  }
+
   if (!response.ok) {
     const errorData = (await response.json().catch(() => ({
       error: 'Error de servidor. Por favor, inténtalo de nuevo más tarde.',
@@ -125,12 +135,14 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 export class ApiRequestError extends Error {
   public readonly apiError: ApiError;
   public readonly statusCode: number;
+  public readonly retryAfterSeconds?: number;
 
-  constructor(apiError: ApiError, statusCode: number) {
+  constructor(apiError: ApiError, statusCode: number, retryAfterSeconds?: number) {
     super(apiError.error);
     this.name = 'ApiRequestError';
     this.apiError = apiError;
     this.statusCode = statusCode;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }
 

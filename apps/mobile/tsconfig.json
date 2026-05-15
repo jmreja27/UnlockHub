@@ -5,6 +5,7 @@
     "noImplicitAny": true,
     "strictNullChecks": true,
     "noImplicitOverride": true,
+    "module": "esnext",
     "paths": {
       "@/*": ["./*"]
     }

@@ -3,9 +3,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { useQuery } from '@tanstack/react-query';
 import { usePublicProfile } from '../../hooks/usePublicProfile';
 import { useFriends } from '../../hooks/useFriends';
+import { useSessionStore } from '../../stores/sessionStore';
+import { api } from '../../lib/api';
 import { SkeletonBox } from '../../components/SkeletonBox';
+
+interface CompareResult {
+  targetUser: { username: string; level: number; xp: number; avatar: string | null };
+  xpDiff: number;
+  sharedAchievementCount: number;
+  sharedGameCount: number;
+}
 
 function ProfileSkeleton() {
   return (
@@ -28,6 +38,14 @@ export default function PublicProfileScreen() {
 
   const { data: profile, isLoading, isError, refetch } = usePublicProfile(username ?? '');
   const { sendRequest, isSending } = useFriends();
+  const isAuthenticated = useSessionStore((s) => s.isAuthenticated);
+
+  const { data: compareData } = useQuery({
+    queryKey: ['compare', username],
+    queryFn: () => api.get<CompareResult>(`/api/v1/users/${username}/compare`),
+    enabled: !!username && isAuthenticated,
+    staleTime: 1000 * 60 * 5,
+  });
 
   function handleAddFriend() {
     if (profile) sendRequest(profile.id);
@@ -122,6 +140,57 @@ export default function PublicProfileScreen() {
                     <Text className="text-gray-400 text-sm">{pa.username}</Text>
                   </View>
                 ))}
+              </View>
+            )}
+
+            {/* Comparación de perfiles — solo para usuarios autenticados */}
+            {compareData && (
+              <View
+                className="mt-6 bg-surface-elevated rounded-2xl px-4 py-4"
+                accessible
+                accessibilityLabel={t('public_profile.compare_title')}
+              >
+                <Text className="text-gray-300 text-xs font-semibold uppercase tracking-wider mb-3">
+                  {t('public_profile.compare_title')}
+                </Text>
+                <View className="flex-row justify-around">
+                  <View className="items-center">
+                    <Text className="text-primary-light text-lg font-bold">
+                      {compareData.sharedAchievementCount}
+                    </Text>
+                    <Text className="text-gray-400 text-xs text-center mt-0.5">
+                      {t('public_profile.compare_shared_achievements')}
+                    </Text>
+                  </View>
+                  <View className="w-px bg-surface-card" />
+                  <View className="items-center">
+                    <Text className="text-primary-light text-lg font-bold">
+                      {compareData.sharedGameCount}
+                    </Text>
+                    <Text className="text-gray-400 text-xs text-center mt-0.5">
+                      {t('public_profile.compare_shared_games')}
+                    </Text>
+                  </View>
+                  <View className="w-px bg-surface-card" />
+                  <View className="items-center">
+                    <Text
+                      className={`text-lg font-bold ${
+                        compareData.xpDiff > 0
+                          ? 'text-green-400'
+                          : compareData.xpDiff < 0
+                          ? 'text-red-400'
+                          : 'text-gray-400'
+                      }`}
+                    >
+                      {compareData.xpDiff > 0
+                        ? `+${compareData.xpDiff.toLocaleString()}`
+                        : compareData.xpDiff.toLocaleString()}
+                    </Text>
+                    <Text className="text-gray-400 text-xs text-center mt-0.5">
+                      {t('public_profile.compare_xp_label')}
+                    </Text>
+                  </View>
+                </View>
               </View>
             )}
           </View>

@@ -1,5 +1,17 @@
 import { z } from 'zod';
 
+const MIN_AGE_YEARS = 16;
+
+function isOldEnough(birthDate: Date): boolean {
+  const today = new Date();
+  const cutoff = new Date(
+    today.getFullYear() - MIN_AGE_YEARS,
+    today.getMonth(),
+    today.getDate(),
+  );
+  return birthDate <= cutoff;
+}
+
 export const registerSchema = z.object({
   username: z
     .string()
@@ -15,6 +27,11 @@ export const registerSchema = z.object({
     .min(8, 'La contraseña debe tener al menos 8 caracteres')
     .regex(/[A-Z]/, 'La contraseña debe contener al menos una mayúscula')
     .regex(/[0-9]/, 'La contraseña debe contener al menos un número'),
+  birthDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'La fecha de nacimiento debe tener el formato YYYY-MM-DD')
+    .transform((s) => new Date(s))
+    .refine(isOldEnough, `Debes tener al menos ${MIN_AGE_YEARS} años para registrarte`),
 });
 
 export const loginSchema = z.object({

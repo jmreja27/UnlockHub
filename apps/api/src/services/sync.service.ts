@@ -24,15 +24,17 @@ export async function triggerManualSync(
   // Mientras premium esté desactivado todos usan el tier free
   const effectivePremium = FEATURES.premium && isPremium;
   const config = SYNC_COOLDOWNS[effectivePremium ? 'premium' : 'free'];
+  const cooldownSeconds = config.manualSyncCooldownMinutes * 60;
 
-  // Comprobar cooldown de Redis (más rápido que consultar la BD)
-  const ttl = await redis.ttl(cooldownKey(userId, platform));
-  if (ttl > 0) {
+  // Intentar adquirir el cooldown atómicamente con SET NX para evitar race conditions
+  const acquired = await redis.set(cooldownKey(userId, platform), '1', 'EX', cooldownSeconds, 'NX');
+  if (!acquired) {
+    const ttl = await redis.ttl(cooldownKey(userId, platform));
     throw new AppError(
-      `Sync en cooldown. Espera ${ttl} segundos.`,
+      `Sync en cooldown. Espera ${ttl > 0 ? ttl : cooldownSeconds} segundos.`,
       'SYNC_COOLDOWN',
       429,
-      { remainingSeconds: ttl },
+      { remainingSeconds: ttl > 0 ? ttl : cooldownSeconds },
     );
   }
 
@@ -46,6 +48,8 @@ export async function triggerManualSync(
     }
     if (newCount > config.dailyManualSyncLimit) {
       await redis.decr(countKey);
+      // Liberar el cooldown si el límite diario bloquea la petición
+      await redis.del(cooldownKey(userId, platform));
       throw new AppError(
         `Límite diario de ${config.dailyManualSyncLimit} syncs manuales alcanzado.`,
         'DAILY_SYNC_LIMIT_EXCEEDED',
@@ -58,16 +62,14 @@ export async function triggerManualSync(
     where: { userId_platform: { userId, platform } },
   });
   if (!account) {
+    // Liberar el cooldown si la cuenta no existe para no penalizar al usuario
+    await redis.del(cooldownKey(userId, platform));
     throw new AppError(
       `No tienes vinculada una cuenta de ${platform}.`,
       'PLATFORM_NOT_LINKED',
       404,
     );
   }
-
-  // Establecer cooldown antes de encolar para evitar doble disparo
-  const cooldownSeconds = config.manualSyncCooldownMinutes * 60;
-  await redis.set(cooldownKey(userId, platform), '1', 'EX', cooldownSeconds);
 
   const job = await syncQueue.add(
     `manual-sync:${userId}:${platform}`,
