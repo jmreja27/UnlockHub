@@ -21,7 +21,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "http://10.0.2.2:3000"
+        "EXPO_PUBLIC_API_URL": "https://unlockhub-production.up.railway.app"
       }
     },
     "staging": {
@@ -30,7 +30,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://unlockhub-api-staging.fly.dev"
+        "EXPO_PUBLIC_API_URL": "https://PENDIENTE-URL-RAILWAY-STAGING.up.railway.app"
       }
     },
     "production": {
@@ -38,7 +38,7 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://unlockhub-api.fly.dev"
+        "EXPO_PUBLIC_API_URL": "https://unlockhub-production.up.railway.app"
       }
     }
   },
