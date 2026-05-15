@@ -1,12 +1,14 @@
 // Pantalla de perfil de usuario: avatar, stats, plataformas y logout
 import { useState, useCallback } from 'react';
-import { View, Text, Pressable, ScrollView, RefreshControl, Alert } from 'react-native';
+import { View, Text, Pressable, ScrollView, RefreshControl, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import type { PlatformAccount } from '@unlockhub/types';
 
 import { useSessionStore } from '../../stores/sessionStore';
 import { useAuth } from '../../hooks/useAuth';
@@ -17,7 +19,6 @@ import { ActivityCard } from '../../components/ActivityCard';
 import { FEATURES } from '../../lib/featureFlags';
 import { api } from '../../lib/api';
 import { useFeed } from '../../hooks/useFeed';
-import type { PlatformAccount } from '@unlockhub/types';
 
 interface UserStats {
   xpByWeek: { week: string; xp: number }[];
@@ -123,6 +124,51 @@ export default function ProfileScreen() {
       void queryClient.invalidateQueries({ queryKey: ['linkedPlatforms'] });
     },
   });
+
+  const avatarMutation = useMutation({
+    mutationFn: async (uri: string) => {
+      const form = new FormData();
+      const filename = uri.split('/').pop() ?? 'avatar.jpg';
+      const ext = filename.split('.').pop()?.toLowerCase() ?? 'jpg';
+      const mimeMap: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
+      const type = mimeMap[ext] ?? 'image/jpeg';
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      form.append('avatar', { uri, name: filename, type } as any);
+      return api.post<{ avatar: string }>('/api/v1/users/me/avatar', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    },
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: ['profile'] });
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const current = useSessionStore.getState().user;
+      if (current) {
+        useSessionStore.getState().setUser({ ...current, avatar: data.avatar });
+      }
+    },
+    onError: () => {
+      Alert.alert(t('profile.avatar_error_title'), t('profile.avatar_error_message'));
+    },
+  });
+
+  async function handleAvatarPress() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(t('profile.avatar_permission_title'), t('profile.avatar_permission_message'));
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      avatarMutation.mutate(result.assets[0].uri);
+    }
+  }
 
   function handleUnlink(platform: string, label: string) {
     const platformKey = platform.toLowerCase();
@@ -267,14 +313,30 @@ export default function ProfileScreen() {
             xp: user.xp.toLocaleString(),
           })}
         >
-          <Image
-            source={user.avatar ?? undefined}
-            placeholder={AVATAR_BLURHASH}
+          <Pressable
+            onPress={() => { void handleAvatarPress(); }}
+            accessibilityRole="button"
+            accessibilityLabel={t('profile.change_avatar')}
             style={{ width: 96, height: 96, borderRadius: 48, marginBottom: 12 }}
-            contentFit="cover"
-            transition={300}
-            accessibilityElementsHidden
-          />
+          >
+            <Image
+              source={user.avatar ?? undefined}
+              placeholder={AVATAR_BLURHASH}
+              style={{ width: 96, height: 96, borderRadius: 48 }}
+              contentFit="cover"
+              transition={300}
+              accessibilityElementsHidden
+            />
+            {avatarMutation.isPending && (
+              <View
+                style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 48, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}
+                accessibilityLiveRegion="polite"
+                accessibilityLabel={t('common.loading')}
+              >
+                <ActivityIndicator color="#818cf8" />
+              </View>
+            )}
+          </Pressable>
 
           <Text className="text-white text-2xl font-bold mb-1">{user.username}</Text>
 

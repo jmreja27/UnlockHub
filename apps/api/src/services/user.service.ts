@@ -1,7 +1,10 @@
+import type { User, PlatformAccount, PointReason, Platform } from '@unlockhub/types';
+
 import { AppError } from '../middleware/errorHandler';
 import { prisma } from '../lib/prisma';
+import { cloudinary } from '../lib/cloudinary';
+
 import { upsertUserScore, removeUserFromRankings } from './ranking.service';
-import type { User, PlatformAccount, PointReason, Platform } from '@unlockhub/types';
 
 // XP necesario por nivel — cada 1000 XP sube un nivel, máximo nivel 100
 const XP_PER_LEVEL = 1000;
@@ -388,4 +391,23 @@ export async function deleteAccount(userId: string): Promise<void> {
   await prisma.$transaction([
     prisma.user.delete({ where: { id: userId } }),
   ]);
+}
+
+// Sube un avatar a Cloudinary y actualiza el campo avatar del usuario
+export async function uploadAvatar(userId: string, fileBuffer: Buffer, mimetype: string): Promise<User> {
+  const dataUri = `data:${mimetype};base64,${fileBuffer.toString('base64')}`;
+
+  const result = await cloudinary.uploader.upload(dataUri, {
+    folder: 'unlockhub/avatars',
+    public_id: `user_${userId}`,
+    overwrite: true,
+    transformation: [{ width: 256, height: 256, crop: 'fill', gravity: 'face' }],
+  });
+
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data: { avatar: result.secure_url },
+  });
+
+  return mapUser(updated);
 }

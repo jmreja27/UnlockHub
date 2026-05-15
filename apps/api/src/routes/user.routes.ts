@@ -10,14 +10,17 @@ import {
   getMyGameAchievementsHandler,
   compareProfilesHandler,
   deleteAccountHandler,
+  uploadAvatarHandler,
 } from '../controllers/user.controller';
 import { getMyStatsHandler } from '../controllers/stats.controller';
+import { uploadAvatar } from '../middleware/upload.middleware';
 
 const router = Router();
 
 // Rutas privadas — requieren autenticación
 router.get('/me', authenticate, getMeHandler);
 router.patch('/me', authenticate, updateMeHandler);
+router.post('/me/avatar', authenticate, uploadAvatar, uploadAvatarHandler);
 router.get('/me/games', authenticate, getMyGamesHandler);
 router.get('/me/games/:gameId/achievements', authenticate, getMyGameAchievementsHandler);
 router.get('/me/streak-milestone', authenticate, getStreakMilestoneHandler);

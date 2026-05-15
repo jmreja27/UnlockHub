@@ -1,9 +1,9 @@
 import type { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
+import { updateProfileSchema } from '@unlockhub/validators';
 
 import * as userService from '../services/user.service';
 import type { AuthenticatedRequest } from '../middleware/authenticate';
-import { updateProfileSchema } from '@unlockhub/validators';
 import { redis } from '../lib/redis';
 
 // GET /api/v1/users/me — perfil del usuario autenticado
@@ -138,6 +138,27 @@ export async function getPublicProfileHandler(
     const { username } = req.params as { username: string };
     const profile = await userService.getPublicProfile(username);
     res.json(profile);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// POST /api/v1/users/me/avatar — subir avatar del usuario autenticado
+export async function uploadAvatarHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const userId = (req as AuthenticatedRequest).user.id;
+
+    if (!req.file) {
+      res.status(400).json({ error: 'No se proporcionó ningún archivo', code: 'NO_FILE' });
+      return;
+    }
+
+    const updated = await userService.uploadAvatar(userId, req.file.buffer, req.file.mimetype);
+    res.json(updated);
   } catch (err) {
     next(err);
   }

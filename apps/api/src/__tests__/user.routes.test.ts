@@ -2,6 +2,7 @@
 // Mockea los servicios para aislar la capa de controlador+rutas
 
 jest.mock('../services/user.service');
+jest.mock('../lib/cloudinary', () => ({ cloudinary: { uploader: { upload: jest.fn() } } }));
 jest.mock('../lib/redis', () => ({ redis: { on: jest.fn() } }));
 jest.mock('../middleware/rateLimiter', () => ({
   globalRateLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),
@@ -9,6 +10,7 @@ jest.mock('../middleware/rateLimiter', () => ({
 }));
 
 import request from 'supertest';
+
 import * as userService from '../services/user.service';
 import app from '../app';
 import { signAccessToken } from '../lib/jwt';
@@ -223,5 +225,62 @@ describe('GET /api/v1/users/:username', () => {
 
     expect(res.status).toBe(404);
     expect(res.body.code).toBe('USER_NOT_FOUND');
+  });
+});
+
+// ─── POST /me/avatar ──────────────────────────────────────────────────────────
+
+describe('POST /api/v1/users/me/avatar', () => {
+  const updatedProfile = { ...baseProfile, avatar: 'https://res.cloudinary.com/x/image/upload/avatar.jpg' };
+
+  it('401 sin token de acceso', async () => {
+    const res = await request(app)
+      .post('/api/v1/users/me/avatar')
+      .attach('avatar', Buffer.from('fake-image'), { filename: 'avatar.jpg', contentType: 'image/jpeg' });
+
+    expect(res.status).toBe(401);
+  });
+
+  it('400 cuando no se adjunta ningún archivo', async () => {
+    const res = await request(app)
+      .post('/api/v1/users/me/avatar')
+      .set('Authorization', `Bearer ${validToken}`);
+
+    expect(res.status).toBe(400);
+  });
+
+  it('400 cuando el tipo de archivo no está permitido', async () => {
+    const res = await request(app)
+      .post('/api/v1/users/me/avatar')
+      .set('Authorization', `Bearer ${validToken}`)
+      .attach('avatar', Buffer.from('fake-gif'), { filename: 'avatar.gif', contentType: 'image/gif' });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('200 con avatar URL cuando la subida es exitosa', async () => {
+    mockUserService.uploadAvatar.mockResolvedValue(updatedProfile);
+
+    const res = await request(app)
+      .post('/api/v1/users/me/avatar')
+      .set('Authorization', `Bearer ${validToken}`)
+      .attach('avatar', Buffer.from('fake-png'), { filename: 'avatar.png', contentType: 'image/png' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.avatar).toBe(updatedProfile.avatar);
+  });
+
+  it('propaga errores del servicio', async () => {
+    mockUserService.uploadAvatar.mockRejectedValue(
+      new AppError('Error al subir imagen', 'UPLOAD_ERROR', 500),
+    );
+
+    const res = await request(app)
+      .post('/api/v1/users/me/avatar')
+      .set('Authorization', `Bearer ${validToken}`)
+      .attach('avatar', Buffer.from('fake-png'), { filename: 'avatar.png', contentType: 'image/png' });
+
+    expect(res.status).toBe(500);
+    expect(res.body.code).toBe('UPLOAD_ERROR');
   });
 });
