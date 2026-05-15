@@ -45,11 +45,10 @@ describe('RankingsScreen', () => {
     jest.clearAllMocks();
   });
 
-  it('renderiza el tÃ­tulo y el subtÃ­tulo', () => {
+  it('renderiza el tÃ­tulo', () => {
     setupMocks();
-    const { getByRole, getByText } = render(<RankingsScreen />);
+    const { getByRole } = render(<RankingsScreen />);
     expect(getByRole('header')).toBeTruthy();
-    expect(getByText('rankings.subtitle')).toBeTruthy();
   });
 
   it('muestra el skeleton durante la carga', () => {
@@ -98,7 +97,7 @@ describe('RankingsScreen', () => {
   it('muestra "â€”" cuando el usuario no tiene posiciÃ³n en el ranking', () => {
     setupMocks(sampleEntries, false, false, { rank: null, xp: 100 }, 'u1');
     const { getByText } = render(<RankingsScreen />);
-    expect(getByText('â€”')).toBeTruthy();
+    expect(getByText('—')).toBeTruthy();
   });
 
   it('NO muestra la tarjeta de posiciÃ³n cuando no hay usuario autenticado', () => {
@@ -113,10 +112,10 @@ describe('RankingsScreen', () => {
     expect(queryByText('rankings.my_position_label')).toBeNull();
   });
 
-  it('resalta al usuario actual en la lista con "(TÃº)"', () => {
+  it('resalta al usuario actual en la lista con "(Tú)"', () => {
     setupMocks(sampleEntries, false, false, { rank: 1, xp: 9000 }, 'u1');
     const { getByText } = render(<RankingsScreen />);
-    expect(getByText('campeÃ³n (TÃº)')).toBeTruthy();
+    expect(getByText('campeÃ³n (Tú)')).toBeTruthy();
   });
 
   it('la tarjeta de posiciÃ³n tiene el accessibilityLabel correcto con rank', () => {

@@ -10,6 +10,18 @@ import { useAuth } from '../../hooks/useAuth';
 
 jest.mock('../../stores/sessionStore');
 jest.mock('../../hooks/useAuth');
+jest.mock('../../hooks/useFeed', () => ({
+  useFeed: () => ({ events: [], isLoading: false, isError: false, refetch: jest.fn() }),
+}));
+jest.mock('expo-image-picker', () => ({
+  requestMediaLibraryPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
+  launchImageLibraryAsync: jest.fn().mockResolvedValue({ canceled: true }),
+  MediaTypeOptions: { Images: 'Images' },
+}));
+// Activamos FEATURES.premium para testear el badge — en producción está desactivado (F8 pendiente Play Billing)
+jest.mock('../../lib/featureFlags', () => ({
+  FEATURES: { premium: true, wrapped: true, pointsRedeem: true, advancedStats: true, ugcGuides: true, notifications: true },
+}));
 // Mockeamos PremiumBanner y AdBanner para aislar la pantalla de sus dependencias
 jest.mock('../../components/PremiumBanner', () => ({ PremiumBanner: () => null }));
 jest.mock('../../lib/api');

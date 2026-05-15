@@ -1,6 +1,6 @@
 import React from 'react';
 import { Text } from 'react-native';
-import { render } from '@testing-library/react-native';
+import { render, within } from '@testing-library/react-native';
 import type { WeeklyChallenge, UserChallenge } from '@unlockhub/types';
 
 import ChallengesScreen from '../../app/(tabs)/challenges';
@@ -49,7 +49,8 @@ describe('ChallengesScreen', () => {
   it('renderiza el título de la pantalla', () => {
     setupMock();
     const { getByRole } = render(<ChallengesScreen />);
-    expect(getByRole('header')).toBeTruthy();
+    // Usamos name para distinguir del header que EmptyState también renderiza
+    expect(getByRole('header', { name: 'challenges.title' })).toBeTruthy();
   });
 
   it('no muestra el alert ni el reto durante la carga (skeleton)', () => {
@@ -70,7 +71,8 @@ describe('ChallengesScreen', () => {
   it('muestra el mensaje "sin reto activo" cuando no hay reto', () => {
     setupMock();
     const { getByText } = render(<ChallengesScreen />);
-    expect(getByText('challenges.no_challenge')).toBeTruthy();
+    // Componente renderiza EmptyState con clave challenges.empty_body
+    expect(getByText('challenges.empty_body')).toBeTruthy();
   });
 
   it('renderiza el título y descripción del reto activo', () => {
