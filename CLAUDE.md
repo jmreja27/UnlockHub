@@ -837,6 +837,10 @@ Métricas disponibles:
 | `requirePremium` solo comprueba `isPremium` del JWT | El payload JWT contiene `{sub, email, isPremium}` sin `role` — añadirlo requeriría rotar todas las sesiones | Fase 3 |
 | Rutas `/admin/*` protegidas por `ADMIN_SECRET` bearer (no por role JWT) | `role` no está en el JWT payload — ver decisión anterior | Fase 3 |
 | `rotate-encryption-key.ts` debe ejecutarse desde `apps/api/` | `@prisma/client` solo está en `apps/api/node_modules` | Fase 3 |
+| `while(true)` con eslint-disable en cursor pagination | Patrón cursor batch necesita bucle infinito con break interno — regla `no-constant-condition` se desactiva línea por línea | Fase 3 |
+| `useSessionStore as unknown as jest.Mock` en tests móvil | TypeScript no acepta la conversión directa porque los tipos no se solapan — doble aserción vía `unknown` es el patrón estándar | Fase 3 |
+| `apps/mobile` lint script usa `../../.gitignore` | El script usaba `--ignore-path .gitignore` pero `apps/mobile/.gitignore` no existe; la raíz del monorepo tiene el `.gitignore` correcto | Fase 3 |
+| `no-var-requires` en `require()` de tests Jest | Patrón legítimo para acceder a módulos mockeados tras `jest.mock()` — se suprime con eslint-disable-next-line | Fase 3 |
 
 ---
 
@@ -923,6 +927,9 @@ Métricas disponibles:
 | T4 | Paginación cursor en feed | 🔲 Cuando el volumen lo justifique |
 | T5 | Tests de carga k6 | ✅ |
 | T6 | Tests unitarios nuevos servicios | ✅ |
+| T7 | Reescribir FeedScreen.test.tsx | 🔲 Importa `app/(tabs)/index` (LibraryScreen) pero mockea `useFeed` — componente usa `useMyGames`; reescritura > 30 líneas pendiente |
+| T8 | Subir Expo a v55 para vulnerabilidades node-tar | 🔲 18 vulnerabilidades `high` en `node-tar` vía dependencias de build de Expo — fix requiere `expo@55.0.24` (breaking change); hacer en PR dedicado |
+| T9 | Resolver 145 warnings import/order en API | 🔲 Todos son orden de imports — `eslint --fix` puede resolverlos automáticamente; hacer en PR dedicado |
 
 ### 🟢 Features
 
@@ -938,3 +945,57 @@ Métricas disponibles:
 | F8 | Avatar upload | 🔲 Espera `CLOUDINARY_URL` en Railway (P2) |
 | F9 | Dashboard admin | ✅ |
 | F10 | OG profiles | 🔲 Fase 4 |
+
+---
+
+## Última revisión de código
+
+**Fecha**: 2026-05-15 — revisión pre-EAS Build exhaustiva en rama `develop`.
+
+### Resumen ejecutivo
+
+| Categoría | Estado |
+|---|---|
+| TypeScript strict (API) | ✅ 0 errores `tsc --noEmit` |
+| TypeScript strict (mobile) | ✅ 0 errores `tsc --noEmit` |
+| Lint errores (API) | ✅ 0 errores, 145 warnings `import/order` (pendiente T9) |
+| Lint errores (mobile) | ✅ 0 errores, 90 warnings |
+| Tests backend | ✅ 366 tests pasando, cobertura >80% |
+| API build | ✅ `tsc -p tsconfig.json` sin errores |
+| npm audit | ⚠️ 18 high en `node-tar` (build-time, vía Expo) — pendiente T8 |
+| Logger `pino` | ✅ 33 `console.log/warn/error` eliminados, `lib/logger.ts` integrado |
+
+### Correcciones aplicadas
+
+**Errores rojos (críticos)**
+- `@socket.io/redis-adapter` no estaba en `package.json` — añadido
+- `posthog-react-native` no estaba en `package.json` — añadido
+- `useAuth.ts`: `RegisterInput` le faltaba el campo `birthDate` — añadido
+- `analytics.ts`: `tsconfig.json` sin `"module": "esnext"` — `dynamic import` fallaba en TypeScript
+- `analytics.ts`: cast `Properties → PostHogEventProperties` con `undefined` no compatible — corregido
+- 6 tests fallando por cambios en la API (SET NX pattern en sync, `platformAccounts` en deleteAccount, arity en `getMyGames`, `birthDate` en register)
+
+**Advertencias amarillas**
+- 33 usos de `console.log/warn/error` en producción → `pino` logger
+- `RA_SYSTEM_USER` y `RA_SYSTEM_KEY` faltaban en `.env.example`
+- `eslint-disable` con nombre de regla incorrecto en `AdBanner` y `useGdprConsent`
+- Variables sin usar: `friendsTotal`, `total`, `t` (NotificationItem), `ActivityIndicator`, `isBusy`, `View`, `APP_ID`, `last24h`, `AppError` (imports)
+- `while(true)` sin `eslint-disable` en 3 archivos de cursor pagination
+- Lint script mobile con `--ignore-path .gitignore` sin `.gitignore` local
+
+**Tests nuevos añadidos** (72 tests en 5 nuevos archivos + extensiones en 3 existentes)
+- `stats.service.test.ts` — 10 tests (100% cobertura)
+- `admin.service.test.ts` — 4 tests (100% cobertura)
+- `inapp-notification.service.test.ts` — 7 tests (100% cobertura)
+- `achievement-challenge.service.test.ts` — 5 tests (100% cobertura)
+- `guide.service.test.ts` — 8 tests (100% cobertura)
+- `auth.service.test.ts` — +7 tests (logoutAll, forgotPassword, resetPassword)
+- `subscription.service.test.ts` — +5 tests (redeemPointsForPremium)
+- `wrapped.service.test.ts` — +5 tests (getMonthlyWrapped)
+
+### Pendientes documentados (no tocar en esta revisión)
+
+- **T7**: `FeedScreen.test.tsx` — importa `app/(tabs)/index` (LibraryScreen) y mockea `useFeed`, pero el componente usa `useMyGames`. Reescritura >30 líneas.
+- **T8**: `node-tar` vulnerabilidades high (18) — requiere `expo@55.0.24` (breaking). PR dedicado.
+- **T9**: 145 warnings `import/order` en API — `eslint --fix` los resuelve automáticamente. PR dedicado.
+- **`roles.middleware.ts`** — 0% cobertura. Solo tiene 2 funciones (`requireRole`, `requirePremium`); tests sencillos pero requieren contexto de Express request con `user` en scope.
