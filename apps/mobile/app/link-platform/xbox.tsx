@@ -17,9 +17,9 @@ import {
   makeRedirectUri,
   ResponseType,
 } from 'expo-auth-session';
+import type { PlatformAccount } from '@unlockhub/types';
 
 import { api, ApiRequestError } from '../../lib/api';
-import type { PlatformAccount } from '@unlockhub/types';
 
 // Requerido para completar el flujo OAuth2 en mobile correctamente
 WebBrowser.maybeCompleteAuthSession();
@@ -96,6 +96,7 @@ export default function LinkXboxScreen() {
       setLinkError(null);
       linkMutation.mutate({ code, codeVerifier, redirectUri });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [response]);
 
   function handleConnect() {

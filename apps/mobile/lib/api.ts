@@ -6,13 +6,13 @@ const REFRESH_TOKEN_KEY = 'unlockhub_refresh_token';
 
 // Acceso lazy al store para evitar circular imports
 function getAccessToken(): string | null {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/consistent-type-imports
   const { useSessionStore } = require('../stores/sessionStore') as typeof import('../stores/sessionStore');
   return useSessionStore.getState().accessToken;
 }
 
 function setAccessToken(token: string): void {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/consistent-type-imports
   const { useSessionStore } = require('../stores/sessionStore') as typeof import('../stores/sessionStore');
   useSessionStore.getState().setAccessToken(token);
 }

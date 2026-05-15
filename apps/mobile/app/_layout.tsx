@@ -5,9 +5,11 @@ import * as SplashScreen from 'expo-splash-screen';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as Sentry from '@sentry/react-native';
 import { useColorScheme } from 'nativewind';
+import type { User } from '@unlockhub/types';
 
 import '../global.css';
 import '../i18n';
+
 import { api, getRefreshToken, saveRefreshToken, deleteRefreshToken } from '../lib/api';
 import { useSessionStore } from '../stores/sessionStore';
 import { usePreferencesStore } from '../stores/preferencesStore';
@@ -17,7 +19,6 @@ import { useMaintenanceCheck } from '../hooks/useMaintenanceCheck';
 import { MaintenanceScreen } from '../components/MaintenanceScreen';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { ErrorBoundary } from '../components/ErrorBoundary';
-import type { User } from '@unlockhub/types';
 
 // Inicializa Sentry — no-op si EXPO_PUBLIC_SENTRY_DSN no está definido
 Sentry.init({

@@ -18,6 +18,7 @@ jest.mock('react-i18next', () => ({
 
 // expo-router
 jest.mock('expo-router', () => {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   const ReactNative = jest.requireActual<typeof import('react-native')>('react-native');
   return {
     router: { push: jest.fn(), replace: jest.fn(), back: jest.fn(), navigate: jest.fn() },
@@ -40,6 +41,7 @@ jest.mock('expo-haptics', () => ({
 
 // expo-image → Image nativa de RN
 jest.mock('expo-image', () => {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   const ReactNative = jest.requireActual<typeof import('react-native')>('react-native');
   return { Image: ReactNative.Image };
 });
@@ -65,6 +67,7 @@ jest.mock('expo-splash-screen', () => ({
 
 // react-native-safe-area-context
 jest.mock('react-native-safe-area-context', () => {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   const ReactNative = jest.requireActual<typeof import('react-native')>('react-native');
   return {
     SafeAreaView: ReactNative.View,
@@ -76,6 +79,7 @@ jest.mock('react-native-safe-area-context', () => {
 
 // @shopify/flash-list → FlatList de RN (suficiente para tests)
 jest.mock('@shopify/flash-list', () => {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   const ReactNative = jest.requireActual<typeof import('react-native')>('react-native');
   return { FlashList: ReactNative.FlatList };
 });

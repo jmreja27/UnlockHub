@@ -13,7 +13,9 @@ jest.mock('../../hooks/useSyncAll');
 jest.mock('../../stores/sessionStore');
 jest.mock('../../components/AdBanner', () => ({ AdBanner: () => null }));
 jest.mock('../../components/LibraryGameCard', () => ({
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   LibraryGameCard: ({ game }: { game: LibraryGame }) => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { Text } = require('react-native');
     return <Text accessibilityRole="button">{game.title}</Text>;
   },
@@ -22,7 +24,9 @@ jest.mock('../../components/SkeletonBox', () => ({
   SkeletonBox: () => null,
 }));
 jest.mock('../../components/EmptyState', () => ({
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   EmptyState: ({ title }: { title: string }) => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { Text } = require('react-native');
     return <Text>{title}</Text>;
   },

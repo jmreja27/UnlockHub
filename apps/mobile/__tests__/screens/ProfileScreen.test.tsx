@@ -2,11 +2,11 @@
 import { Alert } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { User, PlatformAccount } from '@unlockhub/types';
 
 import ProfileScreen from '../../app/(tabs)/profile';
 import { useSessionStore } from '../../stores/sessionStore';
 import { useAuth } from '../../hooks/useAuth';
-import type { User, PlatformAccount } from '@unlockhub/types';
 
 jest.mock('../../stores/sessionStore');
 jest.mock('../../hooks/useAuth');
@@ -86,7 +86,7 @@ describe('ProfileScreen', () => {
     });
 
     it('navega a la pantalla de login al pulsar el botÃ³n', () => {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/consistent-type-imports
       const { router } = require('expo-router') as typeof import('expo-router');
       const { getByRole } = renderProfile();
       fireEvent.press(getByRole('button', { name: 'profile.login' }));

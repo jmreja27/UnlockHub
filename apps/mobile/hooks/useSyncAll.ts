@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api } from '../lib/api';
 import type { PlatformAccount } from '@unlockhub/types';
+
+import { api } from '../lib/api';
 
 const COOLDOWN_MS = 30 * 60 * 1000;
 
