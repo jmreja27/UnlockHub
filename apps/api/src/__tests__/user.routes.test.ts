@@ -130,7 +130,7 @@ describe('GET /api/v1/users/me/games', () => {
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(1);
     expect(res.body.total).toBe(1);
-    expect(mockUserService.getMyGames).toHaveBeenCalledWith('user-1', undefined);
+    expect(mockUserService.getMyGames).toHaveBeenCalledWith('user-1', undefined, 1, 20);
   });
 
   it('pasa el filtro de plataforma al servicio cuando se especifica', async () => {
@@ -141,7 +141,7 @@ describe('GET /api/v1/users/me/games', () => {
       .set('Authorization', `Bearer ${validToken}`);
 
     expect(res.status).toBe(200);
-    expect(mockUserService.getMyGames).toHaveBeenCalledWith('user-1', 'STEAM');
+    expect(mockUserService.getMyGames).toHaveBeenCalledWith('user-1', 'STEAM', 1, 20);
   });
 
   it('400 VALIDATION_ERROR con plataforma inválida', async () => {

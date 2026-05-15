@@ -25,6 +25,7 @@ jest.mock('../lib/prisma', () => ({
 // Mock del ranking service para evitar llamadas a Redis
 jest.mock('../services/ranking.service', () => ({
   upsertUserScore: jest.fn().mockResolvedValue(undefined),
+  removeUserFromRankings: jest.fn().mockResolvedValue(undefined),
 }));
 
 import { prisma } from '../lib/prisma';
@@ -355,11 +356,199 @@ describe('userService.getMyGames', () => {
   });
 });
 
+// ─── getMyGameAchievements ────────────────────────────────────────────────────
+
+describe('userService.getMyGameAchievements', () => {
+  it('devuelve lista vacía cuando el usuario no tiene logros para ese juego', async () => {
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([]);
+
+    const result = await userService.getMyGameAchievements('user-1', 'game-1');
+
+    expect(result).toHaveLength(0);
+  });
+
+  it('devuelve los achievementIds con unlockedAt serializado como ISO string', async () => {
+    const unlockedAt = new Date('2024-03-15T10:00:00.000Z');
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
+      { achievementId: 'ach-1', unlockedAt },
+      { achievementId: 'ach-2', unlockedAt },
+    ]);
+
+    const result = await userService.getMyGameAchievements('user-1', 'game-1');
+
+    expect(result).toHaveLength(2);
+    expect(result[0]?.achievementId).toBe('ach-1');
+    expect(result[0]?.unlockedAt).toBe(unlockedAt.toISOString());
+  });
+
+  it('filtra por userId y gameId en la cláusula where', async () => {
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([]);
+
+    await userService.getMyGameAchievements('user-42', 'game-99');
+
+    expect(mockPrisma.userAchievement.findMany).toHaveBeenCalledWith({
+      where: { userId: 'user-42', achievement: { gameId: 'game-99' } },
+      select: { achievementId: true, unlockedAt: true },
+    });
+  });
+
+  it('preserva el orden de los logros tal como los devuelve la BD', async () => {
+    const dates = [
+      new Date('2024-01-01T00:00:00.000Z'),
+      new Date('2024-06-15T00:00:00.000Z'),
+    ];
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
+      { achievementId: 'ach-first', unlockedAt: dates[0] },
+      { achievementId: 'ach-second', unlockedAt: dates[1] },
+    ]);
+
+    const result = await userService.getMyGameAchievements('user-1', 'game-1');
+
+    expect(result[0]?.achievementId).toBe('ach-first');
+    expect(result[1]?.achievementId).toBe('ach-second');
+  });
+});
+
+// ─── compareProfiles ──────────────────────────────────────────────────────────
+
+describe('userService.compareProfiles', () => {
+  const myUserXp = { xp: 1500 };
+  const targetUser = {
+    id: 'target-1',
+    username: 'targetuser',
+    level: 5,
+    xp: 1000,
+    avatar: null,
+  };
+
+  it('devuelve xpDiff positivo cuando mi XP es mayor que el del objetivo', async () => {
+    (mockPrisma.user.findUnique as jest.Mock)
+      .mockResolvedValueOnce(targetUser)
+      .mockResolvedValueOnce(myUserXp);
+    (mockPrisma.userAchievement.findMany as jest.Mock)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    const result = await userService.compareProfiles('user-1', 'targetuser');
+
+    expect(result.xpDiff).toBe(500); // 1500 - 1000
+  });
+
+  it('devuelve xpDiff negativo cuando mi XP es menor que el del objetivo', async () => {
+    (mockPrisma.user.findUnique as jest.Mock)
+      .mockResolvedValueOnce({ ...targetUser, xp: 2000 })
+      .mockResolvedValueOnce({ xp: 800 });
+    (mockPrisma.userAchievement.findMany as jest.Mock)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    const result = await userService.compareProfiles('user-1', 'targetuser');
+
+    expect(result.xpDiff).toBe(-1200); // 800 - 2000
+  });
+
+  it('cuenta correctamente los logros compartidos', async () => {
+    (mockPrisma.user.findUnique as jest.Mock)
+      .mockResolvedValueOnce(targetUser)
+      .mockResolvedValueOnce(myUserXp);
+    (mockPrisma.userAchievement.findMany as jest.Mock)
+      .mockResolvedValueOnce([
+        { achievementId: 'ach-1', achievement: { gameId: 'g1' } },
+        { achievementId: 'ach-2', achievement: { gameId: 'g1' } },
+        { achievementId: 'ach-3', achievement: { gameId: 'g2' } },
+      ])
+      .mockResolvedValueOnce([
+        { achievementId: 'ach-1', achievement: { gameId: 'g1' } }, // compartido
+        { achievementId: 'ach-4', achievement: { gameId: 'g3' } }, // exclusivo del objetivo
+      ]);
+
+    const result = await userService.compareProfiles('user-1', 'targetuser');
+
+    expect(result.sharedAchievementCount).toBe(1);
+  });
+
+  it('cuenta correctamente los juegos compartidos', async () => {
+    (mockPrisma.user.findUnique as jest.Mock)
+      .mockResolvedValueOnce(targetUser)
+      .mockResolvedValueOnce(myUserXp);
+    (mockPrisma.userAchievement.findMany as jest.Mock)
+      .mockResolvedValueOnce([
+        { achievementId: 'ach-1', achievement: { gameId: 'g1' } },
+        { achievementId: 'ach-2', achievement: { gameId: 'g2' } },
+      ])
+      .mockResolvedValueOnce([
+        { achievementId: 'ach-3', achievement: { gameId: 'g1' } }, // juego compartido
+        { achievementId: 'ach-4', achievement: { gameId: 'g3' } }, // juego exclusivo
+      ]);
+
+    const result = await userService.compareProfiles('user-1', 'targetuser');
+
+    expect(result.sharedGameCount).toBe(1);
+  });
+
+  it('incluye los datos del usuario objetivo en el resultado', async () => {
+    (mockPrisma.user.findUnique as jest.Mock)
+      .mockResolvedValueOnce(targetUser)
+      .mockResolvedValueOnce(myUserXp);
+    (mockPrisma.userAchievement.findMany as jest.Mock)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    const result = await userService.compareProfiles('user-1', 'targetuser');
+
+    expect(result.targetUser.username).toBe('targetuser');
+    expect(result.targetUser.level).toBe(5);
+    expect(result.targetUser.xp).toBe(1000);
+    expect(result.targetUser.avatar).toBeNull();
+  });
+
+  it('devuelve 0 logros y juegos compartidos cuando no hay intersección', async () => {
+    (mockPrisma.user.findUnique as jest.Mock)
+      .mockResolvedValueOnce(targetUser)
+      .mockResolvedValueOnce(myUserXp);
+    (mockPrisma.userAchievement.findMany as jest.Mock)
+      .mockResolvedValueOnce([
+        { achievementId: 'ach-1', achievement: { gameId: 'g1' } },
+      ])
+      .mockResolvedValueOnce([
+        { achievementId: 'ach-2', achievement: { gameId: 'g2' } },
+      ]);
+
+    const result = await userService.compareProfiles('user-1', 'targetuser');
+
+    expect(result.sharedAchievementCount).toBe(0);
+    expect(result.sharedGameCount).toBe(0);
+  });
+
+  it('lanza USER_NOT_FOUND cuando el usuario objetivo no existe', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValueOnce(null);
+
+    await expect(
+      userService.compareProfiles('user-1', 'noexiste'),
+    ).rejects.toMatchObject({ code: 'USER_NOT_FOUND', statusCode: 404 });
+  });
+
+  it('lanza USER_NOT_FOUND cuando el usuario autenticado no existe', async () => {
+    (mockPrisma.user.findUnique as jest.Mock)
+      .mockResolvedValueOnce(targetUser)
+      .mockResolvedValueOnce(null);
+    (mockPrisma.userAchievement.findMany as jest.Mock)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    await expect(
+      userService.compareProfiles('noexiste', 'targetuser'),
+    ).rejects.toMatchObject({ code: 'USER_NOT_FOUND', statusCode: 404 });
+  });
+});
+
 // ─── deleteAccount ────────────────────────────────────────────────────────────
+
+const baseUserWithPlatforms = { ...baseUser, platformAccounts: [{ platform: 'STEAM' as const }] };
 
 describe('userService.deleteAccount', () => {
   it('elimina el usuario cuando existe', async () => {
-    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(baseUser);
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(baseUserWithPlatforms);
     (mockPrisma.$transaction as jest.Mock).mockResolvedValue([]);
 
     await userService.deleteAccount('user-1');
@@ -379,7 +568,7 @@ describe('userService.deleteAccount', () => {
   });
 
   it('la transacción incluye prisma.user.delete con el userId correcto', async () => {
-    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(baseUser);
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(baseUserWithPlatforms);
     (mockPrisma.$transaction as jest.Mock).mockResolvedValue([]);
 
     await userService.deleteAccount('user-1');

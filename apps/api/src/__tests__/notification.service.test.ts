@@ -8,6 +8,15 @@ jest.mock('../lib/prisma', () => ({
   },
 }));
 
+const mockLoggerWarn = jest.fn();
+jest.mock('../lib/logger', () => ({
+  logger: {
+    warn: mockLoggerWarn,
+    error: jest.fn(),
+    info: jest.fn(),
+  },
+}));
+
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
@@ -74,10 +83,8 @@ describe('sendPush', () => {
   it('loguea warning si hay tickets con error (no lanza)', async () => {
     mockFindMany.mockResolvedValue([{ token: 'ExponentPushToken[a]' }]);
     mockFetch.mockResolvedValue(okFetchResponse([{ status: 'error', message: 'invalid' }]));
-    const spy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
     await sendPush('u1', 'T', 'B');
-    expect(spy).toHaveBeenCalled();
-    spy.mockRestore();
+    expect(mockLoggerWarn).toHaveBeenCalled();
   });
 });
 

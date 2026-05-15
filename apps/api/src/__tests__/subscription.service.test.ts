@@ -17,6 +17,10 @@ jest.mock('../lib/prisma', () => ({
       updateMany: jest.fn(),
       upsert: jest.fn(),
     },
+    userPoint: {
+      aggregate: jest.fn(),
+      create: jest.fn(),
+    },
     $transaction: jest.fn(),
   },
 }));
@@ -365,5 +369,66 @@ describe('subscriptionService.expireOldSubscriptions', () => {
         where: { id: { in: ['user-1'] } },
       }),
     );
+  });
+});
+
+// ─── redeemPointsForPremium ───────────────────────────────────────────────────
+
+describe('subscriptionService.redeemPointsForPremium', () => {
+  beforeEach(() => {
+    (mockPrisma.userPoint.aggregate as jest.Mock).mockResolvedValue({ _sum: { amount: 600 } });
+    (mockPrisma.$transaction as jest.Mock).mockResolvedValue([]);
+  });
+
+  it('lanza USER_NOT_FOUND si el usuario no existe', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+
+    await expect(subscriptionService.redeemPointsForPremium('noexiste', 300)).rejects.toMatchObject({
+      code: 'USER_NOT_FOUND',
+      statusCode: 404,
+    });
+  });
+
+  it('lanza INVALID_POINTS_AMOUNT si el monto no es múltiplo de 300', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(baseUser);
+
+    await expect(subscriptionService.redeemPointsForPremium('user-1', 150)).rejects.toMatchObject({
+      code: 'INVALID_POINTS_AMOUNT',
+      statusCode: 400,
+    });
+  });
+
+  it('lanza INSUFFICIENT_POINTS si el saldo es inferior al canje solicitado', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(baseUser);
+    (mockPrisma.userPoint.aggregate as jest.Mock).mockResolvedValue({ _sum: { amount: 100 } });
+
+    await expect(subscriptionService.redeemPointsForPremium('user-1', 300)).rejects.toMatchObject({
+      code: 'INSUFFICIENT_POINTS',
+      statusCode: 400,
+    });
+  });
+
+  it('ejecuta transacción y devuelve nuevo saldo y días añadidos', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(baseUser);
+
+    const result = await subscriptionService.redeemPointsForPremium('user-1', 300);
+
+    expect(mockPrisma.$transaction).toHaveBeenCalled();
+    expect(result.newBalance).toBe(300); // 600 - 300
+    expect(result.daysAdded).toBe(7);    // 300 / 300 * 7
+  });
+
+  it('añade días sobre premiumUntil existente si el usuario ya es premium', async () => {
+    const futureDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000); // 3 días en el futuro
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({
+      ...baseUser,
+      isPremium: true,
+      premiumUntil: futureDate,
+    });
+
+    const result = await subscriptionService.redeemPointsForPremium('user-1', 300);
+
+    expect(result.daysAdded).toBe(7);
+    expect(mockPrisma.$transaction).toHaveBeenCalled();
   });
 });

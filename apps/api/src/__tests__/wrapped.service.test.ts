@@ -7,7 +7,7 @@ jest.mock('../lib/prisma', () => ({
   },
 }));
 
-import { getWrapped } from '../services/wrapped.service';
+import { getWrapped, getMonthlyWrapped } from '../services/wrapped.service';
 import { prisma } from '../lib/prisma';
 
 const mockUserFindUnique = prisma.user.findUnique as jest.Mock;
@@ -117,5 +117,47 @@ describe('getWrapped', () => {
       .mockResolvedValueOnce([]);
     const result = await getWrapped('u1', 2024);
     expect(result.previousYear).toBeNull();
+  });
+});
+
+describe('getMonthlyWrapped', () => {
+  it('lanza USER_NOT_FOUND si el usuario no existe', async () => {
+    mockUserFindUnique.mockResolvedValue(null);
+    await expect(getMonthlyWrapped('u1', 2024, 1)).rejects.toMatchObject({ code: 'USER_NOT_FOUND' });
+  });
+
+  it('lanza WRAPPED_PERIOD_FUTURE para un mes en el futuro', async () => {
+    const future = new Date();
+    future.setFullYear(future.getFullYear() + 1);
+    await expect(
+      getMonthlyWrapped('u1', future.getFullYear(), future.getMonth() + 1),
+    ).rejects.toMatchObject({ code: 'WRAPPED_PERIOD_FUTURE' });
+  });
+
+  it('devuelve stats del mes con period en formato YYYY-MM', async () => {
+    mockUAFindMany.mockResolvedValue([]);
+    const result = await getMonthlyWrapped('u1', 2024, 3);
+    expect(result.period).toBe('2024-03');
+    expect(result.totalAchievements).toBe(0);
+  });
+
+  it('incluye previousYear cuando el mismo mes del año anterior tiene datos', async () => {
+    mockUAFindMany
+      .mockResolvedValueOnce([makeUA()])   // mes solicitado
+      .mockResolvedValueOnce([makeUA()]);  // mismo mes año anterior
+    mockPointAggregate
+      .mockResolvedValueOnce({ _sum: { amount: 300 } })
+      .mockResolvedValueOnce({ _sum: { amount: 150 } });
+
+    const result = await getMonthlyWrapped('u1', 2024, 6);
+    expect(result.previousYear).not.toBeNull();
+    expect(result.previousYear?.totalAchievements).toBe(1);
+  });
+
+  it('usa streakDays del usuario si bestStreak es 0 en el mes actual', async () => {
+    const now = new Date();
+    mockActivityFindMany.mockResolvedValue([]);
+    const result = await getMonthlyWrapped('u1', now.getFullYear(), now.getMonth() + 1);
+    expect(result.bestStreak).toBe(14); // valor del mock de usuario
   });
 });

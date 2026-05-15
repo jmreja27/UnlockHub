@@ -9,6 +9,7 @@ jest.mock('../lib/redis', () => ({
     incr: jest.fn(),
     decr: jest.fn(),
     expire: jest.fn(),
+    del: jest.fn(),
   },
 }));
 
@@ -60,6 +61,8 @@ describe('syncService.triggerManualSync', () => {
   });
 
   it('lanza SYNC_COOLDOWN si el cooldown de Redis está activo', async () => {
+    // SET NX devuelve null cuando la clave ya existe (cooldown activo)
+    mockRedis.set.mockResolvedValue(null);
     mockRedis.ttl.mockResolvedValue(120);
 
     await expect(
@@ -68,6 +71,8 @@ describe('syncService.triggerManualSync', () => {
   });
 
   it('lanza DAILY_SYNC_LIMIT_EXCEEDED para free con 5 syncs ya realizados (INCR devuelve 6)', async () => {
+    // SET NX devuelve 'OK' → cooldown adquirido correctamente, no hay bloqueo por cooldown
+    mockRedis.set.mockResolvedValue('OK');
     mockRedis.ttl.mockResolvedValue(-1);
     // INCR devuelve 6 → supera el límite de 5
     mockRedis.incr.mockResolvedValue(6);
@@ -160,6 +165,8 @@ describe('syncService.getSyncStatus', () => {
 
 describe('AppError details', () => {
   it('incluye remainingSeconds en SYNC_COOLDOWN', async () => {
+    // SET NX devuelve null cuando la clave ya existe (cooldown activo)
+    mockRedis.set.mockResolvedValue(null);
     mockRedis.ttl.mockResolvedValue(60);
 
     try {

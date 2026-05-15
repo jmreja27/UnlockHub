@@ -46,6 +46,7 @@ describe('POST /api/v1/auth/register', () => {
       username: 'testuser',
       email: 'test@example.com',
       password: 'Password1!',
+      birthDate: '1995-06-15',
     });
 
     expect(res.status).toBe(201);
@@ -72,6 +73,7 @@ describe('POST /api/v1/auth/register', () => {
       username: 'nuevo',
       email: 'existe@example.com',
       password: 'Password1!',
+      birthDate: '1995-06-15',
     });
 
     expect(res.status).toBe(409);
