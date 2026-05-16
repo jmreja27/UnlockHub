@@ -21,6 +21,7 @@ const TABS: TabConfig[] = [
   { name: 'index', titleKey: 'tabs.home', icon: 'game-controller-outline', iconFocused: 'game-controller' },
   { name: 'search', titleKey: 'tabs.search', icon: 'search-outline', iconFocused: 'search' },
   { name: 'rankings', titleKey: 'tabs.rankings', icon: 'trophy-outline', iconFocused: 'trophy' },
+  { name: 'challenges', titleKey: 'tabs.challenges', icon: 'flash-outline', iconFocused: 'flash' },
   { name: 'friends', titleKey: 'tabs.friends', icon: 'people-outline', iconFocused: 'people' },
   { name: 'profile', titleKey: 'tabs.profile', icon: 'person-outline', iconFocused: 'person' },
 ];
