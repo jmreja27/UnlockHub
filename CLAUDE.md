@@ -214,6 +214,7 @@ Usar siempre estos en lugar de recrear funcionalidad equivalente.
 | `UserCard` | `components/UserCard.tsx` | ✅ | Tarjeta de usuario con avatar, username, nivel y XP. |
 | `ActivityCard` | `components/ActivityCard.tsx` | ✅ | Evento del feed de actividad. |
 | `NotificationBell` | `components/NotificationBell.tsx` | ✅ | Campana en header con badge de no leídas. |
+| `AchievementSearchCard` | `components/AchievementSearchCard.tsx` | ✅ | Tarjeta de logro en resultados de búsqueda — estado locked/unlocked, XP, rareza, badge de plataforma. |
 
 ---
 
@@ -797,7 +798,7 @@ Métricas disponibles:
 | `app/(auth)/forgot-password.tsx` | ✅ | Requiere RESEND_API_KEY (B3) para funcionar en prod |
 | `app/reset-password.tsx` | ✅ | Deep link `unlockhub://reset-password?token=…` |
 | `app/onboarding.tsx` | ✅ | Solo en primer login |
-| `app/game/[id].tsx` | ✅ | Filtros, compartir, retar amigo, guías UGC |
+| `app/game/[id].tsx` | ✅ | Filtros, compartir, retar amigo, guías UGC. Header muestra "X/Y logros · Z% completado" cuando autenticado. |
 | `app/profile/[username].tsx` | ✅ | Sección "vs tú" incluida |
 | `app/link-platform/steam.tsx` | ✅ | Con ayuda contextual paso a paso |
 | `app/link-platform/ra.tsx` | ✅ | Con ayuda contextual paso a paso |
@@ -848,6 +849,11 @@ Métricas disponibles:
 | Maestro flows usan `runFlow/when` condicional en lugar de login fijo | APK preview conecta a API producción (`eas.json` profile `preview` → `https://unlockhub-production.up.railway.app`); `demo@unlockhub.test` solo existe en mock — los flows deben adaptarse a sesión activa o sin sesión | Fase 3 |
 | Regex `~.*(A\|B).*` con alternación evitada en flows Maestro | Maestro 2.5.1 no evalúa correctamente el operador `\|` dentro de grupos regex — sustituir siempre por texto exacto o regex simple sin alternación | Fase 3 |
 | `testID="login-email/password"` añadido a login.tsx | `inputText: {label}` en Maestro encuentra el `Text` label component antes que el `TextInput` cuando ambos tienen el mismo texto accesible — `testID` como selector unívoco (activo en próximo build) | Fase 3 |
+| `authenticateOptional` en lugar de `authenticate` en endpoints públicos con contexto de usuario | Endpoints de logros y búsqueda deben funcionar sin sesión (isUnlocked=false) — devolver 401 sin token sería incorrecto y rompería la UX de discovery | Fase 3 |
+| Search de logros excluye Xbox con `NOT: { platform: 'XBOX' }` en Prisma | Xbox gateado hasta Fase 4 — no exponer logros Xbox aunque estuvieran en BD | Fase 3 |
+| `getGameAchievementsWithStatus` usa dos queries separadas (achievements + userAchievements) | Evita un JOIN complejo; Map<achievementId, unlockedAt> para lookup O(1) es más claro y suficientemente rápido a escala de logros por juego | Fase 3 |
+| i18n key `search.achievement_in_game` en tests devuelve la clave sin interpolar | En entorno de test, i18next devuelve la clave (no el texto interpolado) — tests usan `getByText('search.achievement_in_game')` en lugar de buscar el nombre del juego | Fase 3 |
+| Search de logros paginado con `page` param (no cursor) | La UX de búsqueda es exploratoria, no un feed continuo — paginación offset simple suficiente; `useInfiniteQuery` gestiona la acumulación de páginas en el cliente | Fase 3 |
 
 ---
 
@@ -938,6 +944,8 @@ Métricas disponibles:
 | T8 | Subir Expo a v55 para vulnerabilidades node-tar | 🔲 17 high mobile (build-time vía Expo) + 2 high API (bcrypt build-time) — ninguna runtime; PR dedicado post-lanzamiento |
 | T9 | Resolver 145 warnings import/order en API | ✅ Resuelto — `eslint --fix` + override en `.eslintrc.js` para ficheros de test |
 | T10 | Flows Maestro E2E | ✅ 5 flows en `apps/mobile/.maestro/` — todos pasando contra emulador Android con APK preview |
+| T11 | Search de logros + endpoint logros de juego | ✅ Backend `GET /api/v1/games/:id/achievements` + `GET /api/v1/search?type=achievements` — JWT opcional, Xbox excluido, paginado 20/pág |
+| T12 | Job "seed de logros populares" | 🔲 BullMQ job que sincroniza top-100 juegos por plataforma sin usuario — necesario para que el search tenga contenido desde el día 1 |
 
 ### 🟢 Features
 
@@ -953,12 +961,13 @@ Métricas disponibles:
 | F8 | Avatar upload | ✅ Backend Cloudinary + mobile expo-image-picker — activo en prod cuando `CLOUDINARY_URL` esté en Railway (P2) |
 | F9 | Dashboard admin | ✅ |
 | F10 | OG profiles | 🔲 Fase 4 |
+| F11 | Búsqueda de logros con filtro de plataforma | ✅ Search tab: chip Achievements + sub-filtro Steam/RA/PSN, infinite scroll, estado locked/unlocked |
 
 ---
 
 ## Última revisión de código
 
-**Fecha**: 2026-05-16 — bug fixes sobre APK preview + suite Maestro E2E validada contra emulador.
+**Fecha**: 2026-05-17 — búsqueda de logros global + endpoint logros de juego + AchievementSearchCard.
 
 ### Resumen ejecutivo
 
@@ -968,12 +977,29 @@ Métricas disponibles:
 | TypeScript strict (mobile) | ✅ 0 errores `tsc --noEmit` |
 | Lint errores (API) | ✅ 0 errores, 0 warnings |
 | Lint errores (mobile) | ✅ 0 errores, 0 warnings |
-| Tests backend | ✅ 376 tests pasando, 32 suites — cobertura 81% stmt / 82% branch |
-| Tests mobile | ✅ 160 tests pasando, 13 suites |
+| Tests backend | ✅ 390 tests pasando, 33 suites — cobertura 81% stmt / 82% branch |
+| Tests mobile | ✅ 171 tests, 169 pasando, 2 pre-existentes fallando (ChallengesScreen / RankingsScreen) |
 | API build | ✅ `tsc -p tsconfig.json` sin errores |
 | npm audit API | ⚠️ 2 high: `bcrypt → @mapbox/node-pre-gyp → tar` (build-time, pre-existente) |
 | npm audit mobile | ⚠️ 17 high: `node-tar` vía Expo build tooling (build-time) — pendiente T8 |
 | Maestro E2E | ✅ 5 flows pasando contra emulador Android (APK preview) |
+
+### Features implementadas en esta sesión (2026-05-17)
+
+**FEATURE — Búsqueda global de logros**
+- `GET /api/v1/search?type=achievements&q=...&platform=...` — JWT opcional, Xbox excluido, 20 resultados/pág
+- `GET /api/v1/games/:id/achievements` — logros de un juego con estado isUnlocked por usuario
+- `authenticateOptional` middleware: extrae usuario del JWT si presente, continúa sin error si ausente
+- `AchievementSearchResult` añadido a `packages/types/src/index.ts`; `SearchResponse` incluye `achievements[]`
+- Search tab: nuevo filtro chip "Achievements" + sub-filtro de plataforma (Steam / RA / PSN)
+- `AchievementSearchCard.tsx`: icono con opacity 0.4 si bloqueado, badge de plataforma con color, XP y rareza
+- `useSearchAchievements.ts`: `useInfiniteQuery`, debounce 400ms, staleTime 5min, infinite scroll en FlashList
+- `game/[id].tsx`: header muestra "X/Y logros · Z% completado" cuando autenticado; empty state en filtro "Earned" sin sesión
+
+**NOTA — BD vacía de logros**
+- El search de logros solo encuentra logros que ya estén en la BD (sincronizados por algún usuario).
+- Si nadie ha hecho sync todavía, la búsqueda devuelve 0 resultados aunque los logros existan en Steam/RA/PSN.
+- Solución a largo plazo: job de "seed de logros populares" que sincronice los top-100 juegos por plataforma sin necesidad de usuario. Propuesto como T12 en el backlog.
 
 ### Correcciones aplicadas en esta sesión (2026-05-16)
 
@@ -1012,4 +1038,6 @@ Métricas disponibles:
 ### Pendientes documentados
 
 - **T8**: `node-tar` vulnerabilidades high — ninguna runtime. PR dedicado post-lanzamiento.
+- **T12 propuesto**: Job BullMQ "seed de logros populares" — sincronizar top-100 juegos por plataforma (Steam/RA/PSN) sin necesidad de usuario para que el search de logros tenga contenido desde el día 1.
 - **Maestro auth completa**: requiere development build con `EXPO_PUBLIC_API_URL=http://10.0.2.2:3000` o cuenta real en producción para testear login/registro/plataformas autenticadas.
+- **ChallengesScreen.test.tsx / RankingsScreen.test.tsx**: 2 tests fallando pre-existentes (no relacionados con esta sesión).
