@@ -12,6 +12,14 @@ export interface AuthenticatedRequest extends Request {
   };
 }
 
+export interface OptionallyAuthenticatedRequest extends Request {
+  user?: {
+    id: string;
+    email: string;
+    isPremium: boolean;
+  };
+}
+
 export function authenticate(req: Request, _res: Response, next: NextFunction): void {
   const authHeader = req.headers['authorization'];
   const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
@@ -31,4 +39,26 @@ export function authenticate(req: Request, _res: Response, next: NextFunction): 
   } catch {
     next(new AppError('Token inválido o expirado', 'INVALID_TOKEN', 401));
   }
+}
+
+// Extrae el usuario del JWT si el token está presente, pero no falla si no hay token.
+// Usar en endpoints que devuelven datos diferentes según si el usuario está autenticado o no.
+export function authenticateOptional(req: Request, _res: Response, next: NextFunction): void {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
+
+  if (token) {
+    try {
+      const payload = verifyAccessToken(token);
+      (req as OptionallyAuthenticatedRequest).user = {
+        id: payload.sub,
+        email: payload.email,
+        isPremium: payload.isPremium,
+      };
+    } catch {
+      // Token inválido — continuar sin autenticar en lugar de devolver 401
+    }
+  }
+
+  next();
 }

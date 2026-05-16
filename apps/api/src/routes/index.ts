@@ -14,6 +14,7 @@ import notificationRouter from './notification.routes';
 import wrappedRouter from './wrapped.routes';
 import adminRouter from './admin.routes';
 import searchRouter from './search.routes';
+import gamesRouter from './games.routes';
 import achievementRouter from './achievement.routes';
 import guideRouter from './guide.routes';
 
@@ -37,6 +38,7 @@ router.use('/notifications', notificationRouter);
 router.use('/wrapped', wrappedRouter);
 router.use('/admin', adminRouter);
 router.use('/search', searchRouter);
+router.use('/games', gamesRouter);
 router.use('/achievements', achievementRouter);
 router.use('/guides', guideRouter);
 

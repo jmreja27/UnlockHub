@@ -1,4 +1,4 @@
-import type { GameSearchResult, UserSearchResult, SearchResponse } from '@unlockhub/types';
+import type { GameSearchResult, UserSearchResult, AchievementSearchResult, SearchResponse } from '@unlockhub/types';
 
 import { prisma } from '../lib/prisma';
 import { redis } from '../lib/redis';
@@ -12,16 +12,20 @@ const STEAM_SEARCH_CACHE_TTL = 3600; // 1 hora
 
 export async function search(
   query: string,
-  type: 'all' | 'games' | 'users',
+  type: 'all' | 'games' | 'users' | 'achievements',
+  platform?: string,
+  userId?: string,
+  page: number = 1,
 ): Promise<SearchResponse> {
   const q = query.trim();
 
-  const [games, users] = await Promise.all([
-    type !== 'users' ? searchGames(q) : Promise.resolve([]),
-    type !== 'games' ? searchUsers(q) : Promise.resolve([]),
+  const [games, users, achievements] = await Promise.all([
+    type !== 'users' && type !== 'achievements' ? searchGames(q) : Promise.resolve([]),
+    type !== 'games' && type !== 'achievements' ? searchUsers(q) : Promise.resolve([]),
+    type === 'achievements' ? searchAchievements(q, platform, userId, page) : Promise.resolve([]),
   ]);
 
-  return { games, users, total: games.length + users.length };
+  return { games, users, achievements, total: games.length + users.length + achievements.length };
 }
 
 async function searchGames(q: string): Promise<GameSearchResult[]> {
@@ -186,4 +190,122 @@ export async function getGameWithAchievements(gameId: string) {
       },
     },
   });
+}
+
+// ─── Achievement search ───────────────────────────────────────────────────────
+
+async function searchAchievements(
+  query: string,
+  platform?: string,
+  userId?: string,
+  page: number = 1,
+): Promise<AchievementSearchResult[]> {
+  const limit = MAX_RESULTS;
+  const skip = (page - 1) * limit;
+
+  const achievementRows = await prisma.achievement.findMany({
+    where: {
+      title: { contains: query, mode: 'insensitive' },
+      // Xbox está gateado hasta Fase 4 — nunca aparece en búsqueda
+      NOT: { platform: 'XBOX' },
+      ...(platform && platform !== 'XBOX' ? { platform: platform as 'STEAM' | 'RA' | 'PSN' } : {}),
+    },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      iconUrl: true,
+      rarity: true,
+      normalizedPoints: true,
+      platform: true,
+      game: { select: { id: true, title: true, iconUrl: true } },
+    },
+    orderBy: [{ rarity: 'asc' }, { normalizedPoints: 'desc' }],
+    take: limit,
+    skip,
+  });
+
+  const earnedMap = new Map<string, string>();
+  if (userId && achievementRows.length > 0) {
+    const achievementIds = achievementRows.map((a) => a.id);
+    const earned = await prisma.userAchievement.findMany({
+      where: { userId, achievementId: { in: achievementIds } },
+      select: { achievementId: true, unlockedAt: true },
+    });
+    earned.forEach((e) => earnedMap.set(e.achievementId, e.unlockedAt.toISOString()));
+  }
+
+  return achievementRows.map((a) => ({
+    type: 'achievement' as const,
+    id: a.id,
+    title: a.title,
+    description: a.description,
+    iconUrl: a.iconUrl,
+    rarity: a.rarity,
+    normalizedPoints: a.normalizedPoints,
+    platform: a.platform,
+    game: { id: a.game.id, title: a.game.title, iconUrl: a.game.iconUrl },
+    isUnlocked: earnedMap.has(a.id),
+    unlockedAt: earnedMap.get(a.id) ?? null,
+  }));
+}
+
+// ─── Game achievements con estado de desbloqueo del usuario ───────────────────
+
+interface AchievementWithStatus {
+  id: string;
+  title: string;
+  description: string | null;
+  iconUrl: string | null;
+  rarity: number | null;
+  normalizedPoints: number;
+  platform: string;
+  externalId: string;
+  externalUrl: string | null;
+  isUnlocked: boolean;
+  unlockedAt: string | null;
+}
+
+interface GameAchievementsResponse {
+  achievements: AchievementWithStatus[];
+  earnedCount: number;
+  totalCount: number;
+}
+
+export async function getGameAchievementsWithStatus(
+  gameId: string,
+  userId?: string,
+): Promise<GameAchievementsResponse | null> {
+  const game = await prisma.game.findUnique({ where: { id: gameId }, select: { id: true } });
+  if (!game) return null;
+
+  const achievementRows = await prisma.achievement.findMany({
+    where: { gameId },
+    orderBy: [{ rarity: 'asc' }, { normalizedPoints: 'desc' }],
+  });
+
+  const earnedMap = new Map<string, string>();
+  if (userId && achievementRows.length > 0) {
+    const earned = await prisma.userAchievement.findMany({
+      where: { userId, achievementId: { in: achievementRows.map((a) => a.id) } },
+      select: { achievementId: true, unlockedAt: true },
+    });
+    earned.forEach((e) => earnedMap.set(e.achievementId, e.unlockedAt.toISOString()));
+  }
+
+  const achievements: AchievementWithStatus[] = achievementRows.map((a) => ({
+    id: a.id,
+    title: a.title,
+    description: a.description,
+    iconUrl: a.iconUrl,
+    rarity: a.rarity,
+    normalizedPoints: a.normalizedPoints,
+    platform: a.platform,
+    externalId: a.externalId,
+    externalUrl: a.externalUrl,
+    isUnlocked: earnedMap.has(a.id),
+    unlockedAt: earnedMap.get(a.id) ?? null,
+  }));
+
+  return { achievements, earnedCount: earnedMap.size, totalCount: achievementRows.length };
 }

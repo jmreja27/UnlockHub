@@ -189,7 +189,7 @@ export interface GamingWrapped {
 }
 
 // Search
-export type SearchResultType = 'game' | 'user';
+export type SearchResultType = 'game' | 'user' | 'achievement';
 
 export interface GameSearchResult {
   type: 'game';
@@ -209,11 +209,30 @@ export interface UserSearchResult {
   xp: number;
 }
 
-export type SearchResult = GameSearchResult | UserSearchResult;
+export interface AchievementSearchResult {
+  type: 'achievement';
+  id: string;
+  title: string;
+  description: string | null;
+  iconUrl: string | null;
+  rarity: number | null;
+  normalizedPoints: number;
+  platform: Platform;
+  game: {
+    id: string;
+    title: string;
+    iconUrl: string | null;
+  };
+  isUnlocked: boolean;
+  unlockedAt: string | null;
+}
+
+export type SearchResult = GameSearchResult | UserSearchResult | AchievementSearchResult;
 
 export interface SearchResponse {
   games: GameSearchResult[];
   users: UserSearchResult[];
+  achievements: AchievementSearchResult[];
   total: number;
 }
 
