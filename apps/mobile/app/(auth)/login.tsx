@@ -109,6 +109,7 @@ export default function LoginScreen() {
                   setEmail(text);
                   if (fieldErrors.email) setFieldErrors((prev: { email?: string; password?: string }) => ({ ...prev, email: undefined }));
                 }}
+                testID="login-email"
                 accessibilityLabel={t('auth.login.email_label')}
                 accessibilityHint={t('auth.login.email_hint')}
               />
@@ -142,6 +143,7 @@ export default function LoginScreen() {
                   if (fieldErrors.password) setFieldErrors((prev: { email?: string; password?: string }) => ({ ...prev, password: undefined }));
                 }}
                 onSubmitEditing={handleSubmit}
+                testID="login-password"
                 accessibilityLabel={t('auth.login.password_label')}
                 accessibilityHint={t('auth.login.password_hint')}
               />
