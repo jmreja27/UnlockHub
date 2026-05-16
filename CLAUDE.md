@@ -845,6 +845,9 @@ Métricas disponibles:
 | Upgrade Expo SDK 51 → 55 diferido post-lanzamiento | 17 high vulnerabilidades en `node-tar` son build-time (no runtime); `expo@55.0.24` es breaking change; riesgo/beneficio favorable a diferirlo hasta después del primer deploy a Play Store | Fase 3 |
 | `jest.mock('../../lib/featureFlags')` en tests que necesitan features gateadas | Algunos tests de pantallas prueban UI que `FEATURES.premium = false` oculta en producción — necesario mockear la flag en el test para ejercitar el código | Fase 3 |
 | `import/order` override en `.eslintrc.js` para ficheros de test | El patrón `jest.mock()` hoisted (antes de imports) es intencional; la regla `import/order` genera falsos positivos — se desactiva solo en `**/__tests__/**` y `*.test.ts` | Fase 3 |
+| Maestro flows usan `runFlow/when` condicional en lugar de login fijo | APK preview conecta a API producción (`eas.json` profile `preview` → `https://unlockhub-production.up.railway.app`); `demo@unlockhub.test` solo existe en mock — los flows deben adaptarse a sesión activa o sin sesión | Fase 3 |
+| Regex `~.*(A\|B).*` con alternación evitada en flows Maestro | Maestro 2.5.1 no evalúa correctamente el operador `\|` dentro de grupos regex — sustituir siempre por texto exacto o regex simple sin alternación | Fase 3 |
+| `testID="login-email/password"` añadido a login.tsx | `inputText: {label}` en Maestro encuentra el `Text` label component antes que el `TextInput` cuando ambos tienen el mismo texto accesible — `testID` como selector unívoco (activo en próximo build) | Fase 3 |
 
 ---
 
@@ -934,6 +937,7 @@ Métricas disponibles:
 | T7 | Reescribir FeedScreen.test.tsx | ✅ Reescrito correctamente — mockea `useMyGames`; 9 tests pasando |
 | T8 | Subir Expo a v55 para vulnerabilidades node-tar | 🔲 17 high mobile (build-time vía Expo) + 2 high API (bcrypt build-time) — ninguna runtime; PR dedicado post-lanzamiento |
 | T9 | Resolver 145 warnings import/order en API | ✅ Resuelto — `eslint --fix` + override en `.eslintrc.js` para ficheros de test |
+| T10 | Flows Maestro E2E | ✅ 5 flows en `apps/mobile/.maestro/` — todos pasando contra emulador Android con APK preview |
 
 ### 🟢 Features
 
@@ -954,7 +958,7 @@ Métricas disponibles:
 
 ## Última revisión de código
 
-**Fecha**: 2026-05-15 — revisión completa pre-EAS Build + resolución de todos los pendientes en rama `develop`.
+**Fecha**: 2026-05-16 — bug fixes sobre APK preview + suite Maestro E2E validada contra emulador.
 
 ### Resumen ejecutivo
 
@@ -962,47 +966,50 @@ Métricas disponibles:
 |---|---|
 | TypeScript strict (API) | ✅ 0 errores `tsc --noEmit` |
 | TypeScript strict (mobile) | ✅ 0 errores `tsc --noEmit` |
-| Lint errores (API) | ✅ 0 errores, 0 warnings (T9 resuelto — era 145 `import/order`) |
-| Lint errores (mobile) | ✅ 0 errores, 0 warnings (era 90 warnings) |
+| Lint errores (API) | ✅ 0 errores, 0 warnings |
+| Lint errores (mobile) | ✅ 0 errores, 0 warnings |
 | Tests backend | ✅ 376 tests pasando, 32 suites — cobertura 81% stmt / 82% branch |
-| Tests mobile | ✅ 160 tests pasando, 13 suites — era 135 pasando / 25 fallando |
+| Tests mobile | ✅ 160 tests pasando, 13 suites |
 | API build | ✅ `tsc -p tsconfig.json` sin errores |
 | npm audit API | ⚠️ 2 high: `bcrypt → @mapbox/node-pre-gyp → tar` (build-time, pre-existente) |
 | npm audit mobile | ⚠️ 17 high: `node-tar` vía Expo build tooling (build-time) — pendiente T8 |
-| Logger `pino` | ✅ 33 `console.log/warn/error` eliminados en sesión anterior |
-| F8 avatar upload | ✅ Backend Cloudinary + mobile expo-image-picker implementados |
+| Maestro E2E | ✅ 5 flows pasando contra emulador Android (APK preview) |
 
-### Correcciones aplicadas en esta sesión
+### Correcciones aplicadas en esta sesión (2026-05-16)
 
-**T9 — 145 warnings `import/order` en API → 0**
-- `eslint --fix` automático + override en `.eslintrc.js` para ficheros de test (patrón `jest.mock()` hoisted es legítimo)
-- `app.ts`: `eslint-disable/enable` alrededor del import de Sentry (inicialización antes que el resto — intencional)
+**BUG CRÍTICO — Profile crash tras registro**
+- `profile.tsx`: `user.xp.toLocaleString()` crasheaba cuando `xp`/`level`/`streakDays` llegaban undefined tras registro
+- Fix: null coalescing en todos los campos numéricos (`user.xp ?? 0`, `user.level ?? 1`, `user.streakDays ?? 0`)
 
-**T7 — FeedScreen.test.tsx reescrito**
-- Ahora importa `LibraryScreen` y mockea `useMyGames`/`useSyncAll`/`useSessionStore` correctamente
-- 9 tests: header, loading, error, empty state, games list, pull-to-refresh, sync button
+**BUG — Barra de filtros azul a pantalla completa en Home y Rankings**
+- `index.tsx` + `rankings.tsx`: ScrollView horizontal sin `flexGrow: 0` se expandía ocupando todo el flex space
+- Fix: `style={{ flexGrow: 0 }}` + `alignItems: 'center'` en `contentContainerStyle`
 
-**roles.middleware.ts — de 0% a 100% de cobertura**
-- 5 tests para `requirePremium`: `isPremium=true`, `isPremium=false`, sin user, mensaje /premium/i, next no llamado dos veces
+**BUG — Icono incorrecto en tab Challenges**
+- `_layout.tsx`: `challenges.tsx` existía en `app/(tabs)/` pero no tenía entry en el array TABS → usaba icono por defecto
+- Fix: añadida entrada con `flash-outline` / `flash` (Ionicons)
 
-**Mobile lint — 90 warnings → 0**
-- `_layout.tsx`: tipo `User` movido al grupo de imports externos
-- `jest.setup.ts`: `eslint-disable-next-line consistent-type-imports` en 4 líneas con patrón `jest.requireActual<typeof import(...)>`
-- `link-platform/xbox.tsx`: `eslint-disable-next-line react-hooks/exhaustive-deps` en useEffect de OAuth (omisión intencional para evitar bucle infinito)
+**BUG — Errores genéricos en Friends/Rankings/Challenges**
+- `friends.tsx`, `challenges.tsx`, `rankings.tsx`: error UI diferenciada por tipo (network / auth / server)
+- `useFriends.ts`, `useChallenges.ts`: expuesto `error: Error | null` desde TanStack Query
+- Traducciones ES/EN: claves `error_network`, `error_auth`, `error_server` añadidas en las 3 secciones
 
-**F8 — Avatar upload**
-- Backend: `lib/cloudinary.ts`, `middleware/upload.middleware.ts` (multer, JPG/PNG/WebP, 5 MB max), `user.service.uploadAvatar` (Cloudinary + update BD), `user.controller.uploadAvatarHandler`, ruta `POST /me/avatar`
-- Mobile: `expo-image-picker`, `useMutation` multipart, Pressable en avatar con overlay de carga, `setUser` en sessionStore on success
-- Tests: 5 nuevos tests en `user.routes.test.ts` (401, 400 sin archivo, 400 tipo inválido, 200, error propagación)
+**INVESTIGACIÓN — Steam muestra 0 logros**
+- Causa raíz: no es un bug de código. `steam.adapter.ts` es correcto.
+- Causas más probables: (1) `STEAM_API_KEY` no en `.env` local, (2) perfil Steam privado, (3) caché Redis TTL 30min-24h con arrays vacíos, (4) todos los juegos sin `has_community_visible_stats`
 
-**Tests mobile preexistentes fallando (25 → 0)**
-- `ProfileScreen.test.tsx`: mocks añadidos para `useFeed`, `expo-image-picker`, `featureFlags` (badge premium gateado por `FEATURES.premium=false`)
-- `ChallengesScreen.test.tsx`: `getByRole('header', { name })` para evitar ambigüedad con EmptyState; clave i18n correcta (`empty_body` no `no_challenge`)
-- `RankingsScreen.test.tsx`: eliminado check de subtítulo inexistente; corregido mojibake em-dash (`â€"` → `—`) y `TÃº` → `Tú`
+**Maestro E2E — 5 flows creados y validados**
+- `01_registro.yaml`: clearState + detección condicional de pantalla de login/tabs
+- `02_login_navegacion.yaml`: ✅ login condicional + navegación 6 tabs sin crash
+- `03_vincular_steam.yaml`: ✅ Profile tab + sección vinculación Steam sin crash
+- `04_busqueda.yaml`: ✅ Search tab + input texto sin crash
+- `05_notificaciones.yaml`: ✅ notificaciones sin crash
+- **Limitación documentada**: APK preview usa `https://unlockhub-production.up.railway.app`. `demo@unlockhub.test` es cuenta mock — no existe en producción. Los flows usan `runFlow/when` condicional para adaptarse a sesión activa o expirada. Para tests de auth completos se necesita un development build (`eas build --profile development`) o cuenta real en producción.
+
+**testID en login.tsx**
+- Añadidos `testID="login-email"` y `testID="login-password"` para futuros selectores Maestro más robustos (activos en el próximo build)
 
 ### Pendientes documentados
 
-- **T8**: `node-tar` vulnerabilidades high — API: 2 (vía `bcrypt` build-time), mobile: 17 (vía Expo build tooling). Ninguna es runtime. Fix requiere `expo@55.0.24` (breaking change desde SDK 51) y actualizar `bcrypt` o `@mapbox/node-pre-gyp`. PR dedicado post-lanzamiento.
-- **T7 (cerrado)**: `FeedScreen.test.tsx` ya reescrito correctamente — ver commits de esta sesión.
-- **`roles.middleware.ts` (cerrado)**: cobertura ahora al 100%.
-- **F8 (cerrado)**: avatar upload implementado — funcional en producción en cuanto `CLOUDINARY_URL` esté en Railway Variables (P2).
+- **T8**: `node-tar` vulnerabilidades high — ninguna runtime. PR dedicado post-lanzamiento.
+- **Maestro auth completa**: requiere development build con `EXPO_PUBLIC_API_URL=http://10.0.2.2:3000` o cuenta real en producción para testear login/registro/plataformas autenticadas.
