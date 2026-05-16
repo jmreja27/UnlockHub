@@ -309,8 +309,8 @@ export default function ProfileScreen() {
           accessible
           accessibilityLabel={t('profile.profile_aria', {
             username: user.username,
-            level: user.level,
-            xp: user.xp.toLocaleString(),
+            level: user.level ?? 1,
+            xp: (user.xp ?? 0).toLocaleString(),
           })}
         >
           <Pressable
@@ -361,24 +361,24 @@ export default function ProfileScreen() {
           className="flex-row mx-6 mb-6 bg-surface-elevated rounded-2xl py-4"
           accessible
           accessibilityLabel={t('profile.stats_aria', {
-            level: user.level,
-            xp: user.xp.toLocaleString(),
-            streak: user.streakDays,
+            level: user.level ?? 1,
+            xp: (user.xp ?? 0).toLocaleString(),
+            streak: user.streakDays ?? 0,
           })}
         >
           <View className="flex-1 items-center">
-            <Text className="text-white text-xl font-bold">{user.level}</Text>
+            <Text className="text-white text-xl font-bold">{user.level ?? 1}</Text>
             <Text className="text-gray-400 text-xs mt-1">{t('profile.stat_level')}</Text>
           </View>
           <View className="w-px bg-surface-card" />
           <View className="flex-1 items-center">
-            <Text className="text-white text-xl font-bold">{user.xp.toLocaleString()}</Text>
+            <Text className="text-white text-xl font-bold">{(user.xp ?? 0).toLocaleString()}</Text>
             <Text className="text-gray-400 text-xs mt-1">{t('profile.stat_xp')}</Text>
           </View>
           <View className="w-px bg-surface-card" />
           <View className="flex-1 items-center">
             <View className="flex-row items-center gap-1">
-              <Text className="text-white text-xl font-bold">{user.streakDays}</Text>
+              <Text className="text-white text-xl font-bold">{user.streakDays ?? 0}</Text>
               {(user as unknown as { streakShields?: number }).streakShields != null &&
                 (user as unknown as { streakShields: number }).streakShields > 0 && (
                   <View
@@ -527,13 +527,13 @@ export default function ProfileScreen() {
         {FEATURES.premium && isAuthenticated && <PremiumBanner />}
 
         {/* Rachas conseguidas — badges de hitos */}
-        {user.streakDays >= 7 && (
+        {(user.streakDays ?? 0) >= 7 && (
           <View className="px-6 mb-4">
             <Text className="text-gray-300 text-sm font-semibold mb-3 uppercase tracking-wider">
               {t('profile.streak_badges_section')}
             </Text>
             <View className="flex-row flex-wrap gap-2">
-              {user.streakDays >= 7 && (
+              {(user.streakDays ?? 0) >= 7 && (
                 <View
                   className="bg-orange-900/40 border border-orange-500/50 rounded-full px-3 py-1.5"
                   accessible
@@ -542,7 +542,7 @@ export default function ProfileScreen() {
                   <Text className="text-orange-300 text-xs font-semibold">🔥 {t('profile.streak_badge_week')}</Text>
                 </View>
               )}
-              {user.streakDays >= 30 && (
+              {(user.streakDays ?? 0) >= 30 && (
                 <View
                   className="bg-amber-900/40 border border-amber-500/50 rounded-full px-3 py-1.5"
                   accessible
@@ -551,7 +551,7 @@ export default function ProfileScreen() {
                   <Text className="text-amber-300 text-xs font-semibold">🔥 {t('profile.streak_badge_month')}</Text>
                 </View>
               )}
-              {user.streakDays >= 100 && (
+              {(user.streakDays ?? 0) >= 100 && (
                 <View
                   className="bg-yellow-900/40 border border-yellow-500/50 rounded-full px-3 py-1.5"
                   accessible
@@ -560,7 +560,7 @@ export default function ProfileScreen() {
                   <Text className="text-yellow-300 text-xs font-semibold">⭐ {t('profile.streak_badge_century')}</Text>
                 </View>
               )}
-              {user.streakDays >= 365 && (
+              {(user.streakDays ?? 0) >= 365 && (
                 <View
                   className="bg-purple-900/40 border border-purple-500/50 rounded-full px-3 py-1.5"
                   accessible
