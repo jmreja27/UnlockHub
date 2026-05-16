@@ -8,11 +8,22 @@ import type { RankingEntry } from '@unlockhub/types';
 
 import { useGlobalRankings, useCountryRanking, usePlatformRanking, useMyRanking } from '../../hooks/useRankings';
 import { useSessionStore } from '../../stores/sessionStore';
+import { ApiRequestError } from '../../lib/api';
 import { RankingItem } from '../../components/RankingItem';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { AdBanner } from '../../components/AdBanner';
 
 type RankingFilter = 'global' | 'national' | 'STEAM' | 'RA' | 'PSN';
+
+function classifyError(err: Error | null): 'network' | 'auth' | 'server' {
+  if (!err) return 'server';
+  if (err instanceof ApiRequestError) {
+    if (err.statusCode === 401 || err.statusCode === 403) return 'auth';
+    if (err.statusCode >= 500) return 'server';
+  }
+  if (err.message.toLowerCase().includes('fetch') || err.message.toLowerCase().includes('network')) return 'network';
+  return 'server';
+}
 
 const FILTERS: { key: RankingFilter; labelKey: string }[] = [
   { key: 'global',   labelKey: 'rankings.filter_global' },
@@ -74,7 +85,7 @@ function RankingList({
     : filter === 'national' ? countryQuery
     : platformQuery;
 
-  const { data, isLoading, isError, refetch, isRefetching } = query;
+  const { data, isLoading, isError, error, refetch, isRefetching } = query;
 
   const renderItem = useCallback(
     ({ item }: { item: RankingEntry }) => (
@@ -100,6 +111,7 @@ function RankingList({
   if (isLoading) return <RankingSkeletonList />;
 
   if (isError) {
+    const errorType = classifyError(error);
     return (
       <View
         className="flex-1 items-center justify-center px-6"
@@ -108,15 +120,23 @@ function RankingList({
         accessibilityRole="alert"
       >
         <Text className="text-red-400 text-lg font-semibold mb-2">{t('rankings.error_title')}</Text>
-        <Text className="text-gray-400 text-sm text-center mb-6">{t('rankings.error_message')}</Text>
-        <Text
-          className="text-primary-light text-base"
-          onPress={() => void refetch()}
-          accessibilityRole="button"
-          accessibilityLabel={t('rankings.retry_label')}
-        >
-          {t('common.retry')}
+        <Text className="text-gray-400 text-sm text-center mb-6">
+          {errorType === 'network'
+            ? t('rankings.error_network')
+            : errorType === 'auth'
+              ? t('rankings.error_auth')
+              : t('rankings.error_server')}
         </Text>
+        {errorType !== 'auth' && (
+          <Text
+            className="text-primary-light text-base"
+            onPress={() => void refetch()}
+            accessibilityRole="button"
+            accessibilityLabel={t('rankings.retry_label')}
+          >
+            {t('common.retry')}
+          </Text>
+        )}
       </View>
     );
   }

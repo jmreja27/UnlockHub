@@ -106,7 +106,7 @@ export function useFriends() {
     friends: friendsQuery.data?.data ?? [],
     friendsTotal: friendsQuery.data?.total ?? 0,
     isFriendsLoading: friendsQuery.isLoading,
-    friendsError: friendsQuery.isError,
+    friendsError: friendsQuery.error,
     refetchFriends: friendsQuery.refetch,
 
     pendingRequests: pendingQuery.data?.data ?? [],

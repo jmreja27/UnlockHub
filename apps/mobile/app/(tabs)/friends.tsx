@@ -9,10 +9,21 @@ import type { Friendship } from '@unlockhub/types';
 
 import { useFriends } from '../../hooks/useFriends';
 import { useSessionStore } from '../../stores/sessionStore';
+import { ApiRequestError } from '../../lib/api';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { EmptyState } from '../../components/EmptyState';
 
 type Tab = 'friends' | 'pending';
+
+function classifyError(err: Error | null): 'network' | 'auth' | 'server' {
+  if (!err) return 'server';
+  if (err instanceof ApiRequestError) {
+    if (err.statusCode === 401 || err.statusCode === 403) return 'auth';
+    if (err.statusCode >= 500) return 'server';
+  }
+  if (err.message.toLowerCase().includes('fetch') || err.message.toLowerCase().includes('network')) return 'network';
+  return 'server';
+}
 
 function FriendItem({
   item,
@@ -218,17 +229,41 @@ export default function FriendsScreen() {
         isFriendsLoading ? (
           renderSkeleton()
         ) : friendsError ? (
-          <View className="flex-1 items-center justify-center px-6">
-            <Text className="text-white text-lg font-bold text-center">{t('friends.error_title')}</Text>
-            <Text className="text-gray-400 mt-2 text-center">{t('friends.error_message')}</Text>
-            <TouchableOpacity
-              onPress={() => void refetchFriends()}
-              className="mt-4 px-6 py-3 bg-primary rounded-xl"
-              accessibilityRole="button"
-              accessibilityLabel={t('friends.refresh_label')}
-            >
-              <Text className="text-white font-semibold">{t('common.retry')}</Text>
-            </TouchableOpacity>
+          <View
+            className="flex-1 items-center justify-center px-6"
+            accessible
+            accessibilityLiveRegion="polite"
+            accessibilityRole="alert"
+          >
+            <Text className="text-white text-lg font-bold text-center mb-2">
+              {t('friends.error_title')}
+            </Text>
+            <Text className="text-gray-400 text-sm text-center mb-6">
+              {classifyError(friendsError) === 'network'
+                ? t('friends.error_network')
+                : classifyError(friendsError) === 'auth'
+                  ? t('friends.error_auth')
+                  : t('friends.error_server')}
+            </Text>
+            {classifyError(friendsError) === 'auth' ? (
+              <TouchableOpacity
+                onPress={() => router.replace('/(auth)/login')}
+                className="px-6 py-3 bg-primary rounded-xl"
+                accessibilityRole="button"
+                accessibilityLabel={t('friends.login_cta')}
+              >
+                <Text className="text-white font-semibold">{t('friends.login_cta')}</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                onPress={() => void refetchFriends()}
+                className="px-6 py-3 bg-primary rounded-xl"
+                accessibilityRole="button"
+                accessibilityLabel={t('friends.refresh_label')}
+              >
+                <Text className="text-white font-semibold">{t('common.retry')}</Text>
+              </TouchableOpacity>
+            )}
           </View>
         ) : filteredFriends.length === 0 ? (
           <EmptyState

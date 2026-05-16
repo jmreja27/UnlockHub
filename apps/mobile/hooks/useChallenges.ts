@@ -42,6 +42,7 @@ export function useChallenges() {
     progressPct,
     isLoading: challengeQuery.isLoading,
     isError: challengeQuery.isError,
+    error: challengeQuery.error,
     refetch: () => {
       void challengeQuery.refetch();
       void statusQuery.refetch();

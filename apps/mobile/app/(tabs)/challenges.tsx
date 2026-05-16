@@ -4,8 +4,19 @@ import { useTranslation } from 'react-i18next';
 import type { ChallengeMetric } from '@unlockhub/types';
 
 import { useChallenges } from '../../hooks/useChallenges';
+import { ApiRequestError } from '../../lib/api';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { EmptyState } from '../../components/EmptyState';
+
+function classifyError(err: Error | null): 'network' | 'auth' | 'server' {
+  if (!err) return 'server';
+  if (err instanceof ApiRequestError) {
+    if (err.statusCode === 401 || err.statusCode === 403) return 'auth';
+    if (err.statusCode >= 500) return 'server';
+  }
+  if (err.message.toLowerCase().includes('fetch') || err.message.toLowerCase().includes('network')) return 'network';
+  return 'server';
+}
 
 function metricKey(metric: ChallengeMetric): string {
   return `challenges.metric_${metric}`;
@@ -49,7 +60,7 @@ function ChallengeSkeleton() {
 
 export default function ChallengesScreen() {
   const { t, i18n } = useTranslation();
-  const { challenge, status, progressPct, isLoading, isError, refetch } = useChallenges();
+  const { challenge, status, progressPct, isLoading, isError, error, refetch } = useChallenges();
 
   const isCompleted = !!status?.completedAt;
 
@@ -77,16 +88,21 @@ export default function ChallengesScreen() {
         {isLoading ? (
           <ChallengeSkeleton />
         ) : isError ? (
-          <View className="flex-1 items-center justify-center px-6 mt-20">
-            <Text
-              className="text-white text-lg font-semibold text-center"
-              accessibilityRole="alert"
-              accessibilityLiveRegion="polite"
-            >
+          <View
+            className="flex-1 items-center justify-center px-6 mt-20"
+            accessible
+            accessibilityLiveRegion="polite"
+            accessibilityRole="alert"
+          >
+            <Text className="text-white text-lg font-semibold text-center mb-2">
               {t('challenges.error_title')}
             </Text>
-            <Text className="text-gray-400 mt-2 text-center">
-              {t('challenges.error_message')}
+            <Text className="text-gray-400 text-sm text-center">
+              {classifyError(error) === 'network'
+                ? t('challenges.error_network')
+                : classifyError(error) === 'auth'
+                  ? t('challenges.error_auth')
+                  : t('challenges.error_server')}
             </Text>
           </View>
         ) : !challenge ? (
