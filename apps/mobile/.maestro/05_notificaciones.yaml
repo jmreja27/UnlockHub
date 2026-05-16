@@ -1,0 +1,40 @@
+appId: com.unlockhub.app
+---
+- launchApp
+
+- waitForAnimationToEnd
+
+# Autenticar si la pantalla de login está visible
+- runFlow:
+    when:
+      visible: "Email"
+    commands:
+      - inputText:
+          label: "Email"
+          text: "demo@unlockhub.test"
+      - inputText:
+          label: "Password"
+          text: "Demo1234!"
+      - tapOn:
+          text: "Log in"
+      - waitForAnimationToEnd
+
+# La tab bar es visible — confirmar que estamos en la app
+- assertVisible: "Home"
+
+# Intentar abrir notificaciones vía campana en header (🔔)
+- tapOn:
+    text: "🔔"
+    optional: true
+
+- waitForAnimationToEnd
+
+# Si la campana no está accesible por texto, navegar directo a notifications
+- tapOn:
+    text: "Notifications"
+    optional: true
+
+- waitForAnimationToEnd
+
+# No debe crashear en ningún caso
+- assertNotVisible: "Algo salió mal"

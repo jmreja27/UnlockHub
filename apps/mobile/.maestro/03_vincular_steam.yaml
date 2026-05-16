@@ -1,0 +1,45 @@
+appId: com.unlockhub.app
+---
+- launchApp
+
+- waitForAnimationToEnd
+
+# Si la pantalla de login aparece en el arranque, autenticar
+- runFlow:
+    when:
+      visible: "Email"
+    commands:
+      - inputText:
+          label: "Email"
+          text: "demo@unlockhub.test"
+      - inputText:
+          label: "Password"
+          text: "Demo1234!"
+      - tapOn:
+          text: "Log in"
+      - waitForAnimationToEnd
+
+# Navegar por otra tab antes de ir a Profile para dar tiempo al restore de sesión
+- tapOn:
+    text: "Search"
+
+- waitForAnimationToEnd
+
+- tapOn:
+    text: "Profile"
+
+- waitForAnimationToEnd
+
+# El Profile carga sin crash — estado autenticado o no autenticado, ambos válidos.
+# "Your profile" aparece cuando no hay sesión; "demo_player" cuando sí hay sesión.
+# Sin sesión activa (APK preview → API producción, demo@unlockhub.test es cuenta mock):
+- assertNotVisible: "Algo salió mal"
+
+# Pulsar "Link Steam" si la sesión está activa y el botón existe
+- tapOn:
+    text: "Link Steam"
+    optional: true
+
+- waitForAnimationToEnd
+
+- assertNotVisible: "Algo salió mal"

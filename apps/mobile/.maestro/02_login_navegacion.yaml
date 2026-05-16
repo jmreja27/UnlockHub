@@ -1,0 +1,61 @@
+appId: com.unlockhub.app
+---
+- launchApp
+
+- waitForAnimationToEnd
+
+# Autenticar si hace falta
+- runFlow:
+    when:
+      visible: "Email"
+    commands:
+      - inputText:
+          label: "Email"
+          text: "demo@unlockhub.test"
+      - inputText:
+          label: "Contraseña"
+          text: "Demo1234!"
+      - tapOn:
+          text: "Iniciar sesión"
+      - waitForAnimationToEnd
+
+# Verificar pantalla principal
+- assertVisible: "My Library"
+
+# Search
+- tapOn:
+    text: "Search"
+
+- assertVisible: "Search"
+
+# Rankings
+- tapOn:
+    text: "Rankings"
+
+- assertVisible: "Rankings"
+
+- assertNotVisible: "Algo salió mal"
+
+# Friends
+- tapOn:
+    text: "Friends"
+
+- assertVisible: "Friends"
+
+- assertNotVisible: "Algo salió mal"
+
+# Profile — no debe crashear
+- tapOn:
+    text: "Profile"
+
+- waitForAnimationToEnd
+
+- assertNotVisible: "Algo salió mal"
+
+# Challenges — verificar que carga
+- tapOn:
+    text: "challenges"
+
+- waitForAnimationToEnd
+
+- assertNotVisible: "Algo salió mal"
