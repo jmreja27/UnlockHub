@@ -1,6 +1,6 @@
 import React from 'react';
 import { Text } from 'react-native';
-import { render, within } from '@testing-library/react-native';
+import { render } from '@testing-library/react-native';
 import type { WeeklyChallenge, UserChallenge } from '@unlockhub/types';
 
 import ChallengesScreen from '../../app/(tabs)/challenges';

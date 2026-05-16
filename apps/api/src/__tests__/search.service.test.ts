@@ -2,6 +2,8 @@ jest.mock('../lib/prisma', () => ({
   prisma: {
     game: { findMany: jest.fn(), findUnique: jest.fn(), upsert: jest.fn() },
     user: { findMany: jest.fn() },
+    achievement: { findMany: jest.fn() },
+    userAchievement: { findMany: jest.fn() },
   },
 }));
 
@@ -13,7 +15,7 @@ jest.mock('../lib/redis', () => ({
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
-import { search, getGameWithAchievements } from '../services/search.service';
+import { search, getGameWithAchievements, getGameAchievementsWithStatus } from '../services/search.service';
 import { prisma } from '../lib/prisma';
 import { redis } from '../lib/redis';
 
@@ -21,6 +23,8 @@ const mockGameFindMany = prisma.game.findMany as jest.Mock;
 const mockGameFindUnique = prisma.game.findUnique as jest.Mock;
 const mockGameUpsert = prisma.game.upsert as jest.Mock;
 const mockUserFindMany = prisma.user.findMany as jest.Mock;
+const mockAchievementFindMany = prisma.achievement.findMany as jest.Mock;
+const mockUserAchievementFindMany = prisma.userAchievement.findMany as jest.Mock;
 const mockRedisGet = redis.get as jest.Mock;
 const mockRedisSet = redis.set as jest.Mock;
 
@@ -44,11 +48,27 @@ const makeSteamApiResponse = (items: Array<{ id: number; name: string; tiny_imag
   json: async () => ({ total: items.length, items }),
 });
 
+const makeAchievement = (overrides = {}) => ({
+  id: 'ach1',
+  title: 'First Steps',
+  description: 'Complete the first level',
+  iconUrl: null,
+  rarity: 42.5,
+  normalizedPoints: 10,
+  platform: 'STEAM',
+  externalId: 'ach_001',
+  externalUrl: null,
+  game: { id: 'g1', title: 'Half-Life 2', iconUrl: null },
+  ...overrides,
+});
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockRedisGet.mockResolvedValue(null);
   mockRedisSet.mockResolvedValue('OK');
   mockFetch.mockResolvedValue(makeSteamApiResponse([]));
+  mockAchievementFindMany.mockResolvedValue([]);
+  mockUserAchievementFindMany.mockResolvedValue([]);
 });
 
 // ─── DB local con suficientes resultados (≥ 10) ───────────────────────────────
@@ -258,5 +278,122 @@ describe('getGameWithAchievements', () => {
         include: expect.objectContaining({ achievements: expect.any(Object) }),
       }),
     );
+  });
+});
+
+// ─── searchAchievements (type=achievements) ───────────────────────────────────
+
+describe('search — type=achievements', () => {
+  it('devuelve logros del tipo achievement con isUnlocked: false sin userId', async () => {
+    mockAchievementFindMany.mockResolvedValue([makeAchievement()]);
+    mockGameFindMany.mockResolvedValue([]);
+    mockUserFindMany.mockResolvedValue([]);
+
+    const result = await search('First', 'achievements');
+
+    expect(result.achievements).toHaveLength(1);
+    expect(result.achievements[0]?.type).toBe('achievement');
+    expect(result.achievements[0]?.isUnlocked).toBe(false);
+    expect(result.achievements[0]?.unlockedAt).toBeNull();
+    expect(result.games).toHaveLength(0);
+    expect(result.users).toHaveLength(0);
+  });
+
+  it('devuelve isUnlocked: true cuando el userId tiene el logro desbloqueado', async () => {
+    const unlockedAt = new Date('2024-03-15');
+    mockAchievementFindMany.mockResolvedValue([makeAchievement()]);
+    mockUserAchievementFindMany.mockResolvedValue([
+      { achievementId: 'ach1', unlockedAt },
+    ]);
+
+    const result = await search('First', 'achievements', undefined, 'user-1');
+
+    expect(result.achievements[0]?.isUnlocked).toBe(true);
+    expect(result.achievements[0]?.unlockedAt).toBe(unlockedAt.toISOString());
+  });
+
+  it('filtra por plataforma cuando se proporciona platform=RA', async () => {
+    mockAchievementFindMany.mockResolvedValue([makeAchievement({ platform: 'RA' })]);
+
+    const result = await search('First', 'achievements', 'RA');
+
+    expect(mockAchievementFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ platform: 'RA' }),
+      }),
+    );
+    expect(result.achievements).toHaveLength(1);
+  });
+
+  it('nunca devuelve logros de Xbox', async () => {
+    await search('First', 'achievements');
+
+    expect(mockAchievementFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          NOT: { platform: 'XBOX' },
+        }),
+      }),
+    );
+  });
+
+  it('no llama a searchGames ni searchUsers cuando type=achievements', async () => {
+    mockAchievementFindMany.mockResolvedValue([]);
+
+    await search('First', 'achievements');
+
+    expect(mockGameFindMany).not.toHaveBeenCalled();
+    expect(mockUserFindMany).not.toHaveBeenCalled();
+  });
+});
+
+// ─── getGameAchievementsWithStatus ───────────────────────────────────────────
+
+describe('getGameAchievementsWithStatus', () => {
+  it('devuelve null si el juego no existe', async () => {
+    mockGameFindUnique.mockResolvedValue(null);
+
+    const result = await getGameAchievementsWithStatus('no-existe');
+
+    expect(result).toBeNull();
+  });
+
+  it('devuelve todos los logros con isUnlocked: false sin userId', async () => {
+    mockGameFindUnique.mockResolvedValue({ id: 'g1' });
+    mockAchievementFindMany.mockResolvedValue([makeAchievement()]);
+
+    const result = await getGameAchievementsWithStatus('g1');
+
+    expect(result).not.toBeNull();
+    expect(result?.totalCount).toBe(1);
+    expect(result?.earnedCount).toBe(0);
+    expect(result?.achievements[0]?.isUnlocked).toBe(false);
+  });
+
+  it('devuelve earnedCount correcto cuando el usuario tiene logros desbloqueados', async () => {
+    mockGameFindUnique.mockResolvedValue({ id: 'g1' });
+    mockAchievementFindMany.mockResolvedValue([
+      makeAchievement({ id: 'ach1' }),
+      makeAchievement({ id: 'ach2' }),
+    ]);
+    mockUserAchievementFindMany.mockResolvedValue([
+      { achievementId: 'ach1', unlockedAt: new Date() },
+    ]);
+
+    const result = await getGameAchievementsWithStatus('g1', 'user-1');
+
+    expect(result?.earnedCount).toBe(1);
+    expect(result?.totalCount).toBe(2);
+    expect(result?.achievements.find((a) => a.id === 'ach1')?.isUnlocked).toBe(true);
+    expect(result?.achievements.find((a) => a.id === 'ach2')?.isUnlocked).toBe(false);
+  });
+
+  it('no consulta userAchievement si no hay userId', async () => {
+    mockGameFindUnique.mockResolvedValue({ id: 'g1' });
+    mockAchievementFindMany.mockResolvedValue([makeAchievement()]);
+
+    await getGameAchievementsWithStatus('g1');
+
+    expect(mockUserAchievementFindMany).not.toHaveBeenCalled();
   });
 });
