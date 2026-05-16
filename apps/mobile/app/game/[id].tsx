@@ -263,7 +263,7 @@ export default function GameDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const { user } = useSessionStore();
+  const { user, isAuthenticated } = useSessionStore();
   const currentUserId = user?.id ?? '';
 
   const [filter, setFilter] = useState<AchievementFilter>('all');
@@ -271,7 +271,6 @@ export default function GameDetailScreen() {
   const [challengeAchievementId, setChallengeAchievementId] = useState<string | null>(null);
   const [writeGuideAchievementId, setWriteGuideAchievementId] = useState<string | null>(null);
   const [guideContent, setGuideContent] = useState('');
-
   const { data: game, isLoading, isError } = useGameDetail(id ?? null);
   const { data: myAchievements } = useMyGameAchievements(id ?? null);
   const { friends } = useFriends();
@@ -382,8 +381,17 @@ export default function GameDetailScreen() {
                   {game.title}
                 </Text>
                 <Text className="text-gray-400 text-xs mt-0.5">
-                  {PLATFORM_LABEL[game.platform] ?? game.platform} ·{' '}
-                  {t('search.achievements_count', { count: game.totalAchievements })}
+                  {PLATFORM_LABEL[game.platform] ?? game.platform}
+                  {' · '}
+                  {isAuthenticated && myAchievements
+                    ? t('game.earned_progress', {
+                        earned: myAchievements.length,
+                        total: game.totalAchievements,
+                        pct: game.totalAchievements > 0
+                          ? Math.round((myAchievements.length / game.totalAchievements) * 100)
+                          : 0,
+                      })
+                    : t('search.achievements_count', { count: game.totalAchievements })}
                 </Text>
               </View>
             </View>
@@ -462,8 +470,14 @@ export default function GameDetailScreen() {
             }}
           />
         ) : game && filteredAchievements.length === 0 ? (
-          <Text className="text-gray-500 text-sm text-center mt-12">
-            {filter === 'all' ? t('game.no_achievements') : t('game.no_filtered_achievements')}
+          <Text className="text-gray-500 text-sm text-center mt-12 px-8">
+            {filter === 'all'
+              ? t('game.no_achievements')
+              : filter === 'earned' && !isAuthenticated
+              ? t('game.link_platform_to_see_progress', {
+                  platform: PLATFORM_LABEL[game.platform] ?? game.platform,
+                })
+              : t('game.no_filtered_achievements')}
           </Text>
         ) : null}
       </View>
