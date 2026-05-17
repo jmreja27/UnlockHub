@@ -856,6 +856,10 @@ Métricas disponibles:
 | Search de logros paginado con `page` param (no cursor) | La UX de búsqueda es exploratoria, no un feed continuo — paginación offset simple suficiente; `useInfiniteQuery` gestiona la acumulación de páginas en el cliente | Fase 3 |
 | `getTitleTrophies` PSN puede devolver `trophies` undefined | Algunos títulos (DLC, juegos sin soporte de trofeos) devuelven respuesta vacía — el script `seed-games.ts` necesita guard `trophies?.length ?? 0` antes de iterar | Fase 3 |
 | Token de acceso PSN expira ~60 min en seed con muchos títulos | El NPSSO se intercambia por un access token de corta duración; procesar 372 títulos secuencialmente lo agota — en futuras ejecuciones hay que refrescar el token entre usuarios | Fase 3 |
+| Constraints únicos en `Game(platform, externalId)` y `Achievement(platform, gameId, externalId)` — la BD rechaza duplicados a nivel de constraint | El constraint anterior en Achievement era `(platform, externalId)`, incorrecto para Steam donde el `apiname` (ej. `"ACH_WIN"`) no es globalmente único — el mismo nombre puede repetirse en múltiples juegos. El nuevo constraint `(platform, gameId, externalId)` es la semántica correcta | Fase 3 |
+| DLCs de PSN se tratan como juegos independientes en el seed | La API de Sony devuelve cada DLC/expansión como un `npCommunicationId` separado con su propio trophy set — es el estándar del sector y lo que la API impone; no vale la pena intentar agruparlos | Fase 3 |
+| Token PSN se refresca cada 5 usuarios en `seed-games.ts` | El access token derivado del NPSSO expira en ~60 min; procesar 372 títulos por usuario agota el token. `refreshPsnAuth()` se llama cada 5 usuarios (índice % 5 === 0) para mantener el token fresco sin requerir un nuevo NPSSO | Fase 3 |
+| `steam.adapter.ts` `syncUser()` omite juegos sin logros antes del upsert | Sin el guard `if (schema.length === 0) continue` antes del `game.upsert`, se insertaban filas de juegos vacías (0 logros) para todos los juegos del usuario sin `has_community_visible_stats`. Esto causó 30.066 juegos vacíos en la BD. El guard evita la inserción | Fase 3 |
 
 ---
 
@@ -969,7 +973,7 @@ Métricas disponibles:
 
 ## Última revisión de código
 
-**Fecha**: 2026-05-19 — seed completo Steam+RA+PSN ejecutado en producción: 1.407 juegos + 72.554 logros en BD Railway.
+**Fecha**: 2026-05-20 — limpieza BD (30.251 juegos vacíos eliminados), constraints únicos en Achievement corregidos, guards en todos los adapters, refresco de token PSN en seed.
 
 ### Resumen ejecutivo
 
@@ -980,16 +984,26 @@ Métricas disponibles:
 | Lint errores (API) | ✅ 0 errores, 0 warnings |
 | Lint errores (mobile) | ✅ 0 errores, 0 warnings |
 | Tests backend | ✅ 390 tests pasando, 33 suites — cobertura 81% stmt / 82% branch |
-| Tests mobile | ✅ 171 tests, 171 pasando — ChallengesScreen y RankingsScreen corregidos (error_server en lugar de error_message) |
+| Tests mobile | ✅ 171 tests, 171 pasando |
 | API build | ✅ `tsc -p tsconfig.json` sin errores |
 | npm audit API | ⚠️ 2 high: `bcrypt → @mapbox/node-pre-gyp → tar` (build-time, pre-existente) |
 | npm audit mobile | ⚠️ 17 high: `node-tar` vía Expo build tooling (build-time) — pendiente T8 |
 | Maestro E2E | ✅ 5 flows pasando contra emulador Android (APK preview) |
 
+### Limpieza BD y correcciones (2026-05-20)
+
+- Eliminados **30.251 juegos sin logros** (30.066 Steam + 185 RA/PSN) — causados por `steam.adapter.ts` que hacía upsert antes del guard de logros vacíos
+- Constraint en `Achievement` corregido: `(platform, externalId)` → `(platform, gameId, externalId)` — el `apiname` Steam no es globalmente único entre juegos
+- Migración manual creada: `20260520000000_achievement_unique_platform_gameid_externalid`
+- Todos los adapters (Steam, RA, PSN, Xbox) y `seed-catalog.worker.ts` actualizados al nuevo accessor `platform_gameId_externalId`
+- `steam.adapter.ts` `syncUser()`: guard `if (schema.length === 0) continue` añadido antes del game upsert
+- `scripts/seed-games.ts`: `refreshPsnAuth()` helper + refresco cada 5 usuarios; guard `trophies ?? []` en PSN
+- BD Railway post-limpieza: **1.406 juegos, 72.264 logros** (Steam: 78/7.807 · RA: 1.001/47.889 · PSN: 327/16.568)
+
 ### Seed PSN ejecutado en producción (2026-05-19)
 
 - PSN_NPSSO proporcionado → seed completado: 327 juegos PSN + 16.568 logros insertados en Railway
-- Total BD: **1.407 juegos, 72.554 logros** (Steam: 80/8.177 · RA: 1.000/47.809 · PSN: 327/16.568)
+- Total BD (antes de limpieza): **1.407 juegos, 72.554 logros** (Steam: 80/8.177 · RA: 1.000/47.809 · PSN: 327/16.568)
 - 45 títulos omitidos por `trophies` undefined en respuesta API (DLC / sin soporte de trofeos)
 - Neozaine/Seithek/Keching07 omitidos por "Expired access token" — token expiró tras 372 títulos
 - `scripts/check-db-size.ts` creado: BD Railway en ~41 MB / 1 GB (4%)
@@ -1047,7 +1061,6 @@ Métricas disponibles:
 ### Pendientes documentados
 
 - **T8**: `node-tar` vulnerabilidades high — ninguna runtime. PR dedicado post-lanzamiento.
-- **T12**: ✅ Implementado y ejecutado en producción (Steam+RA+PSN). `scripts/seed-games.ts` (manual, Steam+RA+PSN); `seed-catalog.worker.ts` (BullMQ, Steam+RA); botón "Actualizar catálogo" en dashboard admin. **BD pre-poblada: 1.407 juegos (80 Steam + 1.000 RA + 327 PSN) + 72.554 logros** — Search devuelve resultados desde el día 1.
-- **Seed PSN — resultado**: Sorrow_Lord 327/372 juegos + 16.568 logros. 45 errores `Cannot read properties of undefined (reading 'length')` — títulos sin trofeos en respuesta API (DLC, juegos sin soporte). Otros 3 perfiles (Neozaine, Seithek, Keching07) fallaron con "Expired access token" — el NPSSO expiró tras procesar 372 títulos. Bug pendiente: refrescar token entre usuarios en futuras ejecuciones.
+- **T12**: ✅ Implementado, ejecutado y corregido en producción (Steam+RA+PSN). `scripts/seed-games.ts` (manual, Steam+RA+PSN); `seed-catalog.worker.ts` (BullMQ, Steam+RA); botón "Actualizar catálogo" en dashboard admin. **BD post-limpieza: 1.406 juegos (78 Steam + 1.001 RA + 327 PSN) + 72.264 logros** — Search devuelve resultados desde el día 1. Bugs corregidos: guard `trophies ?? []` en PSN, refresco de token cada 5 usuarios, constraint Achievement corregido, 30.251 juegos vacíos eliminados.
 - **Maestro auth completa**: requiere development build con `EXPO_PUBLIC_API_URL=http://10.0.2.2:3000` o cuenta real en producción para testear login/registro/plataformas autenticadas.
 - **ChallengesScreen.test.tsx / RankingsScreen.test.tsx**: corregidos (2026-05-18) — error_server en lugar de error_message.
