@@ -10,7 +10,8 @@
  */
 
 import axios from 'axios';
-import { Worker, Job } from 'bullmq';
+import { Worker } from 'bullmq';
+import type { Job } from 'bullmq';
 
 import { createWorkerConnection } from '../lib/redis';
 import { prisma } from '../lib/prisma';
@@ -194,7 +195,7 @@ async function seedSteamGames(
       for (const ach of achievements) {
         const rarityPercent = rarityMap.get(ach.name) ?? 100;
         await prisma.achievement.upsert({
-          where: { platform_externalId: { platform: 'STEAM', externalId: ach.name } },
+          where: { platform_gameId_externalId: { platform: 'STEAM', gameId: dbGame.id, externalId: ach.name } },
           create: {
             gameId: dbGame.id,
             platform: 'STEAM',
@@ -324,7 +325,7 @@ async function seedRaGames(
       for (const [achKey, ach] of Object.entries(gameData.Achievements)) {
         const achId = String(ach.ID ?? achKey);
         await prisma.achievement.upsert({
-          where: { platform_externalId: { platform: 'RA', externalId: achId } },
+          where: { platform_gameId_externalId: { platform: 'RA', gameId: dbGame.id, externalId: achId } },
           create: {
             gameId: dbGame.id,
             platform: 'RA',

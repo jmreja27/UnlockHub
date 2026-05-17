@@ -187,6 +187,9 @@ export class SteamAdapter implements PlatformAdapter {
         this.fetchRarityMap(appId),
       ]);
 
+      // Juegos sin logros en su schema no aportan valor — no los persistimos
+      if (schema.length === 0) continue;
+
       const schemaMap = new Map(schema.map((s) => [s.name, s]));
 
       // 4. Upsert del juego en la BD
@@ -217,7 +220,7 @@ export class SteamAdapter implements PlatformAdapter {
         const normalized = normalizePoints(rarityPercent);
 
         const dbAchievement = await prisma.achievement.upsert({
-          where: { platform_externalId: { platform: 'STEAM', externalId: pa.apiname } },
+          where: { platform_gameId_externalId: { platform: 'STEAM', gameId: dbGame.id, externalId: pa.apiname } },
           create: {
             gameId: dbGame.id,
             platform: 'STEAM',

@@ -363,7 +363,7 @@ export const retroAchievementsAdapter: PlatformAdapter = {
         // Upsert del logro en la BD
         const dbAchievement = await prisma.achievement.upsert({
           where: {
-            platform_externalId: { platform: 'RA', externalId: achievementExternalId },
+            platform_gameId_externalId: { platform: 'RA', gameId: dbGame.id, externalId: achievementExternalId },
           },
           create: {
             gameId: dbGame.id,

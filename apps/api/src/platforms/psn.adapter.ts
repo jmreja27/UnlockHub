@@ -256,7 +256,7 @@ export class PsnAdapter implements PlatformAdapter {
 
       for (const t of trophies) {
         const dbAchievement = await prisma.achievement.upsert({
-          where: { platform_externalId: { platform: 'PSN', externalId: `${title.npCommunicationId}:${t.trophyId}` } },
+          where: { platform_gameId_externalId: { platform: 'PSN', gameId: dbGame.id, externalId: `${title.npCommunicationId}:${t.trophyId}` } },
           create: {
             gameId: dbGame.id,
             platform: 'PSN',

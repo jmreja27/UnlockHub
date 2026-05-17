@@ -405,7 +405,7 @@ export class XboxAdapter implements PlatformAdapter {
         );
 
         const dbAchievement = await prisma.achievement.upsert({
-          where: { platform_externalId: { platform: 'XBOX', externalId: a.id } },
+          where: { platform_gameId_externalId: { platform: 'XBOX', gameId: dbGame.id, externalId: a.id } },
           create: {
             gameId: dbGame.id,
             platform: 'XBOX',
