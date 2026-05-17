@@ -155,7 +155,7 @@ model Achievement {
   userAchievements UserAchievement[]
   guides           AchievementGuide[]
 
-  @@unique([platform, externalId])
+  @@unique([platform, gameId, externalId])
   @@index([gameId])
   @@index([platform])
   @@index([normalizedPoints])
