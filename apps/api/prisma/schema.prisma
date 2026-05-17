@@ -123,6 +123,7 @@ model Game {
   platform          Platform
   externalId        String
   title             String
+  console           String?
   iconUrl           String?
   headerUrl         String?
   totalAchievements Int      @default(0)

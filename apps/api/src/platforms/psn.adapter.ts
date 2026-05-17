@@ -200,6 +200,7 @@ export class PsnAdapter implements PlatformAdapter {
       platform: 'PSN',
       externalId: npCommunicationId,
       title: `PSN Game ${npCommunicationId}`,
+      console: null,
       iconUrl: null,
       headerUrl: null,
       totalAchievements: 0,
@@ -235,6 +236,7 @@ export class PsnAdapter implements PlatformAdapter {
           platform: 'PSN',
           externalId: title.npCommunicationId,
           title: title.trophyTitleName,
+          console: title.trophyTitlePlatform ?? null,
           iconUrl: title.trophyTitleIconUrl ?? null,
           headerUrl: null,
           totalAchievements: title.definedTrophies.bronze +
@@ -244,6 +246,7 @@ export class PsnAdapter implements PlatformAdapter {
         },
         update: {
           title: title.trophyTitleName,
+          console: title.trophyTitlePlatform ?? null,
           iconUrl: title.trophyTitleIconUrl ?? null,
           totalAchievements: title.definedTrophies.bronze +
             title.definedTrophies.silver +

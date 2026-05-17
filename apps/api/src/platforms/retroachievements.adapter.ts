@@ -40,6 +40,7 @@ interface RaGameProgress {
   Title: string;
   ImageIcon?: string;
   NumAchievements?: number;
+  ConsoleName?: string;
   Achievements?: Record<string, RaAchievementEntry>;
 }
 
@@ -217,6 +218,7 @@ export const retroAchievementsAdapter: PlatformAdapter = {
         platform: 'RA',
         externalId: String(data.ID ?? externalId),
         title: data.Title ?? 'Juego sin título',
+        console: data.ConsoleName ?? null,
         iconUrl: data.ImageIcon
           ? `https://media.retroachievements.org${data.ImageIcon}`
           : null,
@@ -337,6 +339,7 @@ export const retroAchievementsAdapter: PlatformAdapter = {
           platform: 'RA',
           externalId: gameId,
           title: gameProgress.Title ?? gameEntry.Title ?? 'Juego sin título',
+          console: gameProgress.ConsoleName ?? null,
           iconUrl: gameProgress.ImageIcon
             ? `https://media.retroachievements.org${gameProgress.ImageIcon}`
             : null,
@@ -345,6 +348,7 @@ export const retroAchievementsAdapter: PlatformAdapter = {
         },
         update: {
           title: gameProgress.Title ?? gameEntry.Title ?? 'Juego sin título',
+          console: gameProgress.ConsoleName ?? null,
           iconUrl: gameProgress.ImageIcon
             ? `https://media.retroachievements.org${gameProgress.ImageIcon}`
             : null,

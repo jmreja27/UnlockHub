@@ -33,6 +33,11 @@ const RA_DELAY_MS = 400;
 const RA_CONSOLE_IDS = [7, 3, 5, 12, 2, 1, 6, 21];
 const RA_GAMES_PER_CONSOLE = 50;
 
+const RA_CONSOLE_NAMES: Record<number, string> = {
+  1: 'Mega Drive', 2: 'N64', 3: 'SNES', 5: 'GBA',
+  6: 'Game Boy Color', 7: 'NES', 12: 'PlayStation', 21: 'PlayStation 2',
+};
+
 // ─── Tipos internos ───────────────────────────────────────────────────────────
 
 interface SteamSpyEntry {
@@ -248,10 +253,11 @@ async function seedRaGames(
   let totalGames = 0;
   let processedGames = 0;
 
-  const allGames: Array<{ consoleId: number; gameId: string; gameTitle: string }> = [];
+  const allGames: Array<{ consoleId: number; gameId: string; gameTitle: string; consoleName: string }> = [];
 
   // Recopilar listas de juegos de todas las consolas
   for (const consoleId of RA_CONSOLE_IDS) {
+    const consoleName = RA_CONSOLE_NAMES[consoleId] ?? `Consola ${consoleId}`;
     try {
       const listResp = await axios.get<RaGameListEntry[]>(
         `${RA_API_BASE}/API_GetGameList.php`,
@@ -264,7 +270,7 @@ async function seedRaGames(
 
       const games = Array.isArray(listResp.data) ? listResp.data.slice(0, RA_GAMES_PER_CONSOLE) : [];
       for (const g of games) {
-        allGames.push({ consoleId, gameId: String(g.ID), gameTitle: g.Title ?? 'Sin título' });
+        allGames.push({ consoleId, gameId: String(g.ID), gameTitle: g.Title ?? 'Sin título', consoleName });
       }
       totalGames += games.length;
     } catch (err) {
@@ -275,7 +281,7 @@ async function seedRaGames(
 
   logger.info({ totalGames }, '[SeedCatalog] RA: juegos a procesar');
 
-  for (const { gameId, gameTitle } of allGames) {
+  for (const { gameId, gameTitle, consoleName } of allGames) {
     processedGames++;
 
     if (processedGames % 25 === 0) {
@@ -305,6 +311,7 @@ async function seedRaGames(
           platform: 'RA',
           externalId: gameId,
           title: gameData.Title ?? gameTitle,
+          console: consoleName,
           iconUrl: gameData.ImageIcon
             ? `https://media.retroachievements.org${gameData.ImageIcon}`
             : null,
@@ -313,6 +320,7 @@ async function seedRaGames(
         },
         update: {
           title: gameData.Title ?? gameTitle,
+          console: consoleName,
           iconUrl: gameData.ImageIcon
             ? `https://media.retroachievements.org${gameData.ImageIcon}`
             : null,

@@ -349,6 +349,7 @@ async function seedRetroAchievements(prisma: PrismaClient): Promise<SeedResult> 
             platform: 'RA',
             externalId: gameId,
             title: gameData.Title ?? game.Title ?? 'Sin título',
+            console: consoleName,
             iconUrl: gameData.ImageIcon
               ? `https://media.retroachievements.org${gameData.ImageIcon}`
               : null,
@@ -357,6 +358,7 @@ async function seedRetroAchievements(prisma: PrismaClient): Promise<SeedResult> 
           },
           update: {
             title: gameData.Title ?? game.Title ?? 'Sin título',
+            console: consoleName,
             iconUrl: gameData.ImageIcon
               ? `https://media.retroachievements.org${gameData.ImageIcon}`
               : null,
@@ -514,12 +516,14 @@ async function seedPSN(prisma: PrismaClient): Promise<SeedResult> {
             platform: 'PSN',
             externalId: npCommId,
             title: title.trophyTitleName,
+            console: title.trophyTitlePlatform ?? null,
             iconUrl: title.trophyTitleIconUrl ?? null,
             headerUrl: null,
             totalAchievements,
           },
           update: {
             title: title.trophyTitleName,
+            console: title.trophyTitlePlatform ?? null,
             iconUrl: title.trophyTitleIconUrl ?? null,
             totalAchievements,
           },

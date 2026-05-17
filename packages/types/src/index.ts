@@ -56,6 +56,7 @@ export interface Game {
   platform: Platform;
   externalId: string;
   title: string;
+  console: string | null;
   iconUrl: string | null;
   headerUrl: string | null;
   totalAchievements: number;

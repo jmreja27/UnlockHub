@@ -339,6 +339,7 @@ export class XboxAdapter implements PlatformAdapter {
       platform: 'XBOX',
       externalId: titleId,
       title: `Xbox Game ${titleId}`,
+      console: null,
       iconUrl: null,
       headerUrl: null,
       totalAchievements: 0,
