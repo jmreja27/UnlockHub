@@ -50,6 +50,7 @@ export function GameCard({ game }: Props) {
         </Text>
         <Text className="text-gray-400 text-xs mt-0.5">
           {t('search.achievements_count', { count: game.totalAchievements })}
+          {game.console ? ` · ${game.console}` : ''}
         </Text>
       </View>
       <View

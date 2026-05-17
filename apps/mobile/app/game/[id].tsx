@@ -382,6 +382,7 @@ export default function GameDetailScreen() {
                 </Text>
                 <Text className="text-gray-400 text-xs mt-0.5">
                   {PLATFORM_LABEL[game.platform] ?? game.platform}
+                  {game.console ? ` · ${game.console}` : ''}
                   {' · '}
                   {isAuthenticated && myAchievements
                     ? t('game.earned_progress', {

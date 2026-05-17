@@ -31,7 +31,7 @@ export async function search(
 async function searchGames(q: string): Promise<GameSearchResult[]> {
   const localRows = await prisma.game.findMany({
     where: { title: { contains: q, mode: 'insensitive' } },
-    select: { id: true, platform: true, externalId: true, title: true, iconUrl: true, totalAchievements: true },
+    select: { id: true, platform: true, externalId: true, title: true, console: true, iconUrl: true, totalAchievements: true },
     orderBy: { title: 'asc' },
     take: MAX_RESULTS,
   });
@@ -41,6 +41,7 @@ async function searchGames(q: string): Promise<GameSearchResult[]> {
     id: r.id,
     platform: r.platform,
     title: r.title,
+    console: r.console,
     iconUrl: r.iconUrl,
     totalAchievements: r.totalAchievements,
   }));
@@ -70,6 +71,7 @@ async function searchGames(q: string): Promise<GameSearchResult[]> {
     id: g.id,
     platform: 'STEAM' as const,
     title: g.title,
+    console: null,
     iconUrl: g.iconUrl,
     totalAchievements: g.totalAchievements,
   }));

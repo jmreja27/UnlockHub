@@ -876,6 +876,8 @@ Métricas disponibles:
 | Token PSN se refresca cada 5 usuarios en `seed-games.ts` | El access token derivado del NPSSO expira en ~60 min; procesar 372 títulos por usuario agota el token. `refreshPsnAuth()` se llama cada 5 usuarios (índice % 5 === 0) para mantener el token fresco sin requerir un nuevo NPSSO | Fase 3 |
 | `steam.adapter.ts` `syncUser()` omite juegos sin logros antes del upsert | Sin el guard `if (schema.length === 0) continue` antes del `game.upsert`, se insertaban filas de juegos vacías (0 logros) para todos los juegos del usuario sin `has_community_visible_stats`. Esto causó 30.066 juegos vacíos en la BD. El guard evita la inserción | Fase 3 |
 | `Game.console` almacena la consola/plataforma de origen | PSN devuelve `trophyTitlePlatform` ("PS3"/"PS4"/"PS5"/"PSVITA"), RA devuelve `ConsoleName` por API y el seed usa el mapa `RA_CONSOLE_NAMES`; Steam y Xbox guardan `null` (plataforma única) | Fase 3 |
+| `console` se muestra en GameCard (subtítulo) y game/[id].tsx (header) | Los usuarios con librerías mixtas de PSN necesitan ver si un juego es de PS3/PS4/PS5; RA muestra NES/SNES/etc. Steam y Xbox no muestran nada (null) | Fase 3 |
+| Backfill RA via `API_GetGameList.php` (1 llamada/consola, no 1/juego) | Actualizar 1.001 juegos RA con 1.001 llamadas habría agotado el rate limit y tardado 17 min; con 8 consolas son 8 llamadas y ~5 seg. PSN requiere re-seed con NPSSO. | Fase 3 |
 
 ---
 
@@ -989,7 +991,7 @@ Métricas disponibles:
 
 ## Última revisión de código
 
-**Fecha**: 2026-05-20 — limpieza BD (30.251 juegos vacíos eliminados), constraints únicos en Achievement corregidos, guards en todos los adapters, refresco de token PSN en seed. Campo `Game.console` añadido (PSN: PS3/PS4/PS5/PSVITA · RA: NES/SNES/...).
+**Fecha**: 2026-05-21 — campo `console` visible en UI (GameCard + game detail); script `backfill-game-console.ts` para actualizar juegos RA existentes; `GameSearchResult` y `GameDetail` incluyen `console`. Campo `Game.console` añadido (PSN: PS3/PS4/PS5/PSVITA · RA: NES/SNES/...).
 
 ### Resumen ejecutivo
 
@@ -1080,3 +1082,5 @@ Métricas disponibles:
 - **T12**: ✅ Implementado, ejecutado y corregido en producción (Steam+RA+PSN). `scripts/seed-games.ts` (manual, Steam+RA+PSN); `seed-catalog.worker.ts` (BullMQ, Steam+RA); botón "Actualizar catálogo" en dashboard admin. **BD post-limpieza: 1.406 juegos (78 Steam + 1.001 RA + 327 PSN) + 72.264 logros** — Search devuelve resultados desde el día 1. Bugs corregidos: guard `trophies ?? []` en PSN, refresco de token cada 5 usuarios, constraint Achievement corregido, 30.251 juegos vacíos eliminados.
 - **Maestro auth completa**: requiere development build con `EXPO_PUBLIC_API_URL=http://10.0.2.2:3000` o cuenta real en producción para testear login/registro/plataformas autenticadas.
 - **ChallengesScreen.test.tsx / RankingsScreen.test.tsx**: corregidos (2026-05-18) — error_server en lugar de error_message.
+- **Backfill console en RA**: ejecutar `cd apps/api && npx ts-node ../../scripts/backfill-game-console.ts` con `RA_SYSTEM_USER` y `RA_SYSTEM_KEY` en `.env`.
+- **Backfill console en PSN**: re-ejecutar `cd apps/api && npx ts-node ../../scripts/seed-games.ts` con NPSSO válido — el upsert ya incluye `console: title.trophyTitlePlatform ?? null`.

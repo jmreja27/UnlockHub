@@ -197,6 +197,7 @@ export interface GameSearchResult {
   id: string;
   platform: Platform;
   title: string;
+  console: string | null;
   iconUrl: string | null;
   totalAchievements: number;
 }

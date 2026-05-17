@@ -77,6 +77,7 @@ export interface GameDetail {
   id: string;
   platform: string;
   title: string;
+  console: string | null;
   iconUrl: string | null;
   headerUrl: string | null;
   totalAchievements: number;

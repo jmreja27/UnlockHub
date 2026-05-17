@@ -17,6 +17,7 @@ function makeGame(overrides: Partial<GameSearchResult> = {}): GameSearchResult {
     id: 'g1',
     platform: 'STEAM',
     title: 'Half-Life 2',
+    console: null,
     iconUrl: null,
     totalAchievements: 20,
     ...overrides,
