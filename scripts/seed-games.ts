@@ -236,7 +236,7 @@ async function seedSteam(prisma: PrismaClient): Promise<SeedResult> {
         const normalized = normalizeSteamPoints(rarityPercent);
 
         await prisma.achievement.upsert({
-          where: { platform_externalId: { platform: 'STEAM', externalId: ach.name } },
+          where: { platform_gameId_externalId: { platform: 'STEAM', gameId: dbGame.id, externalId: ach.name } },
           create: {
             gameId: dbGame.id,
             platform: 'STEAM',
@@ -370,7 +370,7 @@ async function seedRetroAchievements(prisma: PrismaClient): Promise<SeedResult> 
         for (const [achKey, ach] of Object.entries(gameData.Achievements)) {
           const achId = String(ach.ID ?? achKey);
           await prisma.achievement.upsert({
-            where: { platform_externalId: { platform: 'RA', externalId: achId } },
+            where: { platform_gameId_externalId: { platform: 'RA', gameId: dbGame.id, externalId: achId } },
             create: {
               gameId: dbGame.id,
               platform: 'RA',
@@ -424,12 +424,15 @@ async function seedPSN(prisma: PrismaClient): Promise<SeedResult> {
 
   console.log('\n🎮 PSN: autenticando con NPSSO...');
 
-  // Auth con NPSSO
-  let auth: AuthorizationPayload;
-  try {
+  async function refreshPsnAuth(): Promise<AuthorizationPayload> {
     const code = await exchangeNpssoForAccessCode(npsso);
     const tokens = await exchangeAccessCodeForAuthTokens(code);
-    auth = { accessToken: tokens.accessToken };
+    return { accessToken: tokens.accessToken };
+  }
+
+  let auth: AuthorizationPayload;
+  try {
+    auth = await refreshPsnAuth();
     console.log('  ✓ Autenticado en PSN');
   } catch (err) {
     console.error(`  ✗ Error de autenticación PSN: ${(err as Error).message}`);
@@ -439,7 +442,17 @@ async function seedPSN(prisma: PrismaClient): Promise<SeedResult> {
 
   const result: SeedResult = { gamesProcessed: 0, gamesCreated: 0, achievementsCreated: 0, errors: 0 };
 
-  for (const username of PSN_USERNAMES_TO_SEED) {
+  for (let userIdx = 0; userIdx < PSN_USERNAMES_TO_SEED.length; userIdx++) {
+    // Refrescar token cada 5 usuarios para evitar expiración a los 60 min
+    if (userIdx > 0 && userIdx % 5 === 0) {
+      try {
+        auth = await refreshPsnAuth();
+        console.log('  ✓ PSN token refrescado');
+      } catch (err) {
+        console.error(`  ⚠️  No se pudo refrescar el token PSN: ${(err as Error).message}`);
+      }
+    }
+    const username = PSN_USERNAMES_TO_SEED[userIdx];
     console.log(`  → Procesando perfil PSN: ${username}`);
 
     // Resolver username → accountId
@@ -484,7 +497,7 @@ async function seedPSN(prisma: PrismaClient): Promise<SeedResult> {
       try {
         // Obtener metadatos globales de trofeos (NO datos del usuario)
         const trophiesResp = await getTitleTrophies(auth, npCommId, 'all', { npServiceName });
-        const trophies: Trophy[] = trophiesResp.trophies;
+        const trophies: Trophy[] = trophiesResp.trophies ?? [];
 
         if (trophies.length === 0) continue;
 
@@ -518,7 +531,7 @@ async function seedPSN(prisma: PrismaClient): Promise<SeedResult> {
         for (const t of trophies) {
           const achExternalId = `${npCommId}:${t.trophyId}`;
           await prisma.achievement.upsert({
-            where: { platform_externalId: { platform: 'PSN', externalId: achExternalId } },
+            where: { platform_gameId_externalId: { platform: 'PSN', gameId: dbGame.id, externalId: achExternalId } },
             create: {
               gameId: dbGame.id,
               platform: 'PSN',
