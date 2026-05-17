@@ -854,6 +854,8 @@ Métricas disponibles:
 | `getGameAchievementsWithStatus` usa dos queries separadas (achievements + userAchievements) | Evita un JOIN complejo; Map<achievementId, unlockedAt> para lookup O(1) es más claro y suficientemente rápido a escala de logros por juego | Fase 3 |
 | i18n key `search.achievement_in_game` en tests devuelve la clave sin interpolar | En entorno de test, i18next devuelve la clave (no el texto interpolado) — tests usan `getByText('search.achievement_in_game')` en lugar de buscar el nombre del juego | Fase 3 |
 | Search de logros paginado con `page` param (no cursor) | La UX de búsqueda es exploratoria, no un feed continuo — paginación offset simple suficiente; `useInfiniteQuery` gestiona la acumulación de páginas en el cliente | Fase 3 |
+| `getTitleTrophies` PSN puede devolver `trophies` undefined | Algunos títulos (DLC, juegos sin soporte de trofeos) devuelven respuesta vacía — el script `seed-games.ts` necesita guard `trophies?.length ?? 0` antes de iterar | Fase 3 |
+| Token de acceso PSN expira ~60 min en seed con muchos títulos | El NPSSO se intercambia por un access token de corta duración; procesar 372 títulos secuencialmente lo agota — en futuras ejecuciones hay que refrescar el token entre usuarios | Fase 3 |
 
 ---
 
@@ -945,7 +947,7 @@ Métricas disponibles:
 | T9 | Resolver 145 warnings import/order en API | ✅ Resuelto — `eslint --fix` + override en `.eslintrc.js` para ficheros de test |
 | T10 | Flows Maestro E2E | ✅ 5 flows en `apps/mobile/.maestro/` — todos pasando contra emulador Android con APK preview |
 | T11 | Search de logros + endpoint logros de juego | ✅ Backend `GET /api/v1/games/:id/achievements` + `GET /api/v1/search?type=achievements` — JWT opcional, Xbox excluido, paginado 20/pág |
-| T12 | Job "seed de logros populares" | 🔲 BullMQ job que sincroniza top-100 juegos por plataforma sin usuario — necesario para que el search tenga contenido desde el día 1 |
+| T12 | Job "seed de logros populares" | ✅ Ejecutado en prod — 1.407 juegos, 72.554 logros (80 Steam + 1.000 RA + 327 PSN). Bugs pendientes en PSN: guard `trophies?.length` + refresco de token entre usuarios |
 
 ### 🟢 Features
 
@@ -967,7 +969,7 @@ Métricas disponibles:
 
 ## Última revisión de código
 
-**Fecha**: 2026-05-17 — búsqueda de logros global + endpoint logros de juego + AchievementSearchCard.
+**Fecha**: 2026-05-19 — seed completo Steam+RA+PSN ejecutado en producción: 1.407 juegos + 72.554 logros en BD Railway.
 
 ### Resumen ejecutivo
 
@@ -978,11 +980,19 @@ Métricas disponibles:
 | Lint errores (API) | ✅ 0 errores, 0 warnings |
 | Lint errores (mobile) | ✅ 0 errores, 0 warnings |
 | Tests backend | ✅ 390 tests pasando, 33 suites — cobertura 81% stmt / 82% branch |
-| Tests mobile | ✅ 171 tests, 169 pasando, 2 pre-existentes fallando (ChallengesScreen / RankingsScreen) |
+| Tests mobile | ✅ 171 tests, 171 pasando — ChallengesScreen y RankingsScreen corregidos (error_server en lugar de error_message) |
 | API build | ✅ `tsc -p tsconfig.json` sin errores |
 | npm audit API | ⚠️ 2 high: `bcrypt → @mapbox/node-pre-gyp → tar` (build-time, pre-existente) |
 | npm audit mobile | ⚠️ 17 high: `node-tar` vía Expo build tooling (build-time) — pendiente T8 |
 | Maestro E2E | ✅ 5 flows pasando contra emulador Android (APK preview) |
+
+### Seed PSN ejecutado en producción (2026-05-19)
+
+- PSN_NPSSO proporcionado → seed completado: 327 juegos PSN + 16.568 logros insertados en Railway
+- Total BD: **1.407 juegos, 72.554 logros** (Steam: 80/8.177 · RA: 1.000/47.809 · PSN: 327/16.568)
+- 45 títulos omitidos por `trophies` undefined en respuesta API (DLC / sin soporte de trofeos)
+- Neozaine/Seithek/Keching07 omitidos por "Expired access token" — token expiró tras 372 títulos
+- `scripts/check-db-size.ts` creado: BD Railway en ~41 MB / 1 GB (4%)
 
 ### Features implementadas en esta sesión (2026-05-17)
 
@@ -996,10 +1006,9 @@ Métricas disponibles:
 - `useSearchAchievements.ts`: `useInfiniteQuery`, debounce 400ms, staleTime 5min, infinite scroll en FlashList
 - `game/[id].tsx`: header muestra "X/Y logros · Z% completado" cuando autenticado; empty state en filtro "Earned" sin sesión
 
-**NOTA — BD vacía de logros**
-- El search de logros solo encuentra logros que ya estén en la BD (sincronizados por algún usuario).
-- Si nadie ha hecho sync todavía, la búsqueda devuelve 0 resultados aunque los logros existan en Steam/RA/PSN.
-- Solución a largo plazo: job de "seed de logros populares" que sincronice los top-100 juegos por plataforma sin necesidad de usuario. Propuesto como T12 en el backlog.
+**NOTA — BD pre-poblada ✅**
+- Seed ejecutado en producción: 1.407 juegos + 72.554 logros (Steam + RA + PSN).
+- Search devuelve resultados desde el día 1 sin necesidad de que ningún usuario haga sync.
 
 ### Correcciones aplicadas en esta sesión (2026-05-16)
 
@@ -1038,6 +1047,7 @@ Métricas disponibles:
 ### Pendientes documentados
 
 - **T8**: `node-tar` vulnerabilidades high — ninguna runtime. PR dedicado post-lanzamiento.
-- **T12 propuesto**: Job BullMQ "seed de logros populares" — sincronizar top-100 juegos por plataforma (Steam/RA/PSN) sin necesidad de usuario para que el search de logros tenga contenido desde el día 1.
+- **T12**: ✅ Implementado y ejecutado en producción (Steam+RA+PSN). `scripts/seed-games.ts` (manual, Steam+RA+PSN); `seed-catalog.worker.ts` (BullMQ, Steam+RA); botón "Actualizar catálogo" en dashboard admin. **BD pre-poblada: 1.407 juegos (80 Steam + 1.000 RA + 327 PSN) + 72.554 logros** — Search devuelve resultados desde el día 1.
+- **Seed PSN — resultado**: Sorrow_Lord 327/372 juegos + 16.568 logros. 45 errores `Cannot read properties of undefined (reading 'length')` — títulos sin trofeos en respuesta API (DLC, juegos sin soporte). Otros 3 perfiles (Neozaine, Seithek, Keching07) fallaron con "Expired access token" — el NPSSO expiró tras procesar 372 títulos. Bug pendiente: refrescar token entre usuarios en futuras ejecuciones.
 - **Maestro auth completa**: requiere development build con `EXPO_PUBLIC_API_URL=http://10.0.2.2:3000` o cuenta real en producción para testear login/registro/plataformas autenticadas.
-- **ChallengesScreen.test.tsx / RankingsScreen.test.tsx**: 2 tests fallando pre-existentes (no relacionados con esta sesión).
+- **ChallengesScreen.test.tsx / RankingsScreen.test.tsx**: corregidos (2026-05-18) — error_server en lugar de error_message.

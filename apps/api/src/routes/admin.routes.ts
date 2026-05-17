@@ -5,6 +5,7 @@ import {
   notifyMaintenanceHandler,
   getMetricsHandler,
   getDashboardHandler,
+  triggerSeedCatalogHandler,
 } from '../controllers/admin.controller';
 
 const router = Router();
@@ -17,5 +18,8 @@ router.get('/metrics', adminAuth, getMetricsHandler);
 
 // Notificación de mantenimiento masiva
 router.post('/maintenance/notify', adminAuth, notifyMaintenanceHandler);
+
+// Seed manual del catálogo de juegos y logros (Steam + RA)
+router.post('/seed-catalog', adminAuth, triggerSeedCatalogHandler);
 
 export default router;

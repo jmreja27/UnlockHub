@@ -63,7 +63,7 @@ describe('RankingsScreen', () => {
     const { getByRole, getByText } = render(<RankingsScreen />);
     expect(getByRole('alert')).toBeTruthy();
     expect(getByText('rankings.error_title')).toBeTruthy();
-    expect(getByText('rankings.error_message')).toBeTruthy();
+    expect(getByText('rankings.error_server')).toBeTruthy();
   });
 
   it('muestra el botÃ³n de reintento con accessibilityLabel en estado de error', () => {

@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { sendAll } from '../services/notification.service';
 import { getAdminMetrics } from '../services/admin.service';
+import { seedCatalogQueue } from '../jobs/seed-catalog.queue';
 import { logger } from '../lib/logger';
 
 const maintenanceNotifySchema = z.object({
@@ -41,6 +42,24 @@ export async function getMetricsHandler(
   }
 }
 
+export async function triggerSeedCatalogHandler(
+  _req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const job = await seedCatalogQueue.add(
+      'manual-seed',
+      { platforms: ['STEAM', 'RA'], triggeredBy: 'admin_manual' },
+      { jobId: `manual-seed-${Date.now()}` },
+    );
+    logger.info({ jobId: job.id }, '[admin] Seed de catálogo encolado manualmente');
+    res.json({ ok: true, jobId: job.id, message: 'Seed de catálogo encolado correctamente' });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function getDashboardHandler(
   _req: Request,
   res: Response,
@@ -69,6 +88,11 @@ export async function getDashboardHandler(
   .metric-value.danger { color: #f87171; }
   .refresh { margin-top: 2rem; color: #64748b; font-size: 0.75rem; }
   a { color: #818cf8; }
+  .actions { margin-top: 1.5rem; display: flex; gap: 0.75rem; flex-wrap: wrap; }
+  .btn { background: #312e81; color: #e0e7ff; border: 1px solid #4338ca; border-radius: 8px; padding: 0.5rem 1.25rem; font-size: 0.875rem; font-weight: 600; cursor: pointer; }
+  .btn:hover { background: #3730a3; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 0.75rem 1.25rem; color: #e2e8f0; font-size: 0.875rem; display: none; }
 </style>
 </head>
 <body>
@@ -77,12 +101,47 @@ export async function getDashboardHandler(
 <div class="grid" id="grid">
   <div class="card"><div class="card-title">Cargando métricas…</div></div>
 </div>
+<div class="actions">
+  <button class="btn" id="btnSeed" onclick="triggerSeed()">Actualizar catálogo (Steam + RA)</button>
+</div>
+<div id="toast" class="toast"></div>
 <p class="refresh">Auto-refresca cada 60 segundos. <a href="#" onclick="load()">Refrescar ahora</a></p>
 
 <script>
+function getToken() {
+  return sessionStorage.getItem('adminToken') || (function() {
+    const t = prompt('Admin token:');
+    if (t) sessionStorage.setItem('adminToken', t);
+    return t;
+  })();
+}
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 4000);
+}
+async function triggerSeed() {
+  const btn = document.getElementById('btnSeed');
+  btn.disabled = true;
+  btn.textContent = 'Encolando...';
+  try {
+    const r = await fetch('/api/v1/admin/seed-catalog', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + getToken() },
+    });
+    const d = await r.json();
+    showToast(r.ok ? \`✓ \${d.message} (jobId: \${d.jobId})\` : \`✗ Error: \${d.error ?? 'desconocido'}\`);
+  } catch (e) {
+    showToast(\`✗ Error de red: \${e.message}\`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Actualizar catálogo (Steam + RA)';
+  }
+}
 async function load() {
   const r = await fetch('/api/v1/admin/metrics', {
-    headers: { 'Authorization': 'Bearer ' + (sessionStorage.getItem('adminToken') || prompt('Admin token:')) }
+    headers: { 'Authorization': 'Bearer ' + getToken() }
   });
   if (!r.ok) { alert('No autorizado'); return; }
   const d = await r.json();

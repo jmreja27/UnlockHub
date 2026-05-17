@@ -6,6 +6,7 @@ import { initSocketServer } from './lib/socket';
 import { registerActivityHandler } from './sockets/activity.handler';
 import { startSyncWorker } from './jobs/sync.worker';
 import { restoreAutoSyncs } from './jobs/sync.scheduler';
+import { startSeedCatalogWorker } from './jobs/seed-catalog.worker';
 import { streakWorker } from './jobs/streak.worker';
 import { scheduleStreakJob } from './jobs/streak.scheduler';
 import { challengeWorker, scheduleChallengeEvaluation } from './jobs/challenge.scheduler';
@@ -18,6 +19,7 @@ import { logger } from './lib/logger';
 const env = validateEnv();
 
 const syncWorker = startSyncWorker();
+const seedCatalogWorker = startSeedCatalogWorker();
 
 // Crear servidor HTTP explícito para compartirlo con Socket.io
 const server = http.createServer(app);
@@ -37,6 +39,7 @@ server.listen(env.PORT, async () => {
 
 process.on('SIGTERM', async () => {
   await syncWorker.close();
+  await seedCatalogWorker.close();
   await streakWorker.close();
   await challengeWorker.close();
   await shieldWorker.close();

@@ -65,7 +65,7 @@ describe('ChallengesScreen', () => {
     const { getByRole, getByText } = render(<ChallengesScreen />);
     expect(getByRole('alert')).toBeTruthy();
     expect(getByText('challenges.error_title')).toBeTruthy();
-    expect(getByText('challenges.error_message')).toBeTruthy();
+    expect(getByText('challenges.error_server')).toBeTruthy();
   });
 
   it('muestra el mensaje "sin reto activo" cuando no hay reto', () => {
