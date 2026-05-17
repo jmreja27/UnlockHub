@@ -302,6 +302,21 @@ model PlatformAccount {
 
 enum Platform { STEAM RA XBOX PSN }
 
+model Game {
+  id                String   @id @default(cuid())
+  platform          Platform
+  externalId        String
+  title             String
+  console           String?  // PSN: "PS3"/"PS4"/"PS5"/"PSVITA" · RA: "NES"/"SNES"/... · Steam/Xbox: null
+  iconUrl           String?
+  headerUrl         String?
+  totalAchievements Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([platform, externalId])
+}
+
 model Achievement {
   id               String   @id @default(cuid())
   gameId           String
@@ -860,6 +875,7 @@ Métricas disponibles:
 | DLCs de PSN se tratan como juegos independientes en el seed | La API de Sony devuelve cada DLC/expansión como un `npCommunicationId` separado con su propio trophy set — es el estándar del sector y lo que la API impone; no vale la pena intentar agruparlos | Fase 3 |
 | Token PSN se refresca cada 5 usuarios en `seed-games.ts` | El access token derivado del NPSSO expira en ~60 min; procesar 372 títulos por usuario agota el token. `refreshPsnAuth()` se llama cada 5 usuarios (índice % 5 === 0) para mantener el token fresco sin requerir un nuevo NPSSO | Fase 3 |
 | `steam.adapter.ts` `syncUser()` omite juegos sin logros antes del upsert | Sin el guard `if (schema.length === 0) continue` antes del `game.upsert`, se insertaban filas de juegos vacías (0 logros) para todos los juegos del usuario sin `has_community_visible_stats`. Esto causó 30.066 juegos vacíos en la BD. El guard evita la inserción | Fase 3 |
+| `Game.console` almacena la consola/plataforma de origen | PSN devuelve `trophyTitlePlatform` ("PS3"/"PS4"/"PS5"/"PSVITA"), RA devuelve `ConsoleName` por API y el seed usa el mapa `RA_CONSOLE_NAMES`; Steam y Xbox guardan `null` (plataforma única) | Fase 3 |
 
 ---
 
@@ -973,7 +989,7 @@ Métricas disponibles:
 
 ## Última revisión de código
 
-**Fecha**: 2026-05-20 — limpieza BD (30.251 juegos vacíos eliminados), constraints únicos en Achievement corregidos, guards en todos los adapters, refresco de token PSN en seed.
+**Fecha**: 2026-05-20 — limpieza BD (30.251 juegos vacíos eliminados), constraints únicos en Achievement corregidos, guards en todos los adapters, refresco de token PSN en seed. Campo `Game.console` añadido (PSN: PS3/PS4/PS5/PSVITA · RA: NES/SNES/...).
 
 ### Resumen ejecutivo
 
