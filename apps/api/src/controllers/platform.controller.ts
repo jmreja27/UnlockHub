@@ -7,9 +7,12 @@ import {
 } from '@unlockhub/validators';
 
 import * as platformService from '../services/platform.service';
+import { triggerExpressSync, queueInitialSync } from '../services/sync.service';
 import type { AuthenticatedRequest } from '../middleware/authenticate';
 import { exchangeNpssoForPsnTokens } from '../platforms/psn.adapter';
 import { exchangeXboxCodeForTokens } from '../platforms/xbox.adapter';
+
+const EXPRESS_SYNC_TIMEOUT_MS = 25_000;
 
 // POST /api/v1/platforms/steam/link — vincular cuenta de Steam
 export async function linkSteamHandler(
@@ -22,6 +25,13 @@ export async function linkSteamHandler(
     const { steamId, apiKey } = linkSteamAccountSchema.parse(req.body);
 
     const account = await platformService.linkPlatform(userId, 'STEAM', steamId, steamId, apiKey);
+
+    await Promise.race([
+      triggerExpressSync(userId, 'STEAM'),
+      new Promise<void>((resolve) => setTimeout(resolve, EXPRESS_SYNC_TIMEOUT_MS)),
+    ]);
+    void queueInitialSync(userId, 'STEAM');
+
     res.status(201).json(account);
   } catch (err) {
     next(err);
@@ -54,6 +64,13 @@ export async function linkRetroAchievementsHandler(
     const { username, apiKey } = linkRetroAchievementsSchema.parse(req.body);
 
     const account = await platformService.linkPlatform(userId, 'RA', username, username, apiKey);
+
+    await Promise.race([
+      triggerExpressSync(userId, 'RA'),
+      new Promise<void>((resolve) => setTimeout(resolve, EXPRESS_SYNC_TIMEOUT_MS)),
+    ]);
+    void queueInitialSync(userId, 'RA');
+
     res.status(201).json(account);
   } catch (err) {
     next(err);
@@ -95,6 +112,13 @@ export async function linkPsnHandler(
       onlineId,
       encryptedTokenJson,
     );
+
+    await Promise.race([
+      triggerExpressSync(userId, 'PSN'),
+      new Promise<void>((resolve) => setTimeout(resolve, EXPRESS_SYNC_TIMEOUT_MS)),
+    ]);
+    void queueInitialSync(userId, 'PSN');
+
     res.status(201).json(account);
   } catch (err) {
     next(err);
