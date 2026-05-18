@@ -10,6 +10,12 @@ import type { LibraryGame } from '../../hooks/useMyGames';
 
 jest.mock('../../hooks/useMyGames');
 jest.mock('../../hooks/useSyncAll');
+jest.mock('../../hooks/useSyncProgress', () => ({
+  useSyncProgress: jest.fn().mockReturnValue({
+    isRunning: false, platform: null, processed: 0, total: 0,
+    percentComplete: 0, newGamesCount: 0, newAchievementsCount: 0,
+  }),
+}));
 jest.mock('../../stores/sessionStore');
 jest.mock('../../components/AdBanner', () => ({ AdBanner: () => null }));
 jest.mock('../../components/LibraryGameCard', () => ({
