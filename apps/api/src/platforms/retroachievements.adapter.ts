@@ -332,6 +332,9 @@ export const retroAchievementsAdapter: PlatformAdapter = {
 
       if (!gameProgress) continue; // Sin datos ni caché, saltar este juego
 
+      // Nunca persistir juegos sin logros — evita filas vacías en la BD
+      if (!gameProgress.Achievements || Object.keys(gameProgress.Achievements).length === 0) continue;
+
       // Upsert del juego en la BD
       const dbGame = await prisma.game.upsert({
         where: { platform_externalId: { platform: 'RA', externalId: gameId } },
@@ -357,8 +360,6 @@ export const retroAchievementsAdapter: PlatformAdapter = {
       });
 
       gamesUpdated++;
-
-      if (!gameProgress.Achievements) continue;
 
       // Procesar cada logro del juego
       for (const [achId, ach] of Object.entries(gameProgress.Achievements)) {

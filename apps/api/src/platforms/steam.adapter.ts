@@ -189,8 +189,8 @@ export class SteamAdapter implements PlatformAdapter {
         this.fetchRarityMap(appId),
       ]);
 
-      // Juegos sin logros en su schema no aportan valor — no los persistimos
-      if (schema.length === 0) continue;
+      // Juegos sin logros en schema no aportan valor — tampoco si la API no devuelve datos del jugador
+      if (schema.length === 0 || playerAchievements.length === 0) continue;
 
       const schemaMap = new Map(schema.map((s) => [s.name, s]));
 

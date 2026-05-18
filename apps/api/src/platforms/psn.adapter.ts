@@ -230,6 +230,9 @@ export class PsnAdapter implements PlatformAdapter {
     for (const title of titles) {
       const trophies = await this.fetchMergedTrophies(auth, title);
 
+      // Nunca persistir juegos sin trofeos (DLC sin soporte, demo packs, etc.)
+      if (trophies.length === 0) continue;
+
       const dbGame = await prisma.game.upsert({
         where: { platform_externalId: { platform: 'PSN', externalId: title.npCommunicationId } },
         create: {
