@@ -1,18 +1,60 @@
-import { useCallback, useState, useMemo } from 'react';
+import { useCallback, useState, useMemo, useEffect } from 'react';
 import { View, Text, RefreshControl, ScrollView, Pressable, TextInput, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import { useTranslation } from 'react-i18next';
 import { router } from 'expo-router';
+import type { SyncCompleteEvent } from '@unlockhub/types';
 
 import { useMyGames } from '../../hooks/useMyGames';
 import { useSessionStore } from '../../stores/sessionStore';
 import { useSyncAll } from '../../hooks/useSyncAll';
+import { useSyncProgress } from '../../hooks/useSyncProgress';
 import { LibraryGameCard } from '../../components/LibraryGameCard';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { EmptyState } from '../../components/EmptyState';
 import { AdBanner } from '../../components/AdBanner';
 import type { LibraryGame } from '../../hooks/useMyGames';
+
+const PLATFORM_LABELS: Record<string, string> = {
+  STEAM: 'Steam',
+  RA: 'RetroAchievements',
+  PSN: 'PlayStation',
+  XBOX: 'Xbox',
+};
+
+function SyncProgressBanner({ platform, processed, total, percentComplete }: {
+  platform: string;
+  processed: number;
+  total: number;
+  percentComplete: number;
+}) {
+  const label = PLATFORM_LABELS[platform] ?? platform;
+  const progress = Math.min(Math.max(percentComplete, 0), 100);
+  return (
+    <View
+      className="mx-4 mb-2 px-4 py-3 bg-surface-2 rounded-xl"
+      accessible
+      accessibilityLiveRegion="polite"
+      accessibilityLabel={`Sincronizando ${label}: ${processed} de ${total} juegos`}
+    >
+      <View className="flex-row items-center justify-between mb-1.5">
+        <Text className="text-white text-xs font-semibold">
+          {`Sincronizando ${label}…`}
+        </Text>
+        <Text className="text-gray-400 text-xs">
+          {total > 0 ? `${processed}/${total}` : '…'}
+        </Text>
+      </View>
+      <View className="h-1.5 bg-surface rounded-full overflow-hidden">
+        <View
+          className="h-full bg-primary-light rounded-full"
+          style={{ width: `${progress}%` }}
+        />
+      </View>
+    </View>
+  );
+}
 
 type PlatformFilter = 'ALL' | 'STEAM' | 'RA' | 'PSN' | 'XBOX';
 
@@ -59,6 +101,20 @@ export default function LibraryScreen() {
   const { user } = useSessionStore();
   const [activeFilter, setActiveFilter] = useState<PlatformFilter>('ALL');
   const [search, setSearch] = useState('');
+  const [toast, setToast] = useState<string | null>(null);
+
+  const handleSyncComplete = useCallback((event: SyncCompleteEvent) => {
+    const label = PLATFORM_LABELS[event.platform] ?? event.platform;
+    setToast(`${label}: +${event.newAchievements} logros · +${event.xpEarned} XP`);
+  }, []);
+
+  const syncProgress = useSyncProgress(handleSyncComplete);
+
+  useEffect(() => {
+    if (!toast) return;
+    const id = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(id);
+  }, [toast]);
 
   const platform = activeFilter === 'ALL' ? undefined : activeFilter;
   const {
@@ -186,6 +242,30 @@ export default function LibraryScreen() {
           </Pressable>
         ))}
       </ScrollView>
+
+      {/* Banner de progreso de sync */}
+      {syncProgress.isRunning && syncProgress.platform && (
+        <SyncProgressBanner
+          platform={syncProgress.platform}
+          processed={syncProgress.processed}
+          total={syncProgress.total}
+          percentComplete={syncProgress.percentComplete}
+        />
+      )}
+
+      {/* Toast de sync completado */}
+      {toast && (
+        <View
+          className="mx-4 mb-2 px-4 py-3 bg-green-900 rounded-xl"
+          accessible
+          accessibilityLiveRegion="assertive"
+          accessibilityRole="alert"
+          accessibilityLabel={`Sync completado: ${toast}`}
+        >
+          <Text className="text-green-300 text-xs font-semibold">✓ Sync completado</Text>
+          <Text className="text-green-400 text-xs mt-0.5">{toast}</Text>
+        </View>
+      )}
 
       {/* Skeleton */}
       {isLoading && <LibrarySkeleton />}

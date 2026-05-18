@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import type { PlatformAccount } from '@unlockhub/types';
 
 import { api } from '../lib/api';
@@ -7,7 +7,6 @@ import { api } from '../lib/api';
 const COOLDOWN_MS = 30 * 60 * 1000;
 
 export function useSyncAll(userId: string | undefined) {
-  const queryClient = useQueryClient();
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
 
   const { data: platforms } = useQuery({
@@ -34,7 +33,7 @@ export function useSyncAll(userId: string | undefined) {
     },
     onSuccess: () => {
       setLastSyncedAt(new Date());
-      void queryClient.invalidateQueries({ queryKey: ['my-games'] });
+      // La invalidación de ['my-games'] la gestiona useSyncProgress vía Socket.io
     },
   });
 
