@@ -22,13 +22,15 @@ Esta sección lista todo lo que **el desarrollador debe hacer manualmente** ante
 | B10 | Configurar **User Messaging Platform (UMP) SDK** de Google | admob.google.com → Privacy & Messaging → Create Message → GDPR | Gratis | Consentimiento GDPR para AdMob en Europa — sin esto AdMob puede suspender la cuenta |
 | B13 | Configurar `APP_SCHEME` como `unlockhub` en Railway | Railway dashboard → service → Variables → `APP_SCHEME=unlockhub` | Gratis | Deep links (reset-password, etc.) |
 | B14 | Crear email de soporte `soporte@unlockhub.app` | Proveedor de dominio/email | ~1-5€/mes | Requerido por Google Play |
-| B15 | Redactar y publicar **Privacy Policy** en URL pública | GitHub Pages (gratis) | Gratis | Requerido por Google Play, AdMob y GDPR |
-| B16 | Redactar **Términos y Condiciones** en URL pública | GitHub Pages (gratis) | Gratis | Requerido por Google Play |
+| ~~B15~~ | ✅ **Privacy Policy publicada** | `docs/privacy-policy.html` → https://jmreja27.github.io/UnlockHub/privacy-policy.html | Gratis | ✅ Completado — pendiente: rellenar [NOMBRE_DESARROLLADOR], [NIF_DESARROLLADOR], [DIRECCIÓN_DESARROLLADOR] y activar GitHub Pages en repo settings |
+| ~~B16~~ | ✅ **Términos y Condiciones publicados** | `docs/terms-of-service.html` → https://jmreja27.github.io/UnlockHub/terms-of-service.html | Gratis | ✅ Completado — mismos placeholders que B15 |
 | B17 | ✅ **Migración Prisma en producción** | Automática en cada deploy — `npx prisma migrate deploy` configurado en `startCommand` de `railway.json` | Gratis | Aplicar todos los modelos nuevos en prod |
 
 > **Estado de acciones completadas ✅**
 > - B1-B2 (Sentry): ✅ DSNs configurados en Railway y EAS
 > - B11-B12 (Cloudinary): ✅ Cuenta creada — `CLOUDINARY_URL` pendiente de configurar en Railway variables
+> - B15 (Privacy Policy): ✅ `docs/privacy-policy.html` — URL: https://jmreja27.github.io/UnlockHub/privacy-policy.html — **acción manual: activar GitHub Pages en repo → Settings → Pages → Source: GitHub Actions + rellenar [NOMBRE_DESARROLLADOR], [NIF_DESARROLLADOR], [DIRECCIÓN_DESARROLLADOR]**
+> - B16 (ToS): ✅ `docs/terms-of-service.html` — URL: https://jmreja27.github.io/UnlockHub/terms-of-service.html — mismos placeholders que B15
 > - B17 (Migraciones Prisma): ✅ Automáticas en cada deploy — `startCommand` en `railway.json`
 > - STEAM_API_KEY: ✅ Configurada en Railway
 > - N1 (UptimeRobot): ⚙️ Actualizar URL del monitor a https://unlockhub-production.up.railway.app
@@ -924,7 +926,7 @@ Métricas disponibles:
 6. ✅ Dashboard de administración
 7. ✅ GDPR — borrado de cuenta. ⚙️ Migrar en prod (B17)
 8. ⚙️ UMP SDK de AdMob (B10)
-9. ✅ Privacy policy en app. ⚙️ Publicar en URL pública (B15-B16)
+9. ✅ Privacy policy en app. ✅ Publicar en URL pública (B15-B16) — GitHub Pages + ToS generados. ⚙️ Activar Pages en GitHub repo settings + rellenar placeholders legales
 10. ✅ Escudo de racha
 11. ✅ Centro de notificaciones in-app
 12. ⚙️ Variables pendientes en Railway dashboard → Variables: `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `APP_SCHEME`, `CLOUDINARY_URL`, `ADMIN_SECRET`, `POSTHOG_API_KEY`
@@ -954,7 +956,7 @@ Métricas disponibles:
 | P2 | Variables pendientes en Railway | Railway dashboard → service → Variables → añadir: `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `APP_SCHEME=unlockhub`, `CLOUDINARY_URL`, `ADMIN_SECRET`, `POSTHOG_API_KEY` |
 | P3 | Resend — cuenta + dominio + API key | resend.com → Add Domain → verificar DNS → API Keys → Create |
 | P4 | UMP SDK AdMob | admob.google.com → Privacy & Messaging → GDPR → publicar |
-| P5 | Privacy Policy + ToS en URL pública | GitHub Pages — Claude Code puede generar el HTML completo |
+| P5 | ✅ Privacy Policy + ToS en URL pública | `docs/privacy-policy.html` + `docs/terms-of-service.html` — **acción manual: activar GitHub Pages (Settings → Pages → Source: GitHub Actions) + rellenar placeholders [NOMBRE_DESARROLLADOR] etc.** |
 | P6 | Google Play Console | $25 + listing completo |
 | P7 | Smoke tests producción | Registro + login + forgot-password + sync Steam/RA/PSN + rankings |
 
