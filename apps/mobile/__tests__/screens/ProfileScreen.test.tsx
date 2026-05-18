@@ -53,6 +53,7 @@ const steamAccount: PlatformAccount = {
   externalId: 'steam123',
   username: 'SteamUser99',
   lastSyncedAt: null,
+  requiresReauth: false,
 };
 
 function renderProfile(mockApiGet?: jest.Mock) {

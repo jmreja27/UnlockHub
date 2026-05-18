@@ -482,6 +482,8 @@
       "error_empty": "El token NPSSO no puede estar vacío.",
       "error_invalid": "El token NPSSO parece inválido. Comprueba que lo has copiado correctamente.",
       "privacy_note": "Tu token NPSSO se usa solo para autenticarte. Se cifra con AES-256 y nunca se comparte con terceros.",
+      "reauth_banner_title": "Sesión expirada",
+      "reauth_banner_body": "Tu sesión de PlayStation ha expirado. Obtén un nuevo token NPSSO y vincúlalo de nuevo.",
       "unlink": "Desvincular PlayStation",
       "unlink_confirm": "¿Seguro que quieres desvincular tu cuenta de PlayStation? Se eliminarán los datos de sincronización.",
       "linked_as": "Vinculado como {{username}}"

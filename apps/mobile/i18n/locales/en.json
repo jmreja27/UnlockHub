@@ -482,6 +482,8 @@
       "error_empty": "The NPSSO token cannot be empty.",
       "error_invalid": "The NPSSO token appears invalid. Make sure you copied it correctly.",
       "privacy_note": "Your NPSSO token is used only to authenticate you. It is encrypted with AES-256 and never shared with third parties.",
+      "reauth_banner_title": "Session expired",
+      "reauth_banner_body": "Your PlayStation session has expired. Get a new NPSSO token and re-link your account.",
       "unlink": "Unlink PlayStation",
       "unlink_confirm": "Are you sure you want to unlink your PlayStation account? Sync data will be removed.",
       "linked_as": "Linked as {{username}}"

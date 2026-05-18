@@ -7,6 +7,8 @@ import { retroAchievementsAdapter } from '../platforms/retroachievements.adapter
 import { psnAdapter } from '../platforms/psn.adapter';
 import { xboxAdapter } from '../platforms/xbox.adapter';
 import { sendPush } from '../services/notification.service';
+import { createNotification } from '../services/inapp-notification.service';
+import { AppError } from '../middleware/errorHandler';
 import { logger } from '../lib/logger';
 
 import type { SyncJobData, SyncJobResult } from './sync.queue';
@@ -49,11 +51,30 @@ export function startSyncWorker() {
         ).map((a) => a.achievementId),
       );
 
-      const result = await adapter.syncUser(account);
+      let result: Awaited<ReturnType<typeof adapter.syncUser>>;
+      try {
+        result = await adapter.syncUser(account);
+      } catch (err) {
+        // Cuando el refresh token PSN expira, notificar al usuario en lugar de solo loguear
+        if (err instanceof AppError && err.code === 'PSN_REFRESH_TOKEN_EXPIRED') {
+          await prisma.platformAccount.update({
+            where: { id: platformAccountId },
+            data: { requiresReauth: true },
+          });
+          await createNotification({
+            userId,
+            type: 'PLATFORM_REAUTH_REQUIRED',
+            title: 'Reconecta tu cuenta PSN',
+            body: 'Tu sesión de PlayStation ha expirado. Vuelve a vincular tu cuenta para continuar sincronizando tus trofeos.',
+          });
+          logger.warn({ userId, platform }, '[SyncWorker] Refresh token PSN expirado — requiresReauth marcado');
+        }
+        throw err;
+      }
 
       await prisma.platformAccount.update({
         where: { id: platformAccountId },
-        data: { lastSyncedAt: new Date() },
+        data: { lastSyncedAt: new Date(), requiresReauth: false },
       });
 
       await prisma.user.update({

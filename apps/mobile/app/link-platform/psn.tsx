@@ -14,7 +14,7 @@ import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { PlatformAccount } from '@unlockhub/types';
 
 import { api, ApiRequestError } from '../../lib/api';
@@ -59,6 +59,15 @@ export default function LinkPsnScreen() {
   const [npsso, setNpsso] = useState('');
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [guideExpanded, setGuideExpanded] = useState(true);
+
+  const { data: linkedPlatforms } = useQuery({
+    queryKey: ['linkedPlatforms'],
+    queryFn: () => api.get<PlatformAccount[]>('/api/v1/platforms/'),
+    staleTime: 1000 * 60 * 2,
+  });
+
+  const psnAccount = linkedPlatforms?.find((p) => p.platform === 'PSN');
+  const requiresReauth = psnAccount?.requiresReauth === true;
 
   const linkMutation = useMutation({
     mutationFn: (npssoToken: string) =>
@@ -175,6 +184,32 @@ export default function LinkPsnScreen() {
             />
             <View className="bg-amber-900/30 border border-amber-600/40 rounded-lg px-3 py-2 mt-1 mb-2">
               <Text className="text-amber-300 text-xs">{t('link_platform.psn.guide_tip')}</Text>
+            </View>
+          </View>
+        )}
+
+        {/* Banner de sesión expirada — solo visible si requiresReauth */}
+        {requiresReauth && (
+          <View
+            className="bg-red-900/40 border border-red-500/50 rounded-xl px-4 py-3 mb-5 flex-row items-start"
+            accessible
+            accessibilityRole="alert"
+            accessibilityLabel={`${t('link_platform.psn.reauth_banner_title')}: ${t('link_platform.psn.reauth_banner_body')}`}
+          >
+            <Ionicons
+              name="warning-outline"
+              size={18}
+              color="#f87171"
+              style={{ marginRight: 8, marginTop: 1 }}
+              accessibilityElementsHidden
+            />
+            <View className="flex-1">
+              <Text className="text-red-400 text-sm font-semibold mb-1">
+                {t('link_platform.psn.reauth_banner_title')}
+              </Text>
+              <Text className="text-red-300 text-xs leading-4">
+                {t('link_platform.psn.reauth_banner_body')}
+              </Text>
             </View>
           </View>
         )}
