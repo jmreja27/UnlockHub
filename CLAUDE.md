@@ -890,6 +890,12 @@ Métricas disponibles:
 | Guard `trophies.length === 0` en PSN `syncUser()` antes del game upsert | Títulos sin trofeos (DLC sin soporte, demos) no deben insertarse — el `definedTrophies` puede ser 0 aunque el título aparezca en la lista | Fase 3 |
 | Guard de achievements movido ANTES del game upsert en RA `syncUser()` | Antes: `prisma.game.upsert` en línea 336, check `if (!gameProgress.Achievements)` en línea 361 — juego sin logros se insertaba. Ahora: comprobación antes del upsert | Fase 3 |
 | Guard `playerAchievements.length === 0` añadido en Steam `syncUser()` | `GetPlayerAchievements` puede devolver `success: false` (perfil privado, juego sin stats para el usuario) dejando el schema como referencia — sin este guard se insertaban juegos sin Achievement records. Causó 3.333 juegos vacíos en prod (eliminados 2026-05-22) | Fase 3 |
+| Sync progresivo por lotes: STEAM=20, RA=15, PSN=10 juegos/batch | Adapters implementan `syncUserBatched(account, onBatch)` opcional — worker llama `onBatch` tras cada lote, emite `sync:progress` a Socket.io y actualiza Redis TTL 2h. Fallback a `syncUser()` si el adapter no implementa batching | Fase 3 |
+| `syncUserExpress` al vincular plataforma: Steam sort by playtime_forever desc (top 20), PSN first 10 (ya ordenado por actividad), RA sort by NumAwarded desc (top 15) | La biblioteca aparece poblada antes de que responda el 201 — full sync se encola en background. Timeout 25s con `Promise.race` para no bloquear indefinidamente | Fase 3 |
+| Socket.io namespace raíz `/` con JWT middleware en `sync.handler.ts` | El mismo namespace que `activity.handler.ts` — los usuarios se unen a `user:{userId}` rooms. `getIOSafe()` en el worker devuelve null en tests (getIO lanza si no está inicializado) | Fase 3 |
+| Redis `sync:progress:{userId}:{platform}` TTL 2h como fallback de Socket.io | `getSyncStatus` lee esta clave para exponer `isRunning/processed/total/percentComplete/startedAt` — útil si el cliente pierde la conexión Socket.io durante el sync | Fase 3 |
+| `useSyncProgress` hook en mobile: invalida `my-games` en cada batch | La lista se actualiza progresivamente conforme llegan los lotes — sin esperar al `sync:complete`. El toast de completado muestra `+N logros · +X XP` y se auto-descarta a los 4s | Fase 3 |
+| `useSyncAll` es fire-and-forget: invalidación de `my-games` delegada a `useSyncProgress` | Antes: `queryClient.invalidateQueries` en `onSuccess` (solo invalidaba al terminar el request HTTP ~instant). Ahora: la invalidación ocurre en cada batch vía Socket.io — la UI se actualiza progresivamente | Fase 3 |
 
 ---
 
@@ -965,6 +971,7 @@ Métricas disponibles:
 | U7 | Error state en feed | ✅ |
 | U8 | Badge solicitudes pendientes | ✅ |
 | U9 | Timestamp "última actualización" | ✅ |
+| U10 | Sync progresivo: banner + toast en Biblioteca | ✅ |
 
 ### 🔵 Técnica
 
@@ -1003,7 +1010,7 @@ Métricas disponibles:
 
 ## Última revisión de código
 
-**Fecha**: 2026-05-22 — token PSN: renovación automática + notificación reauth cuando el refresh token expira; guards contra juegos sin logros en todos los adapters (PSN/RA/Steam); 3.333 juegos Steam vacíos eliminados de producción; `psn.adapter.test.ts` creado con 5 tests; `PlatformAccount.requiresReauth` añadido al schema + migración.
+**Fecha**: 2026-05-23 — sync progresivo por lotes: Socket.io `sync:progress/complete/error`, `syncUserBatched` en Steam/RA/PSN, `syncUserExpress` al vincular, Redis progress TTL 2h, `useSyncProgress` hook + banner + toast en Biblioteca.
 
 ### Resumen ejecutivo
 
@@ -1013,8 +1020,8 @@ Métricas disponibles:
 | TypeScript strict (mobile) | ✅ 0 errores `tsc --noEmit` |
 | Lint errores (API) | ✅ 0 errores, 0 warnings |
 | Lint errores (mobile) | ✅ 0 errores, 0 warnings |
-| Tests backend | ✅ 395 tests pasando, 34 suites — cobertura 81% stmt / 83% branch |
-| Tests mobile | ✅ 171 tests, 171 pasando |
+| Tests backend | ✅ 405 tests pasando, 35 suites — cobertura 81% stmt / 83% branch |
+| Tests mobile | ✅ 179 tests, 179 pasando |
 | API build | ✅ `tsc -p tsconfig.json` sin errores |
 | npm audit API | ⚠️ 18 high (build-time, pre-existente) — pendiente T8 |
 | npm audit mobile | ⚠️ 17 high: `node-tar` vía Expo build tooling (build-time) — pendiente T8 |
@@ -1028,7 +1035,7 @@ Métricas disponibles:
 - **Guard RA `syncUser()`**: comprobación `if (!achievements || Object.keys(achievements).length === 0)` movida ANTES del `prisma.game.upsert` — evitaba que juegos sin logros entraran en BD.
 - **Guard Steam `syncUser()`**: `if (schema.length === 0 || playerAchievements.length === 0) continue` — `GetPlayerAchievements` puede devolver `success: false` (perfil parcialmente privado, juego sin stats para el usuario) mientras `GetSchemaForGame` devuelve logros desde caché → juego se insertaba sin Achievement records.
 - **Limpieza BD**: eliminados **3.333 juegos Steam vacíos** causados por el bug del guard anterior.
-- **BD Railway post-limpieza 2026-05-22: 1.408 juegos (80 Steam + 1.001 RA + 327 PSN) + 72.634 logros, 0 juegos sin logros, 0 duplicados.**
+- **BD Railway post-seed 5 usuarios PSN 2026-05-22: 1.882 juegos (80 Steam + 1.001 RA + 801 PSN) + 92.740 logros, 0 juegos sin logros, 0 duplicados.**
 - `psn.adapter.test.ts` creado: 5 tests cubriendo token válido / access expirado / refresh expirado (×2 aserciones).
 
 ### Limpieza BD y correcciones (2026-05-20)
@@ -1102,7 +1109,7 @@ Métricas disponibles:
 ### Pendientes documentados
 
 - **T8**: `node-tar` vulnerabilidades high — ninguna runtime. PR dedicado post-lanzamiento.
-- **T12**: ✅ Implementado, ejecutado y corregido en producción (Steam+RA+PSN). **BD 2026-05-22: 1.408 juegos (80 Steam + 1.001 RA + 327 PSN) + 72.634 logros, 0 juegos sin logros.** Guards en todos los adapters + limpieza de 3.333 juegos Steam vacíos.
+- **T12**: ✅ Implementado, ejecutado y corregido en producción (Steam+RA+PSN + 5 usuarios adicionales PSN). **BD 2026-05-22: 1.882 juegos (80 Steam + 1.001 RA + 801 PSN) + 92.740 logros, 0 juegos sin logros.** Guards en todos los adapters + limpieza de 3.333 juegos Steam vacíos.
 - **Maestro auth completa**: requiere development build con `EXPO_PUBLIC_API_URL=http://10.0.2.2:3000` o cuenta real en producción para testear login/registro/plataformas autenticadas.
 - **ChallengesScreen.test.tsx / RankingsScreen.test.tsx**: corregidos (2026-05-18) — error_server en lugar de error_message.
 - **Backfill console en RA**: ✅ Completado (2026-05-21) — 1.001 juegos RA actualizados con sus consolas (NES/SNES/GBA/etc).
