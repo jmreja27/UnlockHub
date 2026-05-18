@@ -412,7 +412,7 @@ async function seedRetroAchievements(prisma: PrismaClient): Promise<SeedResult> 
 
 // ─── PSN ──────────────────────────────────────────────────────────────────────
 
-async function seedPSN(prisma: PrismaClient): Promise<SeedResult> {
+async function seedPSN(prisma: PrismaClient, usernamesOverride?: string[]): Promise<SeedResult> {
   const npsso = process.env['PSN_NPSSO'];
   if (!npsso) {
     console.log('\n⏸️  PSN: PSN_NPSSO no configurada.');
@@ -424,7 +424,10 @@ async function seedPSN(prisma: PrismaClient): Promise<SeedResult> {
     return { gamesProcessed: 0, gamesCreated: 0, achievementsCreated: 0, errors: 0 };
   }
 
+  const usernamesToProcess = usernamesOverride ?? PSN_USERNAMES_TO_SEED;
+
   console.log('\n🎮 PSN: autenticando con NPSSO...');
+  console.log(`  Usuarios a procesar: ${usernamesToProcess.join(', ')}`);
 
   async function refreshPsnAuth(): Promise<AuthorizationPayload> {
     const code = await exchangeNpssoForAccessCode(npsso);
@@ -444,9 +447,9 @@ async function seedPSN(prisma: PrismaClient): Promise<SeedResult> {
 
   const result: SeedResult = { gamesProcessed: 0, gamesCreated: 0, achievementsCreated: 0, errors: 0 };
 
-  for (let userIdx = 0; userIdx < PSN_USERNAMES_TO_SEED.length; userIdx++) {
-    // Refrescar token cada 5 usuarios para evitar expiración a los 60 min
-    if (userIdx > 0 && userIdx % 5 === 0) {
+  for (let userIdx = 0; userIdx < usernamesToProcess.length; userIdx++) {
+    // Refrescar token cada 2 usuarios — 150-200 títulos/usuario agotan el access token (~60 min)
+    if (userIdx > 0 && userIdx % 2 === 0) {
       try {
         auth = await refreshPsnAuth();
         console.log('  ✓ PSN token refrescado');
@@ -454,7 +457,7 @@ async function seedPSN(prisma: PrismaClient): Promise<SeedResult> {
         console.error(`  ⚠️  No se pudo refrescar el token PSN: ${(err as Error).message}`);
       }
     }
-    const username = PSN_USERNAMES_TO_SEED[userIdx];
+    const username = usernamesToProcess[userIdx];
     console.log(`  → Procesando perfil PSN: ${username}`);
 
     // Resolver username → accountId
@@ -581,8 +584,18 @@ async function main(): Promise<void> {
     (process as NodeJS.Process & { loadEnvFile(path: string): void }).loadEnvFile(envPath);
   }
 
+  // Parsear flags CLI
+  const args = process.argv.slice(2);
+  const onlyPsn = args.includes('--only-psn');
+  const usernamesArg = args.find((a) => a.startsWith('--usernames='));
+  const usernamesOverride = usernamesArg
+    ? usernamesArg.replace('--usernames=', '').split(',').map((u) => u.trim()).filter(Boolean)
+    : undefined;
+
   console.log('════════════════════════════════════════════════════════');
   console.log('   UnlockHub — Seed de juegos y logros populares');
+  if (onlyPsn) console.log('   Modo: --only-psn');
+  if (usernamesOverride) console.log(`   Usuarios: ${usernamesOverride.join(', ')}`);
   console.log('════════════════════════════════════════════════════════\n');
 
   // Preferir DIRECT_URL (proxy pública) sobre DATABASE_URL (red privada Railway)
@@ -601,9 +614,10 @@ async function main(): Promise<void> {
     await prisma.$connect();
     console.log('✓ Conectado a la base de datos\n');
 
-    const steamResult = await seedSteam(prisma);
-    const raResult = await seedRetroAchievements(prisma);
-    const psnResult = await seedPSN(prisma);
+    const noopResult: SeedResult = { gamesProcessed: 0, gamesCreated: 0, achievementsCreated: 0, errors: 0 };
+    const steamResult = onlyPsn ? noopResult : await seedSteam(prisma);
+    const raResult = onlyPsn ? noopResult : await seedRetroAchievements(prisma);
+    const psnResult = await seedPSN(prisma, usernamesOverride);
 
     const totalGames =
       steamResult.gamesCreated + raResult.gamesCreated + psnResult.gamesCreated;
