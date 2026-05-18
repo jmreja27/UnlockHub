@@ -7,10 +7,13 @@ import { redis } from '../lib/redis';
 import { decrypt } from '../lib/crypto';
 import { AppError } from '../middleware/errorHandler';
 
-import type { PlatformAdapter } from './platform.interface';
+import type { PlatformAdapter, SyncBatchCallback } from './platform.interface';
 
 // URL base de la API de RetroAchievements
 const RA_API_BASE = 'https://retroachievements.org/API';
+
+const EXPRESS_GAME_LIMIT = 15;
+const BATCH_SIZE_RA = 15;
 
 // TTLs de caché en segundos
 const CACHE_TTL_COMPLETED_GAMES = 60 * 60; // 1 hora
@@ -107,6 +110,135 @@ async function setResilientCache<T>(key: string, value: T, ttl: number): Promise
     redis.setex(key, ttl, serialized),
     redis.set(`${key}:stale`, serialized), // sin TTL: persiste aunque expire la clave principal
   ]);
+}
+
+// ─── Helpers internos de procesamiento ───────────────────────────────────────
+
+async function fetchRaUniqueGames(apiKey: string, username: string): Promise<Map<string, RaCompletedGame>> {
+  const completedCacheKey = `ra:completed:${username}`;
+  let completedGames: RaCompletedGame[];
+
+  try {
+    const url = `${RA_API_BASE}/API_GetUserCompletedGames.php`;
+    const response = await axios.get<RaCompletedGame[]>(url, {
+      params: { z: username, y: apiKey, u: username },
+      timeout: 15_000,
+    });
+    completedGames = Array.isArray(response.data) ? response.data : [];
+    await setResilientCache(completedCacheKey, completedGames, CACHE_TTL_COMPLETED_GAMES);
+  } catch (error) {
+    const stale = await getStaleCache<RaCompletedGame[]>(completedCacheKey);
+    if (stale) {
+      completedGames = stale;
+    } else {
+      throw new AppError(
+        'Error al obtener los juegos del usuario desde RetroAchievements',
+        'RA_API_ERROR',
+        502,
+        { username, originalError: error instanceof Error ? error.message : String(error) },
+      );
+    }
+  }
+
+  const uniqueGames = new Map<string, RaCompletedGame>();
+  for (const game of completedGames) {
+    const gameId = String(game.GameID);
+    if (!uniqueGames.has(gameId)) uniqueGames.set(gameId, game);
+  }
+  return uniqueGames;
+}
+
+async function processRaGame(
+  gameId: string,
+  gameEntry: RaCompletedGame,
+  apiKey: string,
+  username: string,
+  userId: string,
+): Promise<{ gamesUpdated: number; achievementsSynced: number }> {
+  const progressCacheKey = `ra:game:${gameId}:${username}`;
+
+  let gameProgress: RaGameProgress | null = null;
+  try {
+    const url = `${RA_API_BASE}/API_GetGameInfoAndUserProgress.php`;
+    const response = await axios.get<RaGameProgress>(url, {
+      params: { z: username, y: apiKey, g: gameId, u: username },
+      timeout: 10_000,
+    });
+    gameProgress = response.data;
+    await setResilientCache(progressCacheKey, gameProgress, CACHE_TTL_GAME_PROGRESS);
+  } catch {
+    gameProgress = await getStaleCache<RaGameProgress>(progressCacheKey);
+  }
+
+  if (!gameProgress) return { gamesUpdated: 0, achievementsSynced: 0 };
+  if (!gameProgress.Achievements || Object.keys(gameProgress.Achievements).length === 0) {
+    return { gamesUpdated: 0, achievementsSynced: 0 };
+  }
+
+  const dbGame = await prisma.game.upsert({
+    where: { platform_externalId: { platform: 'RA', externalId: gameId } },
+    create: {
+      platform: 'RA',
+      externalId: gameId,
+      title: gameProgress.Title ?? gameEntry.Title ?? 'Juego sin título',
+      console: gameProgress.ConsoleName ?? null,
+      iconUrl: gameProgress.ImageIcon
+        ? `https://media.retroachievements.org${gameProgress.ImageIcon}`
+        : null,
+      headerUrl: null,
+      totalAchievements: gameProgress.NumAchievements ?? gameEntry.NumAchievements ?? 0,
+    },
+    update: {
+      title: gameProgress.Title ?? gameEntry.Title ?? 'Juego sin título',
+      console: gameProgress.ConsoleName ?? null,
+      iconUrl: gameProgress.ImageIcon
+        ? `https://media.retroachievements.org${gameProgress.ImageIcon}`
+        : null,
+      totalAchievements: gameProgress.NumAchievements ?? gameEntry.NumAchievements ?? 0,
+    },
+  });
+
+  let achievementsSynced = 0;
+
+  for (const [achId, ach] of Object.entries(gameProgress.Achievements)) {
+    const achievementExternalId = String(ach.ID ?? achId);
+
+    const dbAchievement = await prisma.achievement.upsert({
+      where: { platform_gameId_externalId: { platform: 'RA', gameId: dbGame.id, externalId: achievementExternalId } },
+      create: {
+        gameId: dbGame.id,
+        platform: 'RA',
+        externalId: achievementExternalId,
+        title: ach.Title,
+        description: ach.Description ?? null,
+        iconUrl: buildBadgeUrl(ach.BadgeName),
+        rawValue: ach.Points ?? null,
+        normalizedPoints: normalizePoints(ach.Points),
+        rarity: null,
+        externalUrl: `https://retroachievements.org/achievement/${achievementExternalId}`,
+      },
+      update: {
+        title: ach.Title,
+        description: ach.Description ?? null,
+        iconUrl: buildBadgeUrl(ach.BadgeName),
+        rawValue: ach.Points ?? null,
+        normalizedPoints: normalizePoints(ach.Points),
+        externalUrl: `https://retroachievements.org/achievement/${achievementExternalId}`,
+      },
+    });
+
+    const earnedDate = ach.DateEarned ?? ach.DateEarnedHardcore;
+    if (earnedDate && earnedDate !== '' && earnedDate !== '0000-00-00 00:00:00') {
+      await prisma.userAchievement.upsert({
+        where: { userId_achievementId: { userId, achievementId: dbAchievement.id } },
+        create: { userId, achievementId: dbAchievement.id, unlockedAt: new Date(earnedDate) },
+        update: { unlockedAt: new Date(earnedDate) },
+      });
+      achievementsSynced++;
+    }
+  }
+
+  return { gamesUpdated: 1, achievementsSynced };
 }
 
 // ─── Adapter ──────────────────────────────────────────────────────────────────
@@ -253,181 +385,83 @@ export const retroAchievementsAdapter: PlatformAdapter = {
    * 6. Devuelve el resumen de la sincronización
    */
   async syncUser(account: PlatformAccount): Promise<SyncResult> {
-    // Desencriptar la API key almacenada con AES-256
     const apiKey = decrypt(account.encryptedToken);
-    const username = account.externalId; // El externalId de RA es el username
-
-    const completedCacheKey = `ra:completed:${username}`;
-
-    // Obtener lista de juegos del usuario
-    let completedGames: RaCompletedGame[];
-    try {
-      const url = `${RA_API_BASE}/API_GetUserCompletedGames.php`;
-      const response = await axios.get<RaCompletedGame[]>(url, {
-        params: {
-          z: username,
-          y: apiKey,
-          u: username,
-        },
-        timeout: 15_000,
-      });
-
-      completedGames = Array.isArray(response.data) ? response.data : [];
-
-      // Cachear respuesta válida para fallback
-      await setResilientCache(completedCacheKey, completedGames, CACHE_TTL_COMPLETED_GAMES);
-    } catch (error) {
-      // Si falla, intentar con caché stale
-      const stale = await getStaleCache<RaCompletedGame[]>(completedCacheKey);
-      if (stale) {
-        completedGames = stale;
-      } else {
-        throw new AppError(
-          'Error al obtener los juegos del usuario desde RetroAchievements',
-          'RA_API_ERROR',
-          502,
-          { username, originalError: error instanceof Error ? error.message : String(error) },
-        );
-      }
-    }
+    const username = account.externalId;
+    const uniqueGames = await fetchRaUniqueGames(apiKey, username);
 
     let achievementsSynced = 0;
     let gamesUpdated = 0;
 
-    // Deduplicar juegos por GameID (la API puede devolver duplicados)
-    const uniqueGames = new Map<string, RaCompletedGame>();
-    for (const game of completedGames) {
-      const gameId = String(game.GameID);
-      if (!uniqueGames.has(gameId)) {
-        uniqueGames.set(gameId, game);
-      }
-    }
-
-    // Procesar cada juego
     for (const [gameId, gameEntry] of uniqueGames) {
-      const progressCacheKey = `ra:game:${gameId}:${username}`;
-
-      // Obtener el progreso detallado del juego para este usuario
-      let gameProgress: RaGameProgress | null = null;
-      try {
-        const url = `${RA_API_BASE}/API_GetGameInfoAndUserProgress.php`;
-        const response = await axios.get<RaGameProgress>(url, {
-          params: {
-            z: username,
-            y: apiKey,
-            g: gameId,
-            u: username,
-          },
-          timeout: 10_000,
-        });
-
-        gameProgress = response.data;
-
-        // Cachear para futuros fallbacks
-        await setResilientCache(progressCacheKey, gameProgress, CACHE_TTL_GAME_PROGRESS);
-      } catch {
-        // Si falla, intentar recuperar del caché stale
-        gameProgress = await getStaleCache<RaGameProgress>(progressCacheKey);
-      }
-
-      if (!gameProgress) continue; // Sin datos ni caché, saltar este juego
-
-      // Nunca persistir juegos sin logros — evita filas vacías en la BD
-      if (!gameProgress.Achievements || Object.keys(gameProgress.Achievements).length === 0) continue;
-
-      // Upsert del juego en la BD
-      const dbGame = await prisma.game.upsert({
-        where: { platform_externalId: { platform: 'RA', externalId: gameId } },
-        create: {
-          platform: 'RA',
-          externalId: gameId,
-          title: gameProgress.Title ?? gameEntry.Title ?? 'Juego sin título',
-          console: gameProgress.ConsoleName ?? null,
-          iconUrl: gameProgress.ImageIcon
-            ? `https://media.retroachievements.org${gameProgress.ImageIcon}`
-            : null,
-          headerUrl: null,
-          totalAchievements: gameProgress.NumAchievements ?? gameEntry.NumAchievements ?? 0,
-        },
-        update: {
-          title: gameProgress.Title ?? gameEntry.Title ?? 'Juego sin título',
-          console: gameProgress.ConsoleName ?? null,
-          iconUrl: gameProgress.ImageIcon
-            ? `https://media.retroachievements.org${gameProgress.ImageIcon}`
-            : null,
-          totalAchievements: gameProgress.NumAchievements ?? gameEntry.NumAchievements ?? 0,
-        },
-      });
-
-      gamesUpdated++;
-
-      // Procesar cada logro del juego
-      for (const [achId, ach] of Object.entries(gameProgress.Achievements)) {
-        const achievementExternalId = String(ach.ID ?? achId);
-
-        // Upsert del logro en la BD
-        const dbAchievement = await prisma.achievement.upsert({
-          where: {
-            platform_gameId_externalId: { platform: 'RA', gameId: dbGame.id, externalId: achievementExternalId },
-          },
-          create: {
-            gameId: dbGame.id,
-            platform: 'RA',
-            externalId: achievementExternalId,
-            title: ach.Title,
-            description: ach.Description ?? null,
-            iconUrl: buildBadgeUrl(ach.BadgeName),
-            rawValue: ach.Points ?? null,
-            normalizedPoints: normalizePoints(ach.Points),
-            rarity: null, // Se calcula en un job aparte con datos globales
-            externalUrl: `https://retroachievements.org/achievement/${achievementExternalId}`,
-          },
-          update: {
-            title: ach.Title,
-            description: ach.Description ?? null,
-            iconUrl: buildBadgeUrl(ach.BadgeName),
-            rawValue: ach.Points ?? null,
-            normalizedPoints: normalizePoints(ach.Points),
-            externalUrl: `https://retroachievements.org/achievement/${achievementExternalId}`,
-          },
-        });
-
-        // Registrar el logro como desbloqueado si el usuario lo ha obtenido
-        const earnedDate = ach.DateEarned ?? ach.DateEarnedHardcore;
-        if (earnedDate && earnedDate !== '' && earnedDate !== '0000-00-00 00:00:00') {
-          await prisma.userAchievement.upsert({
-            where: {
-              userId_achievementId: {
-                userId: account.userId,
-                achievementId: dbAchievement.id,
-              },
-            },
-            create: {
-              userId: account.userId,
-              achievementId: dbAchievement.id,
-              unlockedAt: new Date(earnedDate),
-            },
-            update: {
-              unlockedAt: new Date(earnedDate),
-            },
-          });
-
-          achievementsSynced++;
-        }
-      }
+      const r = await processRaGame(gameId, gameEntry, apiKey, username, account.userId);
+      achievementsSynced += r.achievementsSynced;
+      gamesUpdated += r.gamesUpdated;
     }
 
-    // Actualizar la fecha de última sincronización en la cuenta de plataforma
     await prisma.platformAccount.update({
       where: { id: account.id },
       data: { lastSyncedAt: new Date() },
     });
 
-    return {
-      platform: 'RA',
-      achievementsSynced,
-      gamesUpdated,
-      syncedAt: new Date().toISOString(),
-    };
+    return { platform: 'RA', achievementsSynced, gamesUpdated, syncedAt: new Date().toISOString() };
+  },
+
+  async syncUserExpress(account: PlatformAccount): Promise<SyncResult> {
+    const apiKey = decrypt(account.encryptedToken);
+    const username = account.externalId;
+    const uniqueGames = await fetchRaUniqueGames(apiKey, username);
+
+    // Priorizar juegos con más logros desbloqueados (los más jugados)
+    const entries = [...uniqueGames.entries()]
+      .sort(([, a], [, b]) => (b.NumAwarded ?? 0) - (a.NumAwarded ?? 0))
+      .slice(0, EXPRESS_GAME_LIMIT);
+
+    let achievementsSynced = 0;
+    let gamesUpdated = 0;
+
+    for (const [gameId, gameEntry] of entries) {
+      const r = await processRaGame(gameId, gameEntry, apiKey, username, account.userId);
+      achievementsSynced += r.achievementsSynced;
+      gamesUpdated += r.gamesUpdated;
+    }
+
+    return { platform: 'RA', achievementsSynced, gamesUpdated, syncedAt: new Date().toISOString() };
+  },
+
+  async syncUserBatched(account: PlatformAccount, onBatch: SyncBatchCallback): Promise<SyncResult> {
+    const apiKey = decrypt(account.encryptedToken);
+    const username = account.externalId;
+    const uniqueGames = await fetchRaUniqueGames(apiKey, username);
+
+    const entries = [...uniqueGames.entries()];
+    const total = entries.length;
+    let achievementsSynced = 0;
+    let gamesUpdated = 0;
+    let processed = 0;
+
+    for (let i = 0; i < entries.length; i += BATCH_SIZE_RA) {
+      const batch = entries.slice(i, i + BATCH_SIZE_RA);
+      let batchGames = 0;
+      let batchAchievements = 0;
+
+      for (const [gameId, gameEntry] of batch) {
+        const r = await processRaGame(gameId, gameEntry, apiKey, username, account.userId);
+        batchGames += r.gamesUpdated;
+        batchAchievements += r.achievementsSynced;
+      }
+
+      achievementsSynced += batchAchievements;
+      gamesUpdated += batchGames;
+      processed += batch.length;
+
+      await onBatch({ processed, total, newGamesCount: batchGames, newAchievementsCount: batchAchievements });
+    }
+
+    await prisma.platformAccount.update({
+      where: { id: account.id },
+      data: { lastSyncedAt: new Date() },
+    });
+
+    return { platform: 'RA', achievementsSynced, gamesUpdated, syncedAt: new Date().toISOString() };
   },
 };

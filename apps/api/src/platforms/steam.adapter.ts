@@ -7,7 +7,7 @@ import { prisma } from '../lib/prisma';
 import { redis } from '../lib/redis';
 import { AppError } from '../middleware/errorHandler';
 
-import type { PlatformAdapter } from './platform.interface';
+import type { PlatformAdapter, SyncBatchCallback } from './platform.interface';
 
 // ─── Constantes ────────────────────────────────────────────────────────────────
 
@@ -20,6 +20,11 @@ const TTL_ACHIEVEMENTS = 1800;  // 30 minutos
 const TTL_SCHEMA = 86400;       // 24 horas
 const TTL_RARITY = 86400;       // 24 horas
 
+// ─── Constantes de batch ───────────────────────────────────────────────────────
+
+const EXPRESS_GAME_LIMIT = 20;
+const BATCH_SIZE = 20;
+
 // ─── Tipos internos de la Steam Web API ───────────────────────────────────────
 
 interface SteamOwnedGame {
@@ -27,6 +32,7 @@ interface SteamOwnedGame {
   name: string;
   img_icon_url: string;
   has_community_visible_stats?: boolean;
+  playtime_forever?: number;
 }
 
 interface SteamPlayerAchievement {
@@ -167,34 +173,91 @@ export class SteamAdapter implements PlatformAdapter {
   // ── syncUser ───────────────────────────────────────────────────────────────
 
   async syncUser(account: PlatformAccount): Promise<SyncResult> {
-    // 1. Desencriptar el token para obtener la API key de Steam
+    const apiKey = decrypt(account.encryptedToken);
+    const steamId = account.externalId;
+    const games = await this.fetchOwnedGames(steamId, apiKey);
+    const eligible = games.filter((g) => g.has_community_visible_stats);
+    return this.processGames(eligible, steamId, apiKey, account.userId);
+  }
+
+  // ── syncUserExpress ────────────────────────────────────────────────────────
+
+  async syncUserExpress(account: PlatformAccount): Promise<SyncResult> {
     const apiKey = decrypt(account.encryptedToken);
     const steamId = account.externalId;
 
-    // 2. Obtener juegos del usuario
     const games = await this.fetchOwnedGames(steamId, apiKey);
+    // Los juegos más jugados probablemente importan más al usuario
+    const eligible = games
+      .filter((g) => g.has_community_visible_stats)
+      .sort((a, b) => (b.playtime_forever ?? 0) - (a.playtime_forever ?? 0))
+      .slice(0, EXPRESS_GAME_LIMIT);
 
+    return this.processGames(eligible, steamId, apiKey, account.userId);
+  }
+
+  // ── syncUserBatched ────────────────────────────────────────────────────────
+
+  async syncUserBatched(account: PlatformAccount, onBatch: SyncBatchCallback): Promise<SyncResult> {
+    const apiKey = decrypt(account.encryptedToken);
+    const steamId = account.externalId;
+
+    const games = await this.fetchOwnedGames(steamId, apiKey);
+    const eligible = games.filter((g) => g.has_community_visible_stats);
+    const total = eligible.length;
+
+    let achievementsSynced = 0;
+    let gamesUpdated = 0;
+    let processed = 0;
+
+    for (let i = 0; i < eligible.length; i += BATCH_SIZE) {
+      const batch = eligible.slice(i, i + BATCH_SIZE);
+      const batchResult = await this.processGames(batch, steamId, apiKey, account.userId);
+
+      achievementsSynced += batchResult.achievementsSynced;
+      gamesUpdated += batchResult.gamesUpdated;
+      processed += batch.length;
+
+      await onBatch({
+        processed,
+        total,
+        newGamesCount: batchResult.gamesUpdated,
+        newAchievementsCount: batchResult.achievementsSynced,
+      });
+    }
+
+    return {
+      platform: 'STEAM',
+      achievementsSynced,
+      gamesUpdated,
+      syncedAt: new Date().toISOString(),
+    };
+  }
+
+  // ── Lógica de procesamiento compartida ────────────────────────────────────
+
+  private async processGames(
+    games: SteamOwnedGame[],
+    steamId: string,
+    apiKey: string,
+    userId: string,
+  ): Promise<SyncResult> {
     let achievementsSynced = 0;
     let gamesUpdated = 0;
 
     for (const steamGame of games) {
       const appId = String(steamGame.appid);
 
-      if (!steamGame.has_community_visible_stats) continue;
-
-      // 3. Obtener logros, schema y rareza en paralelo para cada juego
       const [playerAchievements, schema, rarityMap] = await Promise.all([
         this.fetchPlayerAchievements(steamId, apiKey, appId),
         this.fetchGameSchema(apiKey, appId),
         this.fetchRarityMap(appId),
       ]);
 
-      // Juegos sin logros en schema no aportan valor — tampoco si la API no devuelve datos del jugador
       if (schema.length === 0 || playerAchievements.length === 0) continue;
 
       const schemaMap = new Map(schema.map((s) => [s.name, s]));
 
-      // 4. Upsert del juego en la BD
       const dbGame = await prisma.game.upsert({
         where: { platform_externalId: { platform: 'STEAM', externalId: appId } },
         create: {
@@ -215,7 +278,6 @@ export class SteamAdapter implements PlatformAdapter {
 
       gamesUpdated++;
 
-      // 5. Upsert de cada logro y de UserAchievement si está desbloqueado
       for (const pa of playerAchievements) {
         const schemaDef = schemaMap.get(pa.apiname);
         const rarityPercent = rarityMap.get(pa.apiname) ?? 100;
@@ -246,23 +308,15 @@ export class SteamAdapter implements PlatformAdapter {
           },
         });
 
-        // 6. Upsert de UserAchievement solo si el logro está desbloqueado
         if (pa.achieved === 1) {
           await prisma.userAchievement.upsert({
-            where: {
-              userId_achievementId: {
-                userId: account.userId,
-                achievementId: dbAchievement.id,
-              },
-            },
+            where: { userId_achievementId: { userId, achievementId: dbAchievement.id } },
             create: {
-              userId: account.userId,
+              userId,
               achievementId: dbAchievement.id,
               unlockedAt: new Date(pa.unlocktime * 1000),
             },
-            update: {
-              unlockedAt: new Date(pa.unlocktime * 1000),
-            },
+            update: { unlockedAt: new Date(pa.unlocktime * 1000) },
           });
           achievementsSynced++;
         }

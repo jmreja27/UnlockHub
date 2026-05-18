@@ -239,6 +239,43 @@ export interface SearchResponse {
   total: number;
 }
 
+// ─── Sync progresivo ──────────────────────────────────────────────────────────
+
+export interface SyncProgressEvent {
+  platform: Platform;
+  processed: number;
+  total: number;
+  newGamesCount: number;
+  newAchievementsCount: number;
+  percentComplete: number;
+}
+
+export interface SyncCompleteEvent {
+  platform: Platform;
+  totalGames: number;
+  newAchievements: number;
+  xpEarned: number;
+}
+
+export interface SyncErrorEvent {
+  platform: Platform;
+  error: string;
+  processedBeforeError: number;
+}
+
+export interface SyncStatusResponse {
+  platform: Platform;
+  lastSyncedAt: string | null;
+  cooldownRemainingSeconds: number;
+  dailySyncsUsed: number;
+  linked: boolean;
+  isRunning: boolean;
+  processed: number;
+  total: number;
+  percentComplete: number;
+  startedAt: string | null;
+}
+
 export const SYNC_COOLDOWNS: Record<SyncTier, SyncCooldownConfig> = {
   free: {
     autoSyncIntervalMinutes: 60,

@@ -1,24 +1,27 @@
 import { Worker } from 'bullmq';
+import type { Platform } from '@unlockhub/types';
 
-import { createWorkerConnection } from '../lib/redis';
+import { AppError } from '../middleware/errorHandler';
+import { createWorkerConnection, redis } from '../lib/redis';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
+import { getIO } from '../lib/socket';
+import type { PlatformAdapter, SyncBatchProgress } from '../platforms/platform.interface';
 import { steamAdapter } from '../platforms/steam.adapter';
 import { retroAchievementsAdapter } from '../platforms/retroachievements.adapter';
 import { psnAdapter } from '../platforms/psn.adapter';
 import { xboxAdapter } from '../platforms/xbox.adapter';
 import { sendPush } from '../services/notification.service';
 import { createNotification } from '../services/inapp-notification.service';
-import { AppError } from '../middleware/errorHandler';
-import { logger } from '../lib/logger';
 
 import type { SyncJobData, SyncJobResult } from './sync.queue';
 
-const ADAPTERS = {
+const ADAPTERS: Record<string, PlatformAdapter> = {
   STEAM: steamAdapter,
   RA: retroAchievementsAdapter,
   PSN: psnAdapter,
   XBOX: xboxAdapter,
-} as const;
+};
 
 const PLATFORM_LABELS: Record<string, string> = {
   STEAM: 'Steam',
@@ -26,6 +29,22 @@ const PLATFORM_LABELS: Record<string, string> = {
   PSN: 'PlayStation',
   XBOX: 'Xbox',
 };
+
+function syncProgressKey(userId: string, platform: Platform): string {
+  return `sync:progress:${userId}:${platform}`;
+}
+
+function userRoom(userId: string): string {
+  return `user:${userId}`;
+}
+
+function getIOSafe() {
+  try {
+    return getIO();
+  } catch {
+    return null;
+  }
+}
 
 export function startSyncWorker() {
   const worker = new Worker<SyncJobData, SyncJobResult>(
@@ -41,7 +60,6 @@ export function startSyncWorker() {
       const adapter = ADAPTERS[platform as keyof typeof ADAPTERS];
       if (!adapter) throw new Error(`Plataforma ${platform} no soportada`);
 
-      // Capturar logros antes del sync para detectar cuáles son nuevos
       const prevEarnedIds = new Set(
         (
           await prisma.userAchievement.findMany({
@@ -51,11 +69,49 @@ export function startSyncWorker() {
         ).map((a) => a.achievementId),
       );
 
+      const startedAt = new Date().toISOString();
+      await redis.setex(
+        syncProgressKey(userId, platform as Platform),
+        7200,
+        JSON.stringify({ isRunning: true, processed: 0, total: 0, percentComplete: 0, startedAt }),
+      );
+
+      const io = getIOSafe();
+
+      const onBatch = async (progress: SyncBatchProgress): Promise<void> => {
+        const percentComplete =
+          progress.total > 0 ? Math.round((progress.processed / progress.total) * 100) : 0;
+        await redis.setex(
+          syncProgressKey(userId, platform as Platform),
+          7200,
+          JSON.stringify({
+            isRunning: true,
+            processed: progress.processed,
+            total: progress.total,
+            percentComplete,
+            startedAt,
+          }),
+        );
+        if (io) {
+          io.to(userRoom(userId)).emit('sync:progress', {
+            platform,
+            processed: progress.processed,
+            total: progress.total,
+            newGamesCount: progress.newGamesCount,
+            newAchievementsCount: progress.newAchievementsCount,
+            percentComplete,
+          });
+        }
+      };
+
       let result: Awaited<ReturnType<typeof adapter.syncUser>>;
       try {
-        result = await adapter.syncUser(account);
+        if (adapter.syncUserBatched) {
+          result = await adapter.syncUserBatched(account, onBatch);
+        } else {
+          result = await adapter.syncUser(account);
+        }
       } catch (err) {
-        // Cuando el refresh token PSN expira, notificar al usuario en lugar de solo loguear
         if (err instanceof AppError && err.code === 'PSN_REFRESH_TOKEN_EXPIRED') {
           await prisma.platformAccount.update({
             where: { id: platformAccountId },
@@ -68,6 +124,14 @@ export function startSyncWorker() {
             body: 'Tu sesión de PlayStation ha expirado. Vuelve a vincular tu cuenta para continuar sincronizando tus trofeos.',
           });
           logger.warn({ userId, platform }, '[SyncWorker] Refresh token PSN expirado — requiresReauth marcado');
+        }
+        await redis.del(syncProgressKey(userId, platform as Platform));
+        if (io) {
+          io.to(userRoom(userId)).emit('sync:error', {
+            platform,
+            error: err instanceof AppError ? err.code : 'SYNC_FAILED',
+            processedBeforeError: 0,
+          });
         }
         throw err;
       }
@@ -82,18 +146,18 @@ export function startSyncWorker() {
         data: { lastSyncAt: new Date() },
       });
 
-      // Enviar push por cada logro nuevo (máximo 3 para no saturar al usuario)
       const newAchievements = await prisma.userAchievement.findMany({
         where: {
           userId,
           achievementId: { notIn: [...prevEarnedIds] },
         },
         include: { achievement: { select: { title: true, normalizedPoints: true } } },
-        take: 3,
         orderBy: { unlockedAt: 'desc' },
       });
 
-      for (const ua of newAchievements) {
+      const xpEarned = newAchievements.reduce((sum, ua) => sum + ua.achievement.normalizedPoints, 0);
+
+      for (const ua of newAchievements.slice(0, 3)) {
         await sendPush(
           userId,
           '🏆 ¡Nuevo logro desbloqueado!',
@@ -101,6 +165,16 @@ export function startSyncWorker() {
           { achievementId: ua.achievementId, platform },
         ).catch((err: unknown) => {
           logger.warn({ err: (err as Error).message }, '[SyncWorker] Push notification fallida');
+        });
+      }
+
+      await redis.del(syncProgressKey(userId, platform as Platform));
+      if (io) {
+        io.to(userRoom(userId)).emit('sync:complete', {
+          platform,
+          totalGames: result.gamesUpdated,
+          newAchievements: result.achievementsSynced,
+          xpEarned,
         });
       }
 

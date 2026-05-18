@@ -6,6 +6,21 @@ import { prisma } from '../lib/prisma';
 import { syncQueue } from '../jobs/sync.queue';
 import { AppError } from '../middleware/errorHandler';
 import { FEATURES } from '../config/features';
+import { steamAdapter } from '../platforms/steam.adapter';
+import { retroAchievementsAdapter } from '../platforms/retroachievements.adapter';
+import { psnAdapter } from '../platforms/psn.adapter';
+import { xboxAdapter } from '../platforms/xbox.adapter';
+import { logger } from '../lib/logger';
+import type { PlatformAdapter } from '../platforms/platform.interface';
+
+const ADAPTERS: Record<string, PlatformAdapter> = {
+  STEAM: steamAdapter,
+  RA: retroAchievementsAdapter,
+  PSN: psnAdapter,
+  XBOX: xboxAdapter,
+};
+
+const ALL_PLATFORMS: Platform[] = ['STEAM', 'RA', 'PSN', 'XBOX'];
 
 function cooldownKey(userId: string, platform: Platform) {
   return `sync:cooldown:${userId}:${platform}`;
@@ -14,6 +29,10 @@ function cooldownKey(userId: string, platform: Platform) {
 function dailyCountKey(userId: string, platform: Platform) {
   const date = new Date().toISOString().slice(0, 10);
   return `sync:daily:${userId}:${platform}:${date}`;
+}
+
+function syncProgressKey(userId: string, platform: Platform) {
+  return `sync:progress:${userId}:${platform}`;
 }
 
 export async function triggerManualSync(
@@ -91,13 +110,100 @@ export async function getSyncStatus(userId: string, platform: Platform) {
     10,
   );
 
+  const progressRaw = await redis.get(syncProgressKey(userId, platform));
+  let isRunning = false;
+  let processed = 0;
+  let total = 0;
+  let percentComplete = 0;
+  let startedAt: string | null = null;
+
+  if (progressRaw) {
+    try {
+      const progress = JSON.parse(progressRaw) as {
+        isRunning: boolean;
+        processed: number;
+        total: number;
+        percentComplete: number;
+        startedAt: string;
+      };
+      isRunning = progress.isRunning;
+      processed = progress.processed;
+      total = progress.total;
+      percentComplete = progress.percentComplete;
+      startedAt = progress.startedAt;
+    } catch {
+      // clave Redis corrupta — ignorar
+    }
+  }
+
   return {
     platform,
     lastSyncedAt: account?.lastSyncedAt ?? null,
     cooldownRemainingSeconds: ttl > 0 ? ttl : 0,
     dailySyncsUsed: dailyCount,
     linked: !!account,
+    isRunning,
+    processed,
+    total,
+    percentComplete,
+    startedAt,
   };
+}
+
+export async function getActiveSyncStatus(userId: string) {
+  const statuses = await Promise.all(
+    ALL_PLATFORMS.map((platform) => getSyncStatus(userId, platform)),
+  );
+  return statuses.filter((s) => s.linked);
+}
+
+/**
+ * Sync express: obtiene los N juegos/trofeos más recientes de forma síncrona (~30 s max).
+ * Se llama al vincular una plataforma por primera vez para poblar la biblioteca antes
+ * de responder al cliente. El full sync completo se encola en BullMQ aparte.
+ */
+export async function triggerExpressSync(
+  userId: string,
+  platform: Platform,
+): Promise<void> {
+  const account = await prisma.platformAccount.findUnique({
+    where: { userId_platform: { userId, platform } },
+  });
+  if (!account) return;
+
+  const adapter = ADAPTERS[platform as keyof typeof ADAPTERS];
+  if (!adapter?.syncUserExpress) return;
+
+  try {
+    await adapter.syncUserExpress(account);
+    await prisma.platformAccount.update({
+      where: { id: account.id },
+      data: { lastSyncedAt: new Date() },
+    });
+    logger.info({ userId, platform }, '[SyncService] Express sync completado');
+  } catch (err) {
+    logger.warn({ userId, platform, err: (err as Error).message }, '[SyncService] Express sync fallido — continuando');
+  }
+}
+
+/**
+ * Encola el sync completo (batched) en BullMQ para procesamiento en background.
+ */
+export async function queueInitialSync(
+  userId: string,
+  platform: Platform,
+): Promise<string | undefined> {
+  const account = await prisma.platformAccount.findUnique({
+    where: { userId_platform: { userId, platform } },
+  });
+  if (!account) return undefined;
+
+  const job = await syncQueue.add(
+    `initial-sync:${userId}:${platform}`,
+    { userId, platformAccountId: account.id, platform, triggerType: 'initial' },
+    { priority: 10 },
+  );
+  return job.id;
 }
 
 function getSecondsUntilMidnight(): number {

@@ -4,6 +4,7 @@ import { validateEnv } from './config/env';
 import app from './app';
 import { initSocketServer } from './lib/socket';
 import { registerActivityHandler } from './sockets/activity.handler';
+import { registerSyncHandler } from './sockets/sync.handler';
 import { startSyncWorker } from './jobs/sync.worker';
 import { restoreAutoSyncs } from './jobs/sync.scheduler';
 import { startSeedCatalogWorker } from './jobs/seed-catalog.worker';
@@ -25,6 +26,7 @@ const seedCatalogWorker = startSeedCatalogWorker();
 const server = http.createServer(app);
 const io = initSocketServer(server);
 registerActivityHandler(io);
+registerSyncHandler(io);
 
 server.listen(env.PORT, async () => {
   logger.info({ port: env.PORT, env: env.NODE_ENV }, 'API arrancada');

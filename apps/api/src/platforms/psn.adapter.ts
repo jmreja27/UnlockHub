@@ -21,9 +21,12 @@ import { prisma } from '../lib/prisma';
 import { redis } from '../lib/redis';
 import { AppError } from '../middleware/errorHandler';
 
-import type { PlatformAdapter } from './platform.interface';
+import type { PlatformAdapter, SyncBatchCallback } from './platform.interface';
 
 // ─── Constantes ────────────────────────────────────────────────────────────────
+
+const EXPRESS_TITLE_LIMIT = 10;
+const BATCH_SIZE = 10;
 
 const TTL_TITLE_TROPHIES = 86400;    // 24 horas — metadatos de trofeos raramente cambian
 const TTL_USER_TITLES   = 3600;     // 1 hora — lista de juegos del usuario
@@ -214,8 +217,35 @@ export class PsnAdapter implements PlatformAdapter {
 
   async syncUser(account: PlatformAccount): Promise<SyncResult> {
     const { auth, updatedEncryptedToken } = await this.buildAuthWithRefresh(account);
+    if (updatedEncryptedToken) {
+      await prisma.platformAccount.update({
+        where: { id: account.id },
+        data: { encryptedToken: updatedEncryptedToken },
+      });
+    }
+    const titles = await this.fetchUserTitles(auth, account.username);
+    return this.processTitles(titles, auth, account);
+  }
 
-    // Si el token fue refrescado, persiste el nuevo token cifrado
+  // ── syncUserExpress ────────────────────────────────────────────────────────
+
+  async syncUserExpress(account: PlatformAccount): Promise<SyncResult> {
+    const { auth, updatedEncryptedToken } = await this.buildAuthWithRefresh(account);
+    if (updatedEncryptedToken) {
+      await prisma.platformAccount.update({
+        where: { id: account.id },
+        data: { encryptedToken: updatedEncryptedToken },
+      });
+    }
+    // PSN devuelve títulos ordenados por última actividad — los primeros N son los más recientes
+    const titles = (await this.fetchUserTitles(auth, account.username)).slice(0, EXPRESS_TITLE_LIMIT);
+    return this.processTitles(titles, auth, account);
+  }
+
+  // ── syncUserBatched ────────────────────────────────────────────────────────
+
+  async syncUserBatched(account: PlatformAccount, onBatch: SyncBatchCallback): Promise<SyncResult> {
+    const { auth, updatedEncryptedToken } = await this.buildAuthWithRefresh(account);
     if (updatedEncryptedToken) {
       await prisma.platformAccount.update({
         where: { id: account.id },
@@ -224,13 +254,47 @@ export class PsnAdapter implements PlatformAdapter {
     }
 
     const titles = await this.fetchUserTitles(auth, account.username);
+    const total = titles.length;
+    let achievementsSynced = 0;
+    let gamesUpdated = 0;
+    let processed = 0;
+
+    for (let i = 0; i < titles.length; i += BATCH_SIZE) {
+      const batch = titles.slice(i, i + BATCH_SIZE);
+      const batchResult = await this.processTitles(batch, auth, account);
+
+      achievementsSynced += batchResult.achievementsSynced;
+      gamesUpdated += batchResult.gamesUpdated;
+      processed += batch.length;
+
+      await onBatch({
+        processed,
+        total,
+        newGamesCount: batchResult.gamesUpdated,
+        newAchievementsCount: batchResult.achievementsSynced,
+      });
+    }
+
+    return {
+      platform: 'PSN',
+      achievementsSynced,
+      gamesUpdated,
+      syncedAt: new Date().toISOString(),
+    };
+  }
+
+  // ── Lógica de procesamiento compartida ────────────────────────────────────
+
+  private async processTitles(
+    titles: TrophyTitle[],
+    auth: AuthorizationPayload,
+    account: PlatformAccount,
+  ): Promise<SyncResult> {
     let achievementsSynced = 0;
     let gamesUpdated = 0;
 
     for (const title of titles) {
       const trophies = await this.fetchMergedTrophies(auth, title);
-
-      // Nunca persistir juegos sin trofeos (DLC sin soporte, demo packs, etc.)
       if (trophies.length === 0) continue;
 
       const dbGame = await prisma.game.upsert({
@@ -286,20 +350,13 @@ export class PsnAdapter implements PlatformAdapter {
 
         if (t.earned && t.earnedDateTime) {
           await prisma.userAchievement.upsert({
-            where: {
-              userId_achievementId: {
-                userId: account.userId,
-                achievementId: dbAchievement.id,
-              },
-            },
+            where: { userId_achievementId: { userId: account.userId, achievementId: dbAchievement.id } },
             create: {
               userId: account.userId,
               achievementId: dbAchievement.id,
               unlockedAt: new Date(t.earnedDateTime),
             },
-            update: {
-              unlockedAt: new Date(t.earnedDateTime),
-            },
+            update: { unlockedAt: new Date(t.earnedDateTime) },
           });
           achievementsSynced++;
         }

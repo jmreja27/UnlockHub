@@ -7,7 +7,7 @@ export interface SyncJobData {
   userId: string;
   platformAccountId: string;
   platform: Platform;
-  triggerType: 'manual' | 'auto';
+  triggerType: 'manual' | 'auto' | 'initial';
 }
 
 export interface SyncJobResult {
