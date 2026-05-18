@@ -61,7 +61,12 @@
       "birthdate_gdpr_note": "Debes tener al menos {{age}} años para registrarte (RGPD)",
       "error_birthdate_required": "La fecha de nacimiento es obligatoria.",
       "error_birthdate_format": "El formato debe ser AAAA-MM-DD (ej. 1990-05-14).",
-      "error_birthdate_underage": "Debes tener al menos {{age}} años para registrarte."
+      "error_birthdate_underage": "Debes tener al menos {{age}} años para registrarte.",
+      "legal_prefix": "Al crear una cuenta aceptas nuestros",
+      "legal_connector": "y la",
+      "legal_accessibility": "Al crear una cuenta aceptas los Términos y Condiciones y la Política de Privacidad",
+      "terms_label": "Términos y Condiciones",
+      "privacy_label": "Política de Privacidad"
     },
     "forgot_password": {
       "title": "¿Olvidaste tu contraseña?",

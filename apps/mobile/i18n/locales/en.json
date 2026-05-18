@@ -61,7 +61,12 @@
       "birthdate_gdpr_note": "You must be at least {{age}} years old to register (GDPR)",
       "error_birthdate_required": "Date of birth is required.",
       "error_birthdate_format": "Format must be YYYY-MM-DD (e.g. 1990-05-14).",
-      "error_birthdate_underage": "You must be at least {{age}} years old to register."
+      "error_birthdate_underage": "You must be at least {{age}} years old to register.",
+      "legal_prefix": "By creating an account you agree to our",
+      "legal_connector": "and our",
+      "legal_accessibility": "By creating an account you agree to the Terms of Service and Privacy Policy",
+      "terms_label": "Terms of Service",
+      "privacy_label": "Privacy Policy"
     },
     "forgot_password": {
       "title": "Forgot password",

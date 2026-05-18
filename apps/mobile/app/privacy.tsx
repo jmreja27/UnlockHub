@@ -4,8 +4,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
-// URL de la política completa — actualizar cuando esté publicada
-const PRIVACY_POLICY_URL = 'https://unlockhub.app/privacy';
+// GitHub Pages: https://jmreja27.github.io/UnlockHub/privacy-policy.html
+// Con dominio custom: https://unlockhub.app/privacy-policy.html
+const PRIVACY_POLICY_URL = 'https://jmreja27.github.io/UnlockHub/privacy-policy.html';
 
 export default function PrivacyScreen() {
   const { t } = useTranslation();

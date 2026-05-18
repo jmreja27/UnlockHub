@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -18,6 +19,9 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../hooks/useAuth';
 
 const MIN_AGE = 16;
+
+const TERMS_URL = 'https://jmreja27.github.io/UnlockHub/terms-of-service.html';
+const PRIVACY_URL = 'https://jmreja27.github.io/UnlockHub/privacy-policy.html';
 
 type FieldErrors = {
   username?: string;
@@ -283,6 +287,31 @@ export default function RegisterScreen() {
                   {fieldErrors.birthDate}
                 </Text>
               )}
+            </View>
+
+            {/* Texto legal — ToS y Privacy Policy */}
+            <View className="mb-6" accessible accessibilityLabel={t('auth.register.legal_accessibility')}>
+              <Text className="text-gray-500 text-xs text-center leading-5">
+                {t('auth.register.legal_prefix')}{' '}
+                <Text
+                  className="text-primary-light underline"
+                  onPress={() => void Linking.openURL(TERMS_URL)}
+                  accessibilityRole="link"
+                  accessibilityLabel={t('auth.register.terms_label')}
+                >
+                  {t('auth.register.terms_label')}
+                </Text>
+                {' '}{t('auth.register.legal_connector')}{' '}
+                <Text
+                  className="text-primary-light underline"
+                  onPress={() => void Linking.openURL(PRIVACY_URL)}
+                  accessibilityRole="link"
+                  accessibilityLabel={t('auth.register.privacy_label')}
+                >
+                  {t('auth.register.privacy_label')}
+                </Text>
+                {'.'}
+              </Text>
             </View>
 
             {/* Botón de registro */}
