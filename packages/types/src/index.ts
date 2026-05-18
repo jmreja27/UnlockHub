@@ -35,6 +35,7 @@ export interface PlatformAccount {
   externalId: string;
   username: string;
   lastSyncedAt: string | null;
+  requiresReauth: boolean;
 }
 
 export interface Achievement {

@@ -105,6 +105,8 @@ model PlatformAccount {
   encryptedToken    String
   lastSyncedAt      DateTime?
   syncCooldownUntil DateTime?
+  requiresReauth    Boolean   @default(false)
+  tokenExpiresAt    DateTime?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 

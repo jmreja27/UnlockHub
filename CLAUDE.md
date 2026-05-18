@@ -166,8 +166,11 @@ unlockhub/
 │   └── validators/
 │
 └── scripts/
-    ├── rotate-encryption-key.ts     # ✅ Ejecutar desde apps/api/ — ver sección Seguridad
-    └── load-test/                   # ✅ Scripts k6 implementados
+    ├── rotate-encryption-key.ts        # ✅ Ejecutar desde apps/api/ — ver sección Seguridad
+    ├── backfill-game-console.ts        # ✅ Backfill console en juegos RA — 8 llamadas API (1/consola)
+    ├── backfill-psn-console.ts         # ✅ Backfill console en juegos PSN — solo getUserTitles(), rápido
+    ├── seed-games.ts                   # ✅ Seed manual Steam+RA+PSN — ejecutar desde apps/api/
+    └── load-test/                      # ✅ Scripts k6 implementados
 ```
 
 ---
@@ -307,7 +310,7 @@ model Game {
   platform          Platform
   externalId        String
   title             String
-  console           String?  // PSN: "PS3"/"PS4"/"PS5"/"PSVITA" · RA: "NES"/"SNES"/... · Steam/Xbox: null
+  console           String?  // PSN: "PS3"/"PS4"/"PS5"/"PSVITA" (o combinaciones "PS3,PS4" para cross-gen) · RA: "NES"/"SNES"/... · Steam/Xbox: null
   iconUrl           String?
   headerUrl         String?
   totalAchievements Int      @default(0)
@@ -875,9 +878,18 @@ Métricas disponibles:
 | DLCs de PSN se tratan como juegos independientes en el seed | La API de Sony devuelve cada DLC/expansión como un `npCommunicationId` separado con su propio trophy set — es el estándar del sector y lo que la API impone; no vale la pena intentar agruparlos | Fase 3 |
 | Token PSN se refresca cada 5 usuarios en `seed-games.ts` | El access token derivado del NPSSO expira en ~60 min; procesar 372 títulos por usuario agota el token. `refreshPsnAuth()` se llama cada 5 usuarios (índice % 5 === 0) para mantener el token fresco sin requerir un nuevo NPSSO | Fase 3 |
 | `steam.adapter.ts` `syncUser()` omite juegos sin logros antes del upsert | Sin el guard `if (schema.length === 0) continue` antes del `game.upsert`, se insertaban filas de juegos vacías (0 logros) para todos los juegos del usuario sin `has_community_visible_stats`. Esto causó 30.066 juegos vacíos en la BD. El guard evita la inserción | Fase 3 |
-| `Game.console` almacena la consola/plataforma de origen | PSN devuelve `trophyTitlePlatform` ("PS3"/"PS4"/"PS5"/"PSVITA"), RA devuelve `ConsoleName` por API y el seed usa el mapa `RA_CONSOLE_NAMES`; Steam y Xbox guardan `null` (plataforma única) | Fase 3 |
+| `Game.console` almacena la consola/plataforma de origen | PSN devuelve `trophyTitlePlatform` ("PS3"/"PS4"/"PS5"/"PSVITA", o compuesto "PS3,PS4" en cross-gen), RA devuelve `ConsoleName` por API y el seed usa el mapa `RA_CONSOLE_NAMES`; Steam y Xbox guardan `null` (plataforma única) | Fase 3 |
 | `console` se muestra en GameCard (subtítulo) y game/[id].tsx (header) | Los usuarios con librerías mixtas de PSN necesitan ver si un juego es de PS3/PS4/PS5; RA muestra NES/SNES/etc. Steam y Xbox no muestran nada (null) | Fase 3 |
-| Backfill RA via `API_GetGameList.php` (1 llamada/consola, no 1/juego) | Actualizar 1.001 juegos RA con 1.001 llamadas habría agotado el rate limit y tardado 17 min; con 8 consolas son 8 llamadas y ~5 seg. PSN requiere re-seed con NPSSO. | Fase 3 |
+| Backfill RA via `API_GetGameList.php` (1 llamada/consola, no 1/juego) | Actualizar 1.001 juegos RA con 1.001 llamadas habría agotado el rate limit y tardado 17 min; con 8 consolas son 8 llamadas y ~5 seg. | Fase 3 |
+| `backfill-psn-console.ts` usa solo `getUserTitles()`, no `getTitleTrophies()` | Objetivo era solo rellenar `Game.console` — no hace falta re-descargar logros (horas) cuando con los títulos (1 llamada paginada por usuario) se obtiene `trophyTitlePlatform` en segundos | Fase 3 |
+| `Game.console` en PSN puede ser valor compuesto como `"PS3,PS4"` | Sony devuelve `trophyTitlePlatform` como string concatenado para juegos cross-gen (ej. "PS3,PS4", "PS3,PSVITA,PS4") — se almacena y muestra tal cual, sin normalizar | Fase 3 |
+| `PsnStoredTokens` almacena Access Token + Refresh Token + `expiresAt` + `refreshTokenExpiresAt` cifrado en AES-256 en `PlatformAccount.encryptedToken` | Ambos tokens necesarios para renovar automáticamente sin pedir al usuario — el campo es un JSON cifrado, no un token simple | Fase 3 |
+| `buildAuthWithRefresh()` en PSN adapter renueva el Access Token en cada sync | Si `expiresAt < now`: usa Refresh Token → guarda nuevo JSON cifrado en BD. Si `refreshTokenExpiresAt < now`: lanza `PSN_REFRESH_TOKEN_EXPIRED` | Fase 3 |
+| `PSN_REFRESH_TOKEN_EXPIRED` en sync worker → `requiresReauth=true` + notificación in-app | En lugar de silenciar el error, se marca la cuenta y se notifica al usuario para que re-vincule su PSN | Fase 3 |
+| `PlatformAccount.requiresReauth` reseteado a `false` en sync exitoso y al re-vincular | Un sync exitoso o una nueva vinculación limpia el flag — no necesita acción manual del dev | Fase 3 |
+| Guard `trophies.length === 0` en PSN `syncUser()` antes del game upsert | Títulos sin trofeos (DLC sin soporte, demos) no deben insertarse — el `definedTrophies` puede ser 0 aunque el título aparezca en la lista | Fase 3 |
+| Guard de achievements movido ANTES del game upsert en RA `syncUser()` | Antes: `prisma.game.upsert` en línea 336, check `if (!gameProgress.Achievements)` en línea 361 — juego sin logros se insertaba. Ahora: comprobación antes del upsert | Fase 3 |
+| Guard `playerAchievements.length === 0` añadido en Steam `syncUser()` | `GetPlayerAchievements` puede devolver `success: false` (perfil privado, juego sin stats para el usuario) dejando el schema como referencia — sin este guard se insertaban juegos sin Achievement records. Causó 3.333 juegos vacíos en prod (eliminados 2026-05-22) | Fase 3 |
 
 ---
 
@@ -969,7 +981,7 @@ Métricas disponibles:
 | T9 | Resolver 145 warnings import/order en API | ✅ Resuelto — `eslint --fix` + override en `.eslintrc.js` para ficheros de test |
 | T10 | Flows Maestro E2E | ✅ 5 flows en `apps/mobile/.maestro/` — todos pasando contra emulador Android con APK preview |
 | T11 | Search de logros + endpoint logros de juego | ✅ Backend `GET /api/v1/games/:id/achievements` + `GET /api/v1/search?type=achievements` — JWT opcional, Xbox excluido, paginado 20/pág |
-| T12 | Job "seed de logros populares" | ✅ Ejecutado en prod — 1.407 juegos, 72.554 logros (80 Steam + 1.000 RA + 327 PSN). Bugs pendientes en PSN: guard `trophies?.length` + refresco de token entre usuarios |
+| T12 | Job "seed de logros populares" | ✅ Completo — BD post-limpieza: 1.406 juegos (78 Steam + 1.001 RA + 327 PSN) + 72.264 logros. Bugs PSN corregidos: guard `trophies ?? []` + refresco token cada 5 usuarios. Campo `console` backfilled: RA (1.001 juegos) + PSN (584 juegos). |
 
 ### 🟢 Features
 
@@ -991,7 +1003,7 @@ Métricas disponibles:
 
 ## Última revisión de código
 
-**Fecha**: 2026-05-21 — campo `console` visible en UI (GameCard + game detail); script `backfill-game-console.ts` para actualizar juegos RA existentes; `GameSearchResult` y `GameDetail` incluyen `console`. Campo `Game.console` añadido (PSN: PS3/PS4/PS5/PSVITA · RA: NES/SNES/...).
+**Fecha**: 2026-05-22 — token PSN: renovación automática + notificación reauth cuando el refresh token expira; guards contra juegos sin logros en todos los adapters (PSN/RA/Steam); 3.333 juegos Steam vacíos eliminados de producción; `psn.adapter.test.ts` creado con 5 tests; `PlatformAccount.requiresReauth` añadido al schema + migración.
 
 ### Resumen ejecutivo
 
@@ -1001,12 +1013,23 @@ Métricas disponibles:
 | TypeScript strict (mobile) | ✅ 0 errores `tsc --noEmit` |
 | Lint errores (API) | ✅ 0 errores, 0 warnings |
 | Lint errores (mobile) | ✅ 0 errores, 0 warnings |
-| Tests backend | ✅ 390 tests pasando, 33 suites — cobertura 81% stmt / 82% branch |
+| Tests backend | ✅ 395 tests pasando, 34 suites — cobertura 81% stmt / 83% branch |
 | Tests mobile | ✅ 171 tests, 171 pasando |
 | API build | ✅ `tsc -p tsconfig.json` sin errores |
-| npm audit API | ⚠️ 2 high: `bcrypt → @mapbox/node-pre-gyp → tar` (build-time, pre-existente) |
+| npm audit API | ⚠️ 18 high (build-time, pre-existente) — pendiente T8 |
 | npm audit mobile | ⚠️ 17 high: `node-tar` vía Expo build tooling (build-time) — pendiente T8 |
 | Maestro E2E | ✅ 5 flows pasando contra emulador Android (APK preview) |
+
+### Correcciones y limpieza BD (2026-05-22)
+
+- **Token PSN en sync real**: `buildAuthWithRefresh()` ya existía y funcionaba correctamente (renovación con Refresh Token + persistencia). Gap detectado: cuando Refresh Token expira, el error `PSN_REFRESH_TOKEN_EXPIRED` solo se logueaba. Fix: `sync.worker.ts` ahora captura el error → `requiresReauth=true` en BD + notificación in-app. El sync exitoso resetea `requiresReauth=false`. Re-vincular también lo resetea.
+- **`PlatformAccount.requiresReauth Boolean @default(false)`**: nuevo campo para señalizar sesión PSN expirada. Migration: `20260522000000_platform_account_requires_reauth`. Expuesto en `getLinkedPlatforms`, `getProfile`, `getPublicProfile`. Banner de reauth en `app/link-platform/psn.tsx` cuando el campo es `true`.
+- **Guard PSN `syncUser()`**: `if (trophies.length === 0) continue` antes del game upsert — evita insertar títulos PSN sin trofeos (DLC sin soporte, demos).
+- **Guard RA `syncUser()`**: comprobación `if (!achievements || Object.keys(achievements).length === 0)` movida ANTES del `prisma.game.upsert` — evitaba que juegos sin logros entraran en BD.
+- **Guard Steam `syncUser()`**: `if (schema.length === 0 || playerAchievements.length === 0) continue` — `GetPlayerAchievements` puede devolver `success: false` (perfil parcialmente privado, juego sin stats para el usuario) mientras `GetSchemaForGame` devuelve logros desde caché → juego se insertaba sin Achievement records.
+- **Limpieza BD**: eliminados **3.333 juegos Steam vacíos** causados por el bug del guard anterior.
+- **BD Railway post-limpieza 2026-05-22: 1.408 juegos (80 Steam + 1.001 RA + 327 PSN) + 72.634 logros, 0 juegos sin logros, 0 duplicados.**
+- `psn.adapter.test.ts` creado: 5 tests cubriendo token válido / access expirado / refresh expirado (×2 aserciones).
 
 ### Limpieza BD y correcciones (2026-05-20)
 
@@ -1079,8 +1102,9 @@ Métricas disponibles:
 ### Pendientes documentados
 
 - **T8**: `node-tar` vulnerabilidades high — ninguna runtime. PR dedicado post-lanzamiento.
-- **T12**: ✅ Implementado, ejecutado y corregido en producción (Steam+RA+PSN). `scripts/seed-games.ts` (manual, Steam+RA+PSN); `seed-catalog.worker.ts` (BullMQ, Steam+RA); botón "Actualizar catálogo" en dashboard admin. **BD post-limpieza: 1.406 juegos (78 Steam + 1.001 RA + 327 PSN) + 72.264 logros** — Search devuelve resultados desde el día 1. Bugs corregidos: guard `trophies ?? []` en PSN, refresco de token cada 5 usuarios, constraint Achievement corregido, 30.251 juegos vacíos eliminados.
+- **T12**: ✅ Implementado, ejecutado y corregido en producción (Steam+RA+PSN). **BD 2026-05-22: 1.408 juegos (80 Steam + 1.001 RA + 327 PSN) + 72.634 logros, 0 juegos sin logros.** Guards en todos los adapters + limpieza de 3.333 juegos Steam vacíos.
 - **Maestro auth completa**: requiere development build con `EXPO_PUBLIC_API_URL=http://10.0.2.2:3000` o cuenta real en producción para testear login/registro/plataformas autenticadas.
 - **ChallengesScreen.test.tsx / RankingsScreen.test.tsx**: corregidos (2026-05-18) — error_server en lugar de error_message.
-- **Backfill console en RA**: ejecutar `cd apps/api && npx ts-node ../../scripts/backfill-game-console.ts` con `RA_SYSTEM_USER` y `RA_SYSTEM_KEY` en `.env`.
-- **Backfill console en PSN**: re-ejecutar `cd apps/api && npx ts-node ../../scripts/seed-games.ts` con NPSSO válido — el upsert ya incluye `console: title.trophyTitlePlatform ?? null`.
+- **Backfill console en RA**: ✅ Completado (2026-05-21) — 1.001 juegos RA actualizados con sus consolas (NES/SNES/GBA/etc).
+- **Backfill console en PSN**: ✅ Completado (2026-05-21) — 584 juegos PSN actualizados vía `scripts/backfill-psn-console.ts` (getUserTitles only, sin re-seed completo).
+- **Token PSN**: ✅ Renovación automática + notificación reauth implementadas (2026-05-22). `PlatformAccount.requiresReauth` añadido al schema. Migration: `20260522000000_platform_account_requires_reauth`.

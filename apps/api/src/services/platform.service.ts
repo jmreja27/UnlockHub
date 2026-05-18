@@ -15,6 +15,7 @@ function mapPlatformAccount(dbAccount: {
   externalId: string;
   username: string;
   lastSyncedAt: Date | null;
+  requiresReauth: boolean;
 }): PlatformAccount {
   return {
     id: dbAccount.id,
@@ -23,6 +24,7 @@ function mapPlatformAccount(dbAccount: {
     externalId: dbAccount.externalId,
     username: dbAccount.username,
     lastSyncedAt: dbAccount.lastSyncedAt?.toISOString() ?? null,
+    requiresReauth: dbAccount.requiresReauth,
   };
 }
 
@@ -76,6 +78,7 @@ export async function linkPlatform(
       externalId,
       username,
       encryptedToken,
+      requiresReauth: false,
     },
     select: {
       id: true,
@@ -84,9 +87,11 @@ export async function linkPlatform(
       externalId: true,
       username: true,
       lastSyncedAt: true,
+      requiresReauth: true,
     },
   });
 
+  // Al vincular una plataforma, resetear requiresReauth (nueva vinculación limpia el estado)
   // Programar el sync automático para esta plataforma
   await scheduleAutoSync(userId, dbAccount.id, platform, user.isPremium);
 
@@ -132,6 +137,7 @@ export async function getLinkedPlatforms(userId: string): Promise<PlatformAccoun
       externalId: true,
       username: true,
       lastSyncedAt: true,
+      requiresReauth: true,
     },
   });
 

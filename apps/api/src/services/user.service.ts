@@ -57,6 +57,7 @@ function mapPlatformAccount(dbAccount: {
   externalId: string;
   username: string;
   lastSyncedAt: Date | null;
+  requiresReauth: boolean;
 }): PlatformAccount {
   return {
     id: dbAccount.id,
@@ -65,6 +66,7 @@ function mapPlatformAccount(dbAccount: {
     externalId: dbAccount.externalId,
     username: dbAccount.username,
     lastSyncedAt: dbAccount.lastSyncedAt?.toISOString() ?? null,
+    requiresReauth: dbAccount.requiresReauth,
   };
 }
 
@@ -83,6 +85,7 @@ export async function getProfile(
           externalId: true,
           username: true,
           lastSyncedAt: true,
+          requiresReauth: true,
         },
       },
     },
@@ -113,6 +116,7 @@ export async function getPublicProfile(
           externalId: true,
           username: true,
           lastSyncedAt: true,
+          requiresReauth: true,
         },
       },
     },
