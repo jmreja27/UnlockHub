@@ -22,15 +22,15 @@ Esta sección lista todo lo que **el desarrollador debe hacer manualmente** ante
 | B10 | Configurar **User Messaging Platform (UMP) SDK** de Google | admob.google.com → Privacy & Messaging → Create Message → GDPR | Gratis | Consentimiento GDPR para AdMob en Europa — sin esto AdMob puede suspender la cuenta |
 | B13 | Configurar `APP_SCHEME` como `unlockhub` en Railway | Railway dashboard → service → Variables → `APP_SCHEME=unlockhub` | Gratis | Deep links (reset-password, etc.) |
 | B14 | Crear email de soporte `soporte@unlockhub.app` | Proveedor de dominio/email | ~1-5€/mes | Requerido por Google Play |
-| ~~B15~~ | ✅ **Privacy Policy publicada** | `docs/privacy-policy.html` → https://jmreja27.github.io/UnlockHub/privacy-policy.html | Gratis | ✅ Completado — pendiente: rellenar [NOMBRE_DESARROLLADOR], [NIF_DESARROLLADOR], [DIRECCIÓN_DESARROLLADOR] y activar GitHub Pages en repo settings |
-| ~~B16~~ | ✅ **Términos y Condiciones publicados** | `docs/terms-of-service.html` → https://jmreja27.github.io/UnlockHub/terms-of-service.html | Gratis | ✅ Completado — mismos placeholders que B15 |
+| ~~B15~~ | ✅ **Privacy Policy publicada** | `docs/privacy-policy.html` → https://jmreja27.github.io/UnlockHub/privacy-policy.html | Gratis | ✅ Completado — GitHub Pages activo (repo público, branch `develop`, carpeta `/docs`). Datos del desarrollador rellenados. |
+| ~~B16~~ | ✅ **Términos y Condiciones publicados** | `docs/terms-of-service.html` → https://jmreja27.github.io/UnlockHub/terms-of-service.html | Gratis | ✅ Completado — igual que B15. |
 | B17 | ✅ **Migración Prisma en producción** | Automática en cada deploy — `npx prisma migrate deploy` configurado en `startCommand` de `railway.json` | Gratis | Aplicar todos los modelos nuevos en prod |
 
 > **Estado de acciones completadas ✅**
 > - B1-B2 (Sentry): ✅ DSNs configurados en Railway y EAS
 > - B11-B12 (Cloudinary): ✅ Cuenta creada — `CLOUDINARY_URL` pendiente de configurar en Railway variables
-> - B15 (Privacy Policy): ✅ `docs/privacy-policy.html` — URL: https://jmreja27.github.io/UnlockHub/privacy-policy.html — **acción manual: activar GitHub Pages en repo → Settings → Pages → Source: GitHub Actions + rellenar [NOMBRE_DESARROLLADOR], [NIF_DESARROLLADOR], [DIRECCIÓN_DESARROLLADOR]**
-> - B16 (ToS): ✅ `docs/terms-of-service.html` — URL: https://jmreja27.github.io/UnlockHub/terms-of-service.html — mismos placeholders que B15
+> - B15 (Privacy Policy): ✅ `docs/privacy-policy.html` — URL: https://jmreja27.github.io/UnlockHub/privacy-policy.html — GitHub Pages activo, repo público, datos del desarrollador rellenados. Auto-deploy en cada push a `develop` que toque `docs/`.
+> - B16 (ToS): ✅ `docs/terms-of-service.html` — URL: https://jmreja27.github.io/UnlockHub/terms-of-service.html — igual que B15.
 > - B17 (Migraciones Prisma): ✅ Automáticas en cada deploy — `startCommand` en `railway.json`
 > - STEAM_API_KEY: ✅ Configurada en Railway
 > - N1 (UptimeRobot): ⚙️ Actualizar URL del monitor a https://unlockhub-production.up.railway.app
@@ -133,7 +133,7 @@ unlockhub/
 │   │   │   ├── wrapped/[year].tsx   # period mensual ("2025-01") y anual ("2025") — param se llama year por quirk de Expo Router
 │   │   │   ├── onboarding.tsx
 │   │   │   ├── premium.tsx          # 🚩 gateado — FEATURES.premium = false
-│   │   │   ├── privacy.tsx          # ✅ en app — pendiente URL pública (B15)
+│   │   │   ├── privacy.tsx          # ✅ URL pública: https://jmreja27.github.io/UnlockHub/privacy-policy.html
 │   │   │   ├── notifications.tsx    # ✅ Centro de notificaciones in-app
 │   │   │   └── reset-password.tsx
 │   │   ├── components/
@@ -814,7 +814,7 @@ Métricas disponibles:
 | Ruta | Estado | Notas |
 |---|---|---|
 | `app/(auth)/login.tsx` | ✅ | |
-| `app/(auth)/register.tsx` | ✅ | Pendiente: validación de edad ≥16 en formulario mobile |
+| `app/(auth)/register.tsx` | ✅ | Validación de edad ≥16 implementada. Texto legal con enlaces a ToS y Privacy Policy antes del botón de registro. |
 | `app/(auth)/forgot-password.tsx` | ✅ | Requiere RESEND_API_KEY (B3) para funcionar en prod |
 | `app/reset-password.tsx` | ✅ | Deep link `unlockhub://reset-password?token=…` |
 | `app/onboarding.tsx` | ✅ | Solo en primer login |
@@ -825,7 +825,7 @@ Métricas disponibles:
 | `app/link-platform/psn.tsx` | ✅ | Con ayuda contextual paso a paso |
 | `app/link-platform/xbox.tsx` | 🚩 Gateado | Banner "Próximamente" hasta Fase 4 |
 | `app/notifications.tsx` | ✅ | Centro de notificaciones in-app |
-| `app/privacy.tsx` | ✅ | Pendiente: publicar en URL pública (B15) |
+| `app/privacy.tsx` | ✅ | URL pública activa: https://jmreja27.github.io/UnlockHub/privacy-policy.html |
 | `app/premium.tsx` | 🚩 Gateado | `FEATURES.premium = false` — espera B7 |
 | `app/wrapped/[year].tsx` | ✅ | Soporta period mensual ("2025-01") y anual ("2025") |
 
@@ -898,6 +898,8 @@ Métricas disponibles:
 | Redis `sync:progress:{userId}:{platform}` TTL 2h como fallback de Socket.io | `getSyncStatus` lee esta clave para exponer `isRunning/processed/total/percentComplete/startedAt` — útil si el cliente pierde la conexión Socket.io durante el sync | Fase 3 |
 | `useSyncProgress` hook en mobile: invalida `my-games` en cada batch | La lista se actualiza progresivamente conforme llegan los lotes — sin esperar al `sync:complete`. El toast de completado muestra `+N logros · +X XP` y se auto-descarta a los 4s | Fase 3 |
 | `useSyncAll` es fire-and-forget: invalidación de `my-games` delegada a `useSyncProgress` | Antes: `queryClient.invalidateQueries` en `onSuccess` (solo invalidaba al terminar el request HTTP ~instant). Ahora: la invalidación ocurre en cada batch vía Socket.io — la UI se actualiza progresivamente | Fase 3 |
+| GitHub Pages para docs legales en repo público | Cloudflare Pages rechazado (ran npm ci sobre el monorepo root). GitHub Pages free solo funciona en repos públicos — repo UnlockHub hecho público. Auto-deploy desde branch `develop`, carpeta `/docs`. URLs: https://jmreja27.github.io/UnlockHub/privacy-policy.html y /terms-of-service.html | Fase 3 |
+| Texto legal ToS + Privacy Policy en pantalla de registro | `app/(auth)/register.tsx`: bloque con `Linking.openURL` a las URLs de GitHub Pages antes del botón de submit. Claves i18n `auth.register.legal_prefix/connector/terms_label/privacy_label` en ES/EN. | Fase 3 |
 
 ---
 
@@ -926,7 +928,7 @@ Métricas disponibles:
 6. ✅ Dashboard de administración
 7. ✅ GDPR — borrado de cuenta. ⚙️ Migrar en prod (B17)
 8. ⚙️ UMP SDK de AdMob (B10)
-9. ✅ Privacy policy en app. ✅ Publicar en URL pública (B15-B16) — GitHub Pages + ToS generados. ⚙️ Activar Pages en GitHub repo settings + rellenar placeholders legales
+9. ✅ Privacy policy en app. ✅ Privacy Policy + ToS publicados en GitHub Pages. ✅ Datos del desarrollador rellenados. ✅ Texto legal con enlaces en pantalla de registro.
 10. ✅ Escudo de racha
 11. ✅ Centro de notificaciones in-app
 12. ⚙️ Variables pendientes en Railway dashboard → Variables: `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `APP_SCHEME`, `CLOUDINARY_URL`, `ADMIN_SECRET`, `POSTHOG_API_KEY`
@@ -956,7 +958,7 @@ Métricas disponibles:
 | P2 | Variables pendientes en Railway | Railway dashboard → service → Variables → añadir: `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `APP_SCHEME=unlockhub`, `CLOUDINARY_URL`, `ADMIN_SECRET`, `POSTHOG_API_KEY` |
 | P3 | Resend — cuenta + dominio + API key | resend.com → Add Domain → verificar DNS → API Keys → Create |
 | P4 | UMP SDK AdMob | admob.google.com → Privacy & Messaging → GDPR → publicar |
-| P5 | ✅ Privacy Policy + ToS en URL pública | `docs/privacy-policy.html` + `docs/terms-of-service.html` — **acción manual: activar GitHub Pages (Settings → Pages → Source: GitHub Actions) + rellenar placeholders [NOMBRE_DESARROLLADOR] etc.** |
+| P5 | ✅ Privacy Policy + ToS en URL pública | `docs/privacy-policy.html` + `docs/terms-of-service.html` — GitHub Pages activo, URLs en vivo, datos del desarrollador rellenados. |
 | P6 | Google Play Console | $25 + listing completo |
 | P7 | Smoke tests producción | Registro + login + forgot-password + sync Steam/RA/PSN + rankings |
 
@@ -1011,6 +1013,21 @@ Métricas disponibles:
 ---
 
 ## Última revisión de código
+
+**Fecha**: 2026-05-18 — documentación legal publicada: Privacy Policy + ToS en GitHub Pages, texto legal en pantalla de registro, datos del desarrollador rellenados.
+
+### Cambios sesión 2026-05-18 (legal + hosting)
+
+- **`docs/privacy-policy.html`**: Política de privacidad GDPR completa en español — 14 secciones, bases legales Art. 6.1, terceros (AdMob/Sentry/Cloudinary/PostHog/Resend/Railway), derechos RGPD, edad mínima 16 años. Datos del desarrollador rellenados.
+- **`docs/terms-of-service.html`**: ToS completos en español para Google Play — suscripción premium (2,99€/mes · 19,99€/año), sistema de puntos (sin valor monetario), plataformas de terceros, ley española.
+- **`docs/index.html`**: Índice con enlaces a ambos documentos.
+- **GitHub Pages**: Repo hecho público. Pages activo desde branch `develop`, carpeta `/docs`. Auto-deploy en cada push. URLs en vivo verificadas (200).
+- **`app/privacy.tsx`**: `PRIVACY_POLICY_URL` actualizado a URL real de GitHub Pages.
+- **`app/(auth)/register.tsx`**: Bloque de texto legal con `Linking.openURL` a ToS y Privacy Policy antes del botón de submit. Claves i18n nuevas.
+- **`apps/mobile/i18n/locales/es.json` + `en.json`**: Claves `auth.register.legal_prefix`, `legal_connector`, `legal_accessibility`, `terms_label`, `privacy_label`.
+- **Cloudflare Pages**: Descartado — intentó `npm ci` sobre el root del monorepo aunque se configuró `Path: docs`. GitHub Pages fue la solución definitiva.
+
+---
 
 **Fecha**: 2026-05-23 — sync progresivo por lotes: Socket.io `sync:progress/complete/error`, `syncUserBatched` en Steam/RA/PSN, `syncUserExpress` al vincular, Redis progress TTL 2h, `useSyncProgress` hook + banner + toast en Biblioteca.
 
