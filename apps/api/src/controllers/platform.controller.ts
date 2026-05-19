@@ -9,7 +9,7 @@ import {
 import * as platformService from '../services/platform.service';
 import { triggerExpressSync, queueInitialSync } from '../services/sync.service';
 import type { AuthenticatedRequest } from '../middleware/authenticate';
-import { exchangeNpssoForPsnTokens } from '../platforms/psn.adapter';
+import { getSystemPsnAuth, lookupPsnUser } from '../platforms/psn.adapter';
 import { exchangeXboxCodeForTokens } from '../platforms/xbox.adapter';
 
 const EXPRESS_SYNC_TIMEOUT_MS = 25_000;
@@ -92,7 +92,7 @@ export async function unlinkRetroAchievementsHandler(
   }
 }
 
-// POST /api/v1/platforms/psn/link — vincular cuenta de PlayStation Network
+// POST /api/v1/platforms/psn/link — vincular cuenta de PlayStation Network por username público
 export async function linkPsnHandler(
   req: Request,
   res: Response,
@@ -100,17 +100,18 @@ export async function linkPsnHandler(
 ): Promise<void> {
   try {
     const userId = (req as AuthenticatedRequest).user.id;
-    const { npsso } = linkPsnAccountSchema.parse(req.body);
+    const { username } = linkPsnAccountSchema.parse(req.body);
 
-    const { encryptedTokenJson, accountId, onlineId } =
-      await exchangeNpssoForPsnTokens(npsso);
+    // El backend usa sus propias credenciales (PSN_SYSTEM_NPSSO) — el usuario no proporciona NPSSO
+    const auth = await getSystemPsnAuth();
+    const { accountId, onlineId } = await lookupPsnUser(auth, username);
 
     const account = await platformService.linkPlatform(
       userId,
       'PSN',
       accountId,
       onlineId,
-      encryptedTokenJson,
+      '',  // PSN no usa token de usuario — el sistema usa PSN_SYSTEM_NPSSO
     );
 
     await Promise.race([

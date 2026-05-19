@@ -13,11 +13,11 @@ export const linkRetroAchievementsSchema = z.object({
 });
 
 export const linkPsnAccountSchema = z.object({
-  npsso: z
+  username: z
     .string()
-    .min(64, 'El token NPSSO debe tener al menos 64 caracteres')
-    .max(512, 'El token NPSSO no puede superar los 512 caracteres')
-    .regex(/^[A-Za-z0-9_\-]+$/, 'El token NPSSO contiene caracteres no válidos'),
+    .min(3, 'El username de PSN debe tener al menos 3 caracteres')
+    .max(16, 'El username de PSN no puede superar los 16 caracteres')
+    .regex(/^[A-Za-z0-9_\-]+$/, 'El username de PSN solo puede contener letras, números, guiones y guiones bajos'),
 });
 
 export const linkXboxAccountSchema = z.object({
@@ -31,5 +31,5 @@ export const linkXboxAccountSchema = z.object({
 
 export type LinkSteamAccountInput = z.infer<typeof linkSteamAccountSchema>;
 export type LinkRetroAchievementsInput = z.infer<typeof linkRetroAchievementsSchema>;
-export type LinkPsnAccountInput = z.infer<typeof linkPsnAccountSchema>;
+export type LinkPsnAccountInput = z.infer<typeof linkPsnAccountSchema>; // { username: string }
 export type LinkXboxAccountInput = z.infer<typeof linkXboxAccountSchema>;
