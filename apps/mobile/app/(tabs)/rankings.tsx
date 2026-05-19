@@ -223,8 +223,8 @@ export default function RankingsScreen() {
           accessible
           accessibilityLabel={
             myRanking.rank
-              ? t('rankings.my_position_aria', { rank: myRanking.rank, xp: myRanking.xp.toLocaleString() })
-              : t('rankings.my_position_unranked_aria', { xp: myRanking.xp.toLocaleString() })
+              ? t('rankings.my_position_aria', { rank: myRanking.rank, xp: (myRanking.xp ?? 0).toLocaleString() })
+              : t('rankings.my_position_unranked_aria', { xp: (myRanking.xp ?? 0).toLocaleString() })
           }
         >
           <Text className="text-gray-400 text-xs mb-1">{t('rankings.my_position_label')}</Text>
@@ -233,7 +233,7 @@ export default function RankingsScreen() {
               {myRanking.rank ? `#${myRanking.rank}` : '—'}
             </Text>
             <Text className="text-white font-semibold">
-              {myRanking.xp.toLocaleString()} XP
+              {(myRanking.xp ?? 0).toLocaleString()} XP
             </Text>
           </View>
         </View>

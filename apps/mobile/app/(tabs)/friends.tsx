@@ -154,7 +154,7 @@ function PendingItem({
 export default function FriendsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { user } = useSessionStore();
+  const { user, isAuthenticated } = useSessionStore();
   const [activeTab, setActiveTab] = useState<Tab>('friends');
   const [search, setSearch] = useState('');
 
@@ -180,6 +180,25 @@ export default function FriendsScreen() {
           <SkeletonBox key={i} height={64} className="mx-4 rounded-xl" />
         ))}
       </View>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <SafeAreaView className="flex-1 bg-surface">
+        <View className="px-4 pt-4 pb-2">
+          <Text className="text-white text-2xl font-bold" accessibilityRole="header">
+            {t('friends.title')}
+          </Text>
+        </View>
+        <EmptyState
+          emoji="👥"
+          title={t('friends.unauthenticated_title')}
+          body={t('friends.unauthenticated_body')}
+          ctaLabel={t('friends.unauthenticated_cta')}
+          onCta={() => router.replace('/(auth)/login')}
+        />
+      </SafeAreaView>
     );
   }
 

@@ -252,7 +252,10 @@
     "empty_body": "Search for players by username to add them as friends.",
     "empty_cta": "Find friends",
     "empty_pending_title": "No pending requests",
-    "empty_pending_body": "Friend requests you receive will appear here."
+    "empty_pending_body": "Friend requests you receive will appear here.",
+    "unauthenticated_title": "Log in to see your friends",
+    "unauthenticated_body": "Create an account or log in to add friends and see their activity.",
+    "unauthenticated_cta": "Log in"
   },
   "challenges": {
     "title": "Weekly Challenge",

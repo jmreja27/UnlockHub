@@ -6,6 +6,7 @@ jest.mock('../lib/redis', () => ({
     zrevrange: jest.fn(),
     zcard: jest.fn(),
     zrevrank: jest.fn(),
+    zscore: jest.fn(),
     zadd: jest.fn(),
     zrem: jest.fn(),
   },
@@ -59,21 +60,22 @@ describe('rankingService.getGlobalRanking', () => {
 describe('rankingService.getUserRank', () => {
   it('devuelve la posición global del usuario (1-indexed)', async () => {
     mockRedis.zrevrank.mockResolvedValue(0); // posición 0 = rank 1
-    mockRedis.zcard.mockResolvedValue(100);
+    mockRedis.zscore.mockResolvedValue('1500');
 
     const result = await rankingService.getUserRank('u1');
 
-    expect(result.global).toBe(1);
-    expect(result.globalTotal).toBe(100);
+    expect(result.rank).toBe(1);
+    expect(result.xp).toBe(1500);
   });
 
   it('devuelve null si el usuario no está en el ranking', async () => {
     mockRedis.zrevrank.mockResolvedValue(null);
-    mockRedis.zcard.mockResolvedValue(50);
+    mockRedis.zscore.mockResolvedValue(null);
 
     const result = await rankingService.getUserRank('unknown');
 
-    expect(result.global).toBeNull();
+    expect(result.rank).toBeNull();
+    expect(result.xp).toBe(0);
   });
 });
 

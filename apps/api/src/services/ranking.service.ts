@@ -68,17 +68,17 @@ export async function getPlatformRanking(
 }
 
 export async function getUserRank(userId: string): Promise<{
-  global: number | null;
-  globalTotal: number;
+  rank: number | null;
+  xp: number;
 }> {
-  const [rankRaw, total] = await Promise.all([
+  const [rankRaw, scoreRaw] = await Promise.all([
     redis.zrevrank(KEYS.global, userId),
-    redis.zcard(KEYS.global),
+    redis.zscore(KEYS.global, userId),
   ]);
 
   return {
-    global: rankRaw !== null ? rankRaw + 1 : null,
-    globalTotal: total,
+    rank: rankRaw !== null ? rankRaw + 1 : null,
+    xp: scoreRaw !== null ? Math.round(parseFloat(scoreRaw)) : 0,
   };
 }
 

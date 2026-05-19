@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { Friendship, PaginatedResponse } from '@unlockhub/types';
 
 import { api } from '../lib/api';
+import { useSessionStore } from '../stores/sessionStore';
 
 const KEYS = {
   friends: ['friends'] as const,
@@ -10,15 +11,18 @@ const KEYS = {
 
 export function useFriends() {
   const queryClient = useQueryClient();
+  const { isAuthenticated } = useSessionStore();
 
   const friendsQuery = useQuery({
     queryKey: KEYS.friends,
     queryFn: () => api.get<PaginatedResponse<Friendship>>('/api/v1/friends?limit=50'),
+    enabled: isAuthenticated,
   });
 
   const pendingQuery = useQuery({
     queryKey: KEYS.pending,
     queryFn: () => api.get<PaginatedResponse<Friendship>>('/api/v1/friends/pending?limit=50'),
+    enabled: isAuthenticated,
   });
 
   const sendRequest = useMutation({

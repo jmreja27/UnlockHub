@@ -252,7 +252,10 @@
     "empty_body": "Busca jugadores por su nombre de usuario para añadirlos como amigos.",
     "empty_cta": "Buscar amigos",
     "empty_pending_title": "Sin solicitudes pendientes",
-    "empty_pending_body": "Las solicitudes de amistad que recibas aparecerán aquí."
+    "empty_pending_body": "Las solicitudes de amistad que recibas aparecerán aquí.",
+    "unauthenticated_title": "Inicia sesión para ver tus amigos",
+    "unauthenticated_body": "Crea una cuenta o inicia sesión para añadir amigos y ver su actividad.",
+    "unauthenticated_cta": "Iniciar sesión"
   },
   "challenges": {
     "title": "Reto de la semana",
