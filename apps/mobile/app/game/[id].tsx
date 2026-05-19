@@ -49,7 +49,7 @@ interface Guide {
   id: string;
   content: string;
   upvotes: number;
-  author: { username: string };
+  user: { id: string; username: string; avatar: string | null };
   createdAt: string;
 }
 
@@ -215,7 +215,7 @@ function AchievementRow({
                     </Text>
                     <View className="flex-row items-center justify-between mt-1.5">
                       <Text className="text-gray-600 text-xs">
-                        {t('game.guides_written_by', { username: guide.author.username })}
+                        {t('game.guides_written_by', { username: guide.user.username })}
                       </Text>
                       <View className="flex-row gap-4">
                         <Pressable
