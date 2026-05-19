@@ -962,7 +962,7 @@ Métricas disponibles:
 | P4 | UMP SDK AdMob | admob.google.com → Privacy & Messaging → GDPR → publicar |
 | P5 | ✅ Privacy Policy + ToS en URL pública | `docs/privacy-policy.html` + `docs/terms-of-service.html` — GitHub Pages activo, URLs en vivo, datos del desarrollador rellenados. |
 | P6 | Google Play Console | $25 + listing completo |
-| P7 | ⚙️ Smoke tests producción — APK parcial | APK `d226d5a5` testado (commit `b69fe21`). Auth, Home, Search, game/[id], Challenges, Friends, Profile: ✅. Rankings: ❌ crash (BUG-3 fix en código, no en APK). Pendiente nuevo APK con BUG-1→5 para validar Rankings + login wrong password + plataformas reales. |
+| P7 | ✅ Smoke tests producción — APK #2 completo | APK `27d0e02d` (build 2026-05-27). BUG-3/4/5 confirmados ✅. Todas las pantallas sin crash. Pendiente: vinculación plataformas reales (requiere credenciales del dev), sync progresivo E2E, Forgot Password (requiere RESEND_API_KEY). |
 
 ### 🟡 UX — todas implementadas ✅
 
@@ -1016,6 +1016,31 @@ Métricas disponibles:
 
 ## Última revisión de código
 
+**Fecha**: 2026-05-27 — smoke test completo APK #2 `27d0e02d-bc78-438f-b41b-6e308f22a8a2` — BUG-3/4/5 validados, 0 bugs nuevos encontrados.
+
+### Smoke test APK `27d0e02d` — sesión 2026-05-27
+
+Prueba manual completa contra emulador `emulator-5554` (1080×2400, API producción). Cuenta: TestUser99 / test99@example.com / Test1234!.
+
+**Pre-build checks:** TypeScript 0 errores · Lint 0 errores · Tests 179 mobile + 405 API passing.
+
+**BUG-3/4/5 confirmados ✅:**
+- BUG-3 (Rankings crash): ✅ Rankings carga correctamente — Global/National/Steam/RetroAchievements/PlayStation sin crash
+- BUG-4 (UGC Guides crash): ✅ Guías muestran `user.username` correctamente — no crash al submit
+- BUG-5 (Login wrong password → error genérico): ✅ "Email o contraseña incorrectos. Por favor, comprueba tus datos." en rojo
+
+**Pantallas verificadas (✅ sin issues):** Home autenticado (filtros All/Steam/RA/PSN/Xbox, empty state correcto), Notifications center (empty state), Rankings (5 filtros sin crash), Search Games (resultados con badges de plataforma), Search Achievements (XP/rareza/locked state/sub-filtros plataforma/sin Xbox), Challenges (empty state), Friends (empty state + CTA), Profile (Level/XP/Streak, platform links, Advanced Stats paywall, Gaming Wrapped 2025/2024), Wrapped 2025 (empty state sin crash), Language toggle ES↔EN (toda la UI cambia: tabs, secciones, botones, dialogs), Logout (confirmación en idioma activo, redirect correcto).
+
+**0 bugs nuevos encontrados.**
+
+**Nota técnica — entrada de `!` via adb:** `adb shell input text "Test1234!"` no envía `!` correctamente. Solución: `input text "Test1234"` + cambiar a teclado de símbolos (`?123`) + tap directo en tecla `!` en pantalla.
+
+**Pendiente (requiere acción del desarrollador):**
+- Vinculación Steam/RA/PSN con credenciales reales + sync progresivo E2E
+- Forgot Password (requiere `RESEND_API_KEY` en Railway — acción B3)
+
+---
+
 **Fecha**: 2026-05-26 — smoke test exhaustivo APK preview `d226d5a5` + fix BUG-3, BUG-4, BUG-5.
 
 ### Smoke test APK `d226d5a5` — sesión 2026-05-26
@@ -1029,8 +1054,6 @@ Prueba manual completa contra emulador `emulator-5554` (1080×2400, API producci
 - **BUG-3** ✅ Fix commit `a8a8901`: Rankings crash "Cannot read property 'toLocaleString' of undefined" — `ranking.service.ts` devolvía `{global, globalTotal}` en lugar de `{rank, xp}`; tab protegido por ErrorBoundary hasta nuevo APK.
 - **BUG-4** ✅ Fix commit `a8a8901`: Crash al ver guías tras submit — `Guide` interface usaba `author.username` pero la API devuelve `user.username`. Interfaz corregida en `game/[id].tsx`.
 - **BUG-5** ✅ Fix commit `586c62f`: Login contraseña incorrecta → "error inesperado" en lugar de "Email o contraseña incorrectos". Causa: `apiRequest` interceptaba el 401 de login e intentaba refrescar el token. Fix: `{ skipRefresh: true }` en `loginMutation` y `registerMutation` de `useAuth.ts`.
-
-**Pendiente nuevo APK:** Rankings validado, login wrong-password con mensaje correcto, vinculación plataformas reales, sync progresivo end-to-end.
 
 ---
 
