@@ -1,11 +1,12 @@
-// Tests de renovación de tokens PSN en buildAuthWithRefresh (syncUser)
-// Se centra en los casos de token expirado que afectan al sync real de usuarios.
+// Tests de buildAuthWithRefresh (método legacy mantenido para seed-games.ts).
+// El sync de usuarios ya no usa tokens de usuario — usa getSystemPsnAuth() (PSN_SYSTEM_NPSSO).
 
 jest.mock('psn-api', () => ({
   exchangeNpssoForAccessCode: jest.fn(),
   exchangeAccessCodeForAuthTokens: jest.fn(),
   exchangeRefreshTokenForAuthTokens: jest.fn(),
   getProfileFromAccountId: jest.fn(),
+  getProfileFromUserName: jest.fn(),
   getUserTitles: jest.fn(),
   getTitleTrophies: jest.fn(),
   getUserTrophiesEarnedForTitle: jest.fn(),
@@ -35,22 +36,12 @@ jest.mock('../lib/crypto', () => ({
 
 import { psnAdapter } from '../platforms/psn.adapter';
 import { AppError } from '../middleware/errorHandler';
-import { prisma } from '../lib/prisma';
 
-import {
-  exchangeRefreshTokenForAuthTokens,
-  getUserTitles,
-  getTitleTrophies,
-  getUserTrophiesEarnedForTitle,
-} from 'psn-api';
+import { exchangeRefreshTokenForAuthTokens } from 'psn-api';
 
 const mockExchangeRefresh = exchangeRefreshTokenForAuthTokens as jest.Mock;
-const mockGetUserTitles = getUserTitles as jest.Mock;
-const mockGetTitleTrophies = getTitleTrophies as jest.Mock;
-const mockGetUserTrophiesEarned = getUserTrophiesEarnedForTitle as jest.Mock;
-const mockPrisma = prisma as jest.Mocked<typeof prisma>;
 
-// Genera un token cifrado simulando la estructura PsnStoredTokens
+// Genera un encryptedToken simulando la estructura PsnStoredTokens
 function makeEncryptedToken(opts: {
   accessExpired?: boolean;
   refreshExpired?: boolean;
@@ -60,11 +51,11 @@ function makeEncryptedToken(opts: {
     accessToken: 'access-token-abc',
     refreshToken: 'refresh-token-xyz',
     expiresAt: opts.accessExpired
-      ? new Date(now - 1000).toISOString()   // ya expirado
-      : new Date(now + 3600_000).toISOString(), // válido 1h
+      ? new Date(now - 1000).toISOString()
+      : new Date(now + 3600_000).toISOString(),
     refreshTokenExpiresAt: opts.refreshExpired
-      ? new Date(now - 1000).toISOString()   // ya expirado
-      : new Date(now + 5_184_000_000).toISOString(), // válido 60 días
+      ? new Date(now - 1000).toISOString()
+      : new Date(now + 5_184_000_000).toISOString(),
   };
   return `enc:${JSON.stringify(stored)}`;
 }
@@ -75,6 +66,7 @@ const baseAccount = {
   platform: 'PSN' as const,
   externalId: 'psn-account-id',
   username: 'testpsn',
+  encryptedToken: '',
   lastSyncedAt: null,
   syncCooldownUntil: null,
   requiresReauth: false,
@@ -83,86 +75,74 @@ const baseAccount = {
   updatedAt: new Date(),
 };
 
-const emptyTitlesResponse = { trophyTitles: [], totalItemCount: 0, nextOffset: undefined };
-
 beforeEach(() => {
   jest.clearAllMocks();
-  mockGetUserTitles.mockResolvedValue(emptyTitlesResponse);
-  mockGetTitleTrophies.mockResolvedValue({ trophies: [] });
-  mockGetUserTrophiesEarned.mockResolvedValue({ trophies: [] });
-  (mockPrisma.platformAccount.update as jest.Mock).mockResolvedValue({});
 });
 
-// ─── Test 1: Token de acceso válido — sync sin llamada a refresh ──────────────
+// ─── buildAuthWithRefresh: access token válido ────────────────────────────────
 
-describe('PsnAdapter.syncUser — token de acceso válido', () => {
-  it('usa el access token directamente sin llamar al refresh endpoint', async () => {
+describe('PsnAdapter.buildAuthWithRefresh — access token válido', () => {
+  it('devuelve el access token sin llamar al refresh endpoint', async () => {
     const account = {
       ...baseAccount,
-      encryptedToken: makeEncryptedToken({ accessExpired: false, refreshExpired: false }),
+      encryptedToken: makeEncryptedToken({ accessExpired: false }),
     };
 
-    const result = await psnAdapter.syncUser(account);
+    const { auth, updatedEncryptedToken } = await psnAdapter.buildAuthWithRefresh(account);
 
+    expect(auth.accessToken).toBe('access-token-abc');
+    expect(updatedEncryptedToken).toBeNull();
     expect(mockExchangeRefresh).not.toHaveBeenCalled();
-    expect(result.platform).toBe('PSN');
-    expect(mockPrisma.platformAccount.update).not.toHaveBeenCalled();
   });
 });
 
-// ─── Test 2: Access Token expirado — se renueva con Refresh Token ─────────────
+// ─── buildAuthWithRefresh: access token expirado ──────────────────────────────
 
-describe('PsnAdapter.syncUser — access token expirado', () => {
-  it('llama a exchangeRefreshTokenForAuthTokens y persiste el nuevo token cifrado', async () => {
+describe('PsnAdapter.buildAuthWithRefresh — access token expirado', () => {
+  it('renueva el token y devuelve el token cifrado actualizado', async () => {
     const account = {
       ...baseAccount,
       encryptedToken: makeEncryptedToken({ accessExpired: true, refreshExpired: false }),
     };
-
-    const freshTokens = {
+    mockExchangeRefresh.mockResolvedValue({
       accessToken: 'new-access-token',
       refreshToken: 'new-refresh-token',
       expiresIn: 3600,
       refreshTokenExpiresIn: 5_184_000,
       idToken: '',
-    };
-    mockExchangeRefresh.mockResolvedValue(freshTokens);
+    });
 
-    const result = await psnAdapter.syncUser(account);
+    const { auth, updatedEncryptedToken } = await psnAdapter.buildAuthWithRefresh(account);
 
     expect(mockExchangeRefresh).toHaveBeenCalledWith('refresh-token-xyz');
-    // El token cifrado actualizado debe persistirse
-    expect(mockPrisma.platformAccount.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'acc-psn-1' },
-        data: expect.objectContaining({ encryptedToken: expect.stringContaining('enc:') }),
-      }),
-    );
-    expect(result.platform).toBe('PSN');
-    // Verifica que el nuevo token cifrado contiene el nuevo access token
-    const updateCall = (mockPrisma.platformAccount.update as jest.Mock).mock.calls[0][0] as {
-      data: { encryptedToken: string };
-    };
-    const decrypted = JSON.parse(updateCall.data.encryptedToken.replace('enc:', '')) as {
+    expect(auth.accessToken).toBe('new-access-token');
+    expect(updatedEncryptedToken).not.toBeNull();
+
+    const stored = JSON.parse((updatedEncryptedToken as string).replace('enc:', '')) as {
       accessToken: string;
+      refreshToken: string;
+      expiresAt: string;
+      refreshTokenExpiresAt: string;
     };
-    expect(decrypted.accessToken).toBe('new-access-token');
+    expect(stored.accessToken).toBe('new-access-token');
+    expect(stored.refreshToken).toBe('new-refresh-token');
+    expect(new Date(stored.expiresAt).getTime()).toBeGreaterThan(Date.now());
+    expect(new Date(stored.refreshTokenExpiresAt).getTime()).toBeGreaterThan(Date.now());
   });
 });
 
-// ─── Test 3: Ambos tokens expirados — lanza PSN_REQUIRES_REAUTH ───────────────
+// ─── buildAuthWithRefresh: ambos tokens expirados ────────────────────────────
 
-describe('PsnAdapter.syncUser — refresh token expirado', () => {
-  it('lanza AppError PSN_REFRESH_TOKEN_EXPIRED cuando el refresh token también ha expirado', async () => {
+describe('PsnAdapter.buildAuthWithRefresh — refresh token expirado', () => {
+  it('lanza PSN_REFRESH_TOKEN_EXPIRED cuando ambos tokens han expirado', async () => {
     const account = {
       ...baseAccount,
       encryptedToken: makeEncryptedToken({ accessExpired: true, refreshExpired: true }),
     };
 
-    await expect(psnAdapter.syncUser(account)).rejects.toMatchObject({
+    await expect(psnAdapter.buildAuthWithRefresh(account)).rejects.toMatchObject({
       code: 'PSN_REFRESH_TOKEN_EXPIRED',
     });
-
     expect(mockExchangeRefresh).not.toHaveBeenCalled();
   });
 
@@ -172,45 +152,22 @@ describe('PsnAdapter.syncUser — refresh token expirado', () => {
       encryptedToken: makeEncryptedToken({ accessExpired: true, refreshExpired: true }),
     };
 
-    await expect(psnAdapter.syncUser(account)).rejects.toBeInstanceOf(AppError);
+    await expect(psnAdapter.buildAuthWithRefresh(account)).rejects.toBeInstanceOf(AppError);
   });
 });
 
-// ─── Test 4: PlatformAccount se actualiza con los nuevos tokens ───────────────
+// ─── buildAuthWithRefresh: token corrupto ────────────────────────────────────
 
-describe('PsnAdapter.syncUser — persistencia del token renovado', () => {
-  it('el encryptedToken persistido incluye nuevo refreshToken y refreshTokenExpiresAt actualizado', async () => {
+describe('PsnAdapter.buildAuthWithRefresh — token corrupto', () => {
+  it('lanza PSN_TOKEN_CORRUPT si encryptedToken no es JSON válido', async () => {
     const account = {
       ...baseAccount,
-      encryptedToken: makeEncryptedToken({ accessExpired: true, refreshExpired: false }),
+      encryptedToken: 'enc:not-a-valid-json',
     };
 
-    const freshTokens = {
-      accessToken: 'access-v2',
-      refreshToken: 'refresh-v2',
-      expiresIn: 3600,
-      refreshTokenExpiresIn: 5_184_000,
-      idToken: '',
-    };
-    mockExchangeRefresh.mockResolvedValue(freshTokens);
-
-    await psnAdapter.syncUser(account);
-
-    const updateCall = (mockPrisma.platformAccount.update as jest.Mock).mock.calls[0][0] as {
-      data: { encryptedToken: string };
-    };
-    const stored = JSON.parse(updateCall.data.encryptedToken.replace('enc:', '')) as {
-      accessToken: string;
-      refreshToken: string;
-      expiresAt: string;
-      refreshTokenExpiresAt: string;
-    };
-
-    expect(stored.accessToken).toBe('access-v2');
-    expect(stored.refreshToken).toBe('refresh-v2');
-    // expiresAt debe ser en el futuro (~1h)
-    expect(new Date(stored.expiresAt).getTime()).toBeGreaterThan(Date.now());
-    // refreshTokenExpiresAt debe ser en el futuro (~60 días)
-    expect(new Date(stored.refreshTokenExpiresAt).getTime()).toBeGreaterThan(Date.now());
+    await expect(psnAdapter.buildAuthWithRefresh(account)).rejects.toMatchObject({
+      code: 'PSN_TOKEN_CORRUPT',
+      statusCode: 401,
+    });
   });
 });

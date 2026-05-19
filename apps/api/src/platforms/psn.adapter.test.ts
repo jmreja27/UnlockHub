@@ -5,6 +5,7 @@ jest.mock('psn-api', () => ({
   exchangeAccessCodeForAuthTokens: jest.fn(),
   exchangeRefreshTokenForAuthTokens: jest.fn(),
   getProfileFromAccountId: jest.fn(),
+  getProfileFromUserName: jest.fn(),
   getUserTitles: jest.fn(),
   getTitleTrophies: jest.fn(),
   getUserTrophiesEarnedForTitle: jest.fn(),
@@ -39,13 +40,14 @@ import * as psnApi from 'psn-api';
 import { redis } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 
-import { PsnAdapter, exchangeNpssoForPsnTokens } from './psn.adapter';
+import { PsnAdapter, getSystemPsnAuth, lookupPsnUser, exchangeNpssoForPsnTokens } from './psn.adapter';
 
 const mocked = {
   exchangeNpssoForAccessCode: psnApi.exchangeNpssoForAccessCode as jest.MockedFunction<typeof psnApi.exchangeNpssoForAccessCode>,
   exchangeAccessCodeForAuthTokens: psnApi.exchangeAccessCodeForAuthTokens as jest.MockedFunction<typeof psnApi.exchangeAccessCodeForAuthTokens>,
   exchangeRefreshTokenForAuthTokens: psnApi.exchangeRefreshTokenForAuthTokens as jest.MockedFunction<typeof psnApi.exchangeRefreshTokenForAuthTokens>,
   getProfileFromAccountId: psnApi.getProfileFromAccountId as jest.MockedFunction<typeof psnApi.getProfileFromAccountId>,
+  getProfileFromUserName: psnApi.getProfileFromUserName as jest.MockedFunction<typeof psnApi.getProfileFromUserName>,
   getUserTitles: psnApi.getUserTitles as jest.MockedFunction<typeof psnApi.getUserTitles>,
   getTitleTrophies: psnApi.getTitleTrophies as jest.MockedFunction<typeof psnApi.getTitleTrophies>,
   getUserTrophiesEarnedForTitle: psnApi.getUserTrophiesEarnedForTitle as jest.MockedFunction<typeof psnApi.getUserTrophiesEarnedForTitle>,
@@ -58,51 +60,26 @@ const mocked = {
 const ACCOUNT_ID = '1234567890987654321';
 const ONLINE_ID = 'TestUser_PSN';
 const ACCESS_TOKEN = 'test-psn-access-token';
-const REFRESH_TOKEN = 'test-psn-refresh-token';
-const FRESH_ACCESS_TOKEN = 'fresh-psn-access-token';
-const FRESH_REFRESH_TOKEN = 'fresh-psn-refresh-token';
+const SYSTEM_ACCESS_TOKEN = 'system-psn-access-token';
 
-// JWT con claim sub = ACCOUNT_ID (base64url del payload JSON)
 const makeIdToken = (sub: string): string => {
   const payload = Buffer.from(JSON.stringify({ sub })).toString('base64url');
   return `header.${payload}.signature`;
 };
 
-// Fechas reales para que el código que usa `new Date()` funcione correctamente
-const FUTURE_EXPIRY = new Date(Date.now() + 10 * 3600 * 1000).toISOString(); // 10h desde ahora
-const PAST_EXPIRY = new Date(Date.now() - 3600 * 1000).toISOString();        // hace 1h
-const FAR_FUTURE_REFRESH = new Date(Date.now() + 90 * 86400 * 1000).toISOString(); // 90 días
-
-function makeStoredTokens(expiresAt: string, refreshExpiresAt?: string) {
-  return JSON.stringify({
-    accessToken: ACCESS_TOKEN,
-    refreshToken: REFRESH_TOKEN,
-    expiresAt,
-    refreshTokenExpiresAt: refreshExpiresAt ?? FAR_FUTURE_REFRESH,
-  });
-}
-
-const mockPlatformAccount = {
-  id: 'acct-1',
-  userId: 'user-1',
-  platform: 'PSN' as const,
-  externalId: ACCOUNT_ID,
-  username: ONLINE_ID,
-  encryptedToken: makeStoredTokens(FUTURE_EXPIRY),
-  lastSyncedAt: null,
-  syncCooldownUntil: null,
-  createdAt: new Date(),
-  updatedAt: new Date(),
-};
-
 const mockAuthTokensResponse = {
   accessToken: ACCESS_TOKEN,
-  refreshToken: REFRESH_TOKEN,
+  refreshToken: 'test-refresh-token',
   expiresIn: 3600,
-  refreshTokenExpiresIn: 5184000, // 60 días
+  refreshTokenExpiresIn: 5184000,
   idToken: makeIdToken(ACCOUNT_ID),
   scope: 'psn:clientapp',
   tokenType: 'bearer',
+};
+
+const mockSystemAuthTokensResponse = {
+  ...mockAuthTokensResponse,
+  accessToken: SYSTEM_ACCESS_TOKEN,
 };
 
 const mockTitle = {
@@ -173,14 +150,247 @@ const mockEarnedTrophies = {
   ],
 };
 
+const mockPlatformAccount = {
+  id: 'acct-1',
+  userId: 'user-1',
+  platform: 'PSN' as const,
+  externalId: ACCOUNT_ID,
+  username: ONLINE_ID,
+  encryptedToken: '',
+  lastSyncedAt: null,
+  syncCooldownUntil: null,
+  requiresReauth: false,
+  tokenExpiresAt: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function setupNoCache(): void {
-  mocked.redis.get.mockResolvedValue(null);
+function setupSystemTokenCached(): void {
+  // Simula que el access token del sistema ya está en Redis
+  (mocked.redis.get as jest.Mock).mockImplementation((key: string) => {
+    if (key === 'psn:system:access_token') return Promise.resolve(SYSTEM_ACCESS_TOKEN);
+    return Promise.resolve(null);
+  });
   (mocked.redis.setex as jest.Mock).mockResolvedValue('OK');
 }
 
-// ─── Tests: exchangeNpssoForPsnTokens ─────────────────────────────────────────
+function setupSystemTokenExpired(): void {
+  // Simula que no hay token en caché — se necesita obtener uno nuevo
+  (mocked.redis.get as jest.Mock).mockResolvedValue(null);
+  (mocked.redis.setex as jest.Mock).mockResolvedValue('OK');
+}
+
+// ─── Tests: getSystemPsnAuth ──────────────────────────────────────────────────
+
+describe('getSystemPsnAuth', () => {
+  const ORIGINAL_NPSSO = process.env.PSN_SYSTEM_NPSSO;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    process.env.PSN_SYSTEM_NPSSO = 'test-system-npsso-token';
+  });
+
+  afterEach(() => {
+    process.env.PSN_SYSTEM_NPSSO = ORIGINAL_NPSSO;
+  });
+
+  it('devuelve el token desde Redis si está en caché', async () => {
+    setupSystemTokenCached();
+
+    const auth = await getSystemPsnAuth();
+
+    expect(auth.accessToken).toBe(SYSTEM_ACCESS_TOKEN);
+    expect(mocked.exchangeNpssoForAccessCode).not.toHaveBeenCalled();
+  });
+
+  it('obtiene y cachea un nuevo token si Redis no tiene el token', async () => {
+    setupSystemTokenExpired();
+    mocked.exchangeNpssoForAccessCode.mockResolvedValue('v3.system-access-code');
+    mocked.exchangeAccessCodeForAuthTokens.mockResolvedValue(mockSystemAuthTokensResponse);
+
+    const auth = await getSystemPsnAuth();
+
+    expect(auth.accessToken).toBe(SYSTEM_ACCESS_TOKEN);
+    expect(mocked.exchangeNpssoForAccessCode).toHaveBeenCalledWith('test-system-npsso-token');
+    expect(mocked.redis.setex).toHaveBeenCalledWith(
+      'psn:system:access_token',
+      55 * 60,
+      SYSTEM_ACCESS_TOKEN,
+    );
+  });
+
+  it('lanza PSN_SYSTEM_NOT_CONFIGURED si PSN_SYSTEM_NPSSO no está definido', async () => {
+    delete process.env.PSN_SYSTEM_NPSSO;
+
+    await expect(getSystemPsnAuth()).rejects.toMatchObject({
+      code: 'PSN_SYSTEM_NOT_CONFIGURED',
+      statusCode: 503,
+    });
+  });
+
+  it('lanza PSN_SYSTEM_NPSSO_EXPIRED si el NPSSO del sistema ha expirado', async () => {
+    setupSystemTokenExpired();
+    mocked.exchangeNpssoForAccessCode.mockRejectedValue(new Error('Invalid NPSSO'));
+
+    await expect(getSystemPsnAuth()).rejects.toMatchObject({
+      code: 'PSN_SYSTEM_NPSSO_EXPIRED',
+      statusCode: 503,
+    });
+  });
+});
+
+// ─── Tests: lookupPsnUser ────────────────────────────────────────────────────
+
+describe('lookupPsnUser', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('devuelve accountId y onlineId cuando el usuario existe', async () => {
+    mocked.getProfileFromUserName.mockResolvedValue({
+      profile: {
+        accountId: ACCOUNT_ID,
+        onlineId: ONLINE_ID,
+        npId: 'test-np-id',
+        avatarUrls: [],
+        plus: 0,
+        aboutMe: '',
+        languagesUsed: [],
+        trophySummary: { level: 1, progress: 0, earnedTrophies: { bronze: 0, silver: 0, gold: 0, platinum: 0 } },
+        isOfficiallyVerified: false,
+        personalDetail: { firstName: '', lastName: '', profilePictureUrls: [] },
+        personalDetailSharing: 'no',
+        personalDetailSharingRequestMessageFlag: false,
+        primaryOnlineStatus: 'offline',
+        presences: [],
+        friendRelation: 'no',
+        requestMessageFlag: false,
+        blocking: false,
+        following: false,
+        consoleAvailability: { availabilityStatus: 'unavailable' },
+      },
+    });
+
+    const result = await lookupPsnUser({ accessToken: SYSTEM_ACCESS_TOKEN }, ONLINE_ID);
+
+    expect(result.accountId).toBe(ACCOUNT_ID);
+    expect(result.onlineId).toBe(ONLINE_ID);
+    expect(mocked.getProfileFromUserName).toHaveBeenCalledWith(
+      { accessToken: SYSTEM_ACCESS_TOKEN },
+      ONLINE_ID,
+    );
+  });
+
+  it('lanza PSN_USER_NOT_FOUND si el usuario no existe o su perfil es privado', async () => {
+    mocked.getProfileFromUserName.mockRejectedValue(new Error('User not found'));
+
+    await expect(
+      lookupPsnUser({ accessToken: SYSTEM_ACCESS_TOKEN }, 'usuario_inexistente'),
+    ).rejects.toMatchObject({
+      code: 'PSN_USER_NOT_FOUND',
+      statusCode: 404,
+    });
+  });
+});
+
+// ─── Tests: PsnAdapter.syncUser ────────────────────────────────────────────────
+
+describe('PsnAdapter.syncUser', () => {
+  let adapter: PsnAdapter;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    adapter = new PsnAdapter();
+    process.env.PSN_SYSTEM_NPSSO = 'test-system-npsso';
+
+    setupSystemTokenCached();
+
+    (mocked.prisma.game.upsert as jest.Mock).mockResolvedValue({ id: 'db-game-1' });
+    (mocked.prisma.achievement.upsert as jest.Mock).mockResolvedValue({ id: 'db-ach-1' });
+    (mocked.prisma.userAchievement.upsert as jest.Mock).mockResolvedValue({});
+  });
+
+  afterEach(() => {
+    delete process.env.PSN_SYSTEM_NPSSO;
+  });
+
+  it('sincroniza juegos y trofeos usando el token del sistema', async () => {
+    mocked.getUserTitles.mockResolvedValue({
+      trophyTitles: [mockTitle],
+      totalItemCount: 1,
+    });
+    mocked.getTitleTrophies.mockResolvedValue(mockTitleTrophies);
+    mocked.getUserTrophiesEarnedForTitle.mockResolvedValue(mockEarnedTrophies);
+
+    const result = await adapter.syncUser(mockPlatformAccount);
+
+    expect(result.platform).toBe('PSN');
+    expect(result.achievementsSynced).toBe(1);
+    expect(result.gamesUpdated).toBe(1);
+    // Usa el accountId del usuario (externalId), no 'me'
+    expect(mocked.getUserTitles).toHaveBeenCalledWith(
+      { accessToken: SYSTEM_ACCESS_TOKEN },
+      ACCOUNT_ID,
+      expect.anything(),
+    );
+    expect(mocked.getUserTrophiesEarnedForTitle).toHaveBeenCalledWith(
+      { accessToken: SYSTEM_ACCESS_TOKEN },
+      ACCOUNT_ID,
+      mockTitle.npCommunicationId,
+      'all',
+      expect.anything(),
+    );
+  });
+
+  it('no actualiza encryptedToken en BD (el sistema gestiona su propio token)', async () => {
+    mocked.getUserTitles.mockResolvedValue({ trophyTitles: [], totalItemCount: 0 });
+
+    await adapter.syncUser(mockPlatformAccount);
+
+    expect(mocked.prisma.platformAccount.update).not.toHaveBeenCalled();
+  });
+
+  it('devuelve SyncResult con platform PSN y syncedAt como string ISO', async () => {
+    mocked.getUserTitles.mockResolvedValue({ trophyTitles: [], totalItemCount: 0 });
+
+    const result = await adapter.syncUser(mockPlatformAccount);
+
+    expect(result.platform).toBe('PSN');
+    expect(typeof result.syncedAt).toBe('string');
+    expect(new Date(result.syncedAt).toISOString()).toBe(result.syncedAt);
+  });
+
+  it('lanza PSN_SYSTEM_NOT_CONFIGURED si PSN_SYSTEM_NPSSO no está definido', async () => {
+    delete process.env.PSN_SYSTEM_NPSSO;
+
+    await expect(adapter.syncUser(mockPlatformAccount)).rejects.toMatchObject({
+      code: 'PSN_SYSTEM_NOT_CONFIGURED',
+      statusCode: 503,
+    });
+  });
+});
+
+// ─── Tests: PsnAdapter.getGameInfo ────────────────────────────────────────────
+
+describe('PsnAdapter.getGameInfo', () => {
+  let adapter: PsnAdapter;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    adapter = new PsnAdapter();
+    (mocked.redis.get as jest.Mock).mockResolvedValue(null);
+  });
+
+  it('devuelve un objeto Game con la plataforma PSN', async () => {
+    const game = await adapter.getGameInfo('NPWR12345_00');
+    expect(game.platform).toBe('PSN');
+    expect(game.externalId).toBe('NPWR12345_00');
+  });
+});
+
+// ─── Tests: exchangeNpssoForPsnTokens (legacy — usado por seed script) ────────
 
 describe('exchangeNpssoForPsnTokens', () => {
   beforeEach(() => {
@@ -226,114 +436,5 @@ describe('exchangeNpssoForPsnTokens', () => {
       code: 'PSN_TOKEN_EXCHANGE_ERROR',
       statusCode: 502,
     });
-  });
-});
-
-// ─── Tests: PsnAdapter.syncUser ────────────────────────────────────────────────
-
-describe('PsnAdapter.syncUser', () => {
-  let adapter: PsnAdapter;
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-    adapter = new PsnAdapter();
-    setupNoCache();
-
-    (mocked.prisma.game.upsert as jest.Mock).mockResolvedValue({ id: 'db-game-1' });
-    (mocked.prisma.achievement.upsert as jest.Mock).mockResolvedValue({ id: 'db-ach-1' });
-    (mocked.prisma.userAchievement.upsert as jest.Mock).mockResolvedValue({});
-    (mocked.prisma.platformAccount.update as jest.Mock).mockResolvedValue({});
-  });
-
-  it('sincroniza juegos y trofeos ganados correctamente', async () => {
-    mocked.getUserTitles.mockResolvedValue({
-      trophyTitles: [mockTitle],
-      totalItemCount: 1,
-    });
-    mocked.getTitleTrophies.mockResolvedValue(mockTitleTrophies);
-    mocked.getUserTrophiesEarnedForTitle.mockResolvedValue(mockEarnedTrophies);
-
-    const result = await adapter.syncUser(mockPlatformAccount);
-
-    expect(result.platform).toBe('PSN');
-    expect(result.achievementsSynced).toBe(1); // Solo el trofeo con earned: true
-    expect(result.gamesUpdated).toBe(1);
-    expect(mocked.prisma.game.upsert).toHaveBeenCalledTimes(1);
-    expect(mocked.prisma.achievement.upsert).toHaveBeenCalledTimes(2); // bronze + platinum
-    expect(mocked.prisma.userAchievement.upsert).toHaveBeenCalledTimes(1); // solo el ganado
-  });
-
-  it('refresca el access token cuando ha expirado', async () => {
-    const expiredAccount = {
-      ...mockPlatformAccount,
-      encryptedToken: makeStoredTokens(PAST_EXPIRY),
-    };
-
-    mocked.exchangeRefreshTokenForAuthTokens.mockResolvedValue({
-      ...mockAuthTokensResponse,
-      accessToken: FRESH_ACCESS_TOKEN,
-      refreshToken: FRESH_REFRESH_TOKEN,
-    });
-    mocked.getUserTitles.mockResolvedValue({ trophyTitles: [], totalItemCount: 0 });
-
-    await adapter.syncUser(expiredAccount);
-
-    expect(mocked.exchangeRefreshTokenForAuthTokens).toHaveBeenCalledWith(REFRESH_TOKEN);
-    expect(mocked.prisma.platformAccount.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'acct-1' },
-        data: expect.objectContaining({ encryptedToken: expect.stringContaining('enc:') }),
-      }),
-    );
-  });
-
-  it('lanza AppError si el refresh token también ha expirado', async () => {
-    const fullyExpiredAccount = {
-      ...mockPlatformAccount,
-      encryptedToken: makeStoredTokens(PAST_EXPIRY, PAST_EXPIRY),
-    };
-
-    await expect(adapter.syncUser(fullyExpiredAccount)).rejects.toMatchObject({
-      code: 'PSN_REFRESH_TOKEN_EXPIRED',
-      statusCode: 401,
-    });
-    expect(mocked.exchangeRefreshTokenForAuthTokens).not.toHaveBeenCalled();
-  });
-
-  it('no persiste token si el access token no ha expirado', async () => {
-    mocked.getUserTitles.mockResolvedValue({ trophyTitles: [], totalItemCount: 0 });
-
-    await adapter.syncUser(mockPlatformAccount);
-
-    expect(mocked.exchangeRefreshTokenForAuthTokens).not.toHaveBeenCalled();
-    expect(mocked.prisma.platformAccount.update).not.toHaveBeenCalled();
-  });
-
-  it('devuelve SyncResult con platform PSN y syncedAt como string ISO', async () => {
-    mocked.getUserTitles.mockResolvedValue({ trophyTitles: [], totalItemCount: 0 });
-
-    const result = await adapter.syncUser(mockPlatformAccount);
-
-    expect(result.platform).toBe('PSN');
-    expect(typeof result.syncedAt).toBe('string');
-    expect(new Date(result.syncedAt).toISOString()).toBe(result.syncedAt);
-  });
-});
-
-// ─── Tests: PsnAdapter.getGameInfo ────────────────────────────────────────────
-
-describe('PsnAdapter.getGameInfo', () => {
-  let adapter: PsnAdapter;
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-    adapter = new PsnAdapter();
-    (mocked.redis.get as jest.Mock).mockResolvedValue(null);
-  });
-
-  it('devuelve un objeto Game con la plataforma PSN', async () => {
-    const game = await adapter.getGameInfo('NPWR12345_00');
-    expect(game.platform).toBe('PSN');
-    expect(game.externalId).toBe('NPWR12345_00');
   });
 });
