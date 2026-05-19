@@ -18,8 +18,8 @@ Esta sección lista todo lo que **el desarrollador debe hacer manualmente** ante
 | B6 | Verificar persistencia de **Railway Redis** | Railway dashboard → servicio Redis → Settings | Según plan | Evitar pérdida de rankings en reinicios |
 | B7 | Crear cuenta de **Google Play Developer** | play.google.com/console | $25 pago único | Publicar en Play Store |
 | B8 | Crear cuenta de **AdMob** y vincularla a la app | admob.google.com | Gratis | Anuncios para usuarios free |
-| B9 | Obtener `ADMOB_APP_ID` y los ad unit IDs de producción | AdMob → Apps → Unidades de anuncio | Gratis | Reemplazar IDs de test en la app |
-| B10 | Configurar **User Messaging Platform (UMP) SDK** de Google | admob.google.com → Privacy & Messaging → Create Message → GDPR | Gratis | Consentimiento GDPR para AdMob en Europa — sin esto AdMob puede suspender la cuenta |
+| ~~B9~~ | ✅ **Ad unit IDs configurados como EAS secrets** | `EXPO_PUBLIC_ADMOB_HOME_BANNER_ID`, `SEARCH_BANNER_ID`, `INTERSTITIAL_ID`, `REWARDED_ID` — todos configurados | Gratis | ✅ Completado — IDs de producción inyectados en builds EAS. |
+| ~~B10~~ | ✅ **UMP SDK integrado** | `hooks/useGdprConsent.ts` + `_layout.tsx` — UMP SDK activo, muestra formulario si `status === REQUIRED` | Gratis | ✅ Código integrado. UMP message ya publicado en AdMob dashboard. |
 | B13 | Configurar `APP_SCHEME` como `unlockhub` en Railway | Railway dashboard → service → Variables → `APP_SCHEME=unlockhub` | Gratis | Deep links (reset-password, etc.) |
 | B14 | Crear email de soporte `soporte@unlockhub.app` | Proveedor de dominio/email | ~1-5€/mes | Requerido por Google Play |
 | ~~B15~~ | ✅ **Privacy Policy publicada** | `docs/privacy-policy.html` → https://jmreja27.github.io/UnlockHub/privacy-policy.html | Gratis | ✅ Completado — GitHub Pages activo (repo público, branch `develop`, carpeta `/docs`). Datos del desarrollador rellenados. |
@@ -28,6 +28,8 @@ Esta sección lista todo lo que **el desarrollador debe hacer manualmente** ante
 
 > **Estado de acciones completadas ✅**
 > - B1-B2 (Sentry): ✅ DSNs configurados en Railway y EAS
+> - B9 (Ad unit IDs): ✅ 4 EAS secrets configurados — `EXPO_PUBLIC_ADMOB_HOME_BANNER_ID`, `SEARCH_BANNER_ID`, `INTERSTITIAL_ID`, `REWARDED_ID`.
+> - B10 (UMP SDK): ✅ `useGdprConsent.ts` activo, GDPR message publicado en AdMob dashboard. Plugin `react-native-google-mobile-ads` en `app.json`.
 > - B11-B12 (Cloudinary): ✅ Cuenta creada — `CLOUDINARY_URL` pendiente de configurar en Railway variables
 > - B15 (Privacy Policy): ✅ `docs/privacy-policy.html` — URL: https://jmreja27.github.io/UnlockHub/privacy-policy.html — GitHub Pages activo, repo público, datos del desarrollador rellenados. Auto-deploy en cada push a `develop` que toque `docs/`.
 > - B16 (ToS): ✅ `docs/terms-of-service.html` — URL: https://jmreja27.github.io/UnlockHub/terms-of-service.html — igual que B15.
@@ -109,7 +111,7 @@ Aplicación móvil (iOS + Android) para tracking unificado de logros de videojue
 | Redis (Railway) | Rankings + caché + BullMQ | ✅ Activo — persistencia gestionada por Railway (B6) |
 | Cloudinary | Avatares y banners | ✅ Cuenta creada — `CLOUDINARY_URL` pendiente en Railway variables |
 | Railway | Deploy API | ✅ Activo — https://unlockhub-production.up.railway.app |
-| AdMob | Anuncios usuarios free | ⚙️ Pendiente (B8-B10) |
+| AdMob | Anuncios usuarios free | ⚙️ Pendiente cuenta AdMob (B8) — IDs producción ✅ (B9) — código integrado (B10 ✅) |
 | GitHub Actions | CI/CD | ✅ Configurado |
 | Sentry | Crash reporting móvil + API | ✅ DSNs configurados — código integrado |
 | UptimeRobot | Alertas de disponibilidad | ✅ Activo |
@@ -383,7 +385,7 @@ model UserPoint {
   createdAt DateTime    @default(now())
 }
 
-enum PointReason { CHALLENGE STREAK ACHIEVEMENT REDEEM }
+enum PointReason { CHALLENGE STREAK ACHIEVEMENT REDEEM REWARDED_AD }
 
 model Subscription {
   id                 String           @id @default(cuid())
@@ -567,7 +569,10 @@ El servidor valida todas al arrancar mediante schema Zod. Ver `.env.example` en 
 | `RESEND_API_KEY` | Emails transaccionales | staging, prod | ⚙️ Pendiente acción B3 |
 | `RESEND_FROM_EMAIL` | Remitente de emails | staging, prod | ⚙️ Pendiente acción B3 |
 | `APP_SCHEME` | Deep links (`unlockhub://`) | local, staging, prod | ⚙️ Pendiente acción B13 — Railway dashboard → Variables |
-| `ADMOB_APP_ID` | AdMob | prod | ⚙️ Pendiente acción B8-B9 |
+| `EXPO_PUBLIC_ADMOB_HOME_BANNER_ID` | Banner Home (EAS secret) | prod | ✅ Configurado como EAS secret (B9) |
+| `EXPO_PUBLIC_ADMOB_SEARCH_BANNER_ID` | Banner Search (EAS secret) | prod | ✅ Configurado como EAS secret (B9) |
+| `EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID` | Interstitial (EAS secret) | prod | ✅ Configurado como EAS secret (B9) |
+| `EXPO_PUBLIC_ADMOB_REWARDED_ID` | Rewarded (EAS secret) | prod | ✅ Configurado como EAS secret (B9) |
 | `POSTHOG_API_KEY` | Analíticas | staging, prod | ⚙️ Pendiente acción N4 |
 | `ADMIN_SECRET` | Acceso al dashboard admin (bearer) | prod | ⚙️ Generar con `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
 
@@ -902,6 +907,10 @@ Métricas disponibles:
 | `useSyncAll` es fire-and-forget: invalidación de `my-games` delegada a `useSyncProgress` | Antes: `queryClient.invalidateQueries` en `onSuccess` (solo invalidaba al terminar el request HTTP ~instant). Ahora: la invalidación ocurre en cada batch vía Socket.io — la UI se actualiza progresivamente | Fase 3 |
 | GitHub Pages para docs legales en repo público | Cloudflare Pages rechazado (ran npm ci sobre el monorepo root). GitHub Pages free solo funciona en repos públicos — repo UnlockHub hecho público. Auto-deploy desde branch `develop`, carpeta `/docs`. URLs: https://jmreja27.github.io/UnlockHub/privacy-policy.html y /terms-of-service.html | Fase 3 |
 | Texto legal ToS + Privacy Policy en pantalla de registro | `app/(auth)/register.tsx`: bloque con `Linking.openURL` a las URLs de GitHub Pages antes del botón de submit. Claves i18n `auth.register.legal_prefix/connector/terms_label/privacy_label` en ES/EN. | Fase 3 |
+| `AdBanner` con prop `unitId: 'home' | 'search'` — IDs de ad unit separados por placement | Permite optimización futura de eCPM por placement sin cambiar la API del componente | Fase 3 |
+| IDs de producción AdMob como EAS secrets (`EXPO_PUBLIC_ADMOB_*`) — no en `app.json` ni código | Repo público — hardcodear IDs de producción en el código fuente expondría las unidades de anuncio. Test IDs de Google integrados como fallback en el código | Fase 3 |
+| `useRewardedAd` solo llama al backend si recibe `EARNED_REWARD` antes de `CLOSED` | Garantiza que el usuario no saltó el anuncio antes de reclamar puntos — el evento `EARNED_REWARD` solo se dispara cuando el anuncio se completa | Fase 3 |
+| Cooldown rewarded ad en Redis (`rewarded-ad:{userId}`, TTL 3h) en lugar de BD | Evitar abuso es un caso de rate limiting — Redis es el lugar correcto; no necesita historial persistente | Fase 3 |
 
 ---
 
@@ -929,7 +938,7 @@ Métricas disponibles:
 5. ✅ Health check endpoint completo
 6. ✅ Dashboard de administración
 7. ✅ GDPR — borrado de cuenta. ⚙️ Migrar en prod (B17)
-8. ⚙️ UMP SDK de AdMob (B10)
+8. ✅ AdMob + UMP SDK integrado — `react-native-google-mobile-ads` instalado, plugin en `app.json` (test App ID), `AdBanner` actualizado (`unitId: 'home'|'search'`), `useInterstitialAd` + `useRewardedAd` hooks, endpoint `POST /api/v1/points/rewarded-ad` (10 pts, cooldown 3h Redis), `REWARDED_AD` en `PointReason`. ⚙️ Pendiente B8-B9: IDs de producción como EAS secrets.
 9. ✅ Privacy policy en app. ✅ Privacy Policy + ToS publicados en GitHub Pages. ✅ Datos del desarrollador rellenados. ✅ Texto legal con enlaces en pantalla de registro.
 10. ✅ Escudo de racha
 11. ✅ Centro de notificaciones in-app
@@ -959,7 +968,8 @@ Métricas disponibles:
 | P1 | ✅ Migración Prisma en prod | Automática en cada deploy — `npx prisma migrate deploy` en `startCommand` de `railway.json` |
 | P2 | Variables pendientes en Railway | Railway dashboard → service → Variables → añadir: `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `APP_SCHEME=unlockhub`, `CLOUDINARY_URL`, `ADMIN_SECRET`, `POSTHOG_API_KEY` |
 | P3 | Resend — cuenta + dominio + API key | resend.com → Add Domain → verificar DNS → API Keys → Create |
-| P4 | UMP SDK AdMob | admob.google.com → Privacy & Messaging → GDPR → publicar |
+| ~~P4~~ | ✅ UMP SDK AdMob | Código integrado — `useGdprConsent.ts` activo, GDPR message ya publicado en AdMob. |
+| ~~P4b~~ | ✅ EAS secrets AdMob configurados | Los 4 IDs de producción están en EAS secrets — `HOME_BANNER_ID`, `SEARCH_BANNER_ID`, `INTERSTITIAL_ID`, `REWARDED_ID`. |
 | P5 | ✅ Privacy Policy + ToS en URL pública | `docs/privacy-policy.html` + `docs/terms-of-service.html` — GitHub Pages activo, URLs en vivo, datos del desarrollador rellenados. |
 | P6 | Google Play Console | $25 + listing completo |
 | P7 | ✅ Smoke tests producción — APK #2 completo | APK `27d0e02d` (build 2026-05-27). BUG-3/4/5 confirmados ✅. Todas las pantallas sin crash. Pendiente: vinculación plataformas reales (requiere credenciales del dev), sync progresivo E2E, Forgot Password (requiere RESEND_API_KEY). |
@@ -1015,6 +1025,86 @@ Métricas disponibles:
 ---
 
 ## Última revisión de código
+
+**Fecha**: 2026-05-29 — Revisión pre-lanzamiento completa. Sin datos sensibles. 0 errores TS/lint. 407 tests pasando. 2 fixes aplicados.
+
+### Revisión pre-lanzamiento — sesión 2026-05-29
+
+**Objetivo**: auditoría completa de seguridad, código, tests y configuración antes de publicar en Play Store.
+
+#### Seguridad ✅
+- **Historial Git**: limpio. Los placeholders `[NIF_DESARROLLADOR]` / `[NOMBRE_DESARROLLADOR]` son el resultado de la limpieza `git filter-branch` de 2026-05-28. 0 datos personales reales en el historial.
+- **AdMob IDs**: solo IDs públicos de prueba de Google (`ca-app-pub-3940256099942544/*`) en el código. IDs de producción en EAS secrets — nunca en el repo.
+- **`.env`**: nunca fue commitado. `.gitignore` cubre `.env`, `.env.local`, `*.pem`, `*.jks`, `google-play-service-account.json`.
+- **`console.log`**: 0 ocurrencias en código de producción.
+- **TODO/FIXME**: 0 en código fuente.
+
+#### Correcciones aplicadas
+- **`chore: .gitignore`** — `app.json` cambiado a `/app.json` para que la regla solo aplique al directorio raíz, evitando que `apps/mobile/app.json` quede untrackeable si se elimina del índice.
+- **`test: claimRewardedAdPoints`** — 2 tests añadidos a `points.service.test.ts`: camino feliz (otorga 10 pts + escribe en Redis) y cooldown activo (lanza 429 `REWARDED_AD_COOLDOWN`).
+
+#### Estado de calidad
+| Categoría | Resultado |
+|---|---|
+| TypeScript strict (API) | ✅ 0 errores |
+| TypeScript strict (mobile) | ✅ 0 errores |
+| Lint (API) | ✅ 0 errores, 0 warnings |
+| Lint (mobile) | ✅ 0 errores, 0 warnings |
+| Tests backend | ✅ 407/407, cobertura 80.59% stmt / 82.44% branch |
+| Tests mobile | ✅ 179/179 |
+| console.log en producción | ✅ 0 |
+| TODO/FIXME en código | ✅ 0 |
+| Datos sensibles en código | ✅ 0 (solo placeholders y test IDs públicos) |
+| Datos sensibles en historial Git | ✅ 0 (limpieza previa confirmada) |
+| .env commitado | ✅ Nunca |
+
+#### Vulnerabilidades npm (sin cambios respecto a T8)
+- **API — 2 high**: `node-tar` vía `@mapbox/node-pre-gyp` — build-time, no runtime. Sin fix no-breaking disponible.
+- **API — 5 moderate**: `ws` (socket.io), `brace-expansion`. Fix requiere `--force` con breaking changes.
+- **Mobile — 17 high + 15 moderate**: `node-tar` + `ws` vía Expo build tooling — build-time. Pendiente T8 post-lanzamiento.
+- **Ninguna vulnerabilidad nueva de runtime** detectada.
+
+#### Edge cases revisados ✅
+- `steam.adapter.ts`: guards `schema.length === 0 || playerAchievements.length === 0` antes del upsert. Arrays con null coalescing. Errores de red con fallback a `[]`.
+- `psn.adapter.ts`: `buildAuthWithRefresh()` maneja access token expirado + refresh expirado (`PSN_REFRESH_TOKEN_EXPIRED`). Guard `trophies.length === 0` antes del upsert.
+- `authenticate.ts`: token Bearer correcto. `authenticateOptional` no falla sin token.
+- `sync.worker.ts`: Redis progress key eliminada en error (`redis.del`) y en completado. Socket.io emit solo si `io !== null`. `requiresReauth=true` en PSN refresh expirado.
+- `AdBanner.tsx` / `useRewardedAd.ts` / `useInterstitialAd.ts`: `user?.isPremium` check al inicio. `admobModule` con try/catch. `EARNED_REWARD` antes de `CLOSED` para la recompensa.
+- Paginación: `limit.max(50)` en todos los endpoints vía Zod.
+- Rate limiting: global (100 req/15min), auth (10 req/15min), search (60 req/min), rewarded-ad (cooldown 3h Redis).
+
+#### Configuración verificada ✅
+- `app.json`: versión 1.0.0, bundleIdentifier correcto, AdMob test App IDs. `usesCleartextTraffic: true` — decisión documentada para SDK 51, inofensiva en prod (API es HTTPS).
+- `eas.json`: preview → Railway prod URL, production → app-bundle, `google-play-service-account.json` gitignoreado.
+- `railway.json`: `preDeployCommand: npx prisma migrate deploy`, healthcheck `/health`, restart on failure.
+
+#### Pendiente (no bloqueante para lanzamiento)
+- T8: upgrade Expo SDK 51→55 + fix vulnerabilidades build-time. PR dedicado post-lanzamiento.
+- `usesCleartextTraffic: true` — evaluar usar `app.config.js` para hacerlo profile-dependent al subir a SDK 55.
+
+---
+
+**Fecha**: 2026-05-28 — AdMob + UMP SDK integrado: `react-native-google-mobile-ads`, `useInterstitialAd`, `useRewardedAd`, endpoint rewarded-ad backend, migración `REWARDED_AD`.
+
+### AdMob + UMP SDK — sesión 2026-05-28
+
+- **`react-native-google-mobile-ads`** instalado en `apps/mobile`.
+- **`app.json`**: plugin `react-native-google-mobile-ads` con test App IDs (Android `~3347511713`, iOS `~1458002511`). ⚙️ Sustituir por los IDs de producción cuando estén disponibles (B8-B9).
+- **`components/AdBanner.tsx`**: nuevo prop `unitId: 'home' | 'search'` — usa `EXPO_PUBLIC_ADMOB_HOME_BANNER_ID` / `EXPO_PUBLIC_ADMOB_SEARCH_BANNER_ID`. Fallback a test ID de Google. Carga dinámica con try/catch — funciona aunque el módulo nativo no esté disponible.
+- **`app/(tabs)/index.tsx`**: `<AdBanner unitId="home" />`.
+- **`app/(tabs)/search.tsx`**: `<AdBanner unitId="search" />` añadido bajo los chips de filtro.
+- **`hooks/useInterstitialAd.ts`**: pre-carga el anuncio al montar. `show()` fire-and-forget. Solo activo para usuarios free. Re-carga automática tras cierre.
+- **`hooks/useRewardedAd.ts`**: `showForReward()` devuelve `Promise<number | null>`. Llama `POST /api/v1/points/rewarded-ad` solo si el usuario completa el anuncio (`EARNED_REWARD` recibido antes de `CLOSED`).
+- **`apps/api/src/services/points.service.ts`**: `claimRewardedAdPoints()` — cooldown 3h por usuario en Redis (`rewarded-ad:{userId}`), crea `UserPoint` con `reason: REWARDED_AD`, devuelve `{ pointsEarned: 10 }`. Error 429 si cooldown activo.
+- **`apps/api/src/controllers/points.controller.ts`**: `rewardedAdHandler`.
+- **`apps/api/src/routes/points.routes.ts`**: `POST /rewarded-ad`.
+- **`apps/api/prisma/schema.prisma`**: `REWARDED_AD` añadido a enum `PointReason`.
+- **`packages/types/src/index.ts`**: `PointReason` actualizado con `REDEEM | REWARDED_AD`.
+- **Migración**: `20260528000000_point_reason_rewarded_ad` — `ALTER TYPE "PointReason" ADD VALUE 'REWARDED_AD'`.
+- **Test IDs integrados en código**: Banner `6300978111`, Interstitial `1033173712`, Rewarded `5224354917`. Sin hardcoding de IDs de producción — siempre via `EXPO_PUBLIC_*` env vars (EAS secrets, repo público).
+- **TypeScript**: 0 errores API + 0 errores mobile. Lint: 0 errores.
+
+---
 
 **Fecha**: 2026-05-28 — limpieza de historial Git: NIF y domicilio del desarrollador eliminados de todos los commits.
 
