@@ -78,4 +78,4 @@ web-build/
 
 # Prisma
 prisma/migrations/*.sql.bak
-app.json
+/app.json
