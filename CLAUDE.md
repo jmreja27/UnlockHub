@@ -870,6 +870,8 @@ Métricas disponibles:
 | Regex `~.*(A\|B).*` con alternación evitada en flows Maestro | Maestro 2.5.1 no evalúa correctamente el operador `\|` dentro de grupos regex — sustituir siempre por texto exacto o regex simple sin alternación | Fase 3 |
 | `testID="login-email/password"` añadido a login.tsx | `inputText: {label}` en Maestro encuentra el `Text` label component antes que el `TextInput` cuando ambos tienen el mismo texto accesible — `testID` como selector unívoco (activo en próximo build) | Fase 3 |
 | `authenticateOptional` en lugar de `authenticate` en endpoints públicos con contexto de usuario | Endpoints de logros y búsqueda deben funcionar sin sesión (isUnlocked=false) — devolver 401 sin token sería incorrecto y rompería la UX de discovery | Fase 3 |
+| `{ skipRefresh: true }` en `api.post()` de login y register | Sin esta opción, cuando `/auth/login` devuelve 401 (contraseña incorrecta), `apiRequest` intercepta el 401 e intenta llamar a `refreshAccessToken()`. Si no hay refresh token en SecureStore (sesión cerrada correctamente), lanza un `Error` plano que `humanizeAuthError` no clasifica como 401 → mensaje genérico en lugar de "Email o contraseña incorrectos" | Fase 3 |
+| `Guide` interface usa `user` no `author` en `game/[id].tsx` | La API de guías devuelve `user: { id, username, avatar }` (relación Prisma `userId`) — el campo nunca fue `author`. La interfaz local en el cliente debe coincidir con la respuesta real del servidor para evitar crash al leer `guide.author.username` | Fase 3 |
 | Search de logros excluye Xbox con `NOT: { platform: 'XBOX' }` en Prisma | Xbox gateado hasta Fase 4 — no exponer logros Xbox aunque estuvieran en BD | Fase 3 |
 | `getGameAchievementsWithStatus` usa dos queries separadas (achievements + userAchievements) | Evita un JOIN complejo; Map<achievementId, unlockedAt> para lookup O(1) es más claro y suficientemente rápido a escala de logros por juego | Fase 3 |
 | i18n key `search.achievement_in_game` en tests devuelve la clave sin interpolar | En entorno de test, i18next devuelve la clave (no el texto interpolado) — tests usan `getByText('search.achievement_in_game')` en lugar de buscar el nombre del juego | Fase 3 |
@@ -960,7 +962,7 @@ Métricas disponibles:
 | P4 | UMP SDK AdMob | admob.google.com → Privacy & Messaging → GDPR → publicar |
 | P5 | ✅ Privacy Policy + ToS en URL pública | `docs/privacy-policy.html` + `docs/terms-of-service.html` — GitHub Pages activo, URLs en vivo, datos del desarrollador rellenados. |
 | P6 | Google Play Console | $25 + listing completo |
-| P7 | Smoke tests producción | Registro + login + forgot-password + sync Steam/RA/PSN + rankings |
+| P7 | ⚙️ Smoke tests producción — APK parcial | APK `d226d5a5` testado (commit `b69fe21`). Auth, Home, Search, game/[id], Challenges, Friends, Profile: ✅. Rankings: ❌ crash (BUG-3 fix en código, no en APK). Pendiente nuevo APK con BUG-1→5 para validar Rankings + login wrong password + plataformas reales. |
 
 ### 🟡 UX — todas implementadas ✅
 
@@ -1013,6 +1015,24 @@ Métricas disponibles:
 ---
 
 ## Última revisión de código
+
+**Fecha**: 2026-05-26 — smoke test exhaustivo APK preview `d226d5a5` + fix BUG-3, BUG-4, BUG-5.
+
+### Smoke test APK `d226d5a5` — sesión 2026-05-26
+
+Prueba manual completa contra emulador `emulator-5554` (1080×2400, API producción). Cuenta: TestUser99 / test99@example.com / Test1234!.
+
+**Pantallas verificadas (✅ sin issues):** Register flow completo (validación GDPR edad <16, enlaces ToS/PP, onboarding 3 pasos), Login, Forgot Password, Home autenticado (empty state, filtros, ad placeholder), Search (Games/Achievements/People con sub-filtros), game/[id] completo (header con progreso, filtros All/Unlocked/Pending, sort rarity, share/challenge/guides UGC), Challenges (empty state correcto), Profile completo (stats, vincular plataformas Steam/RA/PSN, Advanced Stats paywall, Wrapped, Settings ES↔EN, delete account dialog, Privacy Policy in-app, Notifications), profile/[username] (sección COMPARISON).
+
+**Bugs encontrados y estado:**
+
+- **BUG-3** ✅ Fix commit `a8a8901`: Rankings crash "Cannot read property 'toLocaleString' of undefined" — `ranking.service.ts` devolvía `{global, globalTotal}` en lugar de `{rank, xp}`; tab protegido por ErrorBoundary hasta nuevo APK.
+- **BUG-4** ✅ Fix commit `a8a8901`: Crash al ver guías tras submit — `Guide` interface usaba `author.username` pero la API devuelve `user.username`. Interfaz corregida en `game/[id].tsx`.
+- **BUG-5** ✅ Fix commit `586c62f`: Login contraseña incorrecta → "error inesperado" en lugar de "Email o contraseña incorrectos". Causa: `apiRequest` interceptaba el 401 de login e intentaba refrescar el token. Fix: `{ skipRefresh: true }` en `loginMutation` y `registerMutation` de `useAuth.ts`.
+
+**Pendiente nuevo APK:** Rankings validado, login wrong-password con mensaje correcto, vinculación plataformas reales, sync progresivo end-to-end.
+
+---
 
 **Fecha**: 2026-05-18 — documentación legal publicada: Privacy Policy + ToS en GitHub Pages, texto legal en pantalla de registro, datos del desarrollador rellenados.
 
