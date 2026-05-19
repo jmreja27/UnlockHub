@@ -46,7 +46,7 @@ export function useAuth() {
 
   const loginMutation = useMutation({
     mutationFn: (credentials: LoginInput) =>
-      api.post<AuthResponse>('/api/v1/auth/login', credentials),
+      api.post<AuthResponse>('/api/v1/auth/login', credentials, { skipRefresh: true }),
     onSuccess: async (data) => {
       await saveRefreshToken(data.refreshToken);
       setSession(data.user, data.accessToken);
@@ -58,7 +58,7 @@ export function useAuth() {
 
   const registerMutation = useMutation({
     mutationFn: (input: RegisterInput) =>
-      api.post<AuthResponse>('/api/v1/auth/register', input),
+      api.post<AuthResponse>('/api/v1/auth/register', input, { skipRefresh: true }),
     onSuccess: async (data) => {
       await saveRefreshToken(data.refreshToken);
       setSession(data.user, data.accessToken);
