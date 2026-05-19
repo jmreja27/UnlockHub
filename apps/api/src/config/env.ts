@@ -14,6 +14,9 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().default(''),
   ENCRYPTION_KEY: z.string().length(64),
   STEAM_API_KEY: z.string().optional(),
+  // PSN del sistema — usado para acceder a perfiles públicos sin token de usuario
+  // Obtener en: my.playstation.com → ssocookie. Expira cada ~60 días. Renovar en Railway Variables.
+  PSN_SYSTEM_NPSSO: z.string().optional(),
   CLOUDINARY_URL: z.string().url().optional(),
 });
 

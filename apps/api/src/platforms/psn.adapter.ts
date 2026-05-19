@@ -3,6 +3,7 @@ import {
   exchangeAccessCodeForAuthTokens,
   exchangeRefreshTokenForAuthTokens,
   getProfileFromAccountId,
+  getProfileFromUserName,
   getUserTitles,
   getTitleTrophies,
   getUserTrophiesEarnedForTitle,
@@ -30,6 +31,7 @@ const BATCH_SIZE = 10;
 
 const TTL_TITLE_TROPHIES = 86400;    // 24 horas — metadatos de trofeos raramente cambian
 const TTL_USER_TITLES   = 3600;     // 1 hora — lista de juegos del usuario
+const TTL_SYSTEM_TOKEN  = 55 * 60;  // 55 minutos — tokens PSN expiran en 60 min
 
 // Puntos normalizados por tipo de trofeo PSN
 const TROPHY_POINTS: Record<string, number> = {
@@ -38,6 +40,9 @@ const TROPHY_POINTS: Record<string, number> = {
   gold:     90,
   platinum: 300,
 };
+
+// Clave Redis del access token del sistema
+const REDIS_SYSTEM_TOKEN_KEY = 'psn:system:access_token';
 
 // ─── Tipos internos ───────────────────────────────────────────────────────────
 
@@ -71,14 +76,12 @@ function extractAccountIdFromIdToken(idToken: string): string {
 
 /**
  * Devuelve puntos normalizados en función del tipo de trofeo y la rareza.
- * Los puntos base del tipo de trofeo se ajustan con un multiplicador de rareza.
  */
 function normalizePoints(trophyType: string, earnedRate?: string): number {
   const base = TROPHY_POINTS[trophyType.toLowerCase()] ?? 15;
   if (!earnedRate) return base;
   const rarity = parseFloat(earnedRate);
   if (isNaN(rarity) || rarity < 0 || rarity > 100) return base;
-  // Rareza como multiplicador: trofeos más raros valen hasta 2x los puntos base
   const multiplier = 1 + (1 - rarity / 100);
   return Math.round(base * multiplier);
 }
@@ -94,11 +97,75 @@ async function cachedFetch<T>(key: string, ttl: number, fetcher: () => Promise<T
   return value;
 }
 
-// ─── Funciones públicas de autenticación PSN ──────────────────────────────────
+// ─── Auth del sistema ─────────────────────────────────────────────────────────
 
 /**
- * Intercambia un NPSSO por un objeto con access token, refresh token y accountId.
- * Llamado desde el controller al vincular la cuenta — nunca desde el worker.
+ * Devuelve el AuthorizationPayload usando las credenciales del sistema (PSN_SYSTEM_NPSSO).
+ * El access token se cachea en Redis con TTL de 55 min para reutilizarlo entre llamadas.
+ * Si el token no está en caché, lo obtiene intercambiando el NPSSO del sistema.
+ */
+export async function getSystemPsnAuth(): Promise<AuthorizationPayload> {
+  const npsso = process.env.PSN_SYSTEM_NPSSO;
+  if (!npsso) {
+    throw new AppError(
+      'PSN_SYSTEM_NPSSO no está configurado. Configúrala en Railway Variables para habilitar el sync de PSN.',
+      'PSN_SYSTEM_NOT_CONFIGURED',
+      503,
+    );
+  }
+
+  const cached = await redis.get(REDIS_SYSTEM_TOKEN_KEY);
+  if (cached) return { accessToken: cached };
+
+  let code: string;
+  try {
+    code = await exchangeNpssoForAccessCode(npsso);
+  } catch {
+    throw new AppError(
+      'El PSN_SYSTEM_NPSSO ha expirado. Renuévalo en Railway Variables (my.playstation.com → F12 → ssocookie).',
+      'PSN_SYSTEM_NPSSO_EXPIRED',
+      503,
+    );
+  }
+
+  const tokens = await exchangeAccessCodeForAuthTokens(code);
+  await redis.setex(REDIS_SYSTEM_TOKEN_KEY, TTL_SYSTEM_TOKEN, tokens.accessToken);
+
+  return { accessToken: tokens.accessToken };
+}
+
+/**
+ * Resuelve un username de PSN a su accountId numérico y onlineId canónico.
+ * Lanza PSN_USER_NOT_FOUND si el usuario no existe o su perfil es privado.
+ */
+export async function lookupPsnUser(
+  auth: AuthorizationPayload,
+  username: string,
+): Promise<{ accountId: string; onlineId: string }> {
+  let result: Awaited<ReturnType<typeof getProfileFromUserName>>;
+  try {
+    result = await getProfileFromUserName(auth, username);
+  } catch {
+    throw new AppError(
+      'No se encontró ninguna cuenta de PSN con ese username, o el perfil es privado. ' +
+      'Asegúrate de que los trofeos están configurados como públicos en PlayStation Network → Ajustes → Privacidad.',
+      'PSN_USER_NOT_FOUND',
+      404,
+    );
+  }
+
+  return {
+    accountId: result.profile.accountId,
+    onlineId: result.profile.onlineId,
+  };
+}
+
+// ─── Funciones legacy de autenticación de usuario ────────────────────────────
+// Mantenidas para compatibilidad con scripts/seed-games.ts que gestiona su propio NPSSO.
+
+/**
+ * Intercambia un NPSSO por tokens cifrados y accountId.
+ * Solo se usa en el seed script — en producción el sistema usa PSN_SYSTEM_NPSSO.
  */
 export async function exchangeNpssoForPsnTokens(npsso: string): Promise<{
   encryptedTokenJson: string;
@@ -135,7 +202,7 @@ export async function exchangeNpssoForPsnTokens(npsso: string): Promise<{
     profile = await getProfileFromAccountId(auth, 'me');
   } catch {
     throw new AppError(
-      'No se pudo obtener el perfil de PSN. Comprueba que el perfil es público.',
+      'No se pudo obtener el perfil de PSN.',
       'PSN_PROFILE_ERROR',
       502,
     );
@@ -164,13 +231,13 @@ export class PsnAdapter implements PlatformAdapter {
 
   // ── getUserAchievements ────────────────────────────────────────────────────
 
-  async getUserAchievements(onlineId: string, encryptedTokenJson: string): Promise<Achievement[]> {
-    const auth = await this.buildAuth(encryptedTokenJson);
-    const titles = await this.fetchUserTitles(auth, onlineId);
+  async getUserAchievements(accountId: string): Promise<Achievement[]> {
+    const auth = await getSystemPsnAuth();
+    const titles = await this.fetchUserTitles(auth, accountId);
     const results: Achievement[] = [];
 
     for (const title of titles) {
-      const trophies = await this.fetchMergedTrophies(auth, title);
+      const trophies = await this.fetchMergedTrophies(auth, title, accountId);
       for (const t of trophies) {
         results.push({
           id: `psn:${title.npCommunicationId}:${t.trophyId}`,
@@ -183,7 +250,7 @@ export class PsnAdapter implements PlatformAdapter {
           rawValue: t.trophyEarnedRate ? parseFloat(t.trophyEarnedRate) : null,
           normalizedPoints: normalizePoints(t.trophyType, t.trophyEarnedRate),
           rarity: t.trophyEarnedRate ? parseFloat(t.trophyEarnedRate) : null,
-          externalUrl: `https://psnprofiles.com/${onlineId}`,
+          externalUrl: null,
         });
       }
     }
@@ -216,44 +283,25 @@ export class PsnAdapter implements PlatformAdapter {
   // ── syncUser ───────────────────────────────────────────────────────────────
 
   async syncUser(account: PlatformAccount): Promise<SyncResult> {
-    const { auth, updatedEncryptedToken } = await this.buildAuthWithRefresh(account);
-    if (updatedEncryptedToken) {
-      await prisma.platformAccount.update({
-        where: { id: account.id },
-        data: { encryptedToken: updatedEncryptedToken },
-      });
-    }
-    const titles = await this.fetchUserTitles(auth, account.username);
+    const auth = await getSystemPsnAuth();
+    const titles = await this.fetchUserTitles(auth, account.externalId);
     return this.processTitles(titles, auth, account);
   }
 
   // ── syncUserExpress ────────────────────────────────────────────────────────
 
   async syncUserExpress(account: PlatformAccount): Promise<SyncResult> {
-    const { auth, updatedEncryptedToken } = await this.buildAuthWithRefresh(account);
-    if (updatedEncryptedToken) {
-      await prisma.platformAccount.update({
-        where: { id: account.id },
-        data: { encryptedToken: updatedEncryptedToken },
-      });
-    }
+    const auth = await getSystemPsnAuth();
     // PSN devuelve títulos ordenados por última actividad — los primeros N son los más recientes
-    const titles = (await this.fetchUserTitles(auth, account.username)).slice(0, EXPRESS_TITLE_LIMIT);
+    const titles = (await this.fetchUserTitles(auth, account.externalId)).slice(0, EXPRESS_TITLE_LIMIT);
     return this.processTitles(titles, auth, account);
   }
 
   // ── syncUserBatched ────────────────────────────────────────────────────────
 
   async syncUserBatched(account: PlatformAccount, onBatch: SyncBatchCallback): Promise<SyncResult> {
-    const { auth, updatedEncryptedToken } = await this.buildAuthWithRefresh(account);
-    if (updatedEncryptedToken) {
-      await prisma.platformAccount.update({
-        where: { id: account.id },
-        data: { encryptedToken: updatedEncryptedToken },
-      });
-    }
-
-    const titles = await this.fetchUserTitles(auth, account.username);
+    const auth = await getSystemPsnAuth();
+    const titles = await this.fetchUserTitles(auth, account.externalId);
     const total = titles.length;
     let achievementsSynced = 0;
     let gamesUpdated = 0;
@@ -294,7 +342,7 @@ export class PsnAdapter implements PlatformAdapter {
     let gamesUpdated = 0;
 
     for (const title of titles) {
-      const trophies = await this.fetchMergedTrophies(auth, title);
+      const trophies = await this.fetchMergedTrophies(auth, title, account.externalId);
       if (trophies.length === 0) continue;
 
       const dbGame = await prisma.game.upsert({
@@ -369,10 +417,78 @@ export class PsnAdapter implements PlatformAdapter {
   // ─── Métodos privados ─────────────────────────────────────────────────────
 
   /**
-   * Construye el AuthorizationPayload desde el token cifrado.
-   * Solo se usa en casos donde no necesitamos persistir el token refrescado.
+   * Obtiene la lista de títulos con trofeos del usuario identificado por accountId.
+   * Pagina automáticamente hasta el límite de 800 resultados.
    */
-  private async buildAuth(encryptedTokenJson: string): Promise<AuthorizationPayload> {
+  private async fetchUserTitles(
+    auth: AuthorizationPayload,
+    accountId: string,
+  ): Promise<TrophyTitle[]> {
+    return cachedFetch<TrophyTitle[]>(
+      `psn:titles:${accountId}`,
+      TTL_USER_TITLES,
+      async () => {
+        const allTitles: TrophyTitle[] = [];
+        let offset = 0;
+        const limit = 800;
+
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const response = await getUserTitles(auth, accountId, { limit, offset });
+          allTitles.push(...response.trophyTitles);
+          if (allTitles.length >= response.totalItemCount || !response.nextOffset) break;
+          offset = response.nextOffset;
+        }
+
+        return allTitles;
+      },
+    );
+  }
+
+  /**
+   * Obtiene los metadatos de trofeos y el estado ganado del usuario para un título,
+   * y los fusiona en un único array por trophyId.
+   */
+  private async fetchMergedTrophies(
+    auth: AuthorizationPayload,
+    title: TrophyTitle,
+    accountId: string,
+  ): Promise<Array<Trophy & Pick<UserThinTrophy, 'earned' | 'earnedDateTime'>>> {
+    const { npCommunicationId, npServiceName } = title;
+    const opts = { npServiceName };
+
+    const [titleTrophiesRes, earnedRes] = await Promise.all([
+      cachedFetch(
+        `psn:trophies:${npCommunicationId}:${npServiceName}`,
+        TTL_TITLE_TROPHIES,
+        () => getTitleTrophies(auth, npCommunicationId, 'all', opts),
+      ),
+      getUserTrophiesEarnedForTitle(auth, accountId, npCommunicationId, 'all', opts),
+    ]);
+
+    // Indexar estado ganado por trophyId para merge O(1)
+    const earnedMap = new Map<number, UserThinTrophy>();
+    for (const ut of earnedRes.trophies) {
+      earnedMap.set(ut.trophyId, ut);
+    }
+
+    return titleTrophiesRes.trophies.map((t) => {
+      const earned = earnedMap.get(t.trophyId);
+      return {
+        ...t,
+        earned: earned?.earned ?? false,
+        earnedDateTime: earned?.earnedDateTime,
+      };
+    });
+  }
+
+  // ─── Métodos legacy — mantenidos para scripts/seed-games.ts ───────────────
+
+  /**
+   * Construye AuthorizationPayload desde el token cifrado almacenado.
+   * No persiste el token actualizado — solo para uso puntual.
+   */
+  async buildAuth(encryptedTokenJson: string): Promise<AuthorizationPayload> {
     let stored: PsnStoredTokens;
     try {
       stored = JSON.parse(decrypt(encryptedTokenJson)) as PsnStoredTokens;
@@ -387,11 +503,11 @@ export class PsnAdapter implements PlatformAdapter {
   }
 
   /**
-   * Construye el AuthorizationPayload desde la cuenta en BD.
-   * Si el access token expiró, usa el refresh token para obtener uno nuevo
-   * y devuelve el token cifrado actualizado para persistirlo.
+   * Construye AuthorizationPayload con renovación automática del access token.
+   * Devuelve el token cifrado actualizado para persistirlo si hubo renovación.
+   * Mantenido para compatibilidad con seed-games.ts — el sync de usuarios usa getSystemPsnAuth().
    */
-  private async buildAuthWithRefresh(
+  async buildAuthWithRefresh(
     account: PlatformAccount,
   ): Promise<{ auth: AuthorizationPayload; updatedEncryptedToken: string | null }> {
     let stored: PsnStoredTokens;
@@ -407,7 +523,7 @@ export class PsnAdapter implements PlatformAdapter {
 
     if (new Date(stored.refreshTokenExpiresAt) <= new Date()) {
       throw new AppError(
-        'El refresh token de PSN ha expirado. El usuario debe volver a vincular su cuenta.',
+        'El refresh token de PSN ha expirado.',
         'PSN_REFRESH_TOKEN_EXPIRED',
         401,
       );
@@ -427,71 +543,6 @@ export class PsnAdapter implements PlatformAdapter {
       auth: { accessToken: fresh.accessToken },
       updatedEncryptedToken: encrypt(JSON.stringify(newStored)),
     };
-  }
-
-  /**
-   * Obtiene la lista de títulos con trofeos del usuario.
-   * Pagina automáticamente hasta el límite de 800 resultados.
-   */
-  private async fetchUserTitles(
-    auth: AuthorizationPayload,
-    onlineId: string,
-  ): Promise<TrophyTitle[]> {
-    return cachedFetch<TrophyTitle[]>(
-      `psn:titles:${onlineId}`,
-      TTL_USER_TITLES,
-      async () => {
-        const allTitles: TrophyTitle[] = [];
-        let offset = 0;
-        const limit = 800;
-
-        // eslint-disable-next-line no-constant-condition
-        while (true) {
-          const response = await getUserTitles(auth, 'me', { limit, offset });
-          allTitles.push(...response.trophyTitles);
-          if (allTitles.length >= response.totalItemCount || !response.nextOffset) break;
-          offset = response.nextOffset;
-        }
-
-        return allTitles;
-      },
-    );
-  }
-
-  /**
-   * Obtiene los metadatos de trofeos y el estado ganado del usuario para un título,
-   * y los fusiona en un único array por trophyId.
-   */
-  private async fetchMergedTrophies(
-    auth: AuthorizationPayload,
-    title: TrophyTitle,
-  ): Promise<Array<Trophy & Pick<UserThinTrophy, 'earned' | 'earnedDateTime'>>> {
-    const { npCommunicationId, npServiceName } = title;
-    const opts = { npServiceName };
-
-    const [titleTrophiesRes, earnedRes] = await Promise.all([
-      cachedFetch(
-        `psn:trophies:${npCommunicationId}:${npServiceName}`,
-        TTL_TITLE_TROPHIES,
-        () => getTitleTrophies(auth, npCommunicationId, 'all', opts),
-      ),
-      getUserTrophiesEarnedForTitle(auth, 'me', npCommunicationId, 'all', opts),
-    ]);
-
-    // Indexar estado ganado por trophyId para merge O(1)
-    const earnedMap = new Map<number, UserThinTrophy>();
-    for (const ut of earnedRes.trophies) {
-      earnedMap.set(ut.trophyId, ut);
-    }
-
-    return titleTrophiesRes.trophies.map((t) => {
-      const earned = earnedMap.get(t.trophyId);
-      return {
-        ...t,
-        earned: earned?.earned ?? false,
-        earnedDateTime: earned?.earnedDateTime,
-      };
-    });
   }
 }
 
