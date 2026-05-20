@@ -523,8 +523,12 @@ export interface PlatformAdapter {
 - Sin endpoint de búsqueda por título — los juegos solo aparecen tras un sync real.
 
 ### PlayStation Network (psn-api npm)
-- Flujo auth: NPSSO token → Authorization Code → Access Token + Refresh Token.
-- `getUserTitles`, `getTitleTrophies`, `getUserTrophiesEarnedForTitle`
+- **Modelo**: el backend usa credenciales propias (`PSN_SYSTEM_NPSSO`) para leer perfiles públicos — igual que PSNProfiles/TrueTrophies/Exophase. El usuario solo proporciona su username; no se almacena ningún token de usuario.
+- `getSystemPsnAuth()`: intercambia `PSN_SYSTEM_NPSSO` → Access Token, cacheado en Redis TTL 55 min (`psn:system:access_token`). Lanza `PSN_SYSTEM_NOT_CONFIGURED` (503) si la var no está, `PSN_SYSTEM_NPSSO_EXPIRED` (503) si el NPSSO ha expirado (~60 días).
+- `lookupPsnUser(auth, username)`: resuelve username → `{ accountId, onlineId }` vía `getProfileFromUserName`. Lanza `PSN_USER_NOT_FOUND` (404) si el perfil no existe o es privado.
+- `getUserTitles(auth, accountId, opts)`: acepta cualquier `accountId` (no solo `"me"`) — permite leer cualquier perfil público.
+- `getUserTrophiesEarnedForTitle(auth, accountId, ...)`: igual.
+- `buildAuthWithRefresh()`: método público mantenido — lo sigue usando `seed-games.ts` con NPSSO propio.
 - Caché Redis: metadatos de trofeos 24h, lista de juegos 1h.
 
 ### Xbox Live (gateado — Fase 4)
@@ -575,6 +579,7 @@ El servidor valida todas al arrancar mediante schema Zod. Ver `.env.example` en 
 | `EXPO_PUBLIC_ADMOB_REWARDED_ID` | Rewarded (EAS secret) | prod | ✅ Configurado como EAS secret (B9) |
 | `POSTHOG_API_KEY` | Analíticas | staging, prod | ⚙️ Pendiente acción N4 |
 | `ADMIN_SECRET` | Acceso al dashboard admin (bearer) | prod | ⚙️ Generar con `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+| `PSN_SYSTEM_NPSSO` | Sync PSN de usuarios (credencial del sistema) | prod | ⚙️ Obtener en my.playstation.com → F12 → Application → Cookies → `npsso`. Caduca ~60 días. Configurar en Railway dashboard → Variables. **Nunca en código ni `.env` commiteado.** |
 
 ---
 
@@ -827,7 +832,7 @@ Métricas disponibles:
 | `app/profile/[username].tsx` | ✅ | Sección "vs tú" incluida |
 | `app/link-platform/steam.tsx` | ✅ | Con ayuda contextual paso a paso |
 | `app/link-platform/ra.tsx` | ✅ | Con ayuda contextual paso a paso |
-| `app/link-platform/psn.tsx` | ✅ | Con ayuda contextual paso a paso |
+| `app/link-platform/psn.tsx` | ✅ | Formulario de username — el backend usa `PSN_SYSTEM_NPSSO`; no se almacena token de usuario. Guía expandible para hacer perfil público. |
 | `app/link-platform/xbox.tsx` | 🚩 Gateado | Banner "Próximamente" hasta Fase 4 |
 | `app/notifications.tsx` | ✅ | Centro de notificaciones in-app |
 | `app/privacy.tsx` | ✅ | URL pública activa: https://jmreja27.github.io/UnlockHub/privacy-policy.html |
@@ -911,6 +916,9 @@ Métricas disponibles:
 | IDs de producción AdMob como EAS secrets (`EXPO_PUBLIC_ADMOB_*`) — no en `app.json` ni código | Repo público — hardcodear IDs de producción en el código fuente expondría las unidades de anuncio. Test IDs de Google integrados como fallback en el código | Fase 3 |
 | `useRewardedAd` solo llama al backend si recibe `EARNED_REWARD` antes de `CLOSED` | Garantiza que el usuario no saltó el anuncio antes de reclamar puntos — el evento `EARNED_REWARD` solo se dispara cuando el anuncio se completa | Fase 3 |
 | Cooldown rewarded ad en Redis (`rewarded-ad:{userId}`, TTL 3h) en lugar de BD | Evitar abuso es un caso de rate limiting — Redis es el lugar correcto; no necesita historial persistente | Fase 3 |
+| PSN usa credenciales del sistema (`PSN_SYSTEM_NPSSO`) en lugar de tokens de usuario | Mismo modelo que PSNProfiles/TrueTrophies/Exophase. El usuario solo proporciona su username público; el backend autentica con su propio NPSSO. Elimina el flujo NPSSO del usuario, el cifrado AES de token y el refresco automático para PSN. | Fase 3 |
+| `PlatformAccount.encryptedToken` queda `''` para cuentas PSN nuevas | El campo es `String @default("")` — no se almacena ningún token de usuario PSN. `buildAuthWithRefresh()` sigue activo para `seed-games.ts`. Sin migración necesaria: Steam y RA siguen usando el campo. | Fase 3 |
+| `getSystemPsnAuth()` en Redis clave `psn:system:access_token` TTL 55 min | Los access tokens PSN expiran en 60 min; caché 55 min garantiza margen. Si el NPSSO expira (~60 días), la función lanza `PSN_SYSTEM_NPSSO_EXPIRED` (503) — el desarrollador debe renovar el NPSSO en Railway Variables. | Fase 3 |
 
 ---
 
@@ -1025,6 +1033,47 @@ Métricas disponibles:
 ---
 
 ## Última revisión de código
+
+**Fecha**: 2026-05-29 (sesión 2) — Sistema de vinculación PSN migrado a credenciales del sistema. 0 errores TS/lint. 412 tests API + 179 mobile. 4 commits en `develop`.
+
+### PSN sistema de credenciales — sesión 2026-05-29
+
+**Objetivo**: cambiar el flujo de vinculación PSN de "el usuario proporciona su NPSSO" a "el usuario proporciona su username público, el backend usa sus propias credenciales" — mismo modelo que PSNProfiles/TrueTrophies/Exophase.
+
+#### Archivos modificados
+- **`packages/validators/src/platform.validators.ts`**: `linkPsnAccountSchema` cambiado de `{ npsso }` a `{ username: string (3-16 chars, regex [A-Za-z0-9_-]) }`.
+- **`apps/api/src/config/env.ts`**: `PSN_SYSTEM_NPSSO: z.string().optional()` añadido.
+- **`apps/api/.env.example`**: sección `PSN_SYSTEM_NPSSO` con instrucciones de obtención.
+- **`apps/api/src/platforms/psn.adapter.ts`**: `getSystemPsnAuth()` + `lookupPsnUser()` exportadas. `syncUser()` usa `getSystemPsnAuth()` + `account.externalId`. `buildAuthWithRefresh()` hecho público (lo sigue usando `seed-games.ts`). `fetchUserTitles()` y `fetchMergedTrophies()` reciben `accountId` explícito.
+- **`apps/api/src/controllers/platform.controller.ts`**: `linkPsnHandler` acepta `{ username }`, llama `lookupPsnUser` → obtiene `accountId` + `onlineId`, persiste con `encryptedToken: ''`.
+- **`apps/mobile/app/link-platform/psn.tsx`**: reescrito — formulario de username simple + guía expandible 3 pasos "¿Cómo hacer tu perfil público?". Sin NPSSO, sin cookies, sin banner de reauth.
+- **`apps/mobile/i18n/locales/es.json` + `en.json`**: sección `psn` actualizada — nuevas claves `username_label/placeholder/hint`, `guide_title/step1-3`, `error_not_found/service_unavailable`.
+- **`apps/api/src/platforms/psn.adapter.test.ts`**: reescrito — tests de `getSystemPsnAuth` (cache hit, cache miss, no configurado, NPSSO expirado), `lookupPsnUser` (encontrado, no encontrado), `PsnAdapter.syncUser` (usa token del sistema, no actualiza `encryptedToken`).
+- **`apps/api/src/__tests__/psn.adapter.test.ts`**: reescrito — tests de `buildAuthWithRefresh` (token válido, access expirado, refresh expirado, token corrupto).
+
+#### Estado de calidad
+| Categoría | Resultado |
+|---|---|
+| TypeScript strict (API) | ✅ 0 errores |
+| TypeScript strict (mobile) | ✅ 0 errores |
+| Lint (API) | ✅ 0 errores, 0 warnings |
+| Lint (mobile) | ✅ 0 errores, 0 warnings |
+| Tests backend | ✅ 412/412 |
+| Tests mobile | ✅ 179/179 |
+
+#### BD Railway post-seed Adramm (2026-05-29)
+- Seed parcial: Adramm procesó 345/948 títulos antes de que el NPSSO expirara.
+- **Totales observados**: 2.180 juegos (99 Steam + 1.001 RA + 1.080 PSN) + 105.925 logros.
+- **19 juegos vacíos** detectados (PSN, del seed parcial donde el token expiró a mitad de un batch). Pendiente limpieza: `railway run npx tsx apps/api/check-counts.ts` → confirmar, luego `deleteMany({ where: { achievements: { none: {} } } })`.
+- kikecorrales10 falló con "Expired access token" — necesita nuevo NPSSO del desarrollador para re-seed.
+
+#### Acciones pendientes para el desarrollador
+1. **`railway login`** — sesión expirada en local.
+2. Limpiar 19 juegos PSN vacíos: `cd apps/api && railway run npx tsx -e "if(process.env.DIRECT_URL)process.env.DATABASE_URL=process.env.DIRECT_URL;const{PrismaClient}=require('@prisma/client');const p=new PrismaClient();p.game.deleteMany({where:{achievements:{none:{}}}}).then(r=>console.log('Eliminados:',r.count)).finally(()=>p.$disconnect())"`.
+3. **`PSN_SYSTEM_NPSSO`** — configurar en Railway dashboard → Variables con el NPSSO obtenido en my.playstation.com → F12 → Application → Cookies → `npsso`. **Sin esto, el sync PSN de usuarios no funcionará en producción.**
+4. Re-seed kikecorrales10: `cd apps/api && railway run -e PSN_NPSSO=<nuevo-npsso> -- npx tsx ../../scripts/seed-games.ts --only-psn --usernames="kikecorrales10"`.
+5. Backfill `console` en nuevos juegos PSN de Adramm: `cd apps/api && railway run -e PSN_NPSSO=<nuevo-npsso> -- npx tsx ../../scripts/backfill-psn-console.ts --usernames="Adramm"`.
+6. Eliminar `apps/api/check-counts.ts` una vez completada la verificación.
 
 **Fecha**: 2026-05-29 — Revisión pre-lanzamiento completa. Sin datos sensibles. 0 errores TS/lint. 407 tests pasando. 2 fixes aplicados.
 
