@@ -1065,8 +1065,8 @@ e431fab test: tests vinculación PSN sistema
 
 **Pendiente para próxima sesión (todo es acción del desarrollador, no código):**
 1. **`PSN_SYSTEM_NPSSO`** → Railway dashboard → Variables. Sin esto, sync PSN en prod no funciona.
-2. **Re-seed kikecorrales10**: `cd apps/api && railway run -e PSN_NPSSO=<nuevo-npsso> -- npx tsx ../../scripts/seed-games.ts --only-psn --usernames="kikecorrales10"`
-3. **Backfill console Adramm**: `cd apps/api && railway run -e PSN_NPSSO=<nuevo-npsso> -- npx tsx ../../scripts/backfill-psn-console.ts --usernames="Adramm"`
+2. **Re-seed kikecorrales10 (parcial — 350/882 juegos)**: El token PSN expiró a mitad del proceso. El fix del refresco cada 100 títulos está en `a2dc1e4`. Comando: `cd apps/api && railway run -- sh -c 'DATABASE_URL="${DIRECT_URL:-$DATABASE_URL}" PSN_NPSSO="${PSN_NPSSO:-$PSN_SYSTEM_NPSSO}" npx tsx ../../scripts/seed-games.ts --only-psn --usernames="kikecorrales10"'`
+3. ✅ **Backfill console Adramm completado** — 509 juegos PSN actualizados con `console` (PS5/PS4/PS3/PSVITA).
 4. **Railway variables pendientes**: `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `APP_SCHEME=unlockhub`, `CLOUDINARY_URL`, `ADMIN_SECRET`, `POSTHOG_API_KEY`
 5. **EAS Build producción** (N5) — NO lanzar sin pedirlo explícitamente en ese mensaje.
 6. **T8**: upgrade Expo SDK 51→55 + vulnerabilidades build-time. PR dedicado post-lanzamiento.
@@ -1102,13 +1102,16 @@ e431fab test: tests vinculación PSN sistema
 - Seed parcial: Adramm procesó 345/948 títulos antes de que el NPSSO expirara.
 - **19 juegos Steam vacíos** eliminados — residuos anteriores a la corrección del 2026-05-22 que sobrevivieron esa limpieza. El guard `if (schema.length === 0 || playerAchievements.length === 0) continue` está en `processGames()` (método compartido), que es llamado por `syncUser`, `syncUserExpress` y `syncUserBatched` — todos los caminos están cubiertos. No hay fix de código pendiente.
 - **Totales finales**: **2.161 juegos (80 Steam + 1.001 RA + 1.080 PSN) + 105.925 logros, 0 juegos sin logros.**
-- kikecorrales10 falló con "Expired access token" — necesita nuevo NPSSO del desarrollador para re-seed.
+- kikecorrales10: seed parcial — 350/882 juegos. Token PSN expiró a mitad + caída breve de BD. Fix aplicado (`a2dc1e4`): refresco de token cada 100 títulos.
+- ✅ **Backfill console Adramm completado** (sesión 2026-05-29): 509 juegos PSN actualizados con `console`.
 
 #### Acciones pendientes para el desarrollador
-1. **`PSN_SYSTEM_NPSSO`** — configurar en Railway dashboard → Variables con el NPSSO obtenido en my.playstation.com → F12 → Application → Cookies → `npsso`. **Sin esto, el sync PSN de usuarios no funcionará en producción.**
-2. Re-seed kikecorrales10: `cd apps/api && railway run -e PSN_NPSSO=<nuevo-npsso> -- npx tsx ../../scripts/seed-games.ts --only-psn --usernames="kikecorrales10"`.
-3. Backfill `console` en nuevos juegos PSN de Adramm: `cd apps/api && railway run -e PSN_NPSSO=<nuevo-npsso> -- npx tsx ../../scripts/backfill-psn-console.ts --usernames="Adramm"`.
+1. ✅ **`PSN_SYSTEM_NPSSO`** — configurar en Railway dashboard → Variables. **Sin esto, el sync PSN de usuarios no funcionará en producción.**
+2. **Re-seed kikecorrales10** (350/882 juegos, token expiró): `cd apps/api && railway run -- sh -c 'DATABASE_URL="${DIRECT_URL:-$DATABASE_URL}" PSN_NPSSO="${PSN_NPSSO:-$PSN_SYSTEM_NPSSO}" npx tsx ../../scripts/seed-games.ts --only-psn --usernames="kikecorrales10"'`
+3. ✅ Backfill `console` Adramm completado — 509 juegos actualizados.
 4. ✅ Eliminado `apps/api/check-counts.ts` (script temporal de verificación).
+
+**Nota importante**: Al ejecutar scripts localmente via `railway run`, usar siempre `DATABASE_URL="${DIRECT_URL:-$DATABASE_URL}"` — la URL interna `postgres.railway.internal` no es accesible desde fuera de Railway. `DIRECT_URL` (proxy pública `*.proxy.rlwy.net`) funciona desde local.
 
 **Fecha**: 2026-05-29 — Revisión pre-lanzamiento completa. Sin datos sensibles. 0 errores TS/lint. 407 tests pasando. 2 fixes aplicados.
 
