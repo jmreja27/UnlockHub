@@ -1,0 +1,67 @@
+import { useEffect, useRef, useCallback } from 'react';
+
+import { useSessionStore } from '../stores/sessionStore';
+
+const TEST_INTERSTITIAL_ID = 'ca-app-pub-3940256099942544/1033173712';
+
+const AD_UNIT_ID =
+  process.env['EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID'] ?? TEST_INTERSTITIAL_ID;
+
+// Tipos mínimos del módulo
+type InterstitialAdInstance = {
+  load: () => void;
+  show: () => void;
+  addAdEventListener: (event: string, handler: () => void) => () => void;
+};
+
+type AdmobModule = {
+  InterstitialAd: {
+    createForAdRequest: (unitId: string) => InterstitialAdInstance;
+  };
+  AdEventType: { LOADED: string; CLOSED: string };
+};
+
+let admobModule: AdmobModule | null = null;
+
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  admobModule = require('react-native-google-mobile-ads') as AdmobModule;
+} catch {
+  // Módulo no disponible
+}
+
+export function useInterstitialAd() {
+  const { user } = useSessionStore();
+  const adRef = useRef<InterstitialAdInstance | null>(null);
+  const loadedRef = useRef(false);
+
+  useEffect(() => {
+    if (user?.isPremium || !admobModule) return;
+
+    const ad = admobModule.InterstitialAd.createForAdRequest(AD_UNIT_ID);
+    adRef.current = ad;
+
+    const unsubLoaded = ad.addAdEventListener(admobModule.AdEventType.LOADED, () => {
+      loadedRef.current = true;
+    });
+    const unsubClosed = ad.addAdEventListener(admobModule.AdEventType.CLOSED, () => {
+      loadedRef.current = false;
+      // Pre-cargar el siguiente
+      ad.load();
+    });
+
+    ad.load();
+
+    return () => {
+      unsubLoaded();
+      unsubClosed();
+    };
+  }, [user?.isPremium]);
+
+  const show = useCallback(() => {
+    if (!loadedRef.current || !adRef.current || user?.isPremium) return;
+    adRef.current.show();
+  }, [user?.isPremium]);
+
+  return { show };
+}

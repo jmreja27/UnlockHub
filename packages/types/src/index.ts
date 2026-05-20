@@ -1,7 +1,7 @@
 // Plataformas soportadas — extensible: añadir XBOX/PSN aquí y en el enum de Prisma
 export type Platform = 'STEAM' | 'RA' | 'XBOX' | 'PSN';
 
-export type PointReason = 'CHALLENGE' | 'STREAK' | 'ACHIEVEMENT';
+export type PointReason = 'CHALLENGE' | 'STREAK' | 'ACHIEVEMENT' | 'REDEEM' | 'REWARDED_AD';
 
 export type SubscriptionPlan = 'MONTHLY' | 'ANNUAL' | 'LIFETIME';
 

@@ -495,7 +495,13 @@ async function seedPSN(prisma: PrismaClient, usernamesOverride?: string[]): Prom
       continue;
     }
 
+    let titleIdx = 0;
     for (const title of titles) {
+      titleIdx++;
+      if (titleIdx % 25 === 0) {
+        console.log(`     ${username}: ${titleIdx}/${titles.length} títulos, ${result.gamesProcessed} juegos, ${result.achievementsCreated} logros`);
+      }
+
       const npCommId = title.npCommunicationId;
       const npServiceName = title.npServiceName;
 

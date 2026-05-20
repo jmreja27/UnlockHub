@@ -341,7 +341,7 @@ export default function LibraryScreen() {
                   <ActivityIndicator size="small" color="#818cf8" />
                 </View>
               )}
-              <AdBanner />
+              <AdBanner unitId="home" />
             </>
           }
         />

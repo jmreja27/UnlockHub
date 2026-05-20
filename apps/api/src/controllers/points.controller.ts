@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { paginationSchema } from '@unlockhub/validators';
 
 import type { AuthenticatedRequest } from '../middleware/authenticate';
-import { getPointsHistory, getPointsTotal } from '../services/points.service';
+import { getPointsHistory, getPointsTotal, claimRewardedAdPoints } from '../services/points.service';
 
 export async function getHistoryHandler(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -20,6 +20,16 @@ export async function getTotalHandler(req: Request, res: Response, next: NextFun
     const userId = (req as AuthenticatedRequest).user.id;
     const total = await getPointsTotal(userId);
     res.json({ total });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function rewardedAdHandler(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const userId = (req as AuthenticatedRequest).user.id;
+    const result = await claimRewardedAdPoints(userId);
+    res.json(result);
   } catch (err) {
     next(err);
   }

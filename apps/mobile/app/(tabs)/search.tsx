@@ -11,6 +11,7 @@ import { GameCard } from '../../components/GameCard';
 import { UserCard } from '../../components/UserCard';
 import { AchievementSearchCard } from '../../components/AchievementSearchCard';
 import { SkeletonBox } from '../../components/SkeletonBox';
+import { AdBanner } from '../../components/AdBanner';
 
 type FullSearchFilter = SearchFilter | 'achievements';
 
@@ -135,6 +136,8 @@ export default function SearchScreen() {
             </Pressable>
           ))}
         </ScrollView>
+
+        <AdBanner unitId="search" />
 
         {/* Sub-filtro de plataforma — solo visible cuando filter=achievements */}
         {filter === 'achievements' && (

@@ -1,6 +1,7 @@
 import type { PaginatedResponse, PointReason } from '@unlockhub/types';
 
 import { prisma } from '../lib/prisma';
+import { redis } from '../lib/redis';
 import { AppError } from '../middleware/errorHandler';
 
 export interface PointEntry {
@@ -53,4 +54,28 @@ export async function getPointsTotal(userId: string): Promise<number> {
     _sum: { amount: true },
   });
   return result._sum.amount ?? 0;
+}
+
+const REWARDED_AD_POINTS = 10;
+const REWARDED_AD_COOLDOWN_SECONDS = 3 * 60 * 60; // 3 horas
+
+// Otorga 10 puntos por ver un anuncio recompensado. Cooldown 3h por usuario en Redis.
+export async function claimRewardedAdPoints(userId: string): Promise<{ pointsEarned: number }> {
+  const cooldownKey = `rewarded-ad:${userId}`;
+  const existing = await redis.get(cooldownKey);
+
+  if (existing !== null) {
+    throw new AppError(
+      'Ya recibiste puntos por un anuncio recientemente. Vuelve en 3 horas.',
+      'REWARDED_AD_COOLDOWN',
+      429,
+    );
+  }
+
+  await Promise.all([
+    prisma.userPoint.create({ data: { userId, amount: REWARDED_AD_POINTS, reason: 'REWARDED_AD' } }),
+    redis.set(cooldownKey, '1', 'EX', REWARDED_AD_COOLDOWN_SECONDS),
+  ]);
+
+  return { pointsEarned: REWARDED_AD_POINTS };
 }
