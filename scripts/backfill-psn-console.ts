@@ -24,7 +24,14 @@ import type { AuthorizationPayload, TrophyTitle } from 'psn-api';
 
 const prisma = new PrismaClient();
 
-const PSN_USERNAMES = ['Sorrow_Lord', 'Neozaine', 'Seithek', 'Keching07'];
+const PSN_USERNAMES_DEFAULT = ['Adramm', 'Sorrow_Lord', 'Neozaine', 'Seithek', 'Keching07'];
+
+// Soporte: --usernames="A,B,C"
+function parseUsernamesArg(): string[] | undefined {
+  const arg = process.argv.find((a) => a.startsWith('--usernames='));
+  if (!arg) return undefined;
+  return arg.replace('--usernames=', '').split(',').map((u) => u.trim()).filter(Boolean);
+}
 
 async function refreshAuth(npsso: string): Promise<AuthorizationPayload> {
   const code = await exchangeNpssoForAccessCode(npsso);
@@ -49,11 +56,13 @@ async function main() {
     process.exit(1);
   }
 
+  const usernamesToProcess = parseUsernamesArg() ?? PSN_USERNAMES_DEFAULT;
+
   let totalUpdated = 0;
   let totalSkipped = 0;
 
-  for (let userIdx = 0; userIdx < PSN_USERNAMES.length; userIdx++) {
-    const username = PSN_USERNAMES[userIdx];
+  for (let userIdx = 0; userIdx < usernamesToProcess.length; userIdx++) {
+    const username = usernamesToProcess[userIdx];
     console.log(`→ ${username}`);
 
     // Refrescar token cada 2 usuarios por si acaso

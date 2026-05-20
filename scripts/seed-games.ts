@@ -498,6 +498,18 @@ async function seedPSN(prisma: PrismaClient, usernamesOverride?: string[]): Prom
     let titleIdx = 0;
     for (const title of titles) {
       titleIdx++;
+
+      // Refrescar token cada 100 títulos — el access token PSN expira en ~60 min
+      // y un usuario con 882 títulos lo agota a mitad del proceso sin este refresco
+      if (titleIdx > 1 && titleIdx % 100 === 1) {
+        try {
+          auth = await refreshPsnAuth();
+          console.log(`  ✓ PSN token refrescado (título ${titleIdx}/${titles.length})`);
+        } catch (err) {
+          console.error(`  ⚠️  No se pudo refrescar el token PSN: ${(err as Error).message}`);
+        }
+      }
+
       if (titleIdx % 25 === 0) {
         console.log(`     ${username}: ${titleIdx}/${titles.length} títulos, ${result.gamesProcessed} juegos, ${result.achievementsCreated} logros`);
       }
