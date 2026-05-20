@@ -1063,7 +1063,7 @@ Métricas disponibles:
 
 #### BD Railway post-seed Adramm + limpieza (2026-05-29)
 - Seed parcial: Adramm procesó 345/948 títulos antes de que el NPSSO expirara.
-- **19 juegos Steam vacíos** eliminados — eran de syncs de usuarios reales donde `syncUserExpress` o batches insertaron el juego sin logros. El guard en `syncUser()` funciona; investigar si `syncUserBatched` tiene el mismo guard aplicado.
+- **19 juegos Steam vacíos** eliminados — residuos anteriores a la corrección del 2026-05-22 que sobrevivieron esa limpieza. El guard `if (schema.length === 0 || playerAchievements.length === 0) continue` está en `processGames()` (método compartido), que es llamado por `syncUser`, `syncUserExpress` y `syncUserBatched` — todos los caminos están cubiertos. No hay fix de código pendiente.
 - **Totales finales**: **2.161 juegos (80 Steam + 1.001 RA + 1.080 PSN) + 105.925 logros, 0 juegos sin logros.**
 - kikecorrales10 falló con "Expired access token" — necesita nuevo NPSSO del desarrollador para re-seed.
 
@@ -1071,7 +1071,7 @@ Métricas disponibles:
 1. **`PSN_SYSTEM_NPSSO`** — configurar en Railway dashboard → Variables con el NPSSO obtenido en my.playstation.com → F12 → Application → Cookies → `npsso`. **Sin esto, el sync PSN de usuarios no funcionará en producción.**
 2. Re-seed kikecorrales10: `cd apps/api && railway run -e PSN_NPSSO=<nuevo-npsso> -- npx tsx ../../scripts/seed-games.ts --only-psn --usernames="kikecorrales10"`.
 3. Backfill `console` en nuevos juegos PSN de Adramm: `cd apps/api && railway run -e PSN_NPSSO=<nuevo-npsso> -- npx tsx ../../scripts/backfill-psn-console.ts --usernames="Adramm"`.
-4. Eliminar `apps/api/check-counts.ts` (script temporal de verificación).
+4. ✅ Eliminado `apps/api/check-counts.ts` (script temporal de verificación).
 
 **Fecha**: 2026-05-29 — Revisión pre-lanzamiento completa. Sin datos sensibles. 0 errores TS/lint. 407 tests pasando. 2 fixes aplicados.
 
