@@ -1034,6 +1034,43 @@ Métricas disponibles:
 
 ## Última revisión de código
 
+**Fecha**: 2026-05-29 (sesión 3) — AdMob commiteado + Steam guard confirmado + check-counts.ts eliminado. Estado limpio. 6 commits en `develop`.
+
+### Sesión 3 — 2026-05-29
+
+**Commits añadidos:**
+- `e7076a8 feat: AdMob + UMP SDK` — commiteados los archivos de la sesión 2026-05-28 que estaban sin commitear: `hooks/useInterstitialAd.ts`, `hooks/useRewardedAd.ts`, `components/AdBanner.tsx` (prop `unitId`), `app/(tabs)/index.tsx` + `search.tsx` (banners), `app.json` (plugin RN Google Ads), `apps/api/src/services/points.service.ts` (`claimRewardedAdPoints`), `apps/api/src/controllers/points.controller.ts` + `routes/points.routes.ts` (`POST /rewarded-ad`), `apps/api/prisma/schema.prisma` (enum `REWARDED_AD`), `apps/api/prisma/migrations/20260528000000_point_reason_rewarded_ad/`, `packages/types/src/index.ts` (`PointReason`), `scripts/seed-games.ts` (progress logging).
+- `5038dda chore: eliminar check-counts.ts + cerrar investigación guard Steam` — `check-counts.ts` eliminado (era untracked, script temporal). Guard `if (schema.length === 0 || playerAchievements.length === 0) continue` confirmado en `processGames()` (método compartido) — cubre `syncUser`, `syncUserExpress` y `syncUserBatched`. 0 fix de código necesario.
+
+**Git log top 5 (develop):**
+```
+5038dda chore: eliminar check-counts.ts + cerrar investigación guard Steam
+e7076a8 feat: AdMob + UMP SDK — rewarded-ad endpoint, hooks, AdBanner por placement, migración REWARDED_AD
+49363a1 docs: BD Railway definitiva 2026-05-29 — 2161 juegos, 0 vacíos
+d257bfd docs: CLAUDE.md PSN sistema credenciales + estado BD 2026-05-29
+e431fab test: tests vinculación PSN sistema
+```
+
+**BD Railway (2026-05-29):** 2.161 juegos (80 Steam + 1.001 RA + 1.080 PSN) + 105.925 logros. 0 juegos vacíos.
+
+**Estado de calidad (post sesión 3):**
+| Categoría | Resultado |
+|---|---|
+| TypeScript strict (API + mobile) | ✅ 0 errores |
+| Lint (API + mobile) | ✅ 0 errores, 0 warnings |
+| Tests backend | ✅ 412/412 |
+| Tests mobile | ✅ 179/179 |
+| console.log en producción | ✅ 0 |
+| Datos sensibles en código | ✅ 0 |
+
+**Pendiente para próxima sesión (todo es acción del desarrollador, no código):**
+1. **`PSN_SYSTEM_NPSSO`** → Railway dashboard → Variables. Sin esto, sync PSN en prod no funciona.
+2. **Re-seed kikecorrales10**: `cd apps/api && railway run -e PSN_NPSSO=<nuevo-npsso> -- npx tsx ../../scripts/seed-games.ts --only-psn --usernames="kikecorrales10"`
+3. **Backfill console Adramm**: `cd apps/api && railway run -e PSN_NPSSO=<nuevo-npsso> -- npx tsx ../../scripts/backfill-psn-console.ts --usernames="Adramm"`
+4. **Railway variables pendientes**: `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `APP_SCHEME=unlockhub`, `CLOUDINARY_URL`, `ADMIN_SECRET`, `POSTHOG_API_KEY`
+5. **EAS Build producción** (N5) — NO lanzar sin pedirlo explícitamente en ese mensaje.
+6. **T8**: upgrade Expo SDK 51→55 + vulnerabilidades build-time. PR dedicado post-lanzamiento.
+
 **Fecha**: 2026-05-29 (sesión 2) — Sistema de vinculación PSN migrado a credenciales del sistema. 0 errores TS/lint. 412 tests API + 179 mobile. 4 commits en `develop`.
 
 ### PSN sistema de credenciales — sesión 2026-05-29
