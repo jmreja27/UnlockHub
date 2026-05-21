@@ -1,4 +1,8 @@
 {
+  "react-native-google-mobile-ads": {
+    "android_app_id": "ca-app-pub-3940256099942544~3347511713",
+    "ios_app_id": "ca-app-pub-3940256099942544~1458002511"
+  },
   "expo": {
     "name": "UnlockHub",
     "slug": "unlockhub",
@@ -45,18 +49,11 @@
       "expo-font",
       "expo-image-picker",
       [
-        "../../node_modules/react-native-google-mobile-ads/app.plugin.js",
-        {
-          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
-          "iosAppId": "ca-app-pub-3940256099942544~1458002511"
-        }
-      ],
-      [
         "expo-build-properties",
         {
           "android": {
             "usesCleartextTraffic": true,
-            "kotlinVersion": "2.2.0"
+            "kotlinVersion": "1.9.23"
           }
         }
       ]
