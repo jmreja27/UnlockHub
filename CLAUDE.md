@@ -986,7 +986,7 @@ Métricas disponibles:
 | ~~P4b~~ | ✅ EAS secrets AdMob configurados | Los 4 IDs de producción están en EAS secrets — `HOME_BANNER_ID`, `SEARCH_BANNER_ID`, `INTERSTITIAL_ID`, `REWARDED_ID`. |
 | P5 | ✅ Privacy Policy + ToS en URL pública | `docs/privacy-policy.html` + `docs/terms-of-service.html` — GitHub Pages activo, URLs en vivo, datos del desarrollador rellenados. |
 | P6 | Google Play Console | $25 + listing completo |
-| P7 | ✅ Smoke tests producción — APK #2 completo | APK `27d0e02d` (build 2026-05-27). BUG-3/4/5 confirmados ✅. Todas las pantallas sin crash. Pendiente: vinculación plataformas reales (requiere credenciales del dev), sync progresivo E2E, Forgot Password (requiere RESEND_API_KEY). |
+| P7 | ✅ Smoke tests producción — APK #3 completo | APK debug local (build 2026-05-21, 165.7 MB). BUG-3/4/5 re-confirmados ✅. AdMob banners Home+Search ✅. Registro+onboarding ✅. Game detail+Wrapped+perfil público ✅. **BUG-6**: PSN screen muestra flujo NPSSO antiguo (Metro cache stale) — fix: rebuild con `--clean`. Pendiente: vinculación plataformas reales, sync progresivo E2E, Forgot Password (requiere RESEND_API_KEY). |
 
 ### 🟡 UX — todas implementadas ✅
 
@@ -1040,7 +1040,49 @@ Métricas disponibles:
 
 ## Última revisión de código
 
+**Fecha**: 2026-05-30 (sesión 7) — Smoke test APK #3 completo. BUG-6 identificado (PSN screen NPSSO stale — Metro cache). BUG-3/4/5 re-confirmados ✅. AdMob banners ✅. 15/16 pasos completados (offline mode no testeable en emulador). Ver detalles en Sesión 7.
+
 **Fecha**: 2026-05-30 (sesión 6) — APK #3 generada localmente (debug). Downgrade `react-native-google-mobile-ads` v16→v13. `app-debug.apk` 165.7 MB lista para smoke test. Ver detalles en Sesión 6.
+
+### Sesión 7 — 2026-05-30 — Smoke test APK #3 ✅
+
+**Objetivo**: smoke test completo de APK #3 (16 pasos). Verificar AdMob banners, nuevo flujo PSN username-only, banner perfil privado, re-confirmar BUG-3/4/5.
+
+**Resultado**: 15/16 pasos completados. 1 bug nuevo encontrado (BUG-6). 0 crashes nuevos.
+
+**Bugs encontrados:**
+- **BUG-6** 🟡: PSN link screen muestra el flujo NPSSO antiguo ("To connect your PSN account you need your NPSSO token") en lugar del nuevo flujo de username. Causa: Metro bundler usó bundle JS cacheado de antes de los commits PSN (`0f32f35`, `f4a172e`). La causa del cache stale es que `gradlew assembleDebug` no llama a `expo export` — reutiliza el bundle de la compilación previa si el archivo existe. Fix: ejecutar `npx expo prebuild --platform android --clean` (o borrar `android/app/src/main/assets/index.android.bundle`) antes de `gradlew assembleDebug`.
+
+**Bugs re-verificados ✅:**
+- BUG-3 (Rankings crash): ✅ Arreglado
+- BUG-4 (UGC guides crash): ✅ Arreglado
+- BUG-5 (Login wrong password → generic error): ✅ Arreglado
+
+**Pantallas verificadas ✅:** Registro+onboarding, Login, Home+AdMob banner, Search+AdMob+filtros logros, Rankings, Friends, Challenges, Notifications, Profile+Steam validation+RA validation, Game detail (filtros/sort/guides), Wrapped 2025+2024, Perfil público (COMPARISON section), Performance (0 ANR nuevos).
+
+**Notas de entorno:**
+- UMP GDPR: sin dialog (correcto — emulador US = NOT_REQUIRED)
+- Offline mode: no testeable (emulador usa bridge de red del host, `svc wifi/data disable` no corta la conectividad real)
+- AdMob: banner visible como "Espacio publicitario" (placeholder de test — correcto con test App IDs)
+- Filter chips: H~30dp (pre-existente, no regresión APK #3)
+
+**Fix BUG-6 para APK #4:**
+```bash
+# Desde apps/mobile/:
+npx expo prebuild --platform android --clean
+# Añadir en AndroidManifest.xml (APPLICATION_ID meta-data) — ver Sesión 6
+cd android && gradlew assembleDebug
+```
+
+**Estado de calidad (pre-test, sin cambios de código esta sesión):**
+| Categoría | Resultado |
+|---|---|
+| TypeScript strict (API + mobile) | ✅ 0 errores |
+| Lint (API + mobile) | ✅ 0 errores, 0 warnings |
+| Tests backend | ✅ 415/415 |
+| Tests mobile | ✅ 188/188 |
+
+---
 
 ### Sesión 6 — 2026-05-30 — APK #3 ✅ (build local debug)
 
@@ -1095,6 +1137,8 @@ adb install apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
 npx expo prebuild --platform android --clean
 # Añadir manualmente en android/app/src/main/AndroidManifest.xml (dentro de <application>):
 # <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-3940256099942544~3347511713"/>
+# IMPORTANTE: borrar bundle cacheado antes de compilar (evita BUG-6 — Metro cache stale)
+rm -f android/app/src/main/assets/index.android.bundle
 cd android && gradlew assembleDebug
 ```
 
