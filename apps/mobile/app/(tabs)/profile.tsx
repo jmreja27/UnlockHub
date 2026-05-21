@@ -9,6 +9,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { PlatformAccount } from '@unlockhub/types';
+import { Ionicons } from '@expo/vector-icons';
 
 import { useSessionStore } from '../../stores/sessionStore';
 import { useAuth } from '../../hooks/useAuth';
@@ -429,7 +430,18 @@ export default function ProfileScreen() {
                     <Text className="text-white font-semibold text-sm">{label}</Text>
                     <Text className="text-gray-400 text-xs mt-0.5">{account.username}</Text>
                   </View>
-                  {account.lastSyncedAt && (
+                  {account.platform === 'PSN' && account.psnProfilePrivate && (
+                    <Pressable
+                      onPress={() => router.push('/link-platform/psn')}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('link_platform.psn.profile_private_title')}
+                      style={{ minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center', marginRight: 4 }}
+                      testID="psn-private-badge"
+                    >
+                      <Ionicons name="warning" size={18} color="#fbbf24" />
+                    </Pressable>
+                  )}
+                  {account.lastSyncedAt && !account.psnProfilePrivate && (
                     <Text className="text-gray-500 text-xs mr-2">
                       {t('profile.sync_prefix')} {new Date(account.lastSyncedAt).toLocaleDateString()}
                     </Text>
