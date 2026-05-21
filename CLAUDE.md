@@ -1064,8 +1064,8 @@ d257bfd docs: CLAUDE.md PSN sistema credenciales + estado BD 2026-05-29
 | Tests mobile | ✅ 179/179 |
 
 **Pendiente para próxima sesión (todo es acción del desarrollador, no código):**
-1. **Renovar `PSN_SYSTEM_NPSSO`** → El NPSSO fue consumido por el seed. Obtener nuevo en my.playstation.com → F12 → Application → Cookies → `npsso`. Actualizar en Railway dashboard → Variables. Sin esto, sync PSN en prod no funciona.
-2. **Backfill console kikecorrales10** (con NPSSO renovado): `cd apps/api && railway run -- sh -c 'DATABASE_URL="${DIRECT_URL:-$DATABASE_URL}" PSN_NPSSO="${PSN_NPSSO:-$PSN_SYSTEM_NPSSO}" npx tsx ../../scripts/backfill-psn-console.ts --usernames="kikecorrales10"'`
+1. ✅ **`PSN_SYSTEM_NPSSO` renovado** en Railway Variables (2026-05-29 sesión 4).
+2. ✅ **Backfill console kikecorrales10 completado** — 882 juegos actualizados: PS4(417) + PS5(409) + PS3(23) + PSVITA(6) + cross-gen(27).
 3. ✅ **Backfill console Adramm completado** — 509 juegos PSN actualizados con `console` (PS5/PS4/PS3/PSVITA).
 4. **Railway variables pendientes**: `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `APP_SCHEME=unlockhub`, `CLOUDINARY_URL`, `ADMIN_SECRET`, `POSTHOG_API_KEY`
 5. **EAS Build producción** (N5) — NO lanzar sin pedirlo explícitamente en ese mensaje.
