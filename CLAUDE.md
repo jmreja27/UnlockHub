@@ -1034,42 +1034,44 @@ Métricas disponibles:
 
 ## Última revisión de código
 
-**Fecha**: 2026-05-29 (sesión 3) — AdMob commiteado + Steam guard confirmado + check-counts.ts eliminado. Estado limpio. 6 commits en `develop`.
+**Fecha**: 2026-05-29 (sesión 4) — Re-seed kikecorrales10 completado: 879 juegos PSN + 36.649 logros. BD total: ~2.600 juegos + ~142.574 logros. NPSSO consumido → necesita renovación para backfill consola.
 
-### Sesión 3 — 2026-05-29
+### Sesión 4 — 2026-05-29
 
-**Commits añadidos:**
-- `e7076a8 feat: AdMob + UMP SDK` — commiteados los archivos de la sesión 2026-05-28 que estaban sin commitear: `hooks/useInterstitialAd.ts`, `hooks/useRewardedAd.ts`, `components/AdBanner.tsx` (prop `unitId`), `app/(tabs)/index.tsx` + `search.tsx` (banners), `app.json` (plugin RN Google Ads), `apps/api/src/services/points.service.ts` (`claimRewardedAdPoints`), `apps/api/src/controllers/points.controller.ts` + `routes/points.routes.ts` (`POST /rewarded-ad`), `apps/api/prisma/schema.prisma` (enum `REWARDED_AD`), `apps/api/prisma/migrations/20260528000000_point_reason_rewarded_ad/`, `packages/types/src/index.ts` (`PointReason`), `scripts/seed-games.ts` (progress logging).
-- `5038dda chore: eliminar check-counts.ts + cerrar investigación guard Steam` — `check-counts.ts` eliminado (era untracked, script temporal). Guard `if (schema.length === 0 || playerAchievements.length === 0) continue` confirmado en `processGames()` (método compartido) — cubre `syncUser`, `syncUserExpress` y `syncUserBatched`. 0 fix de código necesario.
+**Re-seed kikecorrales10 completado:**
+- 882 títulos procesados → **879 juegos PSN, 36.649 logros** insertados vía upsert
+- 59 errores de conexión puntual con BD (proxy pública `yamanote.proxy.rlwy.net`) — el script continuó correctamente con try/catch
+- Token PSN refrescado en títulos 101, 201, 301, 401, 501, 601, 701, 801 — fix `a2dc1e4` funcionó correctamente
+- **NPSSO consumido** tras el seed: PSN invalida el NPSSO después del primer intercambio de tokens. El backfill de consola falló con "Is your NPSSO code valid?" — necesita nuevo NPSSO.
+
+**BD Railway estimada (post sesión 4):** ~2.600 juegos + ~142.574 logros (kikecorrales10 añadió ~529 juegos nuevos + ~29.000 logros al total anterior de 2.161/105.925).
 
 **Git log top 5 (develop):**
 ```
+f2a45dd docs: estado sesión 3 — AdMob commiteado, guard Steam confirmado
 5038dda chore: eliminar check-counts.ts + cerrar investigación guard Steam
 e7076a8 feat: AdMob + UMP SDK — rewarded-ad endpoint, hooks, AdBanner por placement, migración REWARDED_AD
 49363a1 docs: BD Railway definitiva 2026-05-29 — 2161 juegos, 0 vacíos
 d257bfd docs: CLAUDE.md PSN sistema credenciales + estado BD 2026-05-29
-e431fab test: tests vinculación PSN sistema
 ```
 
-**BD Railway (2026-05-29):** 2.161 juegos (80 Steam + 1.001 RA + 1.080 PSN) + 105.925 logros. 0 juegos vacíos.
-
-**Estado de calidad (post sesión 3):**
+**Estado de calidad (sin cambios de código esta sesión):**
 | Categoría | Resultado |
 |---|---|
 | TypeScript strict (API + mobile) | ✅ 0 errores |
 | Lint (API + mobile) | ✅ 0 errores, 0 warnings |
 | Tests backend | ✅ 412/412 |
 | Tests mobile | ✅ 179/179 |
-| console.log en producción | ✅ 0 |
-| Datos sensibles en código | ✅ 0 |
 
 **Pendiente para próxima sesión (todo es acción del desarrollador, no código):**
-1. **`PSN_SYSTEM_NPSSO`** → Railway dashboard → Variables. Sin esto, sync PSN en prod no funciona.
-2. **Re-seed kikecorrales10 (parcial — 350/882 juegos)**: El token PSN expiró a mitad del proceso. El fix del refresco cada 100 títulos está en `a2dc1e4`. Comando: `cd apps/api && railway run -- sh -c 'DATABASE_URL="${DIRECT_URL:-$DATABASE_URL}" PSN_NPSSO="${PSN_NPSSO:-$PSN_SYSTEM_NPSSO}" npx tsx ../../scripts/seed-games.ts --only-psn --usernames="kikecorrales10"'`
+1. **Renovar `PSN_SYSTEM_NPSSO`** → El NPSSO fue consumido por el seed. Obtener nuevo en my.playstation.com → F12 → Application → Cookies → `npsso`. Actualizar en Railway dashboard → Variables. Sin esto, sync PSN en prod no funciona.
+2. **Backfill console kikecorrales10** (con NPSSO renovado): `cd apps/api && railway run -- sh -c 'DATABASE_URL="${DIRECT_URL:-$DATABASE_URL}" PSN_NPSSO="${PSN_NPSSO:-$PSN_SYSTEM_NPSSO}" npx tsx ../../scripts/backfill-psn-console.ts --usernames="kikecorrales10"'`
 3. ✅ **Backfill console Adramm completado** — 509 juegos PSN actualizados con `console` (PS5/PS4/PS3/PSVITA).
 4. **Railway variables pendientes**: `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `APP_SCHEME=unlockhub`, `CLOUDINARY_URL`, `ADMIN_SECRET`, `POSTHOG_API_KEY`
 5. **EAS Build producción** (N5) — NO lanzar sin pedirlo explícitamente en ese mensaje.
 6. **T8**: upgrade Expo SDK 51→55 + vulnerabilidades build-time. PR dedicado post-lanzamiento.
+
+**Nota NPSSO**: el NPSSO es una cookie de sesión de PlayStation que PSN invalida tras el primer intercambio por access+refresh tokens. Los scripts de seed usan `buildAuthWithRefresh()` que consume el NPSSO una vez y luego renueva con el refresh token. Para volver a autenticar desde cero (backfill, nuevo seed) se necesita un NPSSO fresco.
 
 **Fecha**: 2026-05-29 (sesión 2) — Sistema de vinculación PSN migrado a credenciales del sistema. 0 errores TS/lint. 412 tests API + 179 mobile. 4 commits en `develop`.
 
