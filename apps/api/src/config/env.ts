@@ -17,6 +17,10 @@ const envSchema = z.object({
   // PSN del sistema — usado para acceder a perfiles públicos sin token de usuario
   // Obtener en: my.playstation.com → ssocookie. Expira cada ~60 días. Renovar en Railway Variables.
   PSN_SYSTEM_NPSSO: z.string().optional(),
+  // RetroAchievements del sistema — usado para verificar usuarios y sincronizar sin token individual
+  // Registrar una cuenta en retroachievements.org → Settings → Keys → Web API Key
+  RA_SYSTEM_USER: z.string().optional(),
+  RA_SYSTEM_KEY: z.string().optional(),
   CLOUDINARY_URL: z.string().url().optional(),
 });
 

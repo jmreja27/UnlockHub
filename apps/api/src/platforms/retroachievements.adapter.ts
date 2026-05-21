@@ -4,7 +4,6 @@ import type { Achievement, Game, SyncResult } from '@unlockhub/types';
 
 import { prisma } from '../lib/prisma';
 import { redis } from '../lib/redis';
-import { decrypt } from '../lib/crypto';
 import { AppError } from '../middleware/errorHandler';
 
 import type { PlatformAdapter, SyncBatchCallback } from './platform.interface';
@@ -112,16 +111,60 @@ async function setResilientCache<T>(key: string, value: T, ttl: number): Promise
   ]);
 }
 
+// ─── Helpers públicos ─────────────────────────────────────────────────────────
+
+/**
+ * Verifica que un usuario de RetroAchievements existe llamando a getUserSummary.
+ * Lanza RA_USER_NOT_FOUND (404) si el usuario no existe o la API devuelve error.
+ * Lanza RA_SYSTEM_NOT_CONFIGURED (503) si RA_SYSTEM_KEY no está configurada.
+ */
+export async function lookupRaUser(username: string): Promise<void> {
+  const systemUser = process.env['RA_SYSTEM_USER'] ?? '';
+  const systemKey = process.env['RA_SYSTEM_KEY'] ?? '';
+  if (!systemKey) {
+    throw new AppError(
+      'Credenciales del sistema de RetroAchievements no configuradas. Configura RA_SYSTEM_USER y RA_SYSTEM_KEY en Railway.',
+      'RA_SYSTEM_NOT_CONFIGURED',
+      503,
+    );
+  }
+
+  try {
+    const url = `${RA_API_BASE}/API_GetUserSummary.php`;
+    const response = await axios.get<{ ID?: number | null }>(url, {
+      params: { z: systemUser, y: systemKey, u: username, g: 0, a: 0 },
+      timeout: 10_000,
+    });
+    // La API devuelve null o un objeto con ID null si el usuario no existe
+    if (!response.data || response.data.ID == null) {
+      throw new AppError(
+        `No se encontró ninguna cuenta de RetroAchievements con el username "${username}".`,
+        'RA_USER_NOT_FOUND',
+        404,
+        { username },
+      );
+    }
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    throw new AppError(
+      `No se encontró ninguna cuenta de RetroAchievements con el username "${username}".`,
+      'RA_USER_NOT_FOUND',
+      404,
+      { username },
+    );
+  }
+}
+
 // ─── Helpers internos de procesamiento ───────────────────────────────────────
 
-async function fetchRaUniqueGames(apiKey: string, username: string): Promise<Map<string, RaCompletedGame>> {
+async function fetchRaUniqueGames(username: string): Promise<Map<string, RaCompletedGame>> {
   const completedCacheKey = `ra:completed:${username}`;
   let completedGames: RaCompletedGame[];
 
   try {
     const url = `${RA_API_BASE}/API_GetUserCompletedGames.php`;
     const response = await axios.get<RaCompletedGame[]>(url, {
-      params: { z: username, y: apiKey, u: username },
+      params: { z: RA_SYSTEM_USER, y: RA_SYSTEM_KEY, u: username },
       timeout: 15_000,
     });
     completedGames = Array.isArray(response.data) ? response.data : [];
@@ -151,7 +194,6 @@ async function fetchRaUniqueGames(apiKey: string, username: string): Promise<Map
 async function processRaGame(
   gameId: string,
   gameEntry: RaCompletedGame,
-  apiKey: string,
   username: string,
   userId: string,
 ): Promise<{ gamesUpdated: number; achievementsSynced: number }> {
@@ -161,7 +203,7 @@ async function processRaGame(
   try {
     const url = `${RA_API_BASE}/API_GetGameInfoAndUserProgress.php`;
     const response = await axios.get<RaGameProgress>(url, {
-      params: { z: username, y: apiKey, g: gameId, u: username },
+      params: { z: RA_SYSTEM_USER, y: RA_SYSTEM_KEY, g: gameId, u: username },
       timeout: 10_000,
     });
     gameProgress = response.data;
@@ -251,7 +293,7 @@ export const retroAchievementsAdapter: PlatformAdapter = {
    * Cachea en Redis con TTL de 30 minutos. Si la API falla, devuelve caché stale.
    * Solo lanza RA_API_ERROR si falla Y no hay ningún dato cacheado.
    */
-  async getUserAchievements(externalId: string, apiKey: string): Promise<Achievement[]> {
+  async getUserAchievements(externalId: string): Promise<Achievement[]> {
     // externalId aquí es "{username}:{gameId}" — convenio para esta plataforma
     const [username, gameId] = externalId.split(':');
     if (!username || !gameId) {
@@ -269,12 +311,12 @@ export const retroAchievementsAdapter: PlatformAdapter = {
     if (cached) return cached;
 
     try {
-      // Llamada a la API de RetroAchievements
+      // Llamada a la API de RetroAchievements con credenciales del sistema
       const url = `${RA_API_BASE}/API_GetGameInfoAndUserProgress.php`;
       const response = await axios.get<RaGameProgress>(url, {
         params: {
-          z: RA_SYSTEM_USER || username,
-          y: apiKey,
+          z: RA_SYSTEM_USER,
+          y: RA_SYSTEM_KEY,
           g: gameId,
           u: username,
         },
@@ -385,15 +427,14 @@ export const retroAchievementsAdapter: PlatformAdapter = {
    * 6. Devuelve el resumen de la sincronización
    */
   async syncUser(account: PlatformAccount): Promise<SyncResult> {
-    const apiKey = decrypt(account.encryptedToken);
     const username = account.externalId;
-    const uniqueGames = await fetchRaUniqueGames(apiKey, username);
+    const uniqueGames = await fetchRaUniqueGames(username);
 
     let achievementsSynced = 0;
     let gamesUpdated = 0;
 
     for (const [gameId, gameEntry] of uniqueGames) {
-      const r = await processRaGame(gameId, gameEntry, apiKey, username, account.userId);
+      const r = await processRaGame(gameId, gameEntry, username, account.userId);
       achievementsSynced += r.achievementsSynced;
       gamesUpdated += r.gamesUpdated;
     }
@@ -407,9 +448,8 @@ export const retroAchievementsAdapter: PlatformAdapter = {
   },
 
   async syncUserExpress(account: PlatformAccount): Promise<SyncResult> {
-    const apiKey = decrypt(account.encryptedToken);
     const username = account.externalId;
-    const uniqueGames = await fetchRaUniqueGames(apiKey, username);
+    const uniqueGames = await fetchRaUniqueGames(username);
 
     // Priorizar juegos con más logros desbloqueados (los más jugados)
     const entries = [...uniqueGames.entries()]
@@ -420,7 +460,7 @@ export const retroAchievementsAdapter: PlatformAdapter = {
     let gamesUpdated = 0;
 
     for (const [gameId, gameEntry] of entries) {
-      const r = await processRaGame(gameId, gameEntry, apiKey, username, account.userId);
+      const r = await processRaGame(gameId, gameEntry, username, account.userId);
       achievementsSynced += r.achievementsSynced;
       gamesUpdated += r.gamesUpdated;
     }
@@ -429,9 +469,8 @@ export const retroAchievementsAdapter: PlatformAdapter = {
   },
 
   async syncUserBatched(account: PlatformAccount, onBatch: SyncBatchCallback): Promise<SyncResult> {
-    const apiKey = decrypt(account.encryptedToken);
     const username = account.externalId;
-    const uniqueGames = await fetchRaUniqueGames(apiKey, username);
+    const uniqueGames = await fetchRaUniqueGames(username);
 
     const entries = [...uniqueGames.entries()];
     const total = entries.length;
@@ -445,7 +484,7 @@ export const retroAchievementsAdapter: PlatformAdapter = {
       let batchAchievements = 0;
 
       for (const [gameId, gameEntry] of batch) {
-        const r = await processRaGame(gameId, gameEntry, apiKey, username, account.userId);
+        const r = await processRaGame(gameId, gameEntry, username, account.userId);
         batchGames += r.gamesUpdated;
         batchAchievements += r.achievementsSynced;
       }

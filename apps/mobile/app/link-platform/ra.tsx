@@ -19,17 +19,11 @@ import type { PlatformAccount } from '@unlockhub/types';
 
 import { api, ApiRequestError } from '../../lib/api';
 
-const RA_SETTINGS_URL = 'https://retroachievements.org/controlpanel.php';
 const RA_REGISTER_URL = 'https://retroachievements.org/createaccount.php';
 
-function StepRow({ number, text, url, urlLabel }: {
-  number: number;
-  text: string;
-  url?: string;
-  urlLabel?: string;
-}) {
+function GuideStep({ number, text }: { number: number; text: string }) {
   return (
-    <View className="flex-row mb-4" accessible accessibilityLabel={`Paso ${number}: ${text}`}>
+    <View className="flex-row mb-3" accessible accessibilityLabel={`Paso ${number}: ${text}`}>
       <View
         className="w-7 h-7 rounded-full bg-red-700 items-center justify-center mr-3 mt-0.5"
         accessibilityElementsHidden
@@ -38,16 +32,6 @@ function StepRow({ number, text, url, urlLabel }: {
       </View>
       <View className="flex-1">
         <Text className="text-gray-200 text-sm leading-5">{text}</Text>
-        {url && urlLabel && (
-          <Pressable
-            onPress={() => void Linking.openURL(url)}
-            accessibilityRole="link"
-            accessibilityLabel={urlLabel}
-            style={{ minHeight: 36, justifyContent: 'center' }}
-          >
-            <Text className="text-red-400 text-xs mt-1 underline">{urlLabel} →</Text>
-          </Pressable>
-        )}
       </View>
     </View>
   );
@@ -57,12 +41,11 @@ export default function LinkRAScreen() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [username, setUsername] = useState('');
-  const [apiKey, setApiKey] = useState('');
   const [fieldError, setFieldError] = useState<string | null>(null);
-  const [guideExpanded, setGuideExpanded] = useState(true);
+  const [guideExpanded, setGuideExpanded] = useState(false);
 
   const linkMutation = useMutation({
-    mutationFn: (data: { username: string; apiKey: string }) =>
+    mutationFn: (data: { username: string }) =>
       api.post<PlatformAccount>('/api/v1/platforms/ra/link', data),
     onSuccess: () => {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -75,12 +58,16 @@ export default function LinkRAScreen() {
     onError: (err) => {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       if (err instanceof ApiRequestError) {
-        if (err.statusCode === 400) {
-          setFieldError(t('link_platform.ra.error_invalid'));
+        if (err.statusCode === 404) {
+          setFieldError(t('link_platform.ra.error_not_found'));
           return;
         }
         if (err.statusCode === 409) {
           setFieldError(t('link_platform.ra.error_already_linked'));
+          return;
+        }
+        if (err.statusCode === 503) {
+          setFieldError(t('link_platform.ra.error_service_unavailable'));
           return;
         }
       }
@@ -90,18 +77,12 @@ export default function LinkRAScreen() {
 
   function handleSubmit() {
     setFieldError(null);
-    const uname = username.trim();
-    const key = apiKey.trim();
-
-    if (!uname) {
-      setFieldError(t('link_platform.ra.error_empty_username'));
+    const value = username.trim();
+    if (!value) {
+      setFieldError(t('link_platform.ra.error_empty'));
       return;
     }
-    if (!key) {
-      setFieldError(t('link_platform.ra.error_empty_key'));
-      return;
-    }
-    linkMutation.mutate({ username: uname, apiKey: key });
+    linkMutation.mutate({ username: value });
   }
 
   return (
@@ -134,61 +115,13 @@ export default function LinkRAScreen() {
           {t('link_platform.ra.description')}
         </Text>
 
-        {/* Guía expandible */}
-        <Pressable
-          onPress={() => setGuideExpanded((v) => !v)}
-          accessibilityRole="button"
-          accessibilityLabel={guideExpanded ? t('link_platform.guide_collapse') : t('link_platform.guide_expand')}
-          accessibilityState={{ expanded: guideExpanded }}
-          className="flex-row items-center justify-between bg-gray-800 rounded-t-xl px-4 py-3"
-          style={{ minHeight: 44 }}
-        >
-          <View className="flex-row items-center">
-            <Ionicons name="help-circle-outline" size={18} color="#f87171" style={{ marginRight: 8 }} accessibilityElementsHidden />
-            <Text className="text-red-300 text-sm font-semibold">{t('link_platform.guide_title')}</Text>
-          </View>
-          <Ionicons
-            name={guideExpanded ? 'chevron-up' : 'chevron-down'}
-            size={18}
-            color="#9ca3af"
-            accessibilityElementsHidden
-          />
-        </Pressable>
-
-        {guideExpanded && (
-          <View className="bg-gray-800 rounded-b-xl px-4 pt-4 pb-2 mb-5">
-            <StepRow
-              number={1}
-              text={t('link_platform.ra.guide_step1')}
-              url={RA_REGISTER_URL}
-              urlLabel="retroachievements.org"
-            />
-            <StepRow
-              number={2}
-              text={t('link_platform.ra.guide_step2')}
-            />
-            <StepRow
-              number={3}
-              text={t('link_platform.ra.guide_step3')}
-              url={RA_SETTINGS_URL}
-              urlLabel="retroachievements.org/controlpanel.php"
-            />
-            <StepRow
-              number={4}
-              text={t('link_platform.ra.guide_step4')}
-            />
-            <View className="bg-blue-900/30 border border-blue-600/40 rounded-lg px-3 py-2 mt-1 mb-2">
-              <Text className="text-blue-300 text-xs">{t('link_platform.ra.guide_tip')}</Text>
-            </View>
-          </View>
-        )}
-
-        {/* Username */}
+        {/* Campo de username */}
         <Text className="text-gray-300 text-sm mb-2">
           {t('link_platform.ra.username_label')}
         </Text>
         <TextInput
-          className={`bg-gray-800 text-white rounded-xl px-4 py-3 mb-4 text-sm ${
+          testID="ra-username-input"
+          className={`bg-gray-800 text-white rounded-xl px-4 py-3 mb-1 text-sm ${
             fieldError ? 'border border-red-500' : ''
           }`}
           placeholder={t('link_platform.ra.username_placeholder')}
@@ -197,25 +130,6 @@ export default function LinkRAScreen() {
           onChangeText={(v) => { setUsername(v); setFieldError(null); }}
           accessibilityLabel={t('link_platform.ra.username_label')}
           accessibilityHint={t('link_platform.ra.username_hint')}
-          autoCapitalize="none"
-          autoCorrect={false}
-          editable={!linkMutation.isPending}
-        />
-
-        {/* API Key */}
-        <Text className="text-gray-300 text-sm mb-2">
-          {t('link_platform.ra.api_key_label')}
-        </Text>
-        <TextInput
-          className={`bg-gray-800 text-white rounded-xl px-4 py-3 mb-1 text-sm ${
-            fieldError ? 'border border-red-500' : ''
-          }`}
-          placeholder={t('link_platform.ra.api_key_placeholder')}
-          placeholderTextColor="#6b7280"
-          value={apiKey}
-          onChangeText={(v) => { setApiKey(v); setFieldError(null); }}
-          accessibilityLabel={t('link_platform.ra.api_key_label')}
-          accessibilityHint={t('link_platform.ra.api_key_hint')}
           autoCapitalize="none"
           autoCorrect={false}
           editable={!linkMutation.isPending}
@@ -232,6 +146,54 @@ export default function LinkRAScreen() {
         ) : (
           <View className="mb-4" />
         )}
+
+        {/* Guía expandible */}
+        <Pressable
+          onPress={() => setGuideExpanded((v) => !v)}
+          accessibilityRole="button"
+          accessibilityLabel={guideExpanded ? t('link_platform.guide_collapse') : t('link_platform.guide_expand')}
+          accessibilityState={{ expanded: guideExpanded }}
+          className="flex-row items-center justify-between bg-gray-800 rounded-t-xl px-4 py-3 mb-0"
+          style={{
+            minHeight: 44,
+            borderBottomLeftRadius: guideExpanded ? 0 : 12,
+            borderBottomRightRadius: guideExpanded ? 0 : 12,
+          }}
+        >
+          <View className="flex-row items-center">
+            <Ionicons name="help-circle-outline" size={18} color="#f87171" style={{ marginRight: 8 }} accessibilityElementsHidden />
+            <Text className="text-red-300 text-sm font-semibold">{t('link_platform.ra.guide_title')}</Text>
+          </View>
+          <Ionicons
+            name={guideExpanded ? 'chevron-up' : 'chevron-down'}
+            size={18}
+            color="#9ca3af"
+            accessibilityElementsHidden
+          />
+        </Pressable>
+
+        {guideExpanded && (
+          <View className="bg-gray-800 rounded-b-xl px-4 pt-4 pb-3 mb-5">
+            <GuideStep number={1} text={t('link_platform.ra.guide_step1')} />
+            <GuideStep number={2} text={t('link_platform.ra.guide_step2')} />
+            <GuideStep number={3} text={t('link_platform.ra.guide_step3')} />
+            <View className="bg-amber-900/30 border border-amber-600/40 rounded-lg px-3 py-2 mt-1">
+              <Text className="text-amber-300 text-xs">{t('link_platform.ra.guide_public_warning')}</Text>
+              <Pressable
+                onPress={() => void Linking.openURL(RA_REGISTER_URL)}
+                accessibilityRole="link"
+                accessibilityLabel={t('link_platform.ra.guide_register_link')}
+                style={{ minHeight: 32, justifyContent: 'center' }}
+              >
+                <Text className="text-amber-400 text-xs underline mt-1">
+                  {t('link_platform.ra.guide_register_link')} →
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        {!guideExpanded && <View className="mb-5" />}
 
         <View
           className="bg-gray-900 border border-gray-700 rounded-xl p-3 mb-6"
