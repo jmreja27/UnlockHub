@@ -58,6 +58,7 @@ function mapPlatformAccount(dbAccount: {
   username: string;
   lastSyncedAt: Date | null;
   requiresReauth: boolean;
+  psnProfilePrivate: boolean;
 }): PlatformAccount {
   return {
     id: dbAccount.id,
@@ -67,6 +68,7 @@ function mapPlatformAccount(dbAccount: {
     username: dbAccount.username,
     lastSyncedAt: dbAccount.lastSyncedAt?.toISOString() ?? null,
     requiresReauth: dbAccount.requiresReauth,
+    psnProfilePrivate: dbAccount.psnProfilePrivate,
   };
 }
 
@@ -86,6 +88,7 @@ export async function getProfile(
           username: true,
           lastSyncedAt: true,
           requiresReauth: true,
+          psnProfilePrivate: true,
         },
       },
     },
@@ -117,6 +120,7 @@ export async function getPublicProfile(
           username: true,
           lastSyncedAt: true,
           requiresReauth: true,
+          psnProfilePrivate: true,
         },
       },
     },

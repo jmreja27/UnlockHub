@@ -136,7 +136,8 @@ export async function getSystemPsnAuth(): Promise<AuthorizationPayload> {
 
 /**
  * Resuelve un username de PSN a su accountId numérico y onlineId canónico.
- * Lanza PSN_USER_NOT_FOUND si el usuario no existe o su perfil es privado.
+ * Lanza PSN_USER_NOT_FOUND solo si el usuario no existe.
+ * Perfiles privados tienen éxito aquí — la privacidad se detecta en checkPsnProfilePrivacy().
  */
 export async function lookupPsnUser(
   auth: AuthorizationPayload,
@@ -147,8 +148,7 @@ export async function lookupPsnUser(
     result = await getProfileFromUserName(auth, username);
   } catch {
     throw new AppError(
-      'No se encontró ninguna cuenta de PSN con ese username, o el perfil es privado. ' +
-      'Asegúrate de que los trofeos están configurados como públicos en PlayStation Network → Ajustes → Privacidad.',
+      'No se encontró ninguna cuenta de PSN con ese username. Comprueba que el nombre de usuario es correcto.',
       'PSN_USER_NOT_FOUND',
       404,
     );
@@ -158,6 +158,23 @@ export async function lookupPsnUser(
     accountId: result.profile.accountId,
     onlineId: result.profile.onlineId,
   };
+}
+
+/**
+ * Comprueba si el perfil PSN de un accountId tiene los trofeos accesibles públicamente.
+ * Devuelve true si el perfil es privado (getUserTitles lanza), false si es público.
+ * Conservador: cualquier error al obtener títulos se trata como perfil privado.
+ */
+export async function checkPsnProfilePrivacy(
+  auth: AuthorizationPayload,
+  accountId: string,
+): Promise<boolean> {
+  try {
+    await getUserTitles(auth, accountId, { limit: 1, offset: 0 });
+    return false;
+  } catch {
+    return true;
+  }
 }
 
 // ─── Funciones legacy de autenticación de usuario ────────────────────────────
@@ -419,6 +436,7 @@ export class PsnAdapter implements PlatformAdapter {
   /**
    * Obtiene la lista de títulos con trofeos del usuario identificado por accountId.
    * Pagina automáticamente hasta el límite de 800 resultados.
+   * Lanza PSN_PROFILE_PRIVATE si PSN deniega el acceso (perfil privado).
    */
   private async fetchUserTitles(
     auth: AuthorizationPayload,
@@ -432,12 +450,21 @@ export class PsnAdapter implements PlatformAdapter {
         let offset = 0;
         const limit = 800;
 
-        // eslint-disable-next-line no-constant-condition
-        while (true) {
-          const response = await getUserTitles(auth, accountId, { limit, offset });
-          allTitles.push(...response.trophyTitles);
-          if (allTitles.length >= response.totalItemCount || !response.nextOffset) break;
-          offset = response.nextOffset;
+        try {
+          // eslint-disable-next-line no-constant-condition
+          while (true) {
+            const response = await getUserTitles(auth, accountId, { limit, offset });
+            allTitles.push(...response.trophyTitles);
+            if (allTitles.length >= response.totalItemCount || !response.nextOffset) break;
+            offset = response.nextOffset;
+          }
+        } catch {
+          // PSN lanza un error al intentar leer trofeos de un perfil privado
+          throw new AppError(
+            'El perfil PSN tiene los trofeos configurados como privados.',
+            'PSN_PROFILE_PRIVATE',
+            403,
+          );
         }
 
         return allTitles;

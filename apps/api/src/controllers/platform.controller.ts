@@ -9,7 +9,7 @@ import {
 import * as platformService from '../services/platform.service';
 import { triggerExpressSync, queueInitialSync } from '../services/sync.service';
 import type { AuthenticatedRequest } from '../middleware/authenticate';
-import { getSystemPsnAuth, lookupPsnUser } from '../platforms/psn.adapter';
+import { getSystemPsnAuth, lookupPsnUser, checkPsnProfilePrivacy } from '../platforms/psn.adapter';
 import { exchangeXboxCodeForTokens } from '../platforms/xbox.adapter';
 
 const EXPRESS_SYNC_TIMEOUT_MS = 25_000;
@@ -106,19 +106,26 @@ export async function linkPsnHandler(
     const auth = await getSystemPsnAuth();
     const { accountId, onlineId } = await lookupPsnUser(auth, username);
 
+    // Detectar si el perfil tiene los trofeos privados antes de vincular
+    const isPrivate = await checkPsnProfilePrivacy(auth, accountId);
+
     const account = await platformService.linkPlatform(
       userId,
       'PSN',
       accountId,
       onlineId,
       '',  // PSN no usa token de usuario — el sistema usa PSN_SYSTEM_NPSSO
+      { psnProfilePrivate: isPrivate },
     );
 
-    await Promise.race([
-      triggerExpressSync(userId, 'PSN'),
-      new Promise<void>((resolve) => setTimeout(resolve, EXPRESS_SYNC_TIMEOUT_MS)),
-    ]);
-    void queueInitialSync(userId, 'PSN');
+    if (!isPrivate) {
+      // Solo sincronizar si el perfil es público — no tiene sentido si los trofeos son privados
+      await Promise.race([
+        triggerExpressSync(userId, 'PSN'),
+        new Promise<void>((resolve) => setTimeout(resolve, EXPRESS_SYNC_TIMEOUT_MS)),
+      ]);
+      void queueInitialSync(userId, 'PSN');
+    }
 
     res.status(201).json(account);
   } catch (err) {

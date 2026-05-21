@@ -16,6 +16,7 @@ function mapPlatformAccount(dbAccount: {
   username: string;
   lastSyncedAt: Date | null;
   requiresReauth: boolean;
+  psnProfilePrivate: boolean;
 }): PlatformAccount {
   return {
     id: dbAccount.id,
@@ -25,6 +26,7 @@ function mapPlatformAccount(dbAccount: {
     username: dbAccount.username,
     lastSyncedAt: dbAccount.lastSyncedAt?.toISOString() ?? null,
     requiresReauth: dbAccount.requiresReauth,
+    psnProfilePrivate: dbAccount.psnProfilePrivate,
   };
 }
 
@@ -35,6 +37,7 @@ export async function linkPlatform(
   externalId: string,
   username: string,
   rawToken: string,
+  options?: { psnProfilePrivate?: boolean },
 ): Promise<PlatformAccount> {
   // Verificar que el usuario existe
   const user = await prisma.user.findUnique({
@@ -62,6 +65,8 @@ export async function linkPlatform(
   // Cifrar el token antes de persistir — nunca en texto plano
   const encryptedToken = encrypt(rawToken);
 
+  const psnProfilePrivate = options?.psnProfilePrivate ?? false;
+
   // Upsert: si ya existe la vinculación para este usuario y plataforma, actualizar
   const dbAccount = await prisma.platformAccount.upsert({
     where: {
@@ -73,12 +78,14 @@ export async function linkPlatform(
       externalId,
       username,
       encryptedToken,
+      psnProfilePrivate,
     },
     update: {
       externalId,
       username,
       encryptedToken,
       requiresReauth: false,
+      psnProfilePrivate,
     },
     select: {
       id: true,
@@ -88,6 +95,7 @@ export async function linkPlatform(
       username: true,
       lastSyncedAt: true,
       requiresReauth: true,
+      psnProfilePrivate: true,
     },
   });
 
@@ -138,6 +146,7 @@ export async function getLinkedPlatforms(userId: string): Promise<PlatformAccoun
       username: true,
       lastSyncedAt: true,
       requiresReauth: true,
+      psnProfilePrivate: true,
     },
   });
 

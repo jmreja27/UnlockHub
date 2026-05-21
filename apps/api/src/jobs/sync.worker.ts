@@ -124,6 +124,12 @@ export function startSyncWorker() {
             body: 'Tu sesión de PlayStation ha expirado. Vuelve a vincular tu cuenta para continuar sincronizando tus trofeos.',
           });
           logger.warn({ userId, platform }, '[SyncWorker] Refresh token PSN expirado — requiresReauth marcado');
+        } else if (err instanceof AppError && err.code === 'PSN_PROFILE_PRIVATE') {
+          await prisma.platformAccount.update({
+            where: { id: platformAccountId },
+            data: { psnProfilePrivate: true },
+          });
+          logger.warn({ userId, platform }, '[SyncWorker] Perfil PSN privado — psnProfilePrivate marcado');
         }
         await redis.del(syncProgressKey(userId, platform as Platform));
         if (io) {
@@ -138,7 +144,7 @@ export function startSyncWorker() {
 
       await prisma.platformAccount.update({
         where: { id: platformAccountId },
-        data: { lastSyncedAt: new Date(), requiresReauth: false },
+        data: { lastSyncedAt: new Date(), requiresReauth: false, psnProfilePrivate: false },
       });
 
       await prisma.user.update({

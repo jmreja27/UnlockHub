@@ -36,6 +36,7 @@ export interface PlatformAccount {
   username: string;
   lastSyncedAt: string | null;
   requiresReauth: boolean;
+  psnProfilePrivate: boolean;
 }
 
 export interface Achievement {
