@@ -2,12 +2,14 @@ import axios from 'axios';
 import type { PlatformAccount } from '@prisma/client';
 import type { Achievement, Game, SyncResult } from '@unlockhub/types';
 
-import { decrypt } from '../lib/crypto';
 import { prisma } from '../lib/prisma';
 import { redis } from '../lib/redis';
 import { AppError } from '../middleware/errorHandler';
 
 import type { PlatformAdapter, SyncBatchCallback } from './platform.interface';
+
+// Clave del sistema — todas las llamadas a Steam usan esta key del servidor
+const STEAM_SYSTEM_API_KEY = process.env['STEAM_API_KEY'] ?? '';
 
 // ─── Constantes ────────────────────────────────────────────────────────────────
 
@@ -80,6 +82,50 @@ async function cachedFetch<T>(key: string, ttl: number, fetcher: () => Promise<T
   return value;
 }
 
+// ─── Helpers públicos ─────────────────────────────────────────────────────────
+
+const STEAMID64_REGEX = /^\d{17}$/;
+
+/**
+ * Resuelve un username/vanityURL de Steam a SteamID64.
+ * Si el input ya es un SteamID64 (17 dígitos), lo devuelve directamente.
+ * Si no, llama a ResolveVanityURL con la API key del sistema.
+ * Lanza STEAM_USER_NOT_FOUND (404) si el usuario no existe.
+ * Lanza STEAM_SYSTEM_NOT_CONFIGURED (503) si STEAM_API_KEY no está configurada.
+ */
+export async function resolveVanityUrl(usernameOrId: string): Promise<string> {
+  if (STEAMID64_REGEX.test(usernameOrId)) {
+    return usernameOrId;
+  }
+
+  const apiKey = process.env['STEAM_API_KEY'] ?? '';
+  if (!apiKey) {
+    throw new AppError(
+      'Steam API key del sistema no configurada. Configura STEAM_API_KEY en las variables de entorno.',
+      'STEAM_SYSTEM_NOT_CONFIGURED',
+      503,
+    );
+  }
+
+  const url = `${STEAM_API_BASE}/ISteamUser/ResolveVanityURL/v1/`;
+  const response = await axios.get<{ response: { success: number; steamid?: string } }>(url, {
+    params: { key: apiKey, vanityurl: usernameOrId },
+    timeout: 10_000,
+  });
+
+  const { success, steamid } = response.data.response;
+  if (success !== 1 || !steamid) {
+    throw new AppError(
+      `No se encontró ninguna cuenta de Steam con el username "${usernameOrId}".`,
+      'STEAM_USER_NOT_FOUND',
+      404,
+      { username: usernameOrId },
+    );
+  }
+
+  return steamid;
+}
+
 // ─── Steam Adapter ────────────────────────────────────────────────────────────
 
 export class SteamAdapter implements PlatformAdapter {
@@ -87,7 +133,8 @@ export class SteamAdapter implements PlatformAdapter {
 
   // ── getUserAchievements ────────────────────────────────────────────────────
 
-  async getUserAchievements(steamId: string, apiKey: string): Promise<Achievement[]> {
+  async getUserAchievements(steamId: string): Promise<Achievement[]> {
+    const apiKey = STEAM_SYSTEM_API_KEY;
     // Obtener lista de juegos del usuario
     const games = await this.fetchOwnedGames(steamId, apiKey);
 
@@ -173,7 +220,7 @@ export class SteamAdapter implements PlatformAdapter {
   // ── syncUser ───────────────────────────────────────────────────────────────
 
   async syncUser(account: PlatformAccount): Promise<SyncResult> {
-    const apiKey = decrypt(account.encryptedToken);
+    const apiKey = STEAM_SYSTEM_API_KEY;
     const steamId = account.externalId;
     const games = await this.fetchOwnedGames(steamId, apiKey);
     const eligible = games.filter((g) => g.has_community_visible_stats);
@@ -183,7 +230,7 @@ export class SteamAdapter implements PlatformAdapter {
   // ── syncUserExpress ────────────────────────────────────────────────────────
 
   async syncUserExpress(account: PlatformAccount): Promise<SyncResult> {
-    const apiKey = decrypt(account.encryptedToken);
+    const apiKey = STEAM_SYSTEM_API_KEY;
     const steamId = account.externalId;
 
     const games = await this.fetchOwnedGames(steamId, apiKey);
@@ -199,7 +246,7 @@ export class SteamAdapter implements PlatformAdapter {
   // ── syncUserBatched ────────────────────────────────────────────────────────
 
   async syncUserBatched(account: PlatformAccount, onBatch: SyncBatchCallback): Promise<SyncResult> {
-    const apiKey = decrypt(account.encryptedToken);
+    const apiKey = STEAM_SYSTEM_API_KEY;
     const steamId = account.externalId;
 
     const games = await this.fetchOwnedGames(steamId, apiKey);

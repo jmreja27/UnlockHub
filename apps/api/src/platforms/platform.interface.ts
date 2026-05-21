@@ -12,7 +12,7 @@ export type SyncBatchCallback = (progress: SyncBatchProgress) => Promise<void>;
 
 export interface PlatformAdapter {
   readonly platform: Platform;
-  getUserAchievements(externalId: string, apiKey: string): Promise<Achievement[]>;
+  getUserAchievements(externalId: string, apiKey?: string): Promise<Achievement[]>;
   getGameInfo(externalId: string): Promise<Game>;
   syncUser(account: PlatformAccount): Promise<SyncResult>;
   syncUserBatched?(account: PlatformAccount, onBatch: SyncBatchCallback): Promise<SyncResult>;

@@ -10,11 +10,13 @@ import * as platformService from '../services/platform.service';
 import { triggerExpressSync, queueInitialSync } from '../services/sync.service';
 import type { AuthenticatedRequest } from '../middleware/authenticate';
 import { getSystemPsnAuth, lookupPsnUser, checkPsnProfilePrivacy } from '../platforms/psn.adapter';
+import { resolveVanityUrl } from '../platforms/steam.adapter';
+import { lookupRaUser } from '../platforms/retroachievements.adapter';
 import { exchangeXboxCodeForTokens } from '../platforms/xbox.adapter';
 
 const EXPRESS_SYNC_TIMEOUT_MS = 25_000;
 
-// POST /api/v1/platforms/steam/link — vincular cuenta de Steam
+// POST /api/v1/platforms/steam/link — vincular cuenta de Steam por username o SteamID64
 export async function linkSteamHandler(
   req: Request,
   res: Response,
@@ -22,9 +24,13 @@ export async function linkSteamHandler(
 ): Promise<void> {
   try {
     const userId = (req as AuthenticatedRequest).user.id;
-    const { steamId, apiKey } = linkSteamAccountSchema.parse(req.body);
+    const { username } = linkSteamAccountSchema.parse(req.body);
 
-    const account = await platformService.linkPlatform(userId, 'STEAM', steamId, steamId, apiKey);
+    // Resuelve vanityURL → SteamID64 (o usa SteamID64 directo si son 17 dígitos)
+    const steamId = await resolveVanityUrl(username);
+
+    // Steam no requiere token de usuario — el sistema usa STEAM_API_KEY
+    const account = await platformService.linkPlatform(userId, 'STEAM', steamId, username, '');
 
     await Promise.race([
       triggerExpressSync(userId, 'STEAM'),
@@ -53,7 +59,7 @@ export async function unlinkSteamHandler(
   }
 }
 
-// POST /api/v1/platforms/ra/link — vincular cuenta de RetroAchievements
+// POST /api/v1/platforms/ra/link — vincular cuenta de RetroAchievements por username público
 export async function linkRetroAchievementsHandler(
   req: Request,
   res: Response,
@@ -61,9 +67,13 @@ export async function linkRetroAchievementsHandler(
 ): Promise<void> {
   try {
     const userId = (req as AuthenticatedRequest).user.id;
-    const { username, apiKey } = linkRetroAchievementsSchema.parse(req.body);
+    const { username } = linkRetroAchievementsSchema.parse(req.body);
 
-    const account = await platformService.linkPlatform(userId, 'RA', username, username, apiKey);
+    // Verificar que el usuario existe en RetroAchievements con las credenciales del sistema
+    await lookupRaUser(username);
+
+    // RA no requiere token de usuario — el sistema usa RA_SYSTEM_KEY
+    const account = await platformService.linkPlatform(userId, 'RA', username, username, '');
 
     await Promise.race([
       triggerExpressSync(userId, 'RA'),

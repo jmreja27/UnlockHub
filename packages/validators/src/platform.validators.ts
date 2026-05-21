@@ -3,13 +3,19 @@ import { z } from 'zod';
 export const platformSchema = z.enum(['STEAM', 'RA', 'XBOX', 'PSN']);
 
 export const linkSteamAccountSchema = z.object({
-  steamId: z.string().min(1, 'El Steam ID es obligatorio'),
-  apiKey: z.string().min(1, 'La API key de Steam es obligatoria'),
+  // Acepta vanityURL (ej. "gaben") o SteamID64 directo (17 dígitos)
+  username: z
+    .string()
+    .min(3, 'El username de Steam debe tener al menos 3 caracteres')
+    .max(32, 'El username de Steam no puede superar los 32 caracteres')
+    .regex(/^\S+$/, 'El username de Steam no puede contener espacios'),
 });
 
 export const linkRetroAchievementsSchema = z.object({
-  username: z.string().min(1, 'El username de RetroAchievements es obligatorio'),
-  apiKey: z.string().min(1, 'La API key de RetroAchievements es obligatoria'),
+  username: z
+    .string()
+    .min(1, 'El username de RetroAchievements es obligatorio')
+    .max(32, 'El username de RetroAchievements no puede superar los 32 caracteres'),
 });
 
 export const linkPsnAccountSchema = z.object({
@@ -29,7 +35,7 @@ export const linkXboxAccountSchema = z.object({
   redirectUri: z.string().url('La redirectUri debe ser una URL válida'),
 });
 
-export type LinkSteamAccountInput = z.infer<typeof linkSteamAccountSchema>;
-export type LinkRetroAchievementsInput = z.infer<typeof linkRetroAchievementsSchema>;
+export type LinkSteamAccountInput = z.infer<typeof linkSteamAccountSchema>; // { username: string }
+export type LinkRetroAchievementsInput = z.infer<typeof linkRetroAchievementsSchema>; // { username: string }
 export type LinkPsnAccountInput = z.infer<typeof linkPsnAccountSchema>; // { username: string }
 export type LinkXboxAccountInput = z.infer<typeof linkXboxAccountSchema>;
