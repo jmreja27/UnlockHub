@@ -34,7 +34,7 @@ import { redis } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 
-import { retroAchievementsAdapter } from './retroachievements.adapter';
+import { retroAchievementsAdapter, lookupRaUser } from './retroachievements.adapter';
 
 const mockAxios = axios as jest.Mocked<typeof axios>;
 const mockRedis = redis as jest.Mocked<typeof redis>;
@@ -497,5 +497,68 @@ describe('retroAchievementsAdapter.syncUser', () => {
 describe('retroAchievementsAdapter.platform', () => {
   it('tiene platform igual a "RA"', () => {
     expect(retroAchievementsAdapter.platform).toBe('RA');
+  });
+});
+
+// ─── Tests de lookupRaUser ────────────────────────────────────────────────────
+
+describe('lookupRaUser — RA_SYSTEM_NOT_CONFIGURED', () => {
+  beforeEach(() => {
+    delete process.env['RA_SYSTEM_KEY'];
+  });
+
+  it('lanza RA_SYSTEM_NOT_CONFIGURED si RA_SYSTEM_KEY no está configurada', async () => {
+    await expect(lookupRaUser('someuser')).rejects.toMatchObject({
+      code: 'RA_SYSTEM_NOT_CONFIGURED',
+      statusCode: 503,
+    });
+    expect(mockAxios.get).not.toHaveBeenCalled();
+  });
+});
+
+describe('lookupRaUser — con credenciales del sistema configuradas', () => {
+  beforeEach(() => {
+    process.env['RA_SYSTEM_USER'] = 'systemuser';
+    process.env['RA_SYSTEM_KEY'] = 'systemkey';
+  });
+
+  afterEach(() => {
+    delete process.env['RA_SYSTEM_USER'];
+    delete process.env['RA_SYSTEM_KEY'];
+  });
+
+  it('resuelve correctamente cuando el usuario existe (ID no nulo)', async () => {
+    mockAxios.get.mockResolvedValueOnce({ data: { ID: 12345 } });
+    await expect(lookupRaUser('existinguser')).resolves.toBeUndefined();
+    expect(mockAxios.get).toHaveBeenCalledWith(
+      expect.stringContaining('API_GetUserSummary'),
+      expect.objectContaining({
+        params: expect.objectContaining({ u: 'existinguser' }),
+      }),
+    );
+  });
+
+  it('lanza RA_USER_NOT_FOUND si la API devuelve ID null', async () => {
+    mockAxios.get.mockResolvedValueOnce({ data: { ID: null } });
+    await expect(lookupRaUser('ghostuser')).rejects.toMatchObject({
+      code: 'RA_USER_NOT_FOUND',
+      statusCode: 404,
+    });
+  });
+
+  it('lanza RA_USER_NOT_FOUND si la respuesta está vacía', async () => {
+    mockAxios.get.mockResolvedValueOnce({ data: null });
+    await expect(lookupRaUser('emptyresponse')).rejects.toMatchObject({
+      code: 'RA_USER_NOT_FOUND',
+      statusCode: 404,
+    });
+  });
+
+  it('lanza RA_USER_NOT_FOUND si la petición axios falla', async () => {
+    mockAxios.get.mockRejectedValueOnce(new Error('Network error'));
+    await expect(lookupRaUser('erroruser')).rejects.toMatchObject({
+      code: 'RA_USER_NOT_FOUND',
+      statusCode: 404,
+    });
   });
 });

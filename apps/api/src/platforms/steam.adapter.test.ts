@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-import { SteamAdapter } from './steam.adapter';
+import { SteamAdapter, resolveVanityUrl } from './steam.adapter';
 
 import { AppError } from '../middleware/errorHandler';
 
@@ -274,5 +274,82 @@ describe('AppError', () => {
     expect(err.code).toBe('STEAM_API_ERROR');
     expect(err.statusCode).toBe(502);
     expect(err.details).toEqual({ detail: 'x' });
+  });
+});
+
+// ─── Tests de resolveVanityUrl ─────────────────────────────────────────────────
+
+describe('resolveVanityUrl — SteamID64 directo', () => {
+  it('devuelve el SteamID64 directamente sin llamar a la API', async () => {
+    const result = await resolveVanityUrl('76561198000000001');
+    expect(result).toBe('76561198000000001');
+    expect(mockedAxios.get).not.toHaveBeenCalled();
+  });
+
+  it('trata como vanityURL una cadena que no es exactamente 17 dígitos', async () => {
+    // 16 dígitos → no es SteamID64 → intenta llamar a la API
+    // Sin STEAM_API_KEY configurada, lanza STEAM_SYSTEM_NOT_CONFIGURED
+    await expect(resolveVanityUrl('1234567890123456')).rejects.toMatchObject({
+      code: 'STEAM_SYSTEM_NOT_CONFIGURED',
+    });
+    expect(mockedAxios.get).not.toHaveBeenCalled();
+  });
+});
+
+describe('resolveVanityUrl — STEAM_SYSTEM_NOT_CONFIGURED', () => {
+  beforeEach(() => {
+    delete process.env['STEAM_API_KEY'];
+  });
+
+  it('lanza STEAM_SYSTEM_NOT_CONFIGURED si STEAM_API_KEY no está configurada', async () => {
+    await expect(resolveVanityUrl('mysteamname')).rejects.toMatchObject({
+      code: 'STEAM_SYSTEM_NOT_CONFIGURED',
+      statusCode: 503,
+    });
+    expect(mockedAxios.get).not.toHaveBeenCalled();
+  });
+});
+
+describe('resolveVanityUrl — resolución via API', () => {
+  beforeEach(() => {
+    process.env['STEAM_API_KEY'] = 'test-steam-api-key';
+  });
+
+  afterEach(() => {
+    delete process.env['STEAM_API_KEY'];
+  });
+
+  it('resuelve vanityURL a SteamID64 cuando la API responde con success: 1', async () => {
+    mockedAxios.get.mockResolvedValueOnce({
+      data: { response: { success: 1, steamid: '76561198123456789' } },
+    });
+    const result = await resolveVanityUrl('mysteamname');
+    expect(result).toBe('76561198123456789');
+    expect(mockedAxios.get).toHaveBeenCalledWith(
+      expect.stringContaining('ResolveVanityURL'),
+      expect.objectContaining({
+        params: expect.objectContaining({ vanityurl: 'mysteamname' }),
+      }),
+    );
+  });
+
+  it('lanza STEAM_USER_NOT_FOUND si el usuario no existe (success: 42)', async () => {
+    mockedAxios.get.mockResolvedValueOnce({
+      data: { response: { success: 42 } },
+    });
+    await expect(resolveVanityUrl('unknownuser')).rejects.toMatchObject({
+      code: 'STEAM_USER_NOT_FOUND',
+      statusCode: 404,
+    });
+  });
+
+  it('lanza STEAM_USER_NOT_FOUND si steamid está ausente en la respuesta', async () => {
+    mockedAxios.get.mockResolvedValueOnce({
+      data: { response: { success: 1 } }, // sin steamid
+    });
+    await expect(resolveVanityUrl('ghostuser')).rejects.toMatchObject({
+      code: 'STEAM_USER_NOT_FOUND',
+      statusCode: 404,
+    });
   });
 });

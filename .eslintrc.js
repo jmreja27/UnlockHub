@@ -40,12 +40,14 @@ module.exports = {
       },
     },
     {
-      // Los tests usan jest.mock() entre imports (patrón Jest estándar). ESLint
-      // no puede auto-fixear esta mezcla de imports/código, así que desactivamos
-      // import/order solo en ficheros de test.
-      files: ['**/__tests__/**/*.ts', '**/*.test.ts', '**/*.spec.ts'],
+      // Los tests usan jest.mock() entre imports (patrón Jest estándar) y
+      // jest.requireActual con typeof import() para tipado de módulos mockeados.
+      // ESLint no puede auto-fixear estas mezclas, así que desactivamos las
+      // reglas que generan falsos positivos solo en ficheros de test.
+      files: ['**/__tests__/**/*.ts', '**/__tests__/**/*.tsx', '**/*.test.ts', '**/*.test.tsx', '**/*.spec.ts'],
       rules: {
         'import/order': 'off',
+        '@typescript-eslint/consistent-type-imports': 'off',
       },
     },
   ],
