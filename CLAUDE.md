@@ -916,6 +916,7 @@ Métricas disponibles:
 | IDs de producción AdMob como EAS secrets (`EXPO_PUBLIC_ADMOB_*`) — no en `app.json` ni código | Repo público — hardcodear IDs de producción en el código fuente expondría las unidades de anuncio. Test IDs de Google integrados como fallback en el código | Fase 3 |
 | `useRewardedAd` solo llama al backend si recibe `EARNED_REWARD` antes de `CLOSED` | Garantiza que el usuario no saltó el anuncio antes de reclamar puntos — el evento `EARNED_REWARD` solo se dispara cuando el anuncio se completa | Fase 3 |
 | Cooldown rewarded ad en Redis (`rewarded-ad:{userId}`, TTL 3h) en lugar de BD | Evitar abuso es un caso de rate limiting — Redis es el lugar correcto; no necesita historial persistente | Fase 3 |
+| `react-native-google-mobile-ads` downgraded de v16 a v13.6.1 | `play-services-ads:25.0.0` (v16+) usa metadata Kotlin 2.2.0; el compilador de React Native (1.9.0) no puede leerlo. Subir `kotlinVersion` en `expo-build-properties` solo afecta al stdlib, no al compilador (controlado por el gradle plugin de RN), causando conflicto inverso en `expo-modules-core`. V13.6.1 usa `play-services-ads:23.1.0` (Kotlin 1.x). Los imports son `require()` dinámicos — sin rotura de tipos. | Fase 3 |
 | PSN usa credenciales del sistema (`PSN_SYSTEM_NPSSO`) en lugar de tokens de usuario | Mismo modelo que PSNProfiles/TrueTrophies/Exophase. El usuario solo proporciona su username público; el backend autentica con su propio NPSSO. Elimina el flujo NPSSO del usuario, el cifrado AES de token y el refresco automático para PSN. | Fase 3 |
 | `PlatformAccount.encryptedToken` queda `''` para cuentas PSN nuevas | El campo es `String @default("")` — no se almacena ningún token de usuario PSN. `buildAuthWithRefresh()` sigue activo para `seed-games.ts`. Sin migración necesaria: Steam y RA siguen usando el campo. | Fase 3 |
 | `getSystemPsnAuth()` en Redis clave `psn:system:access_token` TTL 55 min | Los access tokens PSN expiran en 60 min; caché 55 min garantiza margen. Si el NPSSO expira (~60 días), la función lanza `PSN_SYSTEM_NPSSO_EXPIRED` (503) — el desarrollador debe renovar el NPSSO en Railway Variables. | Fase 3 |
@@ -1039,11 +1040,17 @@ Métricas disponibles:
 
 ## Última revisión de código
 
-**Fecha**: 2026-05-30 (sesión 6) — APK #3 bloqueado por cuota EAS free (resetea 2026-06-01). Fix Kotlin listo. Ver detalles en Sesión 6.
+**Fecha**: 2026-05-30 (sesión 6) — APK #3 generada localmente (debug). Downgrade `react-native-google-mobile-ads` v16→v13. `app-debug.apk` 165.7 MB lista para smoke test. Ver detalles en Sesión 6.
 
-### Sesión 6 — 2026-05-30 — APK #3 (pendiente)
+### Sesión 6 — 2026-05-30 — APK #3 ✅ (build local debug)
 
-**Objetivo**: generar APK #3 (preview) con todos los cambios desde APK #2 (`27d0e02d`, 2026-05-27).
+**Objetivo**: generar APK #3 con todos los cambios desde APK #2 (`27d0e02d`, 2026-05-27).
+
+**APK generada**:
+- Ruta local: `apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk`
+- Tamaño: 165.7 MB
+- Tipo: debug (signed con debug keystore automático)
+- Diferencia vs EAS preview: sin minificación R8, sin ProGuard. Para smoke test es equivalente funcional.
 
 **Cambios incluidos desde APK #2:**
 - AdMob + UMP SDK (`react-native-google-mobile-ads`, `useInterstitialAd`, `useRewardedAd`, endpoint `POST /api/v1/points/rewarded-ad`)
@@ -1051,6 +1058,7 @@ Métricas disponibles:
 - PSN perfil privado: `psnProfilePrivate` en schema, `checkPsnProfilePrivacy()`, banner ⚠️ en link screen, badge en Profile
 - 2 tests rewarded-ad en `points.service.test.ts`
 - `.gitignore` fix (`/app.json` solo en root)
+- Downgrade `react-native-google-mobile-ads` v16→v13 (build fix)
 
 **Pre-build checks (pasados antes de lanzar el build):**
 | Categoría | Resultado |
@@ -1060,25 +1068,38 @@ Métricas disponibles:
 | Tests backend | ✅ 415/415 |
 | Tests mobile | ✅ 188/188 |
 
-**Historial de builds intentados:**
+**Historial de intentos EAS (todos fallaron, resuelto localmente):**
 | Build ID | Resultado | Causa del error |
 |---|---|---|
-| `7b5ba56d` | ❌ Fallo Gradle | Plugin `react-native-google-mobile-ads` no resuelto (`find-up` interceptado por `lib/commonjs/package.json`) + Kotlin 1.9.0 vs 2.1.0 |
-| `22e28dd7` | ❌ Fallo Gradle | Mismo error (verbose logs, mismo resultado) |
-| `2ef1ef80` | ❌ Fallo Gradle | Después de `kotlinVersion: "2.0.21"`: `play-services-ads:25.0.0` metadata Kotlin 2.2.0 vs compilador 1.9.0 |
+| `7b5ba56d` | ❌ Fallo Gradle | Plugin `react-native-google-mobile-ads` no resuelto (`find-up` interceptado por `lib/commonjs/package.json`) |
+| `22e28dd7` | ❌ Fallo Gradle | Mismo error |
+| `2ef1ef80` | ❌ Fallo Gradle | `play-services-ads:25.0.0` metadata Kotlin 2.2.0 vs compilador 1.9.0 |
+| local debug | ✅ BUILD SUCCESSFUL | Downgrade v13 + `play-services-ads:23.1.0` (Kotlin 1.x) |
 
-**Fixes aplicados:**
-- Commit `b1eca47`: cambio plugin ref de `"react-native-google-mobile-ads"` → `"../../node_modules/react-native-google-mobile-ads/app.plugin.js"` (bypass `findUpPlugin`)
-- Commit `45ba22d`: `kotlinVersion: "2.0.21"` en `expo-build-properties`
-- Commit `c9f4b20`: `kotlinVersion: "2.2.0"` — necesario porque `play-services-ads:25.0.0` usa metadata Kotlin 2.2.0
+**Causa raíz resuelta** — `play-services-ads:25.0.0` (incluido en v16+) usa metadata Kotlin 2.2.0. El compilador de React Native es 1.9.0 y no puede leerlo. Subir `kotlinVersion` en `expo-build-properties` cambia el stdlib pero no el compilador (controlado por el gradle plugin de React Native), causando un conflicto inverso en `expo-modules-core`. Solución definitiva: downgrade a v13.6.1 que usa `play-services-ads:23.1.0` (Kotlin 1.x).
 
-**Bloqueante actual**: cuota mensual de builds Android del plan Free agotada.
-- **Resetea**: 2026-06-01 (lunes)
-- **Acción**: cuando resetee, ejecutar desde `apps/mobile/`:
-  ```
-  eas build --platform android --profile preview --non-interactive
-  ```
-- **Fallback** si `kotlinVersion: "2.2.0"` sigue fallando: downgrade `react-native-google-mobile-ads` de v16 a v13 (`play-services-ads:22.x.x`, Kotlin 1.x safe). Los imports en el proyecto son solo `require()` dinámicos — no hay imports de tipos estáticos que se rompan.
+**Cambios en `app.json` para v13:**
+- Eliminado: `["../../node_modules/react-native-google-mobile-ads/app.plugin.js", {...}]` (v13 no tiene app.plugin.js)
+- Añadido: clave `react-native-google-mobile-ads.android_app_id` en root del JSON (mecanismo nativo de v13)
+- Revertido: `kotlinVersion: "1.9.23"` (no necesario con v13)
+
+**Instalar APK en emulador:**
+```bash
+# Arrancar emulador, luego:
+adb install apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+**Regenerar APK localmente (si se cambia código):**
+```bash
+# Desde apps/mobile/:
+npx expo prebuild --platform android --clean
+# Añadir manualmente en android/app/src/main/AndroidManifest.xml (dentro de <application>):
+# <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-3940256099942544~3347511713"/>
+cd android && gradlew assembleDebug
+```
+
+**EAS Build (cuando se quiera publicar en Play Store):**
+Con el downgrade a v13, `eas build --platform android --profile preview --non-interactive` también debería funcionar ahora (sin el conflicto Kotlin). La cuota EAS resetea 2026-06-01.
 
 ---
 
