@@ -1039,6 +1039,49 @@ Métricas disponibles:
 
 ## Última revisión de código
 
+**Fecha**: 2026-05-30 (sesión 6) — APK #3 bloqueado por cuota EAS free (resetea 2026-06-01). Fix Kotlin listo. Ver detalles en Sesión 6.
+
+### Sesión 6 — 2026-05-30 — APK #3 (pendiente)
+
+**Objetivo**: generar APK #3 (preview) con todos los cambios desde APK #2 (`27d0e02d`, 2026-05-27).
+
+**Cambios incluidos desde APK #2:**
+- AdMob + UMP SDK (`react-native-google-mobile-ads`, `useInterstitialAd`, `useRewardedAd`, endpoint `POST /api/v1/points/rewarded-ad`)
+- PSN flujo de sistema (`PSN_SYSTEM_NPSSO`): usuario solo proporciona username, sin NPSSO propio
+- PSN perfil privado: `psnProfilePrivate` en schema, `checkPsnProfilePrivacy()`, banner ⚠️ en link screen, badge en Profile
+- 2 tests rewarded-ad en `points.service.test.ts`
+- `.gitignore` fix (`/app.json` solo en root)
+
+**Pre-build checks (pasados antes de lanzar el build):**
+| Categoría | Resultado |
+|---|---|
+| TypeScript strict (API + mobile) | ✅ 0 errores |
+| Lint (API + mobile) | ✅ 0 errores, 0 warnings |
+| Tests backend | ✅ 415/415 |
+| Tests mobile | ✅ 188/188 |
+
+**Historial de builds intentados:**
+| Build ID | Resultado | Causa del error |
+|---|---|---|
+| `7b5ba56d` | ❌ Fallo Gradle | Plugin `react-native-google-mobile-ads` no resuelto (`find-up` interceptado por `lib/commonjs/package.json`) + Kotlin 1.9.0 vs 2.1.0 |
+| `22e28dd7` | ❌ Fallo Gradle | Mismo error (verbose logs, mismo resultado) |
+| `2ef1ef80` | ❌ Fallo Gradle | Después de `kotlinVersion: "2.0.21"`: `play-services-ads:25.0.0` metadata Kotlin 2.2.0 vs compilador 1.9.0 |
+
+**Fixes aplicados:**
+- Commit `b1eca47`: cambio plugin ref de `"react-native-google-mobile-ads"` → `"../../node_modules/react-native-google-mobile-ads/app.plugin.js"` (bypass `findUpPlugin`)
+- Commit `45ba22d`: `kotlinVersion: "2.0.21"` en `expo-build-properties`
+- Commit `c9f4b20`: `kotlinVersion: "2.2.0"` — necesario porque `play-services-ads:25.0.0` usa metadata Kotlin 2.2.0
+
+**Bloqueante actual**: cuota mensual de builds Android del plan Free agotada.
+- **Resetea**: 2026-06-01 (lunes)
+- **Acción**: cuando resetee, ejecutar desde `apps/mobile/`:
+  ```
+  eas build --platform android --profile preview --non-interactive
+  ```
+- **Fallback** si `kotlinVersion: "2.2.0"` sigue fallando: downgrade `react-native-google-mobile-ads` de v16 a v13 (`play-services-ads:22.x.x`, Kotlin 1.x safe). Los imports en el proyecto son solo `require()` dinámicos — no hay imports de tipos estáticos que se rompan.
+
+---
+
 **Fecha**: 2026-05-30 (sesión 5) — PSN perfil privado implementado: `psnProfilePrivate` en schema, `checkPsnProfilePrivacy()`, banner ⚠️ en link screen, badge en Profile, tests. 415 API + 188 mobile. 0 errores TS/lint.
 
 ### Sesión 5 — 2026-05-30
