@@ -54,6 +54,29 @@ const steamAccount: PlatformAccount = {
   username: 'SteamUser99',
   lastSyncedAt: null,
   requiresReauth: false,
+  psnProfilePrivate: false,
+};
+
+const psnAccountPublic: PlatformAccount = {
+  id: 'pa-2',
+  userId: 'u1',
+  platform: 'PSN',
+  externalId: 'psn-account-id',
+  username: 'PSNUser99',
+  lastSyncedAt: null,
+  requiresReauth: false,
+  psnProfilePrivate: false,
+};
+
+const psnAccountPrivate: PlatformAccount = {
+  id: 'pa-3',
+  userId: 'u1',
+  platform: 'PSN',
+  externalId: 'psn-account-id',
+  username: 'PSNUser99',
+  lastSyncedAt: null,
+  requiresReauth: false,
+  psnProfilePrivate: true,
 };
 
 function renderProfile(mockApiGet?: jest.Mock) {
@@ -226,6 +249,24 @@ describe('ProfileScreen', () => {
       await waitFor(() =>
         expect(getByRole('link', { name: 'privacy.link_label' })).toBeTruthy(),
       );
+    });
+
+    it('muestra el badge cuando la cuenta PSN tiene perfil privado', async () => {
+      const apiGet = jest.fn(() => Promise.resolve([psnAccountPrivate]));
+      const { getByTestId } = renderProfile(apiGet);
+      await waitFor(() => expect(getByTestId('psn-private-badge')).toBeTruthy());
+    });
+
+    it('NO muestra el badge cuando la cuenta PSN es pública', async () => {
+      const apiGet = jest.fn(() => Promise.resolve([psnAccountPublic]));
+      const { queryByTestId } = renderProfile(apiGet);
+      await waitFor(() => expect(queryByTestId('psn-private-badge')).toBeNull());
+    });
+
+    it('NO muestra el badge para cuentas que no son PSN', async () => {
+      const apiGet = jest.fn(() => Promise.resolve([steamAccount]));
+      const { queryByTestId } = renderProfile(apiGet);
+      await waitFor(() => expect(queryByTestId('psn-private-badge')).toBeNull());
     });
   });
 });

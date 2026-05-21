@@ -919,6 +919,11 @@ Métricas disponibles:
 | PSN usa credenciales del sistema (`PSN_SYSTEM_NPSSO`) en lugar de tokens de usuario | Mismo modelo que PSNProfiles/TrueTrophies/Exophase. El usuario solo proporciona su username público; el backend autentica con su propio NPSSO. Elimina el flujo NPSSO del usuario, el cifrado AES de token y el refresco automático para PSN. | Fase 3 |
 | `PlatformAccount.encryptedToken` queda `''` para cuentas PSN nuevas | El campo es `String @default("")` — no se almacena ningún token de usuario PSN. `buildAuthWithRefresh()` sigue activo para `seed-games.ts`. Sin migración necesaria: Steam y RA siguen usando el campo. | Fase 3 |
 | `getSystemPsnAuth()` en Redis clave `psn:system:access_token` TTL 55 min | Los access tokens PSN expiran en 60 min; caché 55 min garantiza margen. Si el NPSSO expira (~60 días), la función lanza `PSN_SYSTEM_NPSSO_EXPIRED` (503) — el desarrollador debe renovar el NPSSO en Railway Variables. | Fase 3 |
+| `PlatformAccount.psnProfilePrivate Boolean @default(false)` — perfil PSN privado | `getProfileFromUserName` tiene éxito incluso para perfiles privados (devuelve accountId/onlineId). La privacidad solo se manifiesta en `getUserTitles`. `checkPsnProfilePrivacy()` hace una llamada probe `limit:1` al vincular — si lanza, el perfil es privado (conservador: cualquier error = privado, el siguiente sync corrige si fue transitorio). Migración: `20260530000000_psn_profile_private`. | Fase 3 |
+| `PSN_PROFILE_PRIVATE` (AppError 403) en `fetchUserTitles` | `fetchUserTitles()` envuelve el bucle de paginación en try/catch; si `getUserTitles` lanza → `AppError('PSN_PROFILE_PRIVATE', 403)`. El sync worker captura el error, marca `psnProfilePrivate: true` en BD y lo registra como `warn`. El camino de éxito siempre resetea `psnProfilePrivate: false`. | Fase 3 |
+| Sin sync al vincular PSN con perfil privado | Si `checkPsnProfilePrivacy` devuelve `true` al vincular, `linkPsnHandler` omite `triggerExpressSync` y `queueInitialSync`. El scheduler nocturno puede intentar el sync y manejará el error `PSN_PROFILE_PRIVATE` sin crash. | Fase 3 |
+| Banner ⚠️ en `link-platform/psn.tsx` para perfil privado — no bloquea la app | Si `account.psnProfilePrivate === true` en la respuesta del link, se muestra una vista inline con el banner + pasos para hacer el perfil público + CTA "Ir a biblioteca". El usuario puede seguir usando la app. No navega de vuelta (perfil público navega con `router.back()`). El flag se resetea automáticamente en el siguiente sync exitoso. | Fase 3 |
+| Badge ⚠️ en `profile.tsx` junto a la cuenta PSN privada | `psnProfilePrivate: true` muestra un `Ionicons name="warning"` (testID `psn-private-badge`) que navega a `link-platform/psn`. Se oculta `lastSyncedAt` cuando el perfil es privado. | Fase 3 |
 
 ---
 
@@ -1033,6 +1038,29 @@ Métricas disponibles:
 ---
 
 ## Última revisión de código
+
+**Fecha**: 2026-05-30 (sesión 5) — PSN perfil privado implementado: `psnProfilePrivate` en schema, `checkPsnProfilePrivacy()`, banner ⚠️ en link screen, badge en Profile, tests. 415 API + 188 mobile. 0 errores TS/lint.
+
+### Sesión 5 — 2026-05-30
+
+**PSN perfil privado — implementación completa:**
+- `PlatformAccount.psnProfilePrivate Boolean @default(false)` + migración `20260530000000_psn_profile_private`
+- `checkPsnProfilePrivacy(auth, accountId)` en `psn.adapter.ts`: probe `getUserTitles limit:1` al vincular
+- `linkPsnHandler`: si privado → vincula con `psnProfilePrivate: true`, omite sync. Si público → vincula + sync express como antes
+- `fetchUserTitles`: envuelve bucle en try/catch → lanza `AppError('PSN_PROFILE_PRIVATE', 403)` si `getUserTitles` falla
+- `sync.worker.ts`: captura `PSN_PROFILE_PRIVATE` → marca flag en BD. Camino de éxito siempre resetea `psnProfilePrivate: false`
+- `link-platform/psn.tsx`: vista inline con banner ⚠️ + pasos + CTA "Ir a biblioteca" cuando `account.psnProfilePrivate === true`
+- `profile.tsx`: badge ⚠️ (testID `psn-private-badge`) junto a cuenta PSN privada; `lastSyncedAt` oculto cuando privado
+- i18n ES/EN: claves `profile_private_title/body/cta/step1-3/go_library`
+- Tests: `checkPsnProfilePrivacy` (false/true), `PSN_PROFILE_PRIVATE` en syncUser, banner/badge en mobile (16 suites / 188 tests)
+
+**Estado de calidad:**
+| Categoría | Resultado |
+|---|---|
+| TypeScript strict (API + mobile) | ✅ 0 errores |
+| Lint (API + mobile) | ✅ 0 errores, 0 warnings |
+| Tests backend | ✅ 415/415 |
+| Tests mobile | ✅ 188/188 |
 
 **Fecha**: 2026-05-29 (sesión 4) — Re-seed kikecorrales10 completado: 879 juegos PSN + 36.649 logros. BD total: ~2.600 juegos + ~142.574 logros. NPSSO consumido → necesita renovación para backfill consola.
 

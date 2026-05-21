@@ -40,7 +40,7 @@ import * as psnApi from 'psn-api';
 import { redis } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 
-import { PsnAdapter, getSystemPsnAuth, lookupPsnUser, exchangeNpssoForPsnTokens } from './psn.adapter';
+import { PsnAdapter, getSystemPsnAuth, lookupPsnUser, checkPsnProfilePrivacy, exchangeNpssoForPsnTokens } from './psn.adapter';
 
 const mocked = {
   exchangeNpssoForAccessCode: psnApi.exchangeNpssoForAccessCode as jest.MockedFunction<typeof psnApi.exchangeNpssoForAccessCode>,
@@ -160,6 +160,7 @@ const mockPlatformAccount = {
   lastSyncedAt: null,
   syncCooldownUntil: null,
   requiresReauth: false,
+  psnProfilePrivate: false,
   tokenExpiresAt: null,
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -283,7 +284,7 @@ describe('lookupPsnUser', () => {
     );
   });
 
-  it('lanza PSN_USER_NOT_FOUND si el usuario no existe o su perfil es privado', async () => {
+  it('lanza PSN_USER_NOT_FOUND si el usuario no existe', async () => {
     mocked.getProfileFromUserName.mockRejectedValue(new Error('User not found'));
 
     await expect(
@@ -368,6 +369,61 @@ describe('PsnAdapter.syncUser', () => {
     await expect(adapter.syncUser(mockPlatformAccount)).rejects.toMatchObject({
       code: 'PSN_SYSTEM_NOT_CONFIGURED',
       statusCode: 503,
+    });
+  });
+});
+
+// ─── Tests: checkPsnProfilePrivacy ───────────────────────────────────────────
+
+describe('checkPsnProfilePrivacy', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('devuelve false cuando getUserTitles responde correctamente (perfil público)', async () => {
+    mocked.getUserTitles.mockResolvedValue({ trophyTitles: [], totalItemCount: 0 });
+
+    const isPrivate = await checkPsnProfilePrivacy({ accessToken: SYSTEM_ACCESS_TOKEN }, ACCOUNT_ID);
+
+    expect(isPrivate).toBe(false);
+    expect(mocked.getUserTitles).toHaveBeenCalledWith(
+      { accessToken: SYSTEM_ACCESS_TOKEN },
+      ACCOUNT_ID,
+      { limit: 1, offset: 0 },
+    );
+  });
+
+  it('devuelve true cuando getUserTitles lanza (perfil privado)', async () => {
+    mocked.getUserTitles.mockRejectedValue(new Error('Privacy error'));
+
+    const isPrivate = await checkPsnProfilePrivacy({ accessToken: SYSTEM_ACCESS_TOKEN }, ACCOUNT_ID);
+
+    expect(isPrivate).toBe(true);
+  });
+});
+
+// ─── Tests: PsnAdapter.syncUser — perfil privado ──────────────────────────────
+
+describe('PsnAdapter.syncUser — perfil privado', () => {
+  let adapter: PsnAdapter;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    adapter = new PsnAdapter();
+    process.env.PSN_SYSTEM_NPSSO = 'test-system-npsso';
+    setupSystemTokenCached();
+  });
+
+  afterEach(() => {
+    delete process.env.PSN_SYSTEM_NPSSO;
+  });
+
+  it('lanza PSN_PROFILE_PRIVATE cuando getUserTitles falla durante el sync', async () => {
+    mocked.getUserTitles.mockRejectedValue(new Error('Access denied'));
+
+    await expect(adapter.syncUser(mockPlatformAccount)).rejects.toMatchObject({
+      code: 'PSN_PROFILE_PRIVATE',
+      statusCode: 403,
     });
   });
 });
