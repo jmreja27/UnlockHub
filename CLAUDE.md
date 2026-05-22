@@ -934,6 +934,16 @@ Métricas disponibles:
 | `@typescript-eslint/consistent-type-imports: 'off'` en tests `.tsx` | Los test files de pantallas usan `jest.requireActual<typeof import(...)>` para preservar `ApiRequestError` real en mocks. La regla `consistent-type-imports` genera falso positivo en este patrón de factory Jest — igual que `import/order` ya estaba desactivado en tests. | Fase 3 |
 | `@@unique([platform, externalId])` en `PlatformAccount` ya existía desde el init | El constraint único `(platform, externalId)` fue añadido en la migración inicial `20260507000000_init` — no era una omisión. La protección se hace vía consulta previa en `linkPlatform()` antes del upsert para dar un error descriptivo. Error 409 `PLATFORM_ACCOUNT_ALREADY_LINKED` (antes `PLATFORM_ACCOUNT_TAKEN` — renombrado en sesión 9). | Fase 3 |
 | `LinkPsnScreen.test.tsx` refactorizado a patrón factory `jest.requireActual` | El test original usaba auto-mock (`jest.mock('../../lib/api')`) que no preserva `ApiRequestError` como clase real — `instanceof` fallaba. Refactorizado al mismo patrón que Steam/RA para consistencia y poder testear errores 404/409/503. | Fase 3 |
+| `useSyncProgress` retorna `{ activeSyncs: Map<string, SyncProgressState>, isRunning: boolean }` — API anterior (`platform`, `processed`, `total`, `percentComplete` planos) eliminada (BUG-7) | Con un solo estado plano, el segundo evento de `sync:progress` sobreescribía el primero — imposible trackear dos plataformas simultáneas. El Map keyed por platform es la única forma correcta de modelar syncs concurrentes. | Fase 3 |
+| `hydrateFromApi()` en `useSyncProgress` — polling de fallback Redis al montar y si Socket.io silencioso >5s (BUG-8) | Socket.io es async — si el worker emite `sync:progress` antes de que el cliente haya conectado el socket, el evento se pierde y la barra queda stuckeada. La hidratación desde `/api/v1/sync/status` (que lee Redis TTL 2h) resuelve el race condition. El polling continuo se activa solo si el socket sigue silencioso. | Fase 3 |
+| `addXp()` llamado en `sync.worker.ts` tras calcular `xpEarned` (BUG-9) | El worker calculaba `xpEarned = suma normalizedPoints` pero nunca lo persistía — `user.xp` nunca subía. La llamada `await addXp(userId, xpEarned, 'ACHIEVEMENT')` persiste el XP y actualiza los rankings Redis. Solo se llama si `xpEarned > 0`. | Fase 3 |
+| `totalEarnedAchievements`/`totalAvailableAchievements` calculados antes de paginar en `getMyGames` (BUG-10) | Si se calculaban del subset paginado, el header mostraba "120/1200 logros" en la primera página y cambiaba al cargar más páginas. Los agregados se calculan ahora sobre `allGames` (lista completa antes del `slice`), se devuelven en la respuesta de cada página y el cliente usa siempre los de `pages[0]`. | Fase 3 |
+| XBOX eliminado del filtro de biblioteca (BUG-11) | Xbox está gateado hasta Fase 4 — nunca hay datos Xbox en BD — el filtro mostraba lista vacía confundiendo al usuario. `PlatformFilter` type ahora es `'ALL' \| 'STEAM' \| 'RA' \| 'PSN'`. | Fase 3 |
+| `PSN: #1e90ff` (DodgerBlue) en lugar de `#003087` para badges de plataforma | `#003087` sobre fondo oscuro tenía ratio de contraste ~2.8:1 (no supera WCAG 2.1 AA mínimo 4.5:1). `#1e90ff` da ~6.5:1 — supera AA y casi llega a AAA. | Fase 3 |
+| `LibrarySortOrder` definido en `preferencesStore.ts`, no en `app/(tabs)/index.tsx` | Si `preferencesStore` importara desde `app/(tabs)/index` se creaba una dependencia circular (index → preferencesStore → index). Al mover el tipo a donde semánticamente pertenece (es una preferencia), el `index.tsx` re-exporta vía `export type { LibrarySortOrder }` para compatibilidad. | Fase 3 |
+| Sort de biblioteca es client-side sobre la página cargada, no server-side | Server-side sort requeriría 5 endpoints distintos o un parámetro de sort en la API que paginaría incorrectamente con datos acumulados por `useInfiniteQuery`. Client-side sobre los datos ya cargados es correcto para la escala de juegos por usuario y evita complejidad en la API. Pendiente de sync progresivo: la lista se re-ordena con cada batch. | Fase 3 |
+| `@react-native-async-storage/async-storage` mockeado globalmente en `jest.setup.ts` | Es un módulo nativo que no puede cargarse en Jest sin mock. Al añadir `librarySortOrder` a `preferencesStore`, este módulo se convierte en una dependencia transitiva de cualquier test que importe componentes que usen el store. Mock global previene fallos futuros. | Fase 3 |
+| Sync optimization (parallel RA batches, skip completed) documentada pero no implementada | Parallel processing dentro de batches RA: riesgo de rate limiting sin SLA conocido. Skip completed games: riesgo de perder achievements de DLC añadidos post-sync. Decisión: documentar como pending T13, no implementar en Fase 3. | Fase 3 |
 
 ---
 
@@ -1028,6 +1038,7 @@ Métricas disponibles:
 | T10 | Flows Maestro E2E | ✅ 5 flows en `apps/mobile/.maestro/` — todos pasando contra emulador Android con APK preview |
 | T11 | Search de logros + endpoint logros de juego | ✅ Backend `GET /api/v1/games/:id/achievements` + `GET /api/v1/search?type=achievements` — JWT opcional, Xbox excluido, paginado 20/pág |
 | T12 | Job "seed de logros populares" | ✅ Completo — BD post-limpieza: 1.406 juegos (78 Steam + 1.001 RA + 327 PSN) + 72.264 logros. Bugs PSN corregidos: guard `trophies ?? []` + refresco token cada 5 usuarios. Campo `console` backfilled: RA (1.001 juegos) + PSN (584 juegos). |
+| T13 | Sync optimization: parallel RA batches + skip completed | 🔲 Documentado como pendiente — no implementado por riesgo de rate limiting RA y pérdida de logros DLC. Ver decisiones sesión 10. |
 
 ### 🟢 Features
 
@@ -1049,6 +1060,8 @@ Métricas disponibles:
 
 ## Última revisión de código
 
+**Fecha**: 2026-06-01 (sesión 10) — BUG-7/8/9/10/11 corregidos. PSN states, sort modal, color #1e90ff, i18n. Tests: 438 API + 214 mobile. 0 errores TS/lint. Cobertura API 80.77% stmt / 83.66% branch.
+
 **Fecha**: 2026-05-31 (sesión 9) — Fix `PLATFORM_ACCOUNT_ALREADY_LINKED`: código renombrado, handler 409 añadido en psn.tsx, mensajes i18n corregidos en Steam/RA, clave `error_already_linked` añadida en PSN. `LinkPsnScreen.test.tsx` refactorizado a patrón factory. Revisión completa Parte 2: 0 bugs adicionales. Tests: 427 API + 208 mobile. 0 errores TS/lint.
 
 **Fecha**: 2026-05-31 (sesión 8) — Steam y RA vinculación simplificada: solo username. `resolveVanityUrl` + `lookupRaUser` exportadas. UI reescrita (guía colapsada, sin campos de API key). i18n ES/EN actualizado. Tests: 426 API + 204 mobile. 0 errores TS/lint.
@@ -1056,6 +1069,41 @@ Métricas disponibles:
 **Fecha**: 2026-05-30 (sesión 7) — Smoke test APK #3 completo. BUG-6 identificado (PSN screen NPSSO stale — Metro cache). BUG-3/4/5 re-confirmados ✅. AdMob banners ✅. 15/16 pasos completados (offline mode no testeable en emulador). Ver detalles en Sesión 7.
 
 **Fecha**: 2026-05-30 (sesión 6) — APK #3 generada localmente (debug). Downgrade `react-native-google-mobile-ads` v16→v13. `app-debug.apk` 165.7 MB lista para smoke test. Ver detalles en Sesión 6.
+
+### Sesión 10 — 2026-06-01 — BUG-7 a BUG-11 + PSN states + Sort + Color
+
+**Objetivo**: 5 bugs críticos + estados PSN + ordenación biblioteca + color PSN + optimización sync.
+
+**Bugs corregidos:**
+- **BUG-7** ✅: `useSyncProgress` reescrito con `Map<string, SyncProgressState>` — syncs concurrentes no se sobreescriben.
+- **BUG-8** ✅: `hydrateFromApi()` en mount + polling fallback 2s si Socket.io silencioso >5s — el race condition de conexión async ya no deja la barra stuckeada.
+- **BUG-9** ✅: `addXp(userId, xpEarned, 'ACHIEVEMENT')` añadido en `sync.worker.ts` tras calcular `xpEarned` — XP ahora se persiste correctamente tras cada sync.
+- **BUG-10** ✅: `totalEarnedAchievements`/`totalAvailableAchievements` calculados sobre todos los juegos antes del `slice` de paginación — el header muestra el total real, no el de la página actual.
+- **BUG-11** ✅: XBOX eliminado del array `FILTERS` en `app/(tabs)/index.tsx` — `PlatformFilter` es ahora `'ALL' | 'STEAM' | 'RA' | 'PSN'`.
+
+**Features/mejoras:**
+- PSN states en `LibraryGameCard`: badge `🏆 Platino` (`#f5c518`) cuando `platinumEarned`, badge `🥇 100%` (`#22c55e`) cuando `isCompleted` en juego PSN. `getMyGames` consulta `prisma.achievement.findMany` para detectar platino por `normalizedPoints === 300`.
+- Sort modal en biblioteca: 5 opciones (`last_played`, `alpha_asc`, `alpha_desc`, `pct_desc`, `pct_asc`). Client-side sobre datos ya cargados. Persistido en AsyncStorage via `preferencesStore`.
+- Color PSN cambiado de `#003087` a `#1e90ff` (WCAG ratio ~6.5:1 sobre fondo oscuro, supera AA).
+- i18n ES/EN: claves `syncing`, `syncing_a11y`, `sync_complete`, `sync_complete_a11y`, `sort_*`, `psn_platinum`, `psn_100`.
+- `LibrarySortOrder` movido a `preferencesStore.ts` (eliminada dependencia circular con `app/(tabs)/index`).
+- `@react-native-async-storage/async-storage` mockeado globalmente en `jest.setup.ts`.
+
+**Tests añadidos:**
+- `user.service.test.ts`: 11 tests nuevos — PSN hasPlatinum/platinumEarned/isCompleted, BUG-10 aggregate stats pre-paginación, Steam/isCompleted para non-PSN. Mock `prisma.achievement.findMany` añadido al mock de Prisma.
+- `sync.worker.test.ts`: 2 tests nuevos BUG-9 — verifica que `addXp` se llama con la suma de `normalizedPoints` cuando hay logros nuevos, y que NO se llama si `xpEarned === 0`. Mock `user.service.addXp` añadido.
+- `useSyncProgress.test.ts`: reescrito completamente — 14 tests con nueva API Map. BUG-7 (multi-plataforma), BUG-8 (hidratación API), callbacks, limpieza.
+
+**Estado de calidad:**
+| Categoría | Resultado |
+|---|---|
+| TypeScript strict (API + mobile) | ✅ 0 errores |
+| Lint (API + mobile) | ✅ 0 errores, 0 warnings |
+| Tests backend | ✅ 438/438 — 35 suites |
+| Tests mobile | ✅ 214/214 — 18 suites |
+| Cobertura API | ✅ 80.77% stmt / 83.66% branch |
+
+---
 
 ### Sesión 7 — 2026-05-30 — Smoke test APK #3 ✅
 
