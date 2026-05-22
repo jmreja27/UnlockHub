@@ -166,7 +166,7 @@
     "empty": "Your recent achievements will appear here"
   },
   "library": {
-    "title": "My Library",
+    "title": "Library",
     "subtitle": "Hello, {{username}}",
     "filter_label": "Filter by platform",
     "filter_all": "All",

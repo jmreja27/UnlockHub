@@ -166,7 +166,7 @@
     "empty": "Tus logros recientes aparecerán aquí"
   },
   "library": {
-    "title": "Mi Biblioteca",
+    "title": "Biblioteca",
     "subtitle": "Hola, {{username}}",
     "filter_label": "Filtrar por plataforma",
     "filter_all": "Todo",
