@@ -950,6 +950,11 @@ Métricas disponibles:
 | `totalGames`/`totalCompletedGames` calculados pre-paginación en `getMyGames` | Misma lógica que BUG-10 para `totalEarned`/`totalAvailable` — los contadores de cabecera deben reflejar la colección completa del usuario, no solo la página cargada. `isCompleted` ya existía en el map; se reutiliza vía `.filter`. | Fase 3 |
 | `getByText` con `{ includeHiddenElements: true }` en tests del contador de juegos | Los `Text` del bloque de stats tienen `accessibilityElementsHidden={true}` para que el screen reader lea solo el `accessibilityLabel` combinado del `View` padre. `@testing-library/react-native` excluye estos nodos del árbol de accesibilidad por defecto — la opción `includeHiddenElements` los hace encontrables. | Fase 3 |
 | `globalRateLimiter` a 300 req/15min (antes 100) y `/health` excluido | 100 req/15min se agotaba en uso normal: TanStack Query + infinite scroll + múltiples tabs hacen decenas de peticiones en ráfaga al abrir la app. `/health` puesto antes de `app.use(globalRateLimiter)` para que UptimeRobot y Railway healthcheck nunca sean bloqueados — estaba declarado después y heredaba el límite. | Fase 3 |
+| `lib/platformColors.ts` con `PLATFORM_COLORS` y `getPlatformColor()` — fuente única de verdad para colores de badge | `GameCard` y `AchievementSearchCard` tenían PSN `#003087` (contraste ~2.8:1 insuficiente). `LibraryGameCard` ya tenía `#1e90ff`. Centralizar elimina la divergencia y garantiza WCAG AA en los 3 componentes. `profile.tsx` conserva su propia paleta (colores oscuros de marca para círculos indicadores — caso de uso diferente). | Fase 3 |
+| `sort_last_played` desempata por `completionPct desc` cuando `lastSyncedAt` coincide | `lastSyncedAt` en `LibraryGame` viene de `syncMap.get(g.platform)` — misma fecha para todos los juegos de la misma plataforma. Sin desempate, el orden dentro de una plataforma es el de llegada del backend (no determinista en UI). `pct_desc` como criterio secundario da un orden estable y con sentido visual. | Fase 3 |
+| Badges PSN `platinumEarned` e `isCompleted` son independientes | Un juego PSN puede tener el platino ganado sin `isCompleted=true` si hay DLC con trofeos adicionales posteriores al platino. Renderizar ambos badges simultáneamente es semánticamente correcto y da más información al usuario. | Fase 3 |
+| `lockDuration: 300_000` en sync worker — 5 min en lugar de 30s por defecto | 300 juegos PSN / 10 por lote = 30 lotes; cada lote incluye llamadas API lentas. El default de BullMQ (30s) se agotaba → job marcado como stalled → re-ejecutado → duplicados. `stalledInterval: 30_000` para detección rápida. No afecta syncs cortos. | Fase 3 |
+| Toggle ES\|EN en login — `useLanguage` reutilizado, sin estado nuevo | El hook `useLanguage` ya existía para `profile.tsx`. Reutilizarlo en login evita duplicar lógica de `i18n.changeLanguage`. El toggle se coloca fuera del `KeyboardAvoidingView` para que no suba con el teclado. `testID="language-toggle"` para Maestro. | Fase 3 |
 
 ---
 
@@ -1066,6 +1071,8 @@ Métricas disponibles:
 
 ## Última revisión de código
 
+**Fecha**: 2026-06-04 (sesión 14) — 8 bugs/mejoras UI + sync lockDuration. Padding `pt-4→pt-2` en 5 pantallas. Sort button muestra label activo. `last_played` con desempate por `pct_desc`. Contador juegos: denominador gris. Badges PSN independientes. `lib/platformColors.ts` centralizado (fix `#003087→#1e90ff` en GameCard+AchievementSearchCard). Toggle ES|EN en login. BullMQ `lockDuration: 300_000`. Tests: 445 API + 233 mobile. 0 errores TS/lint. Cobertura API 80.8% stmt / 83.66% branch.
+
 **Fecha**: 2026-06-03 (sesión 13) — Fix rate limiter producción: `max: 100→300` req/15min, `/health` excluido del middleware. 0 código nuevo, solo `app.ts` + `rateLimiter.ts`. Tests: 443 API + 216 mobile. 0 errores TS/lint.
 
 **Fecha**: 2026-06-03 (sesión 12) — Contador `totalGames`/`totalCompletedGames` en cabecera de biblioteca. Backend + hook + UI + i18n + tests. Tests: 443 API + 216 mobile. 0 errores TS/lint. Cobertura API 80.8% stmt / 83.66% branch.
@@ -1081,6 +1088,60 @@ Métricas disponibles:
 **Fecha**: 2026-05-30 (sesión 7) — Smoke test APK #3 completo. BUG-6 identificado (PSN screen NPSSO stale — Metro cache). BUG-3/4/5 re-confirmados ✅. AdMob banners ✅. 15/16 pasos completados (offline mode no testeable en emulador). Ver detalles en Sesión 7.
 
 **Fecha**: 2026-05-30 (sesión 6) — APK #3 generada localmente (debug). Downgrade `react-native-google-mobile-ads` v16→v13. `app-debug.apk` 165.7 MB lista para smoke test. Ver detalles en Sesión 6.
+
+### Sesión 14 — 2026-06-04 — UI polish + sync lockDuration
+
+**Objetivo**: 8 bugs/mejoras de UI + fix de stalled jobs en sync de 300+ juegos PSN.
+
+**PARTE 1 — Padding uniforme:**
+- `pt-4` → `pt-2` en cabeceras de `index.tsx`, `search.tsx`, `rankings.tsx`, `friends.tsx` (×2), `game/[id].tsx` (×2).
+
+**PARTE 2 — Sort button con label activo:**
+- `{t('library.sort_button')} ▼` → `{activeSortLabel} ▼`. `activeSortLabel` ya se calculaba en el componente.
+
+**PARTE 3 — Sort `last_played` con desempate:**
+- El comparador ya era correcto. Causa raíz: `lastSyncedAt` es por plataforma (de `syncMap.get(g.platform)`), no por juego. Dentro de la misma plataforma todos los juegos tienen la misma fecha → orden aparentemente aleatorio.
+- Fix: desempate secundario por `completionPct` desc cuando `lastSyncedAt` coincide.
+
+**PARTE 4 — Contador juegos: denominador en gris:**
+- `{totalCompletedGames}/{totalGames}` todo en `text-green-400` → split con `<Text className="text-gray-500">/{totalGames}</Text>` inline. Solo `totalCompletedGames` en verde.
+
+**PARTE 5 — Badges PSN independientes:**
+- Antes: `if (isCompleted) psnBadge = psn_100; else if (platinumEarned) psnBadge = psn_platinum` — mutuamente excluyentes.
+- Ahora: `showPsnPlatinum = platform === 'PSN' && platinumEarned` y `showPsn100 = platform === 'PSN' && isCompleted`, dos renders independientes. Ambos pueden mostrarse simultáneamente (ej: platino ganado + 100% DLC incluido).
+
+**PARTE 6 — `lib/platformColors.ts` centralizado:**
+- Nuevo archivo con `PLATFORM_COLORS` (STEAM `#1b9aaa`, RA `#e8a838`, XBOX `#107c10`, PSN `#1e90ff`) y `getPlatformColor(platform, fallback?)`.
+- `LibraryGameCard`, `GameCard`, `AchievementSearchCard` migrados a importar desde `platformColors.ts`.
+- Fix colateral: `GameCard` y `AchievementSearchCard` tenían PSN `#003087` (contraste insuficiente) — ahora heredan `#1e90ff`.
+- `profile.tsx` conserva su `PLATFORM_COLORS` propio (colores de dots indicadores, uso diferente: oscuros de marca).
+
+**PARTE 7 — Toggle idioma en login:**
+- `useLanguage` hook integrado en `LoginScreen`. Toggle ES|EN en esquina superior derecha (fuera del scroll), disponible sin autenticación.
+- Clave i18n añadida: `auth.login.language_toggle` en ES/EN.
+- `testID="language-toggle"` para selectores de test y Maestro.
+
+**PARTE 8 — BullMQ lockDuration 5 min:**
+- Causa: `lockDuration` por defecto = 30s. 300 juegos PSN / 10 por lote = 30 lotes con llamadas API → fácilmente > 30s → job marcado como stalled.
+- Fix: `lockDuration: 300_000, stalledInterval: 30_000` en opciones del worker de sync.
+- Conservador: no afecta syncs cortos (usuarios con < 20 juegos el lock se renueva normalmente).
+
+**Tests añadidos:**
+- `__tests__/lib/platformColors.test.ts` (nuevo): 7 tests — colores correctos, fallback, fallback personalizado.
+- `__tests__/components/LibraryGameCard.test.tsx` (nuevo): 7 tests — 4 casos de badges PSN + 2 básicos.
+- `__tests__/screens/LoginScreen.test.tsx`: 3 tests nuevos — toggle visible, `changeLanguage('en')`, `changeLanguage('es')`.
+- `apps/api/src/__tests__/sync.worker.test.ts`: 2 tests nuevos — `lockDuration: 300_000`, `stalledInterval: 30_000`, `concurrency: 5`.
+
+**Estado de calidad:**
+| Categoría | Resultado |
+|---|---|
+| TypeScript strict (API + mobile) | ✅ 0 errores |
+| Lint (API + mobile) | ✅ 0 errores, 0 warnings |
+| Tests backend | ✅ 445/445 — 35 suites |
+| Tests mobile | ✅ 233/233 — 20 suites |
+| Cobertura API | ✅ 80.8% stmt / 83.66% branch |
+
+---
 
 ### Sesión 13 — 2026-06-03 — Fix rate limiter producción
 
