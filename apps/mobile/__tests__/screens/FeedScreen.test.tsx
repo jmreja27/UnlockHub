@@ -12,8 +12,8 @@ jest.mock('../../hooks/useMyGames');
 jest.mock('../../hooks/useSyncAll');
 jest.mock('../../hooks/useSyncProgress', () => ({
   useSyncProgress: jest.fn().mockReturnValue({
-    isRunning: false, platform: null, processed: 0, total: 0,
-    percentComplete: 0, newGamesCount: 0, newAchievementsCount: 0,
+    activeSyncs: new Map(),
+    isRunning: false,
   }),
 }));
 jest.mock('../../stores/sessionStore');
@@ -52,6 +52,9 @@ const baseMyGamesResult = {
   hasNextPage: false,
   isFetchingNextPage: false,
   dataUpdatedAt: 0,
+  total: 0,
+  totalEarnedAchievements: 0,
+  totalAvailableAchievements: 0,
 };
 
 const baseSyncResult = {
@@ -72,6 +75,9 @@ const sampleGames: LibraryGame[] = [
     earnedAchievements: 5,
     completionPct: 50,
     lastSyncedAt: null,
+    hasPlatinum: false,
+    platinumEarned: false,
+    isCompleted: false,
   },
   {
     id: 'g2',
@@ -82,6 +88,9 @@ const sampleGames: LibraryGame[] = [
     earnedAchievements: 20,
     completionPct: 31,
     lastSyncedAt: null,
+    hasPlatinum: false,
+    platinumEarned: false,
+    isCompleted: false,
   },
 ];
 

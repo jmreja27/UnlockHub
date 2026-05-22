@@ -1,3 +1,7 @@
+jest.mock('../services/user.service', () => ({
+  addXp: jest.fn().mockResolvedValue({ newXp: 100, newLevel: 1, leveledUp: false }),
+}));
+
 jest.mock('../lib/redis', () => ({
   redis: {
     setex: jest.fn().mockResolvedValue('OK'),
@@ -53,6 +57,7 @@ jest.mock('bullmq', () => ({
   Worker: jest.fn().mockImplementation(() => ({ on: jest.fn(), close: jest.fn() })),
 }));
 
+import { Worker } from 'bullmq';
 import { redis } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 import { getIO } from '../lib/socket';
@@ -61,11 +66,15 @@ import type { SyncBatchProgress } from '../platforms/platform.interface';
 import { AppError } from '../middleware/errorHandler';
 import { steamAdapter } from '../platforms/steam.adapter';
 import { syncQueue } from '../jobs/sync.queue';
+import { addXp } from '../services/user.service';
+import { startSyncWorker } from '../jobs/sync.worker';
 
 const mockRedis = redis as jest.Mocked<typeof redis>;
 const mockPrisma = prisma as jest.Mocked<typeof prisma>;
 const mockGetIO = getIO as jest.MockedFunction<typeof getIO>;
 const mockSteamAdapter = steamAdapter as jest.Mocked<typeof steamAdapter>;
+const mockAddXp = addXp as jest.Mock;
+const MockWorker = Worker as jest.MockedClass<typeof Worker>;
 
 const mockEmit = jest.fn();
 const mockTo = jest.fn(() => ({ emit: mockEmit }));
@@ -246,5 +255,57 @@ describe('syncService.getSyncStatus — campos de progreso desde Redis', () => {
     expect(status.isRunning).toBe(false);
     expect(status.processed).toBe(0);
     expect(status.total).toBe(0);
+  });
+});
+
+// ─── BUG-9: addXp llamado cuando hay logros nuevos ───────────────────────────
+
+describe('startSyncWorker — addXp persistido cuando hay logros nuevos (BUG-9)', () => {
+  type JobLike = { data: { userId: string; platformAccountId: string; platform: string; triggerType: string } };
+  type ProcessFn = (job: JobLike) => Promise<unknown>;
+
+  it('llama a addXp con la suma de normalizedPoints de los logros nuevos', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+
+    // Extraer el callback de procesamiento pasado al constructor de Worker
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+    expect(processFn).toBeDefined();
+
+    // Primera llamada a userAchievement.findMany: prevEarnedIds (vacío — usuario sin logros previos)
+    mockPrisma.userAchievement.findMany
+      .mockResolvedValueOnce([]) // prevEarnedIds
+      .mockResolvedValueOnce([  // newAchievements tras sync
+        { achievementId: 'ach-new-1', achievement: { title: 'Test A', normalizedPoints: 100 }, unlockedAt: new Date() },
+        { achievementId: 'ach-new-2', achievement: { title: 'Test B', normalizedPoints: 50 }, unlockedAt: new Date() },
+      ]);
+
+    (mockSteamAdapter.syncUser as jest.Mock).mockResolvedValue({
+      gamesUpdated: 1, achievementsSynced: 2, syncedAt: new Date().toISOString(),
+    });
+
+    await processFn({ data: { userId: 'user-1', platformAccountId: 'acc-1', platform: 'STEAM', triggerType: 'manual' } });
+
+    // xpEarned = 100 + 50 = 150
+    expect(mockAddXp).toHaveBeenCalledWith('user-1', 150, 'ACHIEVEMENT');
+  });
+
+  it('no llama a addXp cuando xpEarned es 0 (sin logros nuevos)', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    mockPrisma.userAchievement.findMany
+      .mockResolvedValueOnce([]) // prevEarnedIds
+      .mockResolvedValueOnce([]); // newAchievements — vacío
+
+    (mockSteamAdapter.syncUser as jest.Mock).mockResolvedValue({
+      gamesUpdated: 0, achievementsSynced: 0, syncedAt: new Date().toISOString(),
+    });
+
+    await processFn({ data: { userId: 'user-1', platformAccountId: 'acc-1', platform: 'STEAM', triggerType: 'manual' } });
+
+    expect(mockAddXp).not.toHaveBeenCalled();
   });
 });
