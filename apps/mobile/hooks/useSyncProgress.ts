@@ -1,13 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import type { SyncCompleteEvent, SyncErrorEvent, SyncProgressEvent } from '@unlockhub/types';
+import type { SyncCompleteEvent, SyncErrorEvent, SyncProgressEvent, SyncStatusResponse } from '@unlockhub/types';
 
 import { connectSocket, getSocket } from '../lib/socket';
 import { useSessionStore } from '../stores/sessionStore';
+import { api } from '../lib/api';
 
 export interface SyncProgressState {
-  isRunning: boolean;
-  platform: string | null;
+  platform: string;
   processed: number;
   total: number;
   percentComplete: number;
@@ -15,24 +15,73 @@ export interface SyncProgressState {
   newAchievementsCount: number;
 }
 
-const INITIAL_STATE: SyncProgressState = {
-  isRunning: false,
-  platform: null,
-  processed: 0,
-  total: 0,
-  percentComplete: 0,
-  newGamesCount: 0,
-  newAchievementsCount: 0,
-};
-
 export type SyncCompleteCallback = (event: SyncCompleteEvent) => void;
 
-export function useSyncProgress(onComplete?: SyncCompleteCallback) {
+export interface UseSyncProgressResult {
+  // Map de plataforma → estado de progreso (solo plataformas activas)
+  activeSyncs: Map<string, SyncProgressState>;
+  isRunning: boolean;
+}
+
+const POLL_INTERVAL_MS = 2000;
+const SOCKET_GRACE_MS = 5000;
+
+export function useSyncProgress(onComplete?: SyncCompleteCallback): UseSyncProgressResult {
   const { accessToken, isAuthenticated } = useSessionStore();
   const queryClient = useQueryClient();
-  const [progress, setProgress] = useState<SyncProgressState>(INITIAL_STATE);
+  const [activeSyncs, setActiveSyncs] = useState<Map<string, SyncProgressState>>(new Map());
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
+
+  // Timestamp del último evento Socket.io recibido — para detectar si el socket está recibiendo datos
+  const lastSocketEventRef = useRef<number>(0);
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopPolling = useCallback(() => {
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  }, []);
+
+  // Hidrata el map de syncs activos a partir de la respuesta de la API (Redis)
+  const hydrateFromApi = useCallback(async () => {
+    try {
+      const statuses = await api.get<SyncStatusResponse[]>('/api/v1/sync/status');
+      const running = statuses.filter((s) => s.isRunning && s.linked);
+
+      if (running.length === 0) {
+        stopPolling();
+        return;
+      }
+
+      setActiveSyncs((prev) => {
+        const next = new Map(prev);
+        for (const s of running) {
+          // Solo sobreescribir si no hay evento Socket.io más reciente para esa plataforma
+          if (!next.has(s.platform)) {
+            next.set(s.platform, {
+              platform: s.platform,
+              processed: s.processed,
+              total: s.total,
+              percentComplete: s.percentComplete,
+              newGamesCount: 0,
+              newAchievementsCount: 0,
+            });
+          }
+        }
+        return next;
+      });
+    } catch {
+      // Si falla el poll, no mostrar error — el socket lo cubrirá cuando haya eventos
+    }
+  }, [stopPolling]);
+
+  // BUG-8: En mount, comprobar si hay syncs en curso vía API para no depender solo del socket
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    void hydrateFromApi();
+  }, [isAuthenticated, hydrateFromApi]);
 
   useEffect(() => {
     if (!isAuthenticated || !accessToken) return;
@@ -41,38 +90,80 @@ export function useSyncProgress(onComplete?: SyncCompleteCallback) {
     const socket = getSocket();
 
     const onSyncProgress = (event: SyncProgressEvent) => {
-      setProgress({
-        isRunning: true,
-        platform: event.platform,
-        processed: event.processed,
-        total: event.total,
-        percentComplete: event.percentComplete,
-        newGamesCount: event.newGamesCount,
-        newAchievementsCount: event.newAchievementsCount,
+      lastSocketEventRef.current = Date.now();
+      stopPolling(); // Socket.io está activo — no necesitamos polling
+
+      setActiveSyncs((prev) => {
+        const next = new Map(prev);
+        next.set(event.platform, {
+          platform: event.platform,
+          processed: event.processed,
+          total: event.total,
+          percentComplete: event.percentComplete,
+          newGamesCount: event.newGamesCount,
+          newAchievementsCount: event.newAchievementsCount,
+        });
+        return next;
       });
       void queryClient.invalidateQueries({ queryKey: ['my-games'] });
     };
 
     const onSyncComplete = (event: SyncCompleteEvent) => {
-      setProgress(INITIAL_STATE);
+      lastSocketEventRef.current = Date.now();
+      setActiveSyncs((prev) => {
+        const next = new Map(prev);
+        next.delete(event.platform);
+        return next;
+      });
       void queryClient.invalidateQueries({ queryKey: ['my-games'] });
+      // Refrescar XP/nivel y rankings tras el sync
+      void queryClient.invalidateQueries({ queryKey: ['user-stats'] });
+      void queryClient.invalidateQueries({ queryKey: ['rankings'] });
       onCompleteRef.current?.(event);
     };
 
-    const onSyncError = (_event: SyncErrorEvent) => {
-      setProgress(INITIAL_STATE);
+    const onSyncError = (event: SyncErrorEvent) => {
+      lastSocketEventRef.current = Date.now();
+      setActiveSyncs((prev) => {
+        const next = new Map(prev);
+        next.delete(event.platform);
+        return next;
+      });
     };
 
     socket.on('sync:progress', onSyncProgress);
     socket.on('sync:complete', onSyncComplete);
     socket.on('sync:error', onSyncError);
 
+    // BUG-8: Si hay syncs activos pero el socket no emite eventos en SOCKET_GRACE_MS,
+    // activar polling de fallback vía Redis para no dejar la barra stuckeada
+    const gracePollTimer = setInterval(() => {
+      const silenceDuration = Date.now() - lastSocketEventRef.current;
+      setActiveSyncs((current) => {
+        if (current.size > 0 && silenceDuration > SOCKET_GRACE_MS) {
+          void hydrateFromApi();
+          // Iniciar polling continuo si aún hay syncs activos
+          if (!pollTimerRef.current) {
+            pollTimerRef.current = setInterval(() => void hydrateFromApi(), POLL_INTERVAL_MS);
+          }
+        } else if (current.size === 0) {
+          stopPolling();
+        }
+        return current;
+      });
+    }, SOCKET_GRACE_MS);
+
     return () => {
       socket.off('sync:progress', onSyncProgress);
       socket.off('sync:complete', onSyncComplete);
       socket.off('sync:error', onSyncError);
+      clearInterval(gracePollTimer);
+      stopPolling();
     };
-  }, [isAuthenticated, accessToken, queryClient]);
+  }, [isAuthenticated, accessToken, queryClient, hydrateFromApi, stopPolling]);
 
-  return progress;
+  return {
+    activeSyncs,
+    isRunning: activeSyncs.size > 0,
+  };
 }

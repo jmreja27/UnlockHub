@@ -1,5 +1,5 @@
-import { useCallback, useState, useMemo, useEffect } from 'react';
-import { View, Text, RefreshControl, ScrollView, Pressable, TextInput, ActivityIndicator } from 'react-native';
+import { useCallback, useState, useMemo, useEffect, useRef } from 'react';
+import { View, Text, RefreshControl, ScrollView, Pressable, TextInput, ActivityIndicator, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +8,8 @@ import type { SyncCompleteEvent } from '@unlockhub/types';
 
 import { useMyGames } from '../../hooks/useMyGames';
 import { useSessionStore } from '../../stores/sessionStore';
+import { usePreferencesStore } from '../../stores/preferencesStore';
+import type { LibrarySortOrder } from '../../stores/preferencesStore';
 import { useSyncAll } from '../../hooks/useSyncAll';
 import { useSyncProgress } from '../../hooks/useSyncProgress';
 import { LibraryGameCard } from '../../components/LibraryGameCard';
@@ -23,12 +25,15 @@ const PLATFORM_LABELS: Record<string, string> = {
   XBOX: 'Xbox',
 };
 
+// ── Componente de banner de progreso por plataforma ──────────────────────────
+
 function SyncProgressBanner({ platform, processed, total, percentComplete }: {
   platform: string;
   processed: number;
   total: number;
   percentComplete: number;
 }) {
+  const { t } = useTranslation();
   const label = PLATFORM_LABELS[platform] ?? platform;
   const progress = Math.min(Math.max(percentComplete, 0), 100);
   return (
@@ -36,11 +41,11 @@ function SyncProgressBanner({ platform, processed, total, percentComplete }: {
       className="mx-4 mb-2 px-4 py-3 bg-surface-2 rounded-xl"
       accessible
       accessibilityLiveRegion="polite"
-      accessibilityLabel={`Sincronizando ${label}: ${processed} de ${total} juegos`}
+      accessibilityLabel={t('library.syncing_a11y', { platform: label, processed, total })}
     >
       <View className="flex-row items-center justify-between mb-1.5">
         <Text className="text-white text-xs font-semibold">
-          {`Sincronizando ${label}…`}
+          {t('library.syncing', { platform: label })}
         </Text>
         <Text className="text-gray-400 text-xs">
           {total > 0 ? `${processed}/${total}` : '…'}
@@ -56,15 +61,22 @@ function SyncProgressBanner({ platform, processed, total, percentComplete }: {
   );
 }
 
-type PlatformFilter = 'ALL' | 'STEAM' | 'RA' | 'PSN' | 'XBOX';
+// ── Tipos y constantes ────────────────────────────────────────────────────────
+
+type PlatformFilter = 'ALL' | 'STEAM' | 'RA' | 'PSN';
+
+// LibrarySortOrder se define en preferencesStore para evitar dependencia circular
+// Reexportado aquí para compatibilidad con consumidores directos
+export type { LibrarySortOrder };
 
 const FILTERS: { key: PlatformFilter; label: string }[] = [
   { key: 'ALL',   label: 'library.filter_all' },
   { key: 'STEAM', label: 'library.filter_steam' },
   { key: 'RA',    label: 'library.filter_ra' },
   { key: 'PSN',   label: 'library.filter_psn' },
-  { key: 'XBOX',  label: 'library.filter_xbox' },
 ];
+
+// ── Utilidades ────────────────────────────────────────────────────────────────
 
 function formatUpdatedAt(timestamp: number, t: (key: string, opts?: Record<string, unknown>) => string): string {
   if (timestamp === 0) return '';
@@ -72,6 +84,30 @@ function formatUpdatedAt(timestamp: number, t: (key: string, opts?: Record<strin
   if (diffMin < 1) return t('library.just_updated');
   return t('library.last_updated', { min: diffMin });
 }
+
+function sortGames(games: LibraryGame[], order: LibrarySortOrder): LibraryGame[] {
+  const copy = [...games];
+  switch (order) {
+    case 'alpha_asc':
+      return copy.sort((a, b) => a.title.localeCompare(b.title));
+    case 'alpha_desc':
+      return copy.sort((a, b) => b.title.localeCompare(a.title));
+    case 'pct_desc':
+      return copy.sort((a, b) => b.completionPct - a.completionPct);
+    case 'pct_asc':
+      return copy.sort((a, b) => a.completionPct - b.completionPct);
+    case 'last_played':
+    default:
+      // El backend ya ordena por título; para "última vez" ordenamos por lastSyncedAt desc
+      return copy.sort((a, b) => {
+        const aDate = a.lastSyncedAt ? new Date(a.lastSyncedAt).getTime() : 0;
+        const bDate = b.lastSyncedAt ? new Date(b.lastSyncedAt).getTime() : 0;
+        return bDate - aDate;
+      });
+  }
+}
+
+// ── Skeleton ──────────────────────────────────────────────────────────────────
 
 function LibrarySkeleton() {
   return (
@@ -96,29 +132,39 @@ function LibrarySkeleton() {
   );
 }
 
+// ── Pantalla principal ────────────────────────────────────────────────────────
+
 export default function LibraryScreen() {
   const { t } = useTranslation();
   const { user } = useSessionStore();
+  const { librarySortOrder, setLibrarySortOrder } = usePreferencesStore();
   const [activeFilter, setActiveFilter] = useState<PlatformFilter>('ALL');
   const [search, setSearch] = useState('');
   const [toast, setToast] = useState<string | null>(null);
+  const [sortModalVisible, setSortModalVisible] = useState(false);
 
   const handleSyncComplete = useCallback((event: SyncCompleteEvent) => {
     const label = PLATFORM_LABELS[event.platform] ?? event.platform;
-    setToast(`${label}: +${event.newAchievements} logros · +${event.xpEarned} XP`);
-  }, []);
+    setToast(`${label}: +${event.newAchievements} ${t('library.achievements_short')} · +${event.xpEarned} XP`);
+  }, [t]);
 
-  const syncProgress = useSyncProgress(handleSyncComplete);
+  const { activeSyncs, isRunning } = useSyncProgress(handleSyncComplete);
 
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!toast) return;
-    const id = setTimeout(() => setToast(null), 4000);
-    return () => clearTimeout(id);
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    toastTimeoutRef.current = setTimeout(() => setToast(null), 4000);
+    return () => {
+      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    };
   }, [toast]);
 
   const platform = activeFilter === 'ALL' ? undefined : activeFilter;
   const {
     allGames,
+    totalEarnedAchievements,
+    totalAvailableAchievements,
     isLoading,
     isError,
     refetch,
@@ -133,12 +179,13 @@ export default function LibraryScreen() {
 
   const games = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return allGames;
-    return allGames.filter((g) => g.title.toLowerCase().includes(q));
-  }, [allGames, search]);
+    const filtered = q
+      ? allGames.filter((g) => g.title.toLowerCase().includes(q))
+      : allGames;
+    // Ordenación cliente-side — no afecta a la paginación del backend
+    return sortGames(filtered, librarySortOrder ?? 'last_played');
+  }, [allGames, search, librarySortOrder]);
 
-  const totalEarned = allGames.reduce((sum, g) => sum + g.earnedAchievements, 0);
-  const totalAchievements = allGames.reduce((sum, g) => sum + g.totalAchievements, 0);
   const updatedAtLabel = formatUpdatedAt(dataUpdatedAt, t);
 
   const renderItem = useCallback(
@@ -146,11 +193,21 @@ export default function LibraryScreen() {
     [],
   );
 
+  const SORT_OPTIONS: { key: LibrarySortOrder; label: string }[] = [
+    { key: 'last_played', label: t('library.sort_last_played') },
+    { key: 'alpha_asc',   label: t('library.sort_alpha_asc') },
+    { key: 'alpha_desc',  label: t('library.sort_alpha_desc') },
+    { key: 'pct_desc',    label: t('library.sort_pct_desc') },
+    { key: 'pct_asc',     label: t('library.sort_pct_asc') },
+  ];
+
+  const activeSortLabel = SORT_OPTIONS.find((o) => o.key === (librarySortOrder ?? 'last_played'))?.label ?? '';
+
   return (
     <SafeAreaView className="flex-1 bg-surface">
       {/* Cabecera */}
       <View className="px-4 pt-4 pb-2 flex-row items-center justify-between">
-        <View>
+        <View className="flex-1 mr-3">
           <Text className="text-white text-2xl font-bold" accessibilityRole="header">
             {t('library.title')}
           </Text>
@@ -169,11 +226,12 @@ export default function LibraryScreen() {
             </Text>
           ) : null}
         </View>
-        <View className="flex-row items-center gap-3">
-          {!isLoading && !isError && allGames.length > 0 && (
+        <View className="flex-row items-center gap-2">
+          {/* Contador de logros totales — basado en aggregate stats del backend */}
+          {!isLoading && !isError && totalAvailableAchievements > 0 && (
             <View className="items-end">
-              <Text className="text-primary-light font-bold text-base">{totalEarned}</Text>
-              <Text className="text-gray-500 text-xs">/ {totalAchievements} logros</Text>
+              <Text className="text-primary-light font-bold text-base">{totalEarnedAchievements}</Text>
+              <Text className="text-gray-500 text-xs">/ {totalAvailableAchievements} {t('library.achievements_short')}</Text>
             </View>
           )}
           {hasPlatforms && (
@@ -189,7 +247,7 @@ export default function LibraryScreen() {
               }
               accessibilityState={{ disabled: isSyncing || isInCooldown, busy: isSyncing }}
             >
-              {isSyncing ? (
+              {isSyncing || isRunning ? (
                 <ActivityIndicator size="small" color="#818cf8" />
               ) : (
                 <View className="items-center">
@@ -204,18 +262,29 @@ export default function LibraryScreen() {
         </View>
       </View>
 
-      {/* Buscador */}
-      <View className="mx-4 mb-2">
+      {/* Buscador + botón ordenación */}
+      <View className="mx-4 mb-2 flex-row gap-2">
         <TextInput
           value={search}
           onChangeText={setSearch}
           placeholder={t('library.search_placeholder')}
           placeholderTextColor="#6b7280"
           accessibilityLabel={t('library.search_label')}
-          className="bg-surface-2 text-white px-4 py-3 rounded-xl text-sm"
+          className="bg-surface-2 text-white px-4 py-3 rounded-xl text-sm flex-1"
           returnKeyType="search"
           clearButtonMode="while-editing"
         />
+        <Pressable
+          onPress={() => setSortModalVisible(true)}
+          style={{ minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center' }}
+          className="bg-surface-2 px-3 rounded-xl"
+          accessibilityRole="button"
+          accessibilityLabel={t('library.sort_button_a11y', { current: activeSortLabel })}
+        >
+          <Text className="text-primary-light text-xs font-semibold" numberOfLines={1}>
+            {t('library.sort_button')} ▼
+          </Text>
+        </Pressable>
       </View>
 
       {/* Filtros por plataforma */}
@@ -243,15 +312,16 @@ export default function LibraryScreen() {
         ))}
       </ScrollView>
 
-      {/* Banner de progreso de sync */}
-      {syncProgress.isRunning && syncProgress.platform && (
+      {/* Banners de progreso de sync — uno por plataforma activa */}
+      {Array.from(activeSyncs.values()).map((syncState) => (
         <SyncProgressBanner
-          platform={syncProgress.platform}
-          processed={syncProgress.processed}
-          total={syncProgress.total}
-          percentComplete={syncProgress.percentComplete}
+          key={syncState.platform}
+          platform={syncState.platform}
+          processed={syncState.processed}
+          total={syncState.total}
+          percentComplete={syncState.percentComplete}
         />
-      )}
+      ))}
 
       {/* Toast de sync completado */}
       {toast && (
@@ -260,9 +330,9 @@ export default function LibraryScreen() {
           accessible
           accessibilityLiveRegion="assertive"
           accessibilityRole="alert"
-          accessibilityLabel={`Sync completado: ${toast}`}
+          accessibilityLabel={t('library.sync_complete_a11y', { info: toast })}
         >
-          <Text className="text-green-300 text-xs font-semibold">✓ Sync completado</Text>
+          <Text className="text-green-300 text-xs font-semibold">✓ {t('library.sync_complete')}</Text>
           <Text className="text-green-400 text-xs mt-0.5">{toast}</Text>
         </View>
       )}
@@ -346,6 +416,52 @@ export default function LibraryScreen() {
           }
         />
       )}
+
+      {/* Modal de ordenación */}
+      <Modal
+        visible={sortModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSortModalVisible(false)}
+        accessibilityViewIsModal
+      >
+        <Pressable
+          className="flex-1 bg-black/60 justify-end"
+          onPress={() => setSortModalVisible(false)}
+          accessibilityLabel={t('common.cancel')}
+        >
+          <Pressable
+            className="bg-surface-card rounded-t-2xl px-4 pt-4 pb-8"
+            onPress={() => { /* evitar cierre al pulsar dentro */ }}
+          >
+            <View className="w-10 h-1 bg-gray-600 rounded-full self-center mb-4" />
+            <Text className="text-white font-bold text-base mb-3">
+              {t('library.sort_title')}
+            </Text>
+            {SORT_OPTIONS.map(({ key, label }) => {
+              const isActive = (librarySortOrder ?? 'last_played') === key;
+              return (
+                <Pressable
+                  key={key}
+                  onPress={() => {
+                    setLibrarySortOrder(key);
+                    setSortModalVisible(false);
+                  }}
+                  className={`flex-row items-center justify-between py-3.5 border-b border-surface-2`}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: isActive }}
+                  accessibilityLabel={label}
+                >
+                  <Text className={`text-sm ${isActive ? 'text-primary-light font-semibold' : 'text-gray-300'}`}>
+                    {label}
+                  </Text>
+                  {isActive && <Text className="text-primary-light text-base">✓</Text>}
+                </Pressable>
+              );
+            })}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
