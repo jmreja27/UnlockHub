@@ -165,6 +165,8 @@ export default function LibraryScreen() {
     allGames,
     totalEarnedAchievements,
     totalAvailableAchievements,
+    totalGames,
+    totalCompletedGames,
     isLoading,
     isError,
     refetch,
@@ -227,11 +229,25 @@ export default function LibraryScreen() {
           ) : null}
         </View>
         <View className="flex-row items-center gap-2">
-          {/* Contador de logros totales — basado en aggregate stats del backend */}
-          {!isLoading && !isError && totalAvailableAchievements > 0 && (
-            <View className="items-end">
-              <Text className="text-primary-light font-bold text-base">{totalEarnedAchievements}</Text>
-              <Text className="text-gray-500 text-xs">/ {totalAvailableAchievements} {t('library.achievements_short')}</Text>
+          {/* Contadores de logros y juegos — aggregate stats del backend (pre-paginación) */}
+          {!isLoading && !isError && totalGames > 0 && (
+            <View
+              className="items-end"
+              accessible
+              accessibilityLabel={`${t('library.achievements_progress', { earned: totalEarnedAchievements, total: totalAvailableAchievements })}. ${t('library.games_progress', { completed: totalCompletedGames, total: totalGames })}`}
+            >
+              <Text className="text-primary-light font-bold text-base" accessibilityElementsHidden>
+                {totalEarnedAchievements}
+              </Text>
+              <Text className="text-gray-500 text-xs" accessibilityElementsHidden>
+                / {totalAvailableAchievements} {t('library.achievements_short')}
+              </Text>
+              <Text className="text-green-400 font-semibold text-sm mt-0.5" accessibilityElementsHidden>
+                {totalCompletedGames}/{totalGames}
+              </Text>
+              <Text className="text-gray-500 text-xs" accessibilityElementsHidden>
+                {t('library.games_short')}
+              </Text>
             </View>
           )}
           {hasPlatforms && (

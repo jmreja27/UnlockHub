@@ -24,6 +24,8 @@ interface LibraryPage {
   limit: number;
   totalEarnedAchievements: number;
   totalAvailableAchievements: number;
+  totalGames: number;
+  totalCompletedGames: number;
 }
 
 const LIMIT = 20;
@@ -53,6 +55,8 @@ export function useMyGames(platform?: string) {
   // Los aggregate stats vienen de la primera página y cubren TODOS los juegos (pre-paginación)
   const totalEarnedAchievements = query.data?.pages[0]?.totalEarnedAchievements ?? 0;
   const totalAvailableAchievements = query.data?.pages[0]?.totalAvailableAchievements ?? 0;
+  const totalGames = query.data?.pages[0]?.totalGames ?? 0;
+  const totalCompletedGames = query.data?.pages[0]?.totalCompletedGames ?? 0;
 
   return {
     ...query,
@@ -60,5 +64,7 @@ export function useMyGames(platform?: string) {
     total,
     totalEarnedAchievements,
     totalAvailableAchievements,
+    totalGames,
+    totalCompletedGames,
   };
 }

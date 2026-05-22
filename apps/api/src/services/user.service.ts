@@ -231,6 +231,8 @@ export async function getMyGames(
   limit: number;
   totalEarnedAchievements: number;
   totalAvailableAchievements: number;
+  totalGames: number;
+  totalCompletedGames: number;
 }> {
   const [userAchievements, platformAccounts] = await Promise.all([
     prisma.userAchievement.findMany({
@@ -359,6 +361,8 @@ export async function getMyGames(
   // Aggregate stats sobre todos los juegos (antes de paginar) — BUG-10
   const totalEarnedAchievements = allGames.reduce((sum, g) => sum + g.earnedAchievements, 0);
   const totalAvailableAchievements = allGames.reduce((sum, g) => sum + g.totalAchievements, 0);
+  const totalGames = allGames.length;
+  const totalCompletedGames = allGames.filter((g) => g.isCompleted).length;
 
   const sorted = allGames.sort((a, b) => a.title.localeCompare(b.title));
 
@@ -366,7 +370,11 @@ export async function getMyGames(
   const start = (page - 1) * limit;
   const data = sorted.slice(start, start + limit);
 
-  return { data, total, page, limit, totalEarnedAchievements, totalAvailableAchievements };
+  return {
+    data, total, page, limit,
+    totalEarnedAchievements, totalAvailableAchievements,
+    totalGames, totalCompletedGames,
+  };
 }
 
 // Devuelve los achievementIds ganados por el usuario en un juego específico.
