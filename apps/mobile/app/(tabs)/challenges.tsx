@@ -46,7 +46,7 @@ function ProgressBar({ pct }: { pct: number }) {
 function ChallengeSkeleton() {
   return (
     <View
-      className="mx-4 mt-6 p-4 bg-surface-raised rounded-2xl"
+      className="mx-4 mt-3 p-4 bg-surface-raised rounded-2xl"
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
     >
@@ -112,7 +112,7 @@ export default function ChallengesScreen() {
             body={t('challenges.empty_body')}
           />
         ) : (
-          <View className="mx-4 mt-6 p-4 bg-surface-raised rounded-2xl">
+          <View className="mx-4 mt-3 p-4 bg-surface-raised rounded-2xl">
             {isCompleted && (
               <View
                 className="bg-green-800 rounded-lg px-3 py-1 mb-3 self-start"
