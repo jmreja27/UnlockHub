@@ -932,6 +932,8 @@ Métricas disponibles:
 | RA vinculación por username — `lookupRaUser` | El usuario solo proporciona su username de RetroAchievements. El backend usa `RA_SYSTEM_USER`/`RA_SYSTEM_KEY` del sistema para verificar existencia vía `API_GetUserSummary.php`. `linkRetroAchievementsSchema` acepta `{ username }` sin API key de usuario. `RA_USER_NOT_FOUND` (404) si no existe, `RA_SYSTEM_NOT_CONFIGURED` (503) si las credenciales del sistema no están. `lookupRaUser` lee `process.env['RA_SYSTEM_KEY']` en call-time (igual que `resolveVanityUrl`). | Fase 3 |
 | `resolveVanityUrl` y `lookupRaUser` leen env vars en call-time, no en module-load | Las constantes de módulo `STEAM_SYSTEM_API_KEY` y `RA_SYSTEM_KEY` se siguen usando en los métodos de sync (no bloqueantes de vinculación). Las funciones de vinculación leen `process.env` en cada llamada para que los tests puedan controlarlo sin `jest.resetModules()`. | Fase 3 |
 | `@typescript-eslint/consistent-type-imports: 'off'` en tests `.tsx` | Los test files de pantallas usan `jest.requireActual<typeof import(...)>` para preservar `ApiRequestError` real en mocks. La regla `consistent-type-imports` genera falso positivo en este patrón de factory Jest — igual que `import/order` ya estaba desactivado en tests. | Fase 3 |
+| `@@unique([platform, externalId])` en `PlatformAccount` ya existía desde el init | El constraint único `(platform, externalId)` fue añadido en la migración inicial `20260507000000_init` — no era una omisión. La protección se hace vía consulta previa en `linkPlatform()` antes del upsert para dar un error descriptivo. Error 409 `PLATFORM_ACCOUNT_ALREADY_LINKED` (antes `PLATFORM_ACCOUNT_TAKEN` — renombrado en sesión 9). | Fase 3 |
+| `LinkPsnScreen.test.tsx` refactorizado a patrón factory `jest.requireActual` | El test original usaba auto-mock (`jest.mock('../../lib/api')`) que no preserva `ApiRequestError` como clase real — `instanceof` fallaba. Refactorizado al mismo patrón que Steam/RA para consistencia y poder testear errores 404/409/503. | Fase 3 |
 
 ---
 
@@ -1046,6 +1048,8 @@ Métricas disponibles:
 ---
 
 ## Última revisión de código
+
+**Fecha**: 2026-05-31 (sesión 9) — Fix `PLATFORM_ACCOUNT_ALREADY_LINKED`: código renombrado, handler 409 añadido en psn.tsx, mensajes i18n corregidos en Steam/RA, clave `error_already_linked` añadida en PSN. `LinkPsnScreen.test.tsx` refactorizado a patrón factory. Revisión completa Parte 2: 0 bugs adicionales. Tests: 427 API + 208 mobile. 0 errores TS/lint.
 
 **Fecha**: 2026-05-31 (sesión 8) — Steam y RA vinculación simplificada: solo username. `resolveVanityUrl` + `lookupRaUser` exportadas. UI reescrita (guía colapsada, sin campos de API key). i18n ES/EN actualizado. Tests: 426 API + 204 mobile. 0 errores TS/lint.
 
