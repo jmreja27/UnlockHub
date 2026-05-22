@@ -947,6 +947,8 @@ Métricas disponibles:
 | Sort de biblioteca es client-side sobre la página cargada, no server-side | Server-side sort requeriría 5 endpoints distintos o un parámetro de sort en la API que paginaría incorrectamente con datos acumulados por `useInfiniteQuery`. Client-side sobre los datos ya cargados es correcto para la escala de juegos por usuario y evita complejidad en la API. Pendiente de sync progresivo: la lista se re-ordena con cada batch. | Fase 3 |
 | `@react-native-async-storage/async-storage` mockeado globalmente en `jest.setup.ts` | Es un módulo nativo que no puede cargarse en Jest sin mock. Al añadir `librarySortOrder` a `preferencesStore`, este módulo se convierte en una dependencia transitiva de cualquier test que importe componentes que usen el store. Mock global previene fallos futuros. | Fase 3 |
 | Sync optimization (parallel RA batches, skip completed) documentada pero no implementada | Parallel processing dentro de batches RA: riesgo de rate limiting sin SLA conocido. Skip completed games: riesgo de perder achievements de DLC añadidos post-sync. Decisión: documentar como pending T13, no implementar en Fase 3. | Fase 3 |
+| `totalGames`/`totalCompletedGames` calculados pre-paginación en `getMyGames` | Misma lógica que BUG-10 para `totalEarned`/`totalAvailable` — los contadores de cabecera deben reflejar la colección completa del usuario, no solo la página cargada. `isCompleted` ya existía en el map; se reutiliza vía `.filter`. | Fase 3 |
+| `getByText` con `{ includeHiddenElements: true }` en tests del contador de juegos | Los `Text` del bloque de stats tienen `accessibilityElementsHidden={true}` para que el screen reader lea solo el `accessibilityLabel` combinado del `View` padre. `@testing-library/react-native` excluye estos nodos del árbol de accesibilidad por defecto — la opción `includeHiddenElements` los hace encontrables. | Fase 3 |
 
 ---
 
@@ -1063,6 +1065,8 @@ Métricas disponibles:
 
 ## Última revisión de código
 
+**Fecha**: 2026-06-03 (sesión 12) — Contador `totalGames`/`totalCompletedGames` en cabecera de biblioteca. Backend + hook + UI + i18n + tests. Tests: 443 API + 216 mobile. 0 errores TS/lint. Cobertura API 80.8% stmt / 83.66% branch.
+
 **Fecha**: 2026-06-02 (sesión 11) — Mock server endpoint `sync/status` añadido. BUG-12 `hydrateFromApi` (`socketSilent`). Back buttons WCAG. `fallbackLng: 'en'`. "Biblioteca". i18n audit completo. Tests: 438 API + 214 mobile. 0 errores TS/lint. Cobertura API 80.77% stmt / 83.66% branch.
 
 **Fecha**: 2026-06-01 (sesión 10) — BUG-7/8/9/10/11 corregidos. PSN states, sort modal, color #1e90ff, i18n. Tests: 438 API + 214 mobile. 0 errores TS/lint. Cobertura API 80.77% stmt / 83.66% branch.
@@ -1074,6 +1078,46 @@ Métricas disponibles:
 **Fecha**: 2026-05-30 (sesión 7) — Smoke test APK #3 completo. BUG-6 identificado (PSN screen NPSSO stale — Metro cache). BUG-3/4/5 re-confirmados ✅. AdMob banners ✅. 15/16 pasos completados (offline mode no testeable en emulador). Ver detalles en Sesión 7.
 
 **Fecha**: 2026-05-30 (sesión 6) — APK #3 generada localmente (debug). Downgrade `react-native-google-mobile-ads` v16→v13. `app-debug.apk` 165.7 MB lista para smoke test. Ver detalles en Sesión 6.
+
+### Sesión 12 — 2026-06-03 — Contador juegos completados/totales en biblioteca
+
+**Objetivo**: añadir contador `completados/totales` de juegos a la cabecera de la biblioteca, junto al contador de logros ya existente.
+
+**Backend — `apps/api/src/services/user.service.ts`:**
+- `getMyGames` ahora devuelve `totalGames` (número de juegos distintos del usuario) y `totalCompletedGames` (juegos donde `earnedAchievements === totalAchievements`), calculados sobre `allGames` antes del `slice` de paginación — mismo patrón BUG-10.
+- `isCompleted` ya existía en el map de `allGames` — reutilizado vía `.filter((g) => g.isCompleted).length`, sin duplicación.
+
+**Mobile — `apps/mobile/hooks/useMyGames.ts`:**
+- `LibraryPage` interface extendida con `totalGames: number` y `totalCompletedGames: number`.
+- Ambos campos expuestos en el retorno del hook, leídos de `pages[0]` (mismo patrón que los otros aggregate stats).
+
+**Mobile — `apps/mobile/app/(tabs)/index.tsx`:**
+- Cabecera: condición cambiada de `totalAvailableAchievements > 0` a `totalGames > 0`.
+- Contador de juegos: `{totalCompletedGames}/{totalGames}` en `text-green-400` + etiqueta `library.games_short`.
+- `accessibilityElementsHidden` en los `Text` individuales; `accessibilityLabel` combinado en el `View` padre con claves `library.achievements_progress` y `library.games_progress`.
+
+**i18n — ES + EN:**
+- `library.games_short`: `"juegos completados"` / `"completed"`
+- `library.achievements_progress`: `"{{earned}} logros / {{total}} totales"` / `"{{earned}} achievements / {{total}} total"`
+- `library.games_progress`: `"{{completed}} juegos completados / {{total}} totales"` / `"{{completed}} games completed / {{total}} total"`
+
+**Tests añadidos:**
+- `user.service.test.ts`: 5 tests nuevos — `totalGames` = juegos distintos, `totalCompletedGames` con mezcla completado/incompleto, edge case 0 completados, edge case todos completados, pre-paginación (25 juegos / limit 20 / 5 completados).
+- `FeedScreen.test.tsx`: 2 tests nuevos — contador visible con `includeHiddenElements: true` cuando `totalGames > 0`, invisible cuando `totalGames = 0`. `baseMyGamesResult` extendido con `totalGames: 0` y `totalCompletedGames: 0`.
+
+**Decisiones tomadas:**
+- `getByText('3/10', { includeHiddenElements: true })` en tests mobile — los `Text` tienen `accessibilityElementsHidden={true}`, lo que los excluye del árbol de accesibilidad; `includeHiddenElements` los hace encontrables por el test.
+
+**Estado de calidad:**
+| Categoría | Resultado |
+|---|---|
+| TypeScript strict (API + mobile) | ✅ 0 errores |
+| Lint (API + mobile) | ✅ 0 errores, 0 warnings |
+| Tests backend | ✅ 443/443 — 35 suites |
+| Tests mobile | ✅ 216/216 — 18 suites |
+| Cobertura API | ✅ 80.8% stmt / 83.66% branch |
+
+---
 
 ### Sesión 11 — 2026-06-02 — Mock server, BUG-12, WCAG back buttons, i18n audit
 
