@@ -199,7 +199,7 @@
     "sort_button": "Ordenar",
     "sort_button_a11y": "Ordenar biblioteca. Orden actual: {{current}}",
     "sort_title": "Ordenar por",
-    "sort_last_played": "Última sincronización",
+    "sort_last_played": "Último jugado",
     "sort_alpha_asc": "A → Z",
     "sort_alpha_desc": "Z → A",
     "sort_pct_desc": "Mayor % primero",

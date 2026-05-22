@@ -199,7 +199,7 @@
     "sort_button": "Sort",
     "sort_button_a11y": "Sort library. Current order: {{current}}",
     "sort_title": "Sort by",
-    "sort_last_played": "Last synced",
+    "sort_last_played": "Last played",
     "sort_alpha_asc": "A → Z",
     "sort_alpha_desc": "Z → A",
     "sort_pct_desc": "Highest % first",
