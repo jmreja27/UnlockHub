@@ -12,6 +12,9 @@ export interface LibraryGame {
   earnedAchievements: number;
   completionPct: number;
   lastSyncedAt: string | null;
+  hasPlatinum: boolean;
+  platinumEarned: boolean;
+  isCompleted: boolean;
 }
 
 interface LibraryPage {
@@ -19,6 +22,8 @@ interface LibraryPage {
   total: number;
   page: number;
   limit: number;
+  totalEarnedAchievements: number;
+  totalAvailableAchievements: number;
 }
 
 const LIMIT = 20;
@@ -45,10 +50,15 @@ export function useMyGames(platform?: string) {
 
   const allGames = query.data?.pages.flatMap((p) => p.data) ?? [];
   const total = query.data?.pages[0]?.total ?? 0;
+  // Los aggregate stats vienen de la primera página y cubren TODOS los juegos (pre-paginación)
+  const totalEarnedAchievements = query.data?.pages[0]?.totalEarnedAchievements ?? 0;
+  const totalAvailableAchievements = query.data?.pages[0]?.totalAvailableAchievements ?? 0;
 
   return {
     ...query,
     allGames,
     total,
+    totalEarnedAchievements,
+    totalAvailableAchievements,
   };
 }

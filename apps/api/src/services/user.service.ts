@@ -206,11 +206,19 @@ type LibraryGame = {
   earnedAchievements: number;
   completionPct: number;
   lastSyncedAt: string | null;
+  // Estados PSN: solo presentes cuando platform === 'PSN'
+  hasPlatinum: boolean;
+  platinumEarned: boolean;
+  isCompleted: boolean;
 };
 
 // Devuelve los juegos con logros del usuario, agrupados por juego con stats de completado.
 // Soporta paginación via page/limit — la agregación ocurre en memoria para evitar
 // GROUP BY complejo en Prisma. Suficiente para la escala esperada por usuario.
+//
+// Los aggregate stats (totalEarnedAchievements, totalAvailableAchievements) se calculan
+// sobre TODOS los juegos (antes de paginar) para que el header del cliente los muestre
+// correctamente aunque no todas las páginas estén cargadas.
 export async function getMyGames(
   userId: string,
   platform?: Platform,
@@ -221,6 +229,8 @@ export async function getMyGames(
   total: number;
   page: number;
   limit: number;
+  totalEarnedAchievements: number;
+  totalAvailableAchievements: number;
 }> {
   const [userAchievements, platformAccounts] = await Promise.all([
     prisma.userAchievement.findMany({
@@ -229,9 +239,13 @@ export async function getMyGames(
         achievement: platform ? { platform } : undefined,
       },
       select: {
+        achievementId: true,
         achievement: {
           select: {
             gameId: true,
+            platform: true,
+            // normalizedPoints === 300 identifica el trofeo platino en PSN (ver CLAUDE.md)
+            normalizedPoints: true,
             game: {
               select: {
                 id: true,
@@ -254,6 +268,39 @@ export async function getMyGames(
   const syncMap = new Map<string, string | null>();
   for (const pa of platformAccounts) {
     syncMap.set(pa.platform, pa.lastSyncedAt?.toISOString() ?? null);
+  }
+
+  // Para PSN: mapear juego → achievements del usuario (para calcular hasPlatinum y platinumEarned)
+  // Se necesitan todos los achievements del juego para saber si hay platino disponible
+  const psnGameIds = new Set(
+    userAchievements
+      .filter((ua) => ua.achievement.platform === 'PSN')
+      .map((ua) => ua.achievement.gameId),
+  );
+
+  // Obtener todos los achievements PSN de los juegos (no solo los desbloqueados)
+  // para saber si el juego tiene un trofeo platino
+  const psnAllAchievements = psnGameIds.size > 0
+    ? await prisma.achievement.findMany({
+        where: { gameId: { in: Array.from(psnGameIds) }, platform: 'PSN' },
+        select: { gameId: true, normalizedPoints: true },
+      })
+    : [];
+
+  // Map gameId → ¿tiene trofeo platino disponible? (algún achievement con 300 pts)
+  const psnHasPlatinumMap = new Map<string, boolean>();
+  for (const ach of psnAllAchievements) {
+    if (ach.normalizedPoints === 300) {
+      psnHasPlatinumMap.set(ach.gameId, true);
+    }
+  }
+
+  // Map gameId → ¿el usuario ha ganado el platino?
+  const psnEarnedPlatinumMap = new Map<string, boolean>();
+  for (const ua of userAchievements) {
+    if (ua.achievement.platform === 'PSN' && ua.achievement.normalizedPoints === 300) {
+      psnEarnedPlatinumMap.set(ua.achievement.gameId, true);
+    }
   }
 
   const gameMap = new Map<
@@ -285,8 +332,13 @@ export async function getMyGames(
     }
   }
 
-  const sorted: LibraryGame[] = Array.from(gameMap.values())
-    .map((g) => ({
+  const allGames: LibraryGame[] = Array.from(gameMap.values()).map((g) => {
+    const isCompleted =
+      g.totalAchievements > 0 && g.earnedAchievements === g.totalAchievements;
+    const hasPlatinum = g.platform === 'PSN' ? (psnHasPlatinumMap.get(g.id) ?? false) : false;
+    const platinumEarned = g.platform === 'PSN' ? (psnEarnedPlatinumMap.get(g.id) ?? false) : false;
+
+    return {
       id: g.id,
       title: g.title,
       platform: g.platform,
@@ -298,14 +350,23 @@ export async function getMyGames(
           ? Math.round((g.earnedAchievements / g.totalAchievements) * 100)
           : 0,
       lastSyncedAt: syncMap.get(g.platform) ?? null,
-    }))
-    .sort((a, b) => a.title.localeCompare(b.title));
+      hasPlatinum,
+      platinumEarned,
+      isCompleted,
+    };
+  });
+
+  // Aggregate stats sobre todos los juegos (antes de paginar) — BUG-10
+  const totalEarnedAchievements = allGames.reduce((sum, g) => sum + g.earnedAchievements, 0);
+  const totalAvailableAchievements = allGames.reduce((sum, g) => sum + g.totalAchievements, 0);
+
+  const sorted = allGames.sort((a, b) => a.title.localeCompare(b.title));
 
   const total = sorted.length;
   const start = (page - 1) * limit;
   const data = sorted.slice(start, start + limit);
 
-  return { data, total, page, limit };
+  return { data, total, page, limit, totalEarnedAchievements, totalAvailableAchievements };
 }
 
 // Devuelve los achievementIds ganados por el usuario en un juego específico.
