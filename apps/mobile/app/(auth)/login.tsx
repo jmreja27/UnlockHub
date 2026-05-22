@@ -16,12 +16,14 @@ import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '../../hooks/useAuth';
+import { useLanguage } from '../../hooks/useLanguage';
 
 export default function LoginScreen() {
   const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const { login, isLoggingIn, loginError } = useAuth();
+  const { currentLanguage, changeLanguage } = useLanguage();
 
   // Validación básica en cliente antes de enviar
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
@@ -57,6 +59,30 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-surface">
+      {/* Toggle de idioma — disponible antes de autenticarse */}
+      <View className="flex-row justify-end px-4 pt-2">
+        <Pressable
+          onPress={() => changeLanguage(currentLanguage === 'es' ? 'en' : 'es')}
+          accessibilityRole="button"
+          accessibilityLabel={t('auth.login.language_toggle')}
+          style={{ minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'flex-end' }}
+          testID="language-toggle"
+        >
+          <View className="flex-row items-center gap-1">
+            <Text
+              className={`text-xs font-semibold ${currentLanguage === 'es' ? 'text-primary-light' : 'text-gray-500'}`}
+            >
+              ES
+            </Text>
+            <Text className="text-gray-600 text-xs">|</Text>
+            <Text
+              className={`text-xs font-semibold ${currentLanguage === 'en' ? 'text-primary-light' : 'text-gray-500'}`}
+            >
+              EN
+            </Text>
+          </View>
+        </Pressable>
+      </View>
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

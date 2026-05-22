@@ -28,7 +28,8 @@
       "create_account_hint": "Navega a la pantalla de registro para crear una nueva cuenta",
       "error_email_required": "El email es obligatorio.",
       "error_email_invalid": "Introduce un email válido.",
-      "error_password_required": "La contraseña es obligatoria."
+      "error_password_required": "La contraseña es obligatoria.",
+      "language_toggle": "Cambiar idioma"
     },
     "register": {
       "title": "Crear cuenta",

@@ -28,7 +28,8 @@
       "create_account_hint": "Navigate to the registration screen to create a new account",
       "error_email_required": "Email is required.",
       "error_email_invalid": "Enter a valid email address.",
-      "error_password_required": "Password is required."
+      "error_password_required": "Password is required.",
+      "language_toggle": "Change language"
     },
     "register": {
       "title": "Create account",

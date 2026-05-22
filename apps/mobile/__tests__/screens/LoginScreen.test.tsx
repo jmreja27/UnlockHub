@@ -4,10 +4,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import LoginScreen from '../../app/(auth)/login';
 import { useAuth } from '../../hooks/useAuth';
+import { useLanguage } from '../../hooks/useLanguage';
 
 jest.mock('../../hooks/useAuth');
+jest.mock('../../hooks/useLanguage');
 
 const mockUseAuth = useAuth as jest.Mock;
+const mockUseLanguage = useLanguage as jest.Mock;
 
 function renderLogin() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -25,6 +28,10 @@ describe('LoginScreen', () => {
       login: jest.fn(),
       isLoggingIn: false,
       loginError: null,
+    });
+    mockUseLanguage.mockReturnValue({
+      currentLanguage: 'es',
+      changeLanguage: jest.fn(),
     });
   });
 
@@ -51,6 +58,27 @@ describe('LoginScreen', () => {
   it('renderiza el botón de crear cuenta', () => {
     const { getByRole } = renderLogin();
     expect(getByRole('button', { name: 'auth.login.create_account_label' })).toBeTruthy();
+  });
+
+  it('renderiza el toggle de idioma ES|EN', () => {
+    const { getByTestId } = renderLogin();
+    expect(getByTestId('language-toggle')).toBeTruthy();
+  });
+
+  it('llama a changeLanguage con "en" cuando el idioma activo es "es"', () => {
+    const changeLanguage = jest.fn();
+    mockUseLanguage.mockReturnValue({ currentLanguage: 'es', changeLanguage });
+    const { getByTestId } = renderLogin();
+    fireEvent.press(getByTestId('language-toggle'));
+    expect(changeLanguage).toHaveBeenCalledWith('en');
+  });
+
+  it('llama a changeLanguage con "es" cuando el idioma activo es "en"', () => {
+    const changeLanguage = jest.fn();
+    mockUseLanguage.mockReturnValue({ currentLanguage: 'en', changeLanguage });
+    const { getByTestId } = renderLogin();
+    fireEvent.press(getByTestId('language-toggle'));
+    expect(changeLanguage).toHaveBeenCalledWith('es');
   });
 
   describe('validación de campos', () => {
