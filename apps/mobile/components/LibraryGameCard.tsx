@@ -16,7 +16,8 @@ const PLATFORM_COLOR: Record<string, string> = {
   STEAM: '#1b9aaa',
   RA: '#e8a838',
   XBOX: '#107c10',
-  PSN: '#003087',
+  // #1e90ff (DodgerBlue) — mayor contraste que #003087 en fondo oscuro (ratio ~6.5:1 vs blanco)
+  PSN: '#1e90ff',
 };
 
 function ProgressBar({ pct, color }: { pct: number; color: string }) {
@@ -35,7 +36,28 @@ export function LibraryGameCard({ game }: Props) {
   const { t } = useTranslation();
   const platformLabel = PLATFORM_LABEL[game.platform] ?? game.platform;
   const platformColor = PLATFORM_COLOR[game.platform] ?? '#6b7280';
-  const isComplete = game.completionPct === 100;
+
+  // Color y estado de completado
+  let barColor: string;
+  let pctLabel: string;
+  let psnBadge: string | null = null;
+
+  if (game.isCompleted) {
+    barColor = '#22c55e';
+    pctLabel = t('library.complete');
+  } else {
+    barColor = platformColor;
+    pctLabel = `${game.completionPct}%`;
+  }
+
+  // Badges PSN: platino o 100% completo
+  if (game.platform === 'PSN') {
+    if (game.isCompleted) {
+      psnBadge = t('library.psn_100');
+    } else if (game.platinumEarned) {
+      psnBadge = t('library.psn_platinum');
+    }
+  }
 
   return (
     <Pressable
@@ -61,14 +83,31 @@ export function LibraryGameCard({ game }: Props) {
             <Text className="text-white font-semibold text-sm flex-1 mr-2" numberOfLines={1}>
               {game.title}
             </Text>
-            <View
-              className="px-2 py-0.5 rounded-full"
-              style={{ backgroundColor: platformColor + '33' }}
-              importantForAccessibility="no"
-            >
-              <Text className="text-xs font-medium" style={{ color: platformColor }}>
-                {platformLabel}
-              </Text>
+            <View className="flex-row items-center gap-1.5">
+              {/* Badge PSN especial (platino o 100%) */}
+              {psnBadge && (
+                <View
+                  className="px-1.5 py-0.5 rounded-full"
+                  style={{ backgroundColor: game.isCompleted ? '#22c55e33' : '#f5c518' + '33' }}
+                  importantForAccessibility="no"
+                >
+                  <Text
+                    className="text-xs font-bold"
+                    style={{ color: game.isCompleted ? '#22c55e' : '#f5c518' }}
+                  >
+                    {psnBadge}
+                  </Text>
+                </View>
+              )}
+              <View
+                className="px-2 py-0.5 rounded-full"
+                style={{ backgroundColor: platformColor + '33' }}
+                importantForAccessibility="no"
+              >
+                <Text className="text-xs font-medium" style={{ color: platformColor }}>
+                  {platformLabel}
+                </Text>
+              </View>
             </View>
           </View>
 
@@ -78,13 +117,13 @@ export function LibraryGameCard({ game }: Props) {
             </Text>
             <Text
               className="text-xs font-semibold"
-              style={{ color: isComplete ? '#22c55e' : platformColor }}
+              style={{ color: game.isCompleted ? '#22c55e' : platformColor }}
             >
-              {isComplete ? t('library.complete') : `${game.completionPct}%`}
+              {pctLabel}
             </Text>
           </View>
 
-          <ProgressBar pct={game.completionPct} color={isComplete ? '#22c55e' : platformColor} />
+          <ProgressBar pct={game.completionPct} color={barColor} />
         </View>
       </View>
     </Pressable>
