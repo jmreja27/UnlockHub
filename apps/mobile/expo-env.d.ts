@@ -1,3 +1,3 @@
 /// <reference types="expo/types" />
 
-// Este fichero no debe editarse manualmente.
+// NOTE: This file should not be edited and should be in your git ignore

@@ -12,15 +12,15 @@ Esta sección lista todo lo que **el desarrollador debe hacer manualmente** ante
 
 | # | Acción | Dónde | Coste | Para qué se usa |
 |---|---|---|---|---|
-| B3 | Crear cuenta en **Resend** y verificar dominio de envío | resend.com | Gratis hasta 3k emails/mes | Emails de recuperación de contraseña |
-| B4 | Obtener `RESEND_API_KEY` y definir `RESEND_FROM_EMAIL` | resend.com → API Keys | Gratis | Variable de entorno en Railway |
+| ~~B3~~ | ✅ **Resend — cuenta + dominio verificado** | resend.com | Gratis hasta 3k emails/mes | ✅ Completado |
+| ~~B4~~ | ✅ **`RESEND_API_KEY` y `RESEND_FROM_EMAIL` configuradas** | resend.com → API Keys → Railway Variables | Gratis | ✅ Completado |
 | B5 | Verificar que **Railway PostgreSQL** tiene backups activados | Railway dashboard → servicio PostgreSQL → Settings → Backups | Según plan | Recuperación ante pérdida de datos |
 | B6 | Verificar persistencia de **Railway Redis** | Railway dashboard → servicio Redis → Settings | Según plan | Evitar pérdida de rankings en reinicios |
 | B7 | Crear cuenta de **Google Play Developer** | play.google.com/console | $25 pago único | Publicar en Play Store |
 | B8 | Crear cuenta de **AdMob** y vincularla a la app | admob.google.com | Gratis | Anuncios para usuarios free |
 | ~~B9~~ | ✅ **Ad unit IDs configurados como EAS secrets** | `EXPO_PUBLIC_ADMOB_HOME_BANNER_ID`, `SEARCH_BANNER_ID`, `INTERSTITIAL_ID`, `REWARDED_ID` — todos configurados | Gratis | ✅ Completado — IDs de producción inyectados en builds EAS. |
 | ~~B10~~ | ✅ **UMP SDK integrado** | `hooks/useGdprConsent.ts` + `_layout.tsx` — UMP SDK activo, muestra formulario si `status === REQUIRED` | Gratis | ✅ Código integrado. UMP message ya publicado en AdMob dashboard. |
-| B13 | Configurar `APP_SCHEME` como `unlockhub` en Railway | Railway dashboard → service → Variables → `APP_SCHEME=unlockhub` | Gratis | Deep links (reset-password, etc.) |
+| ~~B13~~ | ✅ **`APP_SCHEME=unlockhub` configurado en Railway** | Railway dashboard → service → Variables | Gratis | ✅ Completado |
 | B14 | Crear email de soporte `soporte@unlockhub.app` | Proveedor de dominio/email | ~1-5€/mes | Requerido por Google Play |
 | ~~B15~~ | ✅ **Privacy Policy publicada** | `docs/privacy-policy.html` → https://jmreja27.github.io/UnlockHub/privacy-policy.html | Gratis | ✅ Completado — GitHub Pages activo (repo público, branch `develop`, carpeta `/docs`). Datos del desarrollador rellenados. |
 | ~~B16~~ | ✅ **Términos y Condiciones publicados** | `docs/terms-of-service.html` → https://jmreja27.github.io/UnlockHub/terms-of-service.html | Gratis | ✅ Completado — igual que B15. |
@@ -30,7 +30,10 @@ Esta sección lista todo lo que **el desarrollador debe hacer manualmente** ante
 > - B1-B2 (Sentry): ✅ DSNs configurados en Railway y EAS
 > - B9 (Ad unit IDs): ✅ 4 EAS secrets configurados — `EXPO_PUBLIC_ADMOB_HOME_BANNER_ID`, `SEARCH_BANNER_ID`, `INTERSTITIAL_ID`, `REWARDED_ID`.
 > - B10 (UMP SDK): ✅ `useGdprConsent.ts` activo, GDPR message publicado en AdMob dashboard. Plugin `react-native-google-mobile-ads` en `app.json`.
-> - B11-B12 (Cloudinary): ✅ Cuenta creada — `CLOUDINARY_URL` pendiente de configurar en Railway variables
+> - B11-B12 (Cloudinary): ✅ Cuenta creada + `CLOUDINARY_URL` configurada en Railway variables
+> - B3-B4 (Resend): ✅ Cuenta + dominio verificado + `RESEND_API_KEY` + `RESEND_FROM_EMAIL` configuradas en Railway
+> - B13 (APP_SCHEME): ✅ `APP_SCHEME=unlockhub` configurado en Railway
+> - ADMIN_SECRET: ✅ Configurado en Railway
 > - B15 (Privacy Policy): ✅ `docs/privacy-policy.html` — URL: https://jmreja27.github.io/UnlockHub/privacy-policy.html — GitHub Pages activo, repo público, datos del desarrollador rellenados. Auto-deploy en cada push a `develop` que toque `docs/`.
 > - B16 (ToS): ✅ `docs/terms-of-service.html` — URL: https://jmreja27.github.io/UnlockHub/terms-of-service.html — igual que B15.
 > - B17 (Migraciones Prisma): ✅ Automáticas en cada deploy — `startCommand` en `railway.json`
@@ -109,7 +112,7 @@ Aplicación móvil (iOS + Android) para tracking unificado de logros de videojue
 |---|---|---|
 | PostgreSQL (Railway) | Base de datos principal | ✅ Activo — backups pendiente verificar (B5) — migración de datos Neon pendiente |
 | Redis (Railway) | Rankings + caché + BullMQ | ✅ Activo — persistencia gestionada por Railway (B6) |
-| Cloudinary | Avatares y banners | ✅ Cuenta creada — `CLOUDINARY_URL` pendiente en Railway variables |
+| Cloudinary | Avatares y banners | ✅ Activo — `CLOUDINARY_URL` configurada en Railway |
 | Railway | Deploy API | ✅ Activo — https://unlockhub-production.up.railway.app |
 | AdMob | Anuncios usuarios free | ⚙️ Pendiente cuenta AdMob (B8) — IDs producción ✅ (B9) — código integrado (B10 ✅) |
 | GitHub Actions | CI/CD | ✅ Configurado |
@@ -569,16 +572,16 @@ El servidor valida todas al arrancar mediante schema Zod. Ver `.env.example` en 
 | `STEAM_API_KEY` | Steam Web API | local, staging, prod | ✅ Configurada |
 | `SENTRY_DSN` | Crash reporting API | staging, prod | ✅ Configurada |
 | `EXPO_PUBLIC_SENTRY_DSN` | Crash reporting móvil | staging, prod | ✅ Configurada |
-| `CLOUDINARY_URL` | Subida de avatares/banners | staging, prod | ⚙️ Pendiente en Railway variables — desbloquea F8 |
-| `RESEND_API_KEY` | Emails transaccionales | staging, prod | ⚙️ Pendiente acción B3 |
-| `RESEND_FROM_EMAIL` | Remitente de emails | staging, prod | ⚙️ Pendiente acción B3 |
-| `APP_SCHEME` | Deep links (`unlockhub://`) | local, staging, prod | ⚙️ Pendiente acción B13 — Railway dashboard → Variables |
+| `CLOUDINARY_URL` | Subida de avatares/banners | staging, prod | ✅ Configurada en Railway |
+| `RESEND_API_KEY` | Emails transaccionales | staging, prod | ✅ Configurada en Railway |
+| `RESEND_FROM_EMAIL` | Remitente de emails | staging, prod | ✅ Configurada en Railway |
+| `APP_SCHEME` | Deep links (`unlockhub://`) | local, staging, prod | ✅ Configurada en Railway (`unlockhub`) |
 | `EXPO_PUBLIC_ADMOB_HOME_BANNER_ID` | Banner Home (EAS secret) | prod | ✅ Configurado como EAS secret (B9) |
 | `EXPO_PUBLIC_ADMOB_SEARCH_BANNER_ID` | Banner Search (EAS secret) | prod | ✅ Configurado como EAS secret (B9) |
 | `EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID` | Interstitial (EAS secret) | prod | ✅ Configurado como EAS secret (B9) |
 | `EXPO_PUBLIC_ADMOB_REWARDED_ID` | Rewarded (EAS secret) | prod | ✅ Configurado como EAS secret (B9) |
 | `POSTHOG_API_KEY` | Analíticas | staging, prod | ⚙️ Pendiente acción N4 |
-| `ADMIN_SECRET` | Acceso al dashboard admin (bearer) | prod | ⚙️ Generar con `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+| `ADMIN_SECRET` | Acceso al dashboard admin (bearer) | prod | ✅ Configurada en Railway |
 | `PSN_SYSTEM_NPSSO` | Sync PSN de usuarios (credencial del sistema) | prod | ⚙️ Obtener en my.playstation.com → F12 → Application → Cookies → `npsso`. Caduca ~60 días. Configurar en Railway dashboard → Variables. **Nunca en código ni `.env` commiteado.** |
 
 ---
@@ -830,8 +833,8 @@ Métricas disponibles:
 | `app/onboarding.tsx` | ✅ | Solo en primer login |
 | `app/game/[id].tsx` | ✅ | Filtros, compartir, retar amigo, guías UGC. Header muestra "X/Y logros · Z% completado" cuando autenticado. |
 | `app/profile/[username].tsx` | ✅ | Sección "vs tú" incluida |
-| `app/link-platform/steam.tsx` | ✅ | Con ayuda contextual paso a paso |
-| `app/link-platform/ra.tsx` | ✅ | Con ayuda contextual paso a paso |
+| `app/link-platform/steam.tsx` | ✅ | Solo pide username (o SteamID64 directo). Backend usa `STEAM_API_KEY` del sistema vía `resolveVanityUrl`. Guía expandible colapsada. |
+| `app/link-platform/ra.tsx` | ✅ | Solo pide username. Backend usa `RA_SYSTEM_KEY` del sistema vía `lookupRaUser`. Guía expandible colapsada. |
 | `app/link-platform/psn.tsx` | ✅ | Formulario de username — el backend usa `PSN_SYSTEM_NPSSO`; no se almacena token de usuario. Guía expandible para hacer perfil público. |
 | `app/link-platform/xbox.tsx` | 🚩 Gateado | Banner "Próximamente" hasta Fase 4 |
 | `app/notifications.tsx` | ✅ | Centro de notificaciones in-app |
@@ -925,6 +928,10 @@ Métricas disponibles:
 | Sin sync al vincular PSN con perfil privado | Si `checkPsnProfilePrivacy` devuelve `true` al vincular, `linkPsnHandler` omite `triggerExpressSync` y `queueInitialSync`. El scheduler nocturno puede intentar el sync y manejará el error `PSN_PROFILE_PRIVATE` sin crash. | Fase 3 |
 | Banner ⚠️ en `link-platform/psn.tsx` para perfil privado — no bloquea la app | Si `account.psnProfilePrivate === true` en la respuesta del link, se muestra una vista inline con el banner + pasos para hacer el perfil público + CTA "Ir a biblioteca". El usuario puede seguir usando la app. No navega de vuelta (perfil público navega con `router.back()`). El flag se resetea automáticamente en el siguiente sync exitoso. | Fase 3 |
 | Badge ⚠️ en `profile.tsx` junto a la cuenta PSN privada | `psnProfilePrivate: true` muestra un `Ionicons name="warning"` (testID `psn-private-badge`) que navega a `link-platform/psn`. Se oculta `lastSyncedAt` cuando el perfil es privado. | Fase 3 |
+| Steam vinculación por username — `resolveVanityUrl` | El usuario solo proporciona su username de Steam (o SteamID64 de 17 dígitos directamente). El backend usa `STEAM_API_KEY` del sistema para llamar a `ISteamUser/ResolveVanityURL/v1/` y resolver username → SteamID64. `linkSteamAccountSchema` acepta `{ username }` sin API key de usuario. `STEAM_USER_NOT_FOUND` (404) si no existe, `STEAM_SYSTEM_NOT_CONFIGURED` (503) si la key del sistema no está. `resolveVanityUrl` lee `process.env['STEAM_API_KEY']` en call-time para facilitar tests sin recargar módulo. | Fase 3 |
+| RA vinculación por username — `lookupRaUser` | El usuario solo proporciona su username de RetroAchievements. El backend usa `RA_SYSTEM_USER`/`RA_SYSTEM_KEY` del sistema para verificar existencia vía `API_GetUserSummary.php`. `linkRetroAchievementsSchema` acepta `{ username }` sin API key de usuario. `RA_USER_NOT_FOUND` (404) si no existe, `RA_SYSTEM_NOT_CONFIGURED` (503) si las credenciales del sistema no están. `lookupRaUser` lee `process.env['RA_SYSTEM_KEY']` en call-time (igual que `resolveVanityUrl`). | Fase 3 |
+| `resolveVanityUrl` y `lookupRaUser` leen env vars en call-time, no en module-load | Las constantes de módulo `STEAM_SYSTEM_API_KEY` y `RA_SYSTEM_KEY` se siguen usando en los métodos de sync (no bloqueantes de vinculación). Las funciones de vinculación leen `process.env` en cada llamada para que los tests puedan controlarlo sin `jest.resetModules()`. | Fase 3 |
+| `@typescript-eslint/consistent-type-imports: 'off'` en tests `.tsx` | Los test files de pantallas usan `jest.requireActual<typeof import(...)>` para preservar `ApiRequestError` real en mocks. La regla `consistent-type-imports` genera falso positivo en este patrón de factory Jest — igual que `import/order` ya estaba desactivado en tests. | Fase 3 |
 
 ---
 
@@ -956,9 +963,9 @@ Métricas disponibles:
 9. ✅ Privacy policy en app. ✅ Privacy Policy + ToS publicados en GitHub Pages. ✅ Datos del desarrollador rellenados. ✅ Texto legal con enlaces en pantalla de registro.
 10. ✅ Escudo de racha
 11. ✅ Centro de notificaciones in-app
-12. ⚙️ Variables pendientes en Railway dashboard → Variables: `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `APP_SCHEME`, `CLOUDINARY_URL`, `ADMIN_SECRET`, `POSTHOG_API_KEY`
+12. ✅ Variables Railway configuradas: `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `APP_SCHEME`, `CLOUDINARY_URL`, `ADMIN_SECRET`. ⚙️ Pendiente: `POSTHOG_API_KEY` (N4)
 13. ⚙️ Google Play Billing — activar cuando Play Console esté listo (B7)
-14. ✅ Analíticas — analytics.ts preparado. ⚙️ POSTHOG_API_KEY (N4)
+14. ✅ Analíticas — analytics.ts preparado. ⚙️ POSTHOG_API_KEY pendiente (N4)
 15. ✅ Ayuda contextual en vinculación de plataformas
 16. ✅ Wrapped mensual + anual
 17. ✅ Canje de puntos por premium
@@ -980,8 +987,8 @@ Métricas disponibles:
 | # | Tarea | Detalle |
 |---|---|---|
 | P1 | ✅ Migración Prisma en prod | Automática en cada deploy — `npx prisma migrate deploy` en `startCommand` de `railway.json` |
-| P2 | Variables pendientes en Railway | Railway dashboard → service → Variables → añadir: `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `APP_SCHEME=unlockhub`, `CLOUDINARY_URL`, `ADMIN_SECRET`, `POSTHOG_API_KEY` |
-| P3 | Resend — cuenta + dominio + API key | resend.com → Add Domain → verificar DNS → API Keys → Create |
+| ~~P2~~ | ✅ Variables Railway configuradas | `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `APP_SCHEME=unlockhub`, `CLOUDINARY_URL`, `ADMIN_SECRET` — todas en Railway. ⚙️ Pendiente solo: `POSTHOG_API_KEY` (N4) |
+| ~~P3~~ | ✅ Resend — cuenta + dominio + API key | Configurado — `RESEND_API_KEY` y `RESEND_FROM_EMAIL` en Railway |
 | ~~P4~~ | ✅ UMP SDK AdMob | Código integrado — `useGdprConsent.ts` activo, GDPR message ya publicado en AdMob. |
 | ~~P4b~~ | ✅ EAS secrets AdMob configurados | Los 4 IDs de producción están en EAS secrets — `HOME_BANNER_ID`, `SEARCH_BANNER_ID`, `INTERSTITIAL_ID`, `REWARDED_ID`. |
 | P5 | ✅ Privacy Policy + ToS en URL pública | `docs/privacy-policy.html` + `docs/terms-of-service.html` — GitHub Pages activo, URLs en vivo, datos del desarrollador rellenados. |
@@ -1031,7 +1038,7 @@ Métricas disponibles:
 | F5 | Push al desbloquear logro | ✅ |
 | F6 | Retar a un amigo en logro | ✅ |
 | F7 | Guías UGC de logros | ✅ |
-| F8 | Avatar upload | ✅ Backend Cloudinary + mobile expo-image-picker — activo en prod cuando `CLOUDINARY_URL` esté en Railway (P2) |
+| F8 | Avatar upload | ✅ Backend Cloudinary + mobile expo-image-picker — activo en prod (`CLOUDINARY_URL` configurada en Railway ✅) |
 | F9 | Dashboard admin | ✅ |
 | F10 | OG profiles | 🔲 Fase 4 |
 | F11 | Búsqueda de logros con filtro de plataforma | ✅ Search tab: chip Achievements + sub-filtro Steam/RA/PSN, infinite scroll, estado locked/unlocked |
@@ -1039,6 +1046,8 @@ Métricas disponibles:
 ---
 
 ## Última revisión de código
+
+**Fecha**: 2026-05-31 (sesión 8) — Steam y RA vinculación simplificada: solo username. `resolveVanityUrl` + `lookupRaUser` exportadas. UI reescrita (guía colapsada, sin campos de API key). i18n ES/EN actualizado. Tests: 426 API + 204 mobile. 0 errores TS/lint.
 
 **Fecha**: 2026-05-30 (sesión 7) — Smoke test APK #3 completo. BUG-6 identificado (PSN screen NPSSO stale — Metro cache). BUG-3/4/5 re-confirmados ✅. AdMob banners ✅. 15/16 pasos completados (offline mode no testeable en emulador). Ver detalles en Sesión 7.
 
@@ -1203,7 +1212,7 @@ d257bfd docs: CLAUDE.md PSN sistema credenciales + estado BD 2026-05-29
 1. ✅ **`PSN_SYSTEM_NPSSO` renovado** en Railway Variables (2026-05-29 sesión 4).
 2. ✅ **Backfill console kikecorrales10 completado** — 882 juegos actualizados: PS4(417) + PS5(409) + PS3(23) + PSVITA(6) + cross-gen(27).
 3. ✅ **Backfill console Adramm completado** — 509 juegos PSN actualizados con `console` (PS5/PS4/PS3/PSVITA).
-4. **Railway variables pendientes**: `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `APP_SCHEME=unlockhub`, `CLOUDINARY_URL`, `ADMIN_SECRET`, `POSTHOG_API_KEY`
+4. ✅ **Railway variables configuradas**: `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `APP_SCHEME=unlockhub`, `CLOUDINARY_URL`, `ADMIN_SECRET`. ⚙️ Pendiente solo: `POSTHOG_API_KEY` (N4)
 5. **EAS Build producción** (N5) — NO lanzar sin pedirlo explícitamente en ese mensaje.
 6. **T8**: upgrade Expo SDK 51→55 + vulnerabilidades build-time. PR dedicado post-lanzamiento.
 
