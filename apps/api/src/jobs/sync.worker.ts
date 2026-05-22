@@ -13,6 +13,7 @@ import { psnAdapter } from '../platforms/psn.adapter';
 import { xboxAdapter } from '../platforms/xbox.adapter';
 import { sendPush } from '../services/notification.service';
 import { createNotification } from '../services/inapp-notification.service';
+import { addXp } from '../services/user.service';
 
 import type { SyncJobData, SyncJobResult } from './sync.queue';
 
@@ -172,6 +173,11 @@ export function startSyncWorker() {
         ).catch((err: unknown) => {
           logger.warn({ err: (err as Error).message }, '[SyncWorker] Push notification fallida');
         });
+      }
+
+      // Acumular XP de los nuevos logros y actualizar BD + rankings Redis
+      if (xpEarned > 0) {
+        await addXp(userId, xpEarned, 'ACHIEVEMENT');
       }
 
       await redis.del(syncProgressKey(userId, platform as Platform));
