@@ -112,7 +112,7 @@ function PendingItem({
     <View
       className="flex-row items-center bg-surface-2 mx-4 mb-2 px-4 py-3 rounded-xl"
       accessible
-      accessibilityLabel={`Solicitud de ${sender.username}`}
+      accessibilityLabel={t('friends.pending_item_label', { username: sender.username })}
     >
       <View className="w-10 h-10 rounded-full bg-primary items-center justify-center mr-3">
         <Text className="text-white font-bold text-base">
