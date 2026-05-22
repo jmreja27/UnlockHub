@@ -56,8 +56,8 @@ export async function linkPlatform(
 
   if (existingAccount) {
     throw new AppError(
-      'Esta cuenta de plataforma ya está vinculada a otro usuario',
-      'PLATFORM_ACCOUNT_TAKEN',
+      'Esta cuenta ya está vinculada a otro usuario de UnlockHub',
+      'PLATFORM_ACCOUNT_ALREADY_LINKED',
       409,
     );
   }

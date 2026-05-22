@@ -142,6 +142,10 @@ export default function LinkPsnScreen() {
           setFieldError(t('link_platform.psn.error_not_found'));
           return;
         }
+        if (err.statusCode === 409) {
+          setFieldError(t('link_platform.psn.error_already_linked'));
+          return;
+        }
         if (err.statusCode === 400) {
           setFieldError(t('link_platform.psn.error_invalid'));
           return;

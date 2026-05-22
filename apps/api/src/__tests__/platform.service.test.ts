@@ -142,7 +142,7 @@ describe('platformService.linkPlatform', () => {
     });
   });
 
-  it('lanza PLATFORM_ACCOUNT_TAKEN si otro usuario ya tiene esa cuenta', async () => {
+  it('lanza PLATFORM_ACCOUNT_ALREADY_LINKED si otro usuario ya tiene esa cuenta', async () => {
     (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(baseUser);
     // Simula que otro usuario ya tiene esta cuenta vinculada
     (mockPrisma.platformAccount.findFirst as jest.Mock).mockResolvedValue({
@@ -159,9 +159,27 @@ describe('platformService.linkPlatform', () => {
         'api-key',
       ),
     ).rejects.toMatchObject({
-      code: 'PLATFORM_ACCOUNT_TAKEN',
+      code: 'PLATFORM_ACCOUNT_ALREADY_LINKED',
       statusCode: 409,
     });
+  });
+
+  it('permite al mismo usuario re-vincular su propia cuenta (upsert)', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(baseUser);
+    // findFirst devuelve null → no hay otra cuenta con el mismo externalId en otro usuario
+    (mockPrisma.platformAccount.findFirst as jest.Mock).mockResolvedValue(null);
+    (mockPrisma.platformAccount.upsert as jest.Mock).mockResolvedValue(basePlatformAccount);
+
+    const account = await platformService.linkPlatform(
+      'user-1',
+      'STEAM',
+      '76561198000000000',
+      'steamuser',
+      'api-key',
+    );
+
+    expect(account.platform).toBe('STEAM');
+    expect(mockPrisma.platformAccount.upsert).toHaveBeenCalledTimes(1);
   });
 
   it('no expone el token en texto plano en el resultado', async () => {
