@@ -34,7 +34,11 @@ function humanizeAuthError(error: unknown): string {
     if (statusCode >= 500) return 'El servidor no está disponible. Por favor, inténtalo más tarde.';
     return apiError.error || 'Ocurrió un error inesperado.';
   }
-  if (error instanceof Error && error.message.includes('fetch')) {
+  if (error instanceof TypeError || (error instanceof Error && (
+    error.message.includes('fetch') ||
+    error.message.includes('Network request failed') ||
+    error.message.includes('Network Error')
+  ))) {
     return 'Sin conexión a internet. Comprueba tu red e inténtalo de nuevo.';
   }
   return 'Ocurrió un error inesperado. Por favor, inténtalo de nuevo.';

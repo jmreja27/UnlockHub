@@ -643,6 +643,21 @@ app.get('/api/v1/challenges/me', auth, (_req, res) => res.json(MY_CHALLENGE_STAT
 
 // ─── SYNC ────────────────────────────────────────────────────────────────────
 
+// Estado agregado de todos los syncs activos — usado por useSyncProgress.hydrateFromApi
+app.get('/api/v1/sync/status', auth, (_req, res) => {
+  res.json(
+    DEMO_PLATFORMS.map((pa) => ({
+      platform: pa.platform,
+      isRunning: false,
+      processed: 0,
+      total: 0,
+      percentComplete: 0,
+      startedAt: null,
+      linked: true,
+    })),
+  );
+});
+
 app.post('/api/v1/sync/:platform', auth, (req, res) => {
   const platform = req.params.platform.toUpperCase();
   res.json({
