@@ -39,10 +39,7 @@ app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 app.use(cookieParser());
 app.use(compression());
 
-app.use(globalRateLimiter);
-
-app.use('/api/v1', router);
-
+// /health excluido del rate limiter — UptimeRobot y Railway healthcheck no deben bloquearse
 app.get('/health', (_req, res) => {
   const maintenance = process.env['MAINTENANCE_MODE'] === 'true';
   res.status(maintenance ? 503 : 200).json({
@@ -51,6 +48,10 @@ app.get('/health', (_req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+app.use(globalRateLimiter);
+
+app.use('/api/v1', router);
 
 // El error handler siempre va al final
 app.use(errorHandler);
