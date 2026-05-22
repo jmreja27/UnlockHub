@@ -44,21 +44,28 @@ export function useSyncProgress(onComplete?: SyncCompleteCallback): UseSyncProgr
     }
   }, []);
 
-  // Hidrata el map de syncs activos a partir de la respuesta de la API (Redis)
-  const hydrateFromApi = useCallback(async () => {
+  // Hidrata el map de syncs activos a partir de la respuesta de la API (Redis).
+  // socketSilent=true: reconstruye el map desde cero (elimina plataformas que ya terminaron).
+  // socketSilent=false (mount): solo añade plataformas nuevas, no elimina las que el socket ya tiene.
+  const hydrateFromApi = useCallback(async (socketSilent = false) => {
     try {
       const statuses = await api.get<SyncStatusResponse[]>('/api/v1/sync/status');
       const running = statuses.filter((s) => s.isRunning && s.linked);
 
       if (running.length === 0) {
+        if (socketSilent) {
+          // El socket lleva tiempo silencioso y Redis confirma que no hay nada en curso:
+          // limpiar el mapa para evitar banners de sync que quedaron huérfanos
+          setActiveSyncs(new Map());
+        }
         stopPolling();
         return;
       }
 
       setActiveSyncs((prev) => {
-        const next = new Map(prev);
+        // socketSilent=true: partir de mapa vacío para eliminar plataformas ya completadas
+        const next = socketSilent ? new Map<string, SyncProgressState>() : new Map(prev);
         for (const s of running) {
-          // Solo sobreescribir si no hay evento Socket.io más reciente para esa plataforma
           if (!next.has(s.platform)) {
             next.set(s.platform, {
               platform: s.platform,
@@ -136,15 +143,17 @@ export function useSyncProgress(onComplete?: SyncCompleteCallback): UseSyncProgr
     socket.on('sync:error', onSyncError);
 
     // BUG-8: Si hay syncs activos pero el socket no emite eventos en SOCKET_GRACE_MS,
-    // activar polling de fallback vía Redis para no dejar la barra stuckeada
+    // activar polling de fallback vía Redis para no dejar la barra stuckeada.
+    // En modo socketSilent=true, hydrateFromApi reconstruye el map desde cero,
+    // eliminando plataformas que terminaron mientras el socket estuvo desconectado.
     const gracePollTimer = setInterval(() => {
       const silenceDuration = Date.now() - lastSocketEventRef.current;
       setActiveSyncs((current) => {
         if (current.size > 0 && silenceDuration > SOCKET_GRACE_MS) {
-          void hydrateFromApi();
+          void hydrateFromApi(true);
           // Iniciar polling continuo si aún hay syncs activos
           if (!pollTimerRef.current) {
-            pollTimerRef.current = setInterval(() => void hydrateFromApi(), POLL_INTERVAL_MS);
+            pollTimerRef.current = setInterval(() => void hydrateFromApi(true), POLL_INTERVAL_MS);
           }
         } else if (current.size === 0) {
           stopPolling();
