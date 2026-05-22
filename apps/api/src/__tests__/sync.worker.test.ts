@@ -103,6 +103,29 @@ beforeEach(() => {
   mockPrisma.userAchievement.findMany.mockResolvedValue([]);
 });
 
+// ─── PARTE 8: lockDuration — evita jobs stalled con 300+ juegos PSN ─────────
+
+describe('startSyncWorker — lockDuration configurado para evitar stalled jobs', () => {
+  it('inicializa el Worker con lockDuration=300_000 y stalledInterval=30_000', () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+
+    const opts = MockWorker.mock.calls[0]?.[2];
+    expect(opts).toMatchObject({
+      lockDuration: 300_000,
+      stalledInterval: 30_000,
+    });
+  });
+
+  it('mantiene concurrency=5', () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+
+    const opts = MockWorker.mock.calls[0]?.[2];
+    expect(opts).toMatchObject({ concurrency: 5 });
+  });
+});
+
 describe('getIOSafe — null cuando Socket.io no está inicializado', () => {
   it('no lanza cuando getIO falla', () => {
     mockGetIO.mockImplementation(() => { throw new Error('not initialized'); });

@@ -196,7 +196,15 @@ export function startSyncWorker() {
         syncedAt: result.syncedAt,
       };
     },
-    { connection: createWorkerConnection(), concurrency: 5 },
+    {
+      connection: createWorkerConnection(),
+      concurrency: 5,
+      // 300 juegos PSN / 10 por lote = 30 lotes; cada lote incluye llamadas API → fácilmente > 30s.
+      // lockDuration por defecto = 30s → job marcado como stalled antes de terminar.
+      // 5 min es suficiente para el peor caso; stalledInterval en 30s para detección rápida.
+      lockDuration: 300_000,
+      stalledInterval: 30_000,
+    },
   );
 
   worker.on('completed', (job) => {
