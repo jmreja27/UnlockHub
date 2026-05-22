@@ -939,6 +939,9 @@ Métricas disponibles:
 | `addXp()` llamado en `sync.worker.ts` tras calcular `xpEarned` (BUG-9) | El worker calculaba `xpEarned = suma normalizedPoints` pero nunca lo persistía — `user.xp` nunca subía. La llamada `await addXp(userId, xpEarned, 'ACHIEVEMENT')` persiste el XP y actualiza los rankings Redis. Solo se llama si `xpEarned > 0`. | Fase 3 |
 | `totalEarnedAchievements`/`totalAvailableAchievements` calculados antes de paginar en `getMyGames` (BUG-10) | Si se calculaban del subset paginado, el header mostraba "120/1200 logros" en la primera página y cambiaba al cargar más páginas. Los agregados se calculan ahora sobre `allGames` (lista completa antes del `slice`), se devuelven en la respuesta de cada página y el cliente usa siempre los de `pages[0]`. | Fase 3 |
 | XBOX eliminado del filtro de biblioteca (BUG-11) | Xbox está gateado hasta Fase 4 — nunca hay datos Xbox en BD — el filtro mostraba lista vacía confundiendo al usuario. `PlatformFilter` type ahora es `'ALL' \| 'STEAM' \| 'RA' \| 'PSN'`. | Fase 3 |
+| `sort_last_played` usa `lastSyncedAt` como aproximación, no `lastPlayedAt` | Steam expone `rtime_last_played` vía `GetOwnedGames`, pero PSN y RA no tienen campo equivalente. Añadir `lastPlayedAt` requeriría nuevo modelo `UserGame` o campo en `Game`, migración Prisma y actualizaciones en 3 adapters. `lastSyncedAt` es suficientemente buena aproximación para la UX de ordenación. | Fase 3 |
+| `hydrateFromApi(socketSilent=false)` en mount vs `hydrateFromApi(true)` en timer de polling (BUG-12) | Al montar solo se añaden plataformas nuevas (preserva estado del socket si ya había eventos). Al hacer polling (socket silencioso >5s), se reconstruye el Map desde cero para no mostrar plataformas que ya terminaron pero no llegaron por socket. | Fase 3 |
+| `fallbackLng: 'en'` en i18n — inglés como idioma de fallback universal | `fallbackLng: 'es'` anterior causaba que usuarios con dispositivos en francés/alemán/etc. vieran la app en español en lugar de inglés. El español es solo uno de los dos idiomas soportados, no debe ser fallback universal. | Fase 3 |
 | `PSN: #1e90ff` (DodgerBlue) en lugar de `#003087` para badges de plataforma | `#003087` sobre fondo oscuro tenía ratio de contraste ~2.8:1 (no supera WCAG 2.1 AA mínimo 4.5:1). `#1e90ff` da ~6.5:1 — supera AA y casi llega a AAA. | Fase 3 |
 | `LibrarySortOrder` definido en `preferencesStore.ts`, no en `app/(tabs)/index.tsx` | Si `preferencesStore` importara desde `app/(tabs)/index` se creaba una dependencia circular (index → preferencesStore → index). Al mover el tipo a donde semánticamente pertenece (es una preferencia), el `index.tsx` re-exporta vía `export type { LibrarySortOrder }` para compatibilidad. | Fase 3 |
 | Sort de biblioteca es client-side sobre la página cargada, no server-side | Server-side sort requeriría 5 endpoints distintos o un parámetro de sort en la API que paginaría incorrectamente con datos acumulados por `useInfiniteQuery`. Client-side sobre los datos ya cargados es correcto para la escala de juegos por usuario y evita complejidad en la API. Pendiente de sync progresivo: la lista se re-ordena con cada batch. | Fase 3 |
@@ -1060,6 +1063,8 @@ Métricas disponibles:
 
 ## Última revisión de código
 
+**Fecha**: 2026-06-02 (sesión 11) — Mock server endpoint `sync/status` añadido. BUG-12 `hydrateFromApi` (`socketSilent`). Back buttons WCAG. `fallbackLng: 'en'`. "Biblioteca". i18n audit completo. Tests: 438 API + 214 mobile. 0 errores TS/lint. Cobertura API 80.77% stmt / 83.66% branch.
+
 **Fecha**: 2026-06-01 (sesión 10) — BUG-7/8/9/10/11 corregidos. PSN states, sort modal, color #1e90ff, i18n. Tests: 438 API + 214 mobile. 0 errores TS/lint. Cobertura API 80.77% stmt / 83.66% branch.
 
 **Fecha**: 2026-05-31 (sesión 9) — Fix `PLATFORM_ACCOUNT_ALREADY_LINKED`: código renombrado, handler 409 añadido en psn.tsx, mensajes i18n corregidos en Steam/RA, clave `error_already_linked` añadida en PSN. `LinkPsnScreen.test.tsx` refactorizado a patrón factory. Revisión completa Parte 2: 0 bugs adicionales. Tests: 427 API + 208 mobile. 0 errores TS/lint.
@@ -1069,6 +1074,36 @@ Métricas disponibles:
 **Fecha**: 2026-05-30 (sesión 7) — Smoke test APK #3 completo. BUG-6 identificado (PSN screen NPSSO stale — Metro cache). BUG-3/4/5 re-confirmados ✅. AdMob banners ✅. 15/16 pasos completados (offline mode no testeable en emulador). Ver detalles en Sesión 7.
 
 **Fecha**: 2026-05-30 (sesión 6) — APK #3 generada localmente (debug). Downgrade `react-native-google-mobile-ads` v16→v13. `app-debug.apk` 165.7 MB lista para smoke test. Ver detalles en Sesión 6.
+
+### Sesión 11 — 2026-06-02 — Mock server, BUG-12, WCAG back buttons, i18n audit
+
+**Objetivo**: emulador local funcional, banner sync incorrecto, espaciado, back buttons, idioma dispositivo, "Biblioteca", "Último jugado", auditoría i18n completa.
+
+**Fixes:**
+- **PARTE 1** ✅: `GET /api/v1/sync/status` añadido al mock server (`apps/api/mock-server.js`). Endpoint retorna todos los `DEMO_PLATFORMS` con `isRunning: false`. `useAuth.ts`: detección de errores de red ampliada para incluir `TypeError` y mensajes `'Network request failed'` / `'Network Error'` — cubría solo `err.message.includes('fetch')`.
+- **BUG-12** ✅ (`useSyncProgress.ts`): `hydrateFromApi` añadía plataformas al Map pero nunca las eliminaba — si PSN terminaba y el socket se desconectaba, PSN quedaba stuckeada en el Map y el banner mostraba "Syncing PlayStation" durante un sync de RA. Fix: parámetro `socketSilent: boolean`. Cuando `true` (polling de fallback), reconstruye el Map desde cero con solo las plataformas en ejecución según Redis. Cuando `false` (mount), solo añade entradas nuevas para preservar el estado del socket.
+- **PARTE 3** ✅ (`challenges.tsx`): `mt-6` → `mt-3` en skeleton y tarjeta de contenido — gap visual excesivo entre el título de sección y la tarjeta del reto.
+- **PARTE 4** ✅: `game/[id].tsx` y `profile/[username].tsx` — botones back tenían solo `hitSlop` pero no `minWidth/minHeight`. Añadido `style={{ minWidth: 44, minHeight: 44, justifyContent: 'center' }}` en ambos para cumplir WCAG 2.1 AA.
+- **PARTE 5** ✅ (`i18n/index.ts`): `fallbackLng: 'es'` → `'en'` y `?? 'es'` → `?? 'en'`. Dispositivos en francés/alemán/etc. ahora caen a inglés en lugar de español.
+- **PARTE 6** ✅: `library.title` → `"Biblioteca"` / `"Library"`.
+- **PARTE 7** ✅: `library.sort_last_played` → `"Último jugado"` / `"Last played"`. No se añade campo `lastPlayedAt` — `lastSyncedAt` es aproximación suficiente (Steam expone `rtime_last_played` pero PSN/RA no tienen equivalente; añadirlo requeriría modelo `UserGame`, migración y 3 adapters). Decisión documentada.
+- **PARTE 8** ✅: Claves `profile.change_avatar`, `profile.avatar_error_title/message`, `profile.avatar_permission_title/message` añadidas en ES/EN (usadas en `profile.tsx` pero ausentes en ambos locale files). `friends.pending_item_label` añadida en ES/EN. `friends.tsx` línea 115: `accessibilityLabel` hardcodeado en español → `t('friends.pending_item_label', { username })`.
+
+**Decisiones tomadas:**
+- `socketSilent=false` en mount (no reconstruye Map) para preservar posibles eventos previos del socket que llegaron antes de la hidratación API.
+- `socketSilent=true` solo en el timer de polling (cuando el socket lleva >5s silencioso), reconstruyendo desde la verdad de Redis.
+- No se añade `lastPlayedAt` a `Game` ni `UserGame` — ver PARTE 7 arriba.
+
+**Estado de calidad:**
+| Categoría | Resultado |
+|---|---|
+| TypeScript strict (API + mobile) | ✅ 0 errores |
+| Lint (API + mobile) | ✅ 0 errores, 0 warnings |
+| Tests backend | ✅ 438/438 — 35 suites |
+| Tests mobile | ✅ 214/214 — 18 suites |
+| Cobertura API | ✅ 80.77% stmt / 83.66% branch |
+
+---
 
 ### Sesión 10 — 2026-06-01 — BUG-7 a BUG-11 + PSN states + Sort + Color
 
@@ -1198,9 +1233,22 @@ adb install apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
 npx expo prebuild --platform android --clean
 # Añadir manualmente en android/app/src/main/AndroidManifest.xml (dentro de <application>):
 # <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-3940256099942544~3347511713"/>
-# IMPORTANTE: borrar bundle cacheado antes de compilar (evita BUG-6 — Metro cache stale)
-rm -f android/app/src/main/assets/index.android.bundle
-cd android && gradlew assembleDebug
+
+# PASO CRÍTICO: generar bundle JS manualmente antes de Gradle
+# Gradle no llama a Metro en debug builds con este setup de Expo — sin este paso la app crashea
+# con "Unable to load script. index.android.bundle is not packaged correctly"
+# NODE_ENV=production + --dev false es obligatorio para que Babel inlinee EXPO_PUBLIC_* vars;
+# en modo --dev true el transform no las inlinea y process.env queda vacío en Hermes → fallback localhost:3000
+mkdir -p android/app/src/main/assets
+EXPO_PUBLIC_API_URL=https://unlockhub-production.up.railway.app NODE_ENV=production npx react-native bundle \
+  --platform android \
+  --dev false \
+  --entry-file "../../node_modules/expo-router/entry.js" \
+  --bundle-output android/app/src/main/assets/index.android.bundle \
+  --assets-dest android/app/src/main/res
+
+# Compilar (incremental si ya se hizo un build completo antes)
+cd android && JAVA_HOME="C:/Program Files/Android/Android Studio/jbr" ANDROID_HOME="C:/Users/Juanjo/AppData/Local/Android/Sdk" ./gradlew assembleDebug
 ```
 
 **EAS Build (cuando se quiera publicar en Play Store):**
