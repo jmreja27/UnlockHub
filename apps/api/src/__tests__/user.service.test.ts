@@ -537,6 +537,104 @@ describe('userService.getMyGames', () => {
 
     expect(result.data[0]?.isCompleted).toBe(false);
   });
+
+  // ─── totalGames / totalCompletedGames ─────────────────────────────────────────
+
+  it('totalGames devuelve el número de juegos distintos', async () => {
+    const gameA = { id: 'g1', title: 'A', platform: 'STEAM', iconUrl: null, totalAchievements: 5 };
+    const gameB = { id: 'g2', title: 'B', platform: 'RA', iconUrl: null, totalAchievements: 10 };
+    const gameC = { id: 'g3', title: 'C', platform: 'STEAM', iconUrl: null, totalAchievements: 3 };
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
+      makeUserAchievement('g1', gameA),
+      makeUserAchievement('g1', gameA),
+      makeUserAchievement('g2', gameB, { platform: 'RA' }),
+      makeUserAchievement('g3', gameC),
+    ]);
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
+    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([]);
+
+    const result = await userService.getMyGames('user-1');
+
+    expect(result.totalGames).toBe(3);
+  });
+
+  it('totalCompletedGames cuenta solo juegos donde earnedAchievements === totalAchievements', async () => {
+    // gameA completado (2/2), gameB incompleto (1/5)
+    const gameA = { id: 'g1', title: 'A', platform: 'STEAM', iconUrl: null, totalAchievements: 2 };
+    const gameB = { id: 'g2', title: 'B', platform: 'STEAM', iconUrl: null, totalAchievements: 5 };
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
+      makeUserAchievement('g1', gameA),
+      makeUserAchievement('g1', gameA),
+      makeUserAchievement('g2', gameB),
+    ]);
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
+    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([]);
+
+    const result = await userService.getMyGames('user-1');
+
+    expect(result.totalCompletedGames).toBe(1);
+    expect(result.totalGames).toBe(2);
+  });
+
+  it('totalCompletedGames=0 cuando ningún juego está completado', async () => {
+    const gameA = { id: 'g1', title: 'A', platform: 'STEAM', iconUrl: null, totalAchievements: 10 };
+    const gameB = { id: 'g2', title: 'B', platform: 'RA', iconUrl: null, totalAchievements: 20 };
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
+      makeUserAchievement('g1', gameA),
+      makeUserAchievement('g2', gameB, { platform: 'RA' }),
+    ]);
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
+    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([]);
+
+    const result = await userService.getMyGames('user-1');
+
+    expect(result.totalCompletedGames).toBe(0);
+  });
+
+  it('totalCompletedGames === totalGames cuando todos los juegos están completados', async () => {
+    const gameA = { id: 'g1', title: 'A', platform: 'STEAM', iconUrl: null, totalAchievements: 2 };
+    const gameB = { id: 'g2', title: 'B', platform: 'RA', iconUrl: null, totalAchievements: 3 };
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
+      makeUserAchievement('g1', gameA),
+      makeUserAchievement('g1', gameA),
+      makeUserAchievement('g2', gameB, { platform: 'RA' }),
+      makeUserAchievement('g2', gameB, { platform: 'RA' }),
+      makeUserAchievement('g2', gameB, { platform: 'RA' }),
+    ]);
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
+    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([]);
+
+    const result = await userService.getMyGames('user-1');
+
+    expect(result.totalCompletedGames).toBe(2);
+    expect(result.totalGames).toBe(2);
+    expect(result.totalCompletedGames).toBe(result.totalGames);
+  });
+
+  it('totalGames/totalCompletedGames se calculan antes de la paginación', async () => {
+    // 25 juegos, 5 completados (1 logro cada uno con totalAchievements=1), 20 incompletos
+    const completedGames = Array.from({ length: 5 }, (_, i) => {
+      const game = { id: `c${i}`, title: `Completed ${i}`, platform: 'STEAM', iconUrl: null, totalAchievements: 1 };
+      return makeUserAchievement(`c${i}`, game);
+    });
+    const incompleteGames = Array.from({ length: 20 }, (_, i) => {
+      const game = { id: `p${i}`, title: `Partial ${i}`, platform: 'STEAM', iconUrl: null, totalAchievements: 10 };
+      return makeUserAchievement(`p${i}`, game);
+    });
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
+      ...completedGames,
+      ...incompleteGames,
+    ]);
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
+    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([]);
+
+    // página 1, limit 20 — solo devuelve 20 juegos pero stats cubren los 25
+    const result = await userService.getMyGames('user-1', undefined, 1, 20);
+
+    expect(result.data).toHaveLength(20);
+    expect(result.totalGames).toBe(25);
+    expect(result.totalCompletedGames).toBe(5);
+  });
 });
 
 // ─── getMyGameAchievements ────────────────────────────────────────────────────

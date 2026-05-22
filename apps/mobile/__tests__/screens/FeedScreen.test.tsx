@@ -55,6 +55,8 @@ const baseMyGamesResult = {
   total: 0,
   totalEarnedAchievements: 0,
   totalAvailableAchievements: 0,
+  totalGames: 0,
+  totalCompletedGames: 0,
 };
 
 const baseSyncResult = {
@@ -158,5 +160,26 @@ describe('LibraryScreen', () => {
     mockUseSyncAll.mockReturnValue({ ...baseSyncResult, hasPlatforms: true });
     const { getByRole } = render(<LibraryScreen />);
     expect(getByRole('button', { name: 'library.sync_button' })).toBeTruthy();
+  });
+
+  it('muestra el contador de juegos completados/totales cuando hay juegos', () => {
+    mockUseMyGames.mockReturnValue({
+      ...baseMyGamesResult,
+      allGames: sampleGames,
+      totalGames: 10,
+      totalCompletedGames: 3,
+      totalEarnedAchievements: 25,
+      totalAvailableAchievements: 73,
+    });
+    const { getByText } = render(<LibraryScreen />);
+    // accessibilityElementsHidden oculta los Text del árbol de a11y — includeHiddenElements necesario
+    expect(getByText('3/10', { includeHiddenElements: true })).toBeTruthy();
+    expect(getByText('library.games_short', { includeHiddenElements: true })).toBeTruthy();
+  });
+
+  it('no muestra el contador de juegos cuando totalGames es 0', () => {
+    mockUseMyGames.mockReturnValue({ ...baseMyGamesResult, totalGames: 0, totalCompletedGames: 0 });
+    const { queryByText } = render(<LibraryScreen />);
+    expect(queryByText('library.games_short', { includeHiddenElements: true })).toBeNull();
   });
 });
