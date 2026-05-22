@@ -949,6 +949,7 @@ Métricas disponibles:
 | Sync optimization (parallel RA batches, skip completed) documentada pero no implementada | Parallel processing dentro de batches RA: riesgo de rate limiting sin SLA conocido. Skip completed games: riesgo de perder achievements de DLC añadidos post-sync. Decisión: documentar como pending T13, no implementar en Fase 3. | Fase 3 |
 | `totalGames`/`totalCompletedGames` calculados pre-paginación en `getMyGames` | Misma lógica que BUG-10 para `totalEarned`/`totalAvailable` — los contadores de cabecera deben reflejar la colección completa del usuario, no solo la página cargada. `isCompleted` ya existía en el map; se reutiliza vía `.filter`. | Fase 3 |
 | `getByText` con `{ includeHiddenElements: true }` en tests del contador de juegos | Los `Text` del bloque de stats tienen `accessibilityElementsHidden={true}` para que el screen reader lea solo el `accessibilityLabel` combinado del `View` padre. `@testing-library/react-native` excluye estos nodos del árbol de accesibilidad por defecto — la opción `includeHiddenElements` los hace encontrables. | Fase 3 |
+| `globalRateLimiter` a 300 req/15min (antes 100) y `/health` excluido | 100 req/15min se agotaba en uso normal: TanStack Query + infinite scroll + múltiples tabs hacen decenas de peticiones en ráfaga al abrir la app. `/health` puesto antes de `app.use(globalRateLimiter)` para que UptimeRobot y Railway healthcheck nunca sean bloqueados — estaba declarado después y heredaba el límite. | Fase 3 |
 
 ---
 
@@ -1065,6 +1066,8 @@ Métricas disponibles:
 
 ## Última revisión de código
 
+**Fecha**: 2026-06-03 (sesión 13) — Fix rate limiter producción: `max: 100→300` req/15min, `/health` excluido del middleware. 0 código nuevo, solo `app.ts` + `rateLimiter.ts`. Tests: 443 API + 216 mobile. 0 errores TS/lint.
+
 **Fecha**: 2026-06-03 (sesión 12) — Contador `totalGames`/`totalCompletedGames` en cabecera de biblioteca. Backend + hook + UI + i18n + tests. Tests: 443 API + 216 mobile. 0 errores TS/lint. Cobertura API 80.8% stmt / 83.66% branch.
 
 **Fecha**: 2026-06-02 (sesión 11) — Mock server endpoint `sync/status` añadido. BUG-12 `hydrateFromApi` (`socketSilent`). Back buttons WCAG. `fallbackLng: 'en'`. "Biblioteca". i18n audit completo. Tests: 438 API + 214 mobile. 0 errores TS/lint. Cobertura API 80.77% stmt / 83.66% branch.
@@ -1078,6 +1081,29 @@ Métricas disponibles:
 **Fecha**: 2026-05-30 (sesión 7) — Smoke test APK #3 completo. BUG-6 identificado (PSN screen NPSSO stale — Metro cache). BUG-3/4/5 re-confirmados ✅. AdMob banners ✅. 15/16 pasos completados (offline mode no testeable en emulador). Ver detalles en Sesión 7.
 
 **Fecha**: 2026-05-30 (sesión 6) — APK #3 generada localmente (debug). Downgrade `react-native-google-mobile-ads` v16→v13. `app-debug.apk` 165.7 MB lista para smoke test. Ver detalles en Sesión 6.
+
+### Sesión 13 — 2026-06-03 — Fix rate limiter producción
+
+**Objetivo**: corregir `RATE_LIMIT_EXCEEDED` en producción que bloqueaba el acceso a RetroAchievements y eventualmente a toda la API (incluyendo `/health`).
+
+**Causa raíz**: `globalRateLimiter` estaba configurado a `max: 100 / 15 min`. TanStack Query con infinite scroll, múltiples tabs cargando simultáneamente y pull-to-refresh genera decenas de peticiones en ráfaga al abrir la app — este límite se agotaba en uso normal. Adicionalmente, `/health` estaba declarado **después** de `app.use(globalRateLimiter)` en `app.ts`, por lo que UptimeRobot y el healthcheck de Railway también podían ser bloqueados.
+
+**`apps/api/src/middleware/rateLimiter.ts`:**
+- `max: 100` → `max: 300` (≈1 req cada 3 segundos de media — conservador pero funcional)
+
+**`apps/api/src/app.ts`:**
+- `/health` route movida **antes** de `app.use(globalRateLimiter)` — nunca debe ser rate-limited
+- `authRateLimiter` (10 req/15min en `/auth/*`) sin cambios — correcto para seguridad
+
+**Estado de calidad:**
+| Categoría | Resultado |
+|---|---|
+| TypeScript strict (API + mobile) | ✅ 0 errores |
+| Lint (API + mobile) | ✅ 0 errores, 0 warnings |
+| Tests backend | ✅ 443/443 — 35 suites |
+| Tests mobile | ✅ 216/216 — 18 suites |
+
+---
 
 ### Sesión 12 — 2026-06-03 — Contador juegos completados/totales en biblioteca
 
