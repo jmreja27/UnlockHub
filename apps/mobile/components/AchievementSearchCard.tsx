@@ -4,16 +4,12 @@ import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import type { AchievementSearchResult } from '@unlockhub/types';
 
+import { getPlatformColor } from '../lib/platformColors';
+
 const PLATFORM_LABEL: Record<string, string> = {
   STEAM: 'Steam',
   RA: 'RetroAchievements',
   PSN: 'PlayStation',
-};
-
-const PLATFORM_COLOR: Record<string, string> = {
-  STEAM: '#1b9aaa',
-  RA: '#e8a838',
-  PSN: '#003087',
 };
 
 interface Props {
@@ -23,7 +19,7 @@ interface Props {
 export function AchievementSearchCard({ achievement }: Props) {
   const { t } = useTranslation();
   const platformLabel = PLATFORM_LABEL[achievement.platform] ?? achievement.platform;
-  const platformColor = PLATFORM_COLOR[achievement.platform] ?? '#6b7280';
+  const platformColor = getPlatformColor(achievement.platform);
 
   const accessLabel = t('search.achievement_item_label', {
     title: achievement.title,

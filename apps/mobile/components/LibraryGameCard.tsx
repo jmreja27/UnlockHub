@@ -4,20 +4,13 @@ import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
 import type { LibraryGame } from '../hooks/useMyGames';
+import { getPlatformColor } from '../lib/platformColors';
 
 const PLATFORM_LABEL: Record<string, string> = {
   STEAM: 'Steam',
   RA: 'RetroAchievements',
   XBOX: 'Xbox',
   PSN: 'PlayStation',
-};
-
-const PLATFORM_COLOR: Record<string, string> = {
-  STEAM: '#1b9aaa',
-  RA: '#e8a838',
-  XBOX: '#107c10',
-  // #1e90ff (DodgerBlue) — mayor contraste que #003087 en fondo oscuro (ratio ~6.5:1 vs blanco)
-  PSN: '#1e90ff',
 };
 
 function ProgressBar({ pct, color }: { pct: number; color: string }) {
@@ -35,12 +28,11 @@ interface Props {
 export function LibraryGameCard({ game }: Props) {
   const { t } = useTranslation();
   const platformLabel = PLATFORM_LABEL[game.platform] ?? game.platform;
-  const platformColor = PLATFORM_COLOR[game.platform] ?? '#6b7280';
+  const platformColor = getPlatformColor(game.platform);
 
   // Color y estado de completado
   let barColor: string;
   let pctLabel: string;
-  let psnBadge: string | null = null;
 
   if (game.isCompleted) {
     barColor = '#22c55e';
@@ -50,14 +42,9 @@ export function LibraryGameCard({ game }: Props) {
     pctLabel = `${game.completionPct}%`;
   }
 
-  // Badges PSN: platino o 100% completo
-  if (game.platform === 'PSN') {
-    if (game.isCompleted) {
-      psnBadge = t('library.psn_100');
-    } else if (game.platinumEarned) {
-      psnBadge = t('library.psn_platinum');
-    }
-  }
+  // Badges PSN independientes — pueden mostrarse ambos a la vez
+  const showPsnPlatinum = game.platform === 'PSN' && game.platinumEarned;
+  const showPsn100 = game.platform === 'PSN' && game.isCompleted;
 
   return (
     <Pressable
@@ -84,18 +71,27 @@ export function LibraryGameCard({ game }: Props) {
               {game.title}
             </Text>
             <View className="flex-row items-center gap-1.5">
-              {/* Badge PSN especial (platino o 100%) */}
-              {psnBadge && (
+              {/* Badge platino PSN */}
+              {showPsnPlatinum && (
                 <View
                   className="px-1.5 py-0.5 rounded-full"
-                  style={{ backgroundColor: game.isCompleted ? '#22c55e33' : '#f5c518' + '33' }}
+                  style={{ backgroundColor: '#f5c51833' }}
                   importantForAccessibility="no"
                 >
-                  <Text
-                    className="text-xs font-bold"
-                    style={{ color: game.isCompleted ? '#22c55e' : '#f5c518' }}
-                  >
-                    {psnBadge}
+                  <Text className="text-xs font-bold" style={{ color: '#f5c518' }}>
+                    {t('library.psn_platinum')}
+                  </Text>
+                </View>
+              )}
+              {/* Badge 100% PSN */}
+              {showPsn100 && (
+                <View
+                  className="px-1.5 py-0.5 rounded-full"
+                  style={{ backgroundColor: '#22c55e33' }}
+                  importantForAccessibility="no"
+                >
+                  <Text className="text-xs font-bold" style={{ color: '#22c55e' }}>
+                    {t('library.psn_100')}
                   </Text>
                 </View>
               )}

@@ -4,18 +4,13 @@ import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import type { GameSearchResult } from '@unlockhub/types';
 
+import { getPlatformColor } from '../lib/platformColors';
+
 const PLATFORM_LABEL: Record<string, string> = {
   STEAM: 'Steam',
   RA: 'RetroAchievements',
   XBOX: 'Xbox',
   PSN: 'PlayStation',
-};
-
-const PLATFORM_COLOR: Record<string, string> = {
-  STEAM: '#1b9aaa',
-  RA: '#e8a838',
-  XBOX: '#107c10',
-  PSN: '#003087',
 };
 
 interface Props {
@@ -25,7 +20,7 @@ interface Props {
 export function GameCard({ game }: Props) {
   const { t } = useTranslation();
   const platformLabel = PLATFORM_LABEL[game.platform] ?? game.platform;
-  const platformColor = PLATFORM_COLOR[game.platform] ?? '#6b7280';
+  const platformColor = getPlatformColor(game.platform);
 
   return (
     <Pressable
