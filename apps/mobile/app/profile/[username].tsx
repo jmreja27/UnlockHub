@@ -59,7 +59,7 @@ export default function PublicProfileScreen() {
         className="px-4 pt-2 pb-1"
         accessibilityLabel={t('common.back')}
         accessibilityRole="button"
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        style={{ minWidth: 44, minHeight: 44, justifyContent: 'center' }}
       >
         <Text className="text-indigo-400 text-base">{t('common.back')}</Text>
       </Pressable>

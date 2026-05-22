@@ -352,7 +352,7 @@ export default function GameDetailScreen() {
             className="self-start mb-4"
             accessibilityRole="button"
             accessibilityLabel={t('common.back')}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            style={{ minWidth: 44, minHeight: 44, justifyContent: 'center' }}
           >
             <Text className="text-primary-light text-base">{t('common.back')}</Text>
           </Pressable>
