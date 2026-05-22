@@ -98,11 +98,13 @@ function sortGames(games: LibraryGame[], order: LibrarySortOrder): LibraryGame[]
       return copy.sort((a, b) => a.completionPct - b.completionPct);
     case 'last_played':
     default:
-      // El backend ya ordena por título; para "última vez" ordenamos por lastSyncedAt desc
+      // lastSyncedAt es por plataforma, no por juego — cuando coincide (misma plataforma),
+      // desempatar por completionPct desc para un orden estable y con sentido
       return copy.sort((a, b) => {
         const aDate = a.lastSyncedAt ? new Date(a.lastSyncedAt).getTime() : 0;
         const bDate = b.lastSyncedAt ? new Date(b.lastSyncedAt).getTime() : 0;
-        return bDate - aDate;
+        const dateDiff = bDate - aDate;
+        return dateDiff !== 0 ? dateDiff : b.completionPct - a.completionPct;
       });
   }
 }
@@ -208,7 +210,7 @@ export default function LibraryScreen() {
   return (
     <SafeAreaView className="flex-1 bg-surface">
       {/* Cabecera */}
-      <View className="px-4 pt-4 pb-2 flex-row items-center justify-between">
+      <View className="px-4 pt-2 pb-2 flex-row items-center justify-between">
         <View className="flex-1 mr-3">
           <Text className="text-white text-2xl font-bold" accessibilityRole="header">
             {t('library.title')}
@@ -243,7 +245,7 @@ export default function LibraryScreen() {
                 / {totalAvailableAchievements} {t('library.achievements_short')}
               </Text>
               <Text className="text-green-400 font-semibold text-sm mt-0.5" accessibilityElementsHidden>
-                {totalCompletedGames}/{totalGames}
+                {totalCompletedGames}<Text className="text-gray-500">/{totalGames}</Text>
               </Text>
               <Text className="text-gray-500 text-xs" accessibilityElementsHidden>
                 {t('library.games_short')}
@@ -298,7 +300,7 @@ export default function LibraryScreen() {
           accessibilityLabel={t('library.sort_button_a11y', { current: activeSortLabel })}
         >
           <Text className="text-primary-light text-xs font-semibold" numberOfLines={1}>
-            {t('library.sort_button')} ▼
+            {activeSortLabel} ▼
           </Text>
         </Pressable>
       </View>

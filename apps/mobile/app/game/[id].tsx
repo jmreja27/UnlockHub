@@ -346,7 +346,7 @@ export default function GameDetailScreen() {
     <SafeAreaView className="flex-1 bg-surface">
       <View className="flex-1">
         {/* Header */}
-        <View className="px-4 pt-4 pb-3">
+        <View className="px-4 pt-2 pb-3">
           <Pressable
             onPress={() => router.back()}
             className="self-start mb-4"
@@ -495,7 +495,7 @@ export default function GameDetailScreen() {
           accessibilityViewIsModal
         >
           <SafeAreaView edges={['bottom']} className="bg-surface rounded-t-2xl">
-            <View className="px-4 pt-4 pb-2">
+            <View className="px-4 pt-2 pb-2">
               <Text className="text-white font-bold text-base mb-0.5">
                 {t('game.challenge_select_friend')}
               </Text>
