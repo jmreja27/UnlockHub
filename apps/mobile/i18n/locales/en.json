@@ -207,9 +207,7 @@
     "sort_alpha_asc": "A → Z",
     "sort_alpha_desc": "Z → A",
     "sort_pct_desc": "Highest % first",
-    "sort_pct_asc": "Lowest % first",
-    "psn_platinum": "🏆 Platinum",
-    "psn_100": "🥇 100%"
+    "sort_pct_asc": "Lowest % first"
   },
   "feed": {
     "title": "Feed",

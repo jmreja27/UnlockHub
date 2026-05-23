@@ -42,10 +42,6 @@ export function LibraryGameCard({ game }: Props) {
     pctLabel = `${game.completionPct}%`;
   }
 
-  // Badges PSN independientes — pueden mostrarse ambos a la vez
-  const showPsnPlatinum = game.platform === 'PSN' && game.platinumEarned;
-  const showPsn100 = game.platform === 'PSN' && game.isCompleted;
-
   return (
     <Pressable
       onPress={() => router.push(`/game/${game.id}`)}
@@ -71,28 +67,13 @@ export function LibraryGameCard({ game }: Props) {
               {game.title}
             </Text>
             <View className="flex-row items-center gap-1.5">
-              {/* Badge platino PSN */}
-              {showPsnPlatinum && (
+              {/* Tick verde — solo cuando el juego PSN está 100% completado */}
+              {game.platform === 'PSN' && game.isCompleted && (
                 <View
-                  className="px-1.5 py-0.5 rounded-full"
-                  style={{ backgroundColor: '#f5c51833' }}
+                  className="bg-green-500 rounded-full w-5 h-5 items-center justify-center"
                   importantForAccessibility="no"
                 >
-                  <Text className="text-xs font-bold" style={{ color: '#f5c518' }}>
-                    {t('library.psn_platinum')}
-                  </Text>
-                </View>
-              )}
-              {/* Badge 100% PSN */}
-              {showPsn100 && (
-                <View
-                  className="px-1.5 py-0.5 rounded-full"
-                  style={{ backgroundColor: '#22c55e33' }}
-                  importantForAccessibility="no"
-                >
-                  <Text className="text-xs font-bold" style={{ color: '#22c55e' }}>
-                    {t('library.psn_100')}
-                  </Text>
+                  <Text className="text-white text-xs font-bold">✓</Text>
                 </View>
               )}
               <View
