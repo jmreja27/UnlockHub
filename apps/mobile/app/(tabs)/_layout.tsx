@@ -7,6 +7,7 @@ import type { PaginatedResponse, Friendship } from '@unlockhub/types';
 import { api } from '../../lib/api';
 import { useSessionStore } from '../../stores/sessionStore';
 import { NotificationBell } from '../../components/NotificationBell';
+import { FEATURES } from '../../lib/featureFlags';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -58,12 +59,15 @@ export default function TabsLayout() {
       {TABS.map((tab) => {
         const label = t(tab.titleKey);
         const badge = tab.name === 'friends' && pendingCount > 0 ? pendingCount : undefined;
+        // Challenges gateado hasta Fase 4 — ocultar del tab bar sin eliminar la pantalla
+        const href = tab.name === 'challenges' && !FEATURES.challenges ? null : undefined;
         return (
           <Tabs.Screen
             key={tab.name}
             name={tab.name}
             options={{
               title: label,
+              href,
               tabBarAccessibilityLabel: badge
                 ? `${label} — ${badge} solicitudes pendientes`
                 : label,
