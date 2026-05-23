@@ -210,7 +210,7 @@ export default function LibraryScreen() {
   return (
     <SafeAreaView className="flex-1 bg-surface">
       {/* Cabecera */}
-      <View className="px-4 pt-2 pb-2 flex-row items-center justify-between">
+      <View className="px-4 pt-1 pb-2 flex-row items-center justify-between">
         <View className="flex-1 mr-3">
           <Text className="text-white text-2xl font-bold" accessibilityRole="header">
             {t('library.title')}

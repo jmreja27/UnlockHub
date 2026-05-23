@@ -306,7 +306,7 @@ export default function ProfileScreen() {
       >
         {/* Sección de avatar y datos principales */}
         <View
-          className="items-center pt-8 pb-6 px-6"
+          className="items-center pt-6 pb-6 px-6"
           accessible
           accessibilityLabel={t('profile.profile_aria', {
             username: user.username,

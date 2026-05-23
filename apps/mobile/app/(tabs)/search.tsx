@@ -76,8 +76,8 @@ export default function SearchScreen() {
   return (
     <SafeAreaView className="flex-1 bg-surface">
       {/* Barra de búsqueda */}
-      <View className="px-4 pt-2 pb-3">
-        <Text className="text-white text-2xl font-bold mb-4" accessibilityRole="header">
+      <View className="px-4 pt-1 pb-3">
+        <Text className="text-white text-2xl font-bold mb-2" accessibilityRole="header">
           {t('search.title')}
         </Text>
         <View className="flex-row items-center bg-surface-card rounded-xl px-3 h-11">
