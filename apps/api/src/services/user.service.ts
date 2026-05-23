@@ -206,6 +206,8 @@ type LibraryGame = {
   earnedAchievements: number;
   completionPct: number;
   lastSyncedAt: string | null;
+  // MAX(unlockedAt) del juego — usado para sort "último jugado" real
+  lastActivityAt: string | null;
   // Estados PSN: solo presentes cuando platform === 'PSN'
   hasPlatinum: boolean;
   platinumEarned: boolean;
@@ -242,6 +244,7 @@ export async function getMyGames(
       },
       select: {
         achievementId: true,
+        unlockedAt: true,
         achievement: {
           select: {
             gameId: true,
@@ -314,6 +317,7 @@ export async function getMyGames(
       iconUrl: string | null;
       totalAchievements: number;
       earnedAchievements: number;
+      lastActivityAt: Date | null;
     }
   >();
 
@@ -328,9 +332,14 @@ export async function getMyGames(
         iconUrl: game.iconUrl,
         totalAchievements: game.totalAchievements,
         earnedAchievements: 1,
+        lastActivityAt: ua.unlockedAt,
       });
     } else {
       entry.earnedAchievements++;
+      // Mantener el MAX(unlockedAt) para reflejar la actividad más reciente por juego
+      if (ua.unlockedAt > (entry.lastActivityAt ?? new Date(0))) {
+        entry.lastActivityAt = ua.unlockedAt;
+      }
     }
   }
 
@@ -352,6 +361,7 @@ export async function getMyGames(
           ? Math.round((g.earnedAchievements / g.totalAchievements) * 100)
           : 0,
       lastSyncedAt: syncMap.get(g.platform) ?? null,
+      lastActivityAt: g.lastActivityAt?.toISOString() ?? null,
       hasPlatinum,
       platinumEarned,
       isCompleted,

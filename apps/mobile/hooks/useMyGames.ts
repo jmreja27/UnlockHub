@@ -12,6 +12,8 @@ export interface LibraryGame {
   earnedAchievements: number;
   completionPct: number;
   lastSyncedAt: string | null;
+  // MAX(unlockedAt) de los logros del juego — más preciso que lastSyncedAt para el sort
+  lastActivityAt: string | null;
   hasPlatinum: boolean;
   platinumEarned: boolean;
   isCompleted: boolean;

@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import { useTranslation } from 'react-i18next';
 import { router } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import type { SyncCompleteEvent } from '@unlockhub/types';
 
 import { useMyGames } from '../../hooks/useMyGames';
@@ -98,11 +99,12 @@ function sortGames(games: LibraryGame[], order: LibrarySortOrder): LibraryGame[]
       return copy.sort((a, b) => a.completionPct - b.completionPct);
     case 'last_played':
     default:
-      // lastSyncedAt es por plataforma, no por juego — cuando coincide (misma plataforma),
-      // desempatar por completionPct desc para un orden estable y con sentido
+      // lastActivityAt = MAX(unlockedAt) de los logros del juego — refleja la actividad real
+      // en la plataforma original. Desempatar por completionPct desc cuando coincida (e.g.
+      // juegos sin ningún logro desbloqueado todavía, donde lastActivityAt es null).
       return copy.sort((a, b) => {
-        const aDate = a.lastSyncedAt ? new Date(a.lastSyncedAt).getTime() : 0;
-        const bDate = b.lastSyncedAt ? new Date(b.lastSyncedAt).getTime() : 0;
+        const aDate = a.lastActivityAt ? new Date(a.lastActivityAt).getTime() : 0;
+        const bDate = b.lastActivityAt ? new Date(b.lastActivityAt).getTime() : 0;
         const dateDiff = bDate - aDate;
         return dateDiff !== 0 ? dateDiff : b.completionPct - a.completionPct;
       });
@@ -139,6 +141,7 @@ function LibrarySkeleton() {
 export default function LibraryScreen() {
   const { t } = useTranslation();
   const { user } = useSessionStore();
+  const queryClient = useQueryClient();
   const { librarySortOrder, setLibrarySortOrder } = usePreferencesStore();
   const [activeFilter, setActiveFilter] = useState<PlatformFilter>('ALL');
   const [search, setSearch] = useState('');
@@ -396,7 +399,9 @@ export default function LibraryScreen() {
           refreshControl={
             <RefreshControl
               refreshing={isRefetching}
-              onRefresh={() => void refetch()}
+              onRefresh={() => {
+                void queryClient.invalidateQueries({ queryKey: ['my-games'] });
+              }}
               tintColor="#818cf8"
               colors={['#4f46e5']}
               accessibilityLabel={t('library.refresh_label')}
