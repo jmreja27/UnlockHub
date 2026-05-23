@@ -236,6 +236,7 @@ Todas las features gateadas se controlan desde `lib/featureFlags.ts`. No crear m
 // lib/featureFlags.ts
 export const FEATURES = {
   premium: false,        // Activar cuando Google Play Billing esté integrado (B7)
+  challenges: false,     // Activar cuando los retos semanales estén listos para Fase 4
   wrapped: true,         // ✅ ACTIVO
   pointsRedeem: true,    // ✅ ACTIVO
   advancedStats: true,   // ✅ ACTIVO
@@ -811,16 +812,16 @@ Métricas disponibles:
 
 ## Estado de pantallas
 
-### Tabs principales — todas ✅
+### Tabs principales
 
-| Tab | Ruta |
-|---|---|
-| Home (Biblioteca) | `app/(tabs)/index.tsx` |
-| Search | `app/(tabs)/search.tsx` |
-| Rankings | `app/(tabs)/rankings.tsx` |
-| Friends | `app/(tabs)/friends.tsx` |
-| Challenges | `app/(tabs)/challenges.tsx` |
-| Profile | `app/(tabs)/profile.tsx` |
+| Tab | Ruta | Estado |
+|---|---|---|
+| Home (Biblioteca) | `app/(tabs)/index.tsx` | ✅ |
+| Search | `app/(tabs)/search.tsx` | ✅ |
+| Rankings | `app/(tabs)/rankings.tsx` | ✅ |
+| Friends | `app/(tabs)/friends.tsx` | ✅ |
+| Challenges | `app/(tabs)/challenges.tsx` | 🚩 Gateado — `FEATURES.challenges = false` oculta el tab del nav bar. La pantalla sigue existiendo. |
+| Profile | `app/(tabs)/profile.tsx` | ✅ |
 
 ### Pantallas adicionales
 
@@ -961,6 +962,11 @@ Métricas disponibles:
 | `globalRateLimiter` 300→500 req/15min. **Express rate limiter ≠ Railway plan limits.** | 300 req/15 min seguía siendo insuficiente para uso normal: múltiples tabs activas + TanStack Query con refetch + sync progress polling ≈ 20-30 req en ráfagas al abrir la app. **Distinción crítica**: el rate limiter es código Express (`express-rate-limit`, controla abusos), completamente independiente de los límites del plan Railway (RAM, horas de ejecución, réplicas). Cambiar uno no afecta al otro. `authRateLimiter` (10 req/15 min en `/auth/*`) sin cambios — correcto por seguridad. | Fase 3 |
 | Sync PSN lento es estructural, no rate limiting — sin código de throttling añadido | `getUserTrophiesEarnedForTitle` se llama una vez por juego en el bucle `processTitles` (secuencial) y no está cacheado (el earned status cambia). Para 300 juegos = 300 llamadas HTTP secuenciales (~300-900s). Los logs de Railway no muestran ningún 429 de PSN. El `lockDuration: 300_000` ya resuelve el stalled job. No se añaden delays sin evidencia de rate limiting real. | Fase 3 |
 | Contadores de biblioteca (`totalGames`, `earnedAchievements`) no desnormalizados — calculados en JS | `getMyGames` carga todos los `UserAchievement` del usuario en memoria y calcula agregados en JS. Eficiente a escala actual (<10k achievements por usuario típico). `UserAchievement.userId` tiene `@@index` — query eficiente. Si un usuario supera ~100k achievements (e.g., PSN con 2000 juegos × 50 trofeos), esta carga podría ser lenta. Documentado como T14. No implementar desnormalización sin confirmación del desarrollador (requeriría migración Prisma + lógica de actualización en todos los adapters). | Fase 3 |
+| `lastActivityAt` = MAX(unlockedAt) por juego — campo real de BD, no estimación | `UserAchievement.unlockedAt DateTime` confirmado en schema Prisma (migración `20260507000000_init`). Se calcula en `getMyGames` iterando los `userAchievements` seleccionados (`unlockedAt: true`). El sort "último jugado" en el cliente usa `lastActivityAt` con desempate por `completionPct desc`. Más preciso que `lastSyncedAt` (que era por plataforma, no por juego). | Fase 3 |
+| `FeedScreen.test.tsx` envuelto en `QueryClientProvider` — necesario desde P3 | Añadir `useQueryClient()` en `index.tsx` (P3, pull-to-refresh) rompe los tests que renderizaban sin QueryClientProvider. La función `renderWithClient` crea un `QueryClient` con `retry: false` para tests. El test de pull-to-refresh cambió de `expect(refetch).toHaveBeenCalled()` a `expect(() => onRefresh()).not.toThrow()` — `queryClient.invalidateQueries` no es mockeable sin infraestructura adicional; verificar que no lanza es suficiente. | Fase 3 |
+| Tab Challenges gateado con `FEATURES.challenges = false` — pantalla intacta | `href: null` en `Tabs.Screen` oculta el tab del nav bar sin eliminar la ruta. La pantalla `challenges.tsx` sigue siendo accesible via deep link. El código no se toca — solo `_layout.tsx` condiciona `href` en función del flag. Activar cambiando `challenges: false → true` en `featureFlags.ts`. | Fase 3 |
+| Badge PSN en `LibraryGameCard` cambiado: tick verde `isCompleted` → badge amarillo "Platino" `platinumEarned` | El tick verde era ambiguo (el usuario no sabe si significa 100% o platino). El badge "Platino" con fondo amarillo (`bg-yellow-400 text-black`) comunica exactamente qué se logró. Un juego puede tener el platino sin `isCompleted` (DLC añadidos tras el platino). | Fase 3 |
+| Selector de tema eliminado de Profile settings — oculto con TODO comentario | Modo oscuro es el único implementado — mostrar un "selector" con una sola opción confundía. Oculto con `{/* TODO Fase 4 */}` para recordar que debe implementarse con el modo claro. | Fase 3 |
 
 ---
 
@@ -1078,6 +1084,8 @@ Métricas disponibles:
 
 ## Última revisión de código
 
+**Fecha**: 2026-06-07 (sesión 17) — 10 mejoras UI/UX: jerarquía visual logros en `game/[id].tsx` (badge earned vs no-earned), `lastActivityAt` = MAX(unlockedAt) para sort "último jugado" real (campo `UserAchievement.unlockedAt` confirmado en schema), pull-to-refresh via `queryClient.invalidateQueries`, `contentFit="contain"` en iconos de juego, badge "Platino" en `LibraryGameCard` cuando `platinumEarned`, ícono cámara en avatar de perfil, placeholder PSN sin username real, selector de tema oculto, más espaciado en chips de Search, tab Challenges gateado con `FEATURES.challenges = false`. Tests: 445 API + 233 mobile. 0 errores TS/lint. Cobertura API 80.8% stmt / 83.66% branch.
+
 **Fecha**: 2026-06-06 (sesión 16) — Padding header reducido (`pt-2→pt-1`) en 6 tabs. Badge PSN simplificado: solo tick ✓ verde cuando `isCompleted` — sin texto ni badge de platino. `globalRateLimiter` 300→500 req/15min. Investigación sync PSN: estructural (300 llamadas secuenciales), sin rate limiting detectado, sin cambios de código. Investigación contadores BD: query eficiente con `@@index([userId])`, documentado como T14. Tests: 445 API + 233 mobile. 0 errores TS/lint. Cobertura API 80.8% stmt / 83.66% branch.
 
 **Fecha**: 2026-06-05 (sesión 15) — APK #4 build + smoke test. Sin cambios de código. Build local debug 169 MB. PSN sync falla con "Expired token" — NPSSO del sistema expirado. Auth rate limiter (10 req/15 min) disparado por peticiones curl de diagnóstico desde la misma IP del emulador. Dos hallazgos documentados en Decisiones tomadas.
@@ -1099,6 +1107,63 @@ Métricas disponibles:
 **Fecha**: 2026-05-30 (sesión 7) — Smoke test APK #3 completo. BUG-6 identificado (PSN screen NPSSO stale — Metro cache). BUG-3/4/5 re-confirmados ✅. AdMob banners ✅. 15/16 pasos completados (offline mode no testeable en emulador). Ver detalles en Sesión 7.
 
 **Fecha**: 2026-05-30 (sesión 6) — APK #3 generada localmente (debug). Downgrade `react-native-google-mobile-ads` v16→v13. `app-debug.apk` 165.7 MB lista para smoke test. Ver detalles en Sesión 6.
+
+### Sesión 17 — 2026-06-07 — UI/UX polish: jerarquía logros, lastActivityAt, iconos, badges, Challenges gateado
+
+**Objetivo**: 10 mejoras UI/UX priorizadas + verificación de tests + actualización CLAUDE.md.
+
+**P1 — Jerarquía visual logros (`game/[id].tsx`):**
+- Antes: logros earned con `bg-primary/10 border border-primary/30` (apenas visible) parecían más apagados que los no-earned con `bg-surface-card`.
+- Ahora: ambos usan `bg-surface-card`; solo earned recibe borde inline `{ borderWidth: 1, borderColor: 'rgba(129,140,248,0.45)' }`. Iconos: opacity 1 si earned, 0.4 si no.
+
+**P2 — `lastActivityAt` = MAX(unlockedAt) por juego:**
+- Campo `UserAchievement.unlockedAt DateTime` confirmado en schema Prisma — implementación real.
+- `getMyGames` selecciona `unlockedAt: true` en `userAchievements`; el loop actualiza `lastActivityAt = max(entry.lastActivityAt, ua.unlockedAt)`.
+- `useMyGames.ts`: campo `lastActivityAt: string | null` añadido a `LibraryGame`.
+- Sort `last_played` en `index.tsx` usa `lastActivityAt` en lugar de `lastSyncedAt`.
+
+**P3 — Pull-to-refresh via `queryClient.invalidateQueries`:**
+- Añadido `import { useQueryClient }` y `const queryClient = useQueryClient()` en `index.tsx`.
+- `onRefresh` cambiado de `refetch()` a `queryClient.invalidateQueries({ queryKey: ['my-games'] })`.
+- `FeedScreen.test.tsx` actualizado: envuelto en `QueryClientProvider` (necesario para `useQueryClient`), test de pull-to-refresh cambiado a "no lanza".
+
+**P4 — Iconos de juego sin recorte (`contentFit="contain"`):**
+- `LibraryGameCard.tsx`: `contentFit="cover"` → `contentFit="contain"` + `backgroundColor: '#1e293b'`.
+- `game/[id].tsx` header: misma corrección.
+
+**P5 — Badge "Platino" en `LibraryGameCard`:**
+- Reemplaza el tick verde `isCompleted` por badge amarillo `platinumEarned`: `bg-yellow-400 rounded px-1 text-black`.
+- i18n: `library.psn_platinum_badge` → ES `"Platino"` / EN `"Platinum"`.
+- Tests `LibraryGameCard.test.tsx` reescritos para nueva lógica.
+
+**P6 — Ícono cámara en avatar de perfil:**
+- `profile.tsx`: dentro del `Pressable` del avatar, cuando `!avatarMutation.isPending`, muestra badge circular `w-28 h-28 bg-primary` con `Ionicons name="camera"` en esquina inferior derecha.
+- i18n: `profile.change_avatar_hint` → ES/EN.
+
+**P7 — Placeholder PSN sin username real:**
+- `es.json`: `"Ej: Sorrow_Lord"` → `"Ej: tu_username_psn"`.
+- `en.json`: `"e.g. Sorrow_Lord"` → `"e.g. your_psn_username"`.
+
+**P8 — Selector de tema oculto:**
+- Bloque `bg-surface-elevated rounded-xl` del tema eliminado de `profile.tsx` → reemplazado por `{/* TODO Fase 4: selector de tema */}`.
+
+**P9 — Espaciado chips Search:**
+- `contentContainerStyle={{ gap: 8, paddingVertical: 6 }}` → `{ gap: 10, paddingVertical: 8 }`.
+
+**P10 — Challenges gateado:**
+- `featureFlags.ts`: añadido `challenges: false`.
+- `_layout.tsx`: importa `FEATURES`; calcula `href = tab.name === 'challenges' && !FEATURES.challenges ? null : undefined`. La pantalla sigue existiendo.
+
+**Estado de calidad:**
+| Categoría | Resultado |
+|---|---|
+| TypeScript strict (API + mobile) | ✅ 0 errores |
+| Lint (API + mobile) | ✅ 0 errores, 0 warnings |
+| Tests backend | ✅ 445/445 — 35 suites |
+| Tests mobile | ✅ 233/233 — 20 suites |
+| Cobertura API | ✅ 80.8% stmt / 83.66% branch |
+
+---
 
 ### Sesión 16 — 2026-06-06 — UI polish + rate limiter + investigaciones
 
