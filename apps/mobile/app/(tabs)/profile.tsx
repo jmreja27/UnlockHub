@@ -328,13 +328,22 @@ export default function ProfileScreen() {
               transition={300}
               accessibilityElementsHidden
             />
-            {avatarMutation.isPending && (
+            {avatarMutation.isPending ? (
               <View
                 style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 48, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}
                 accessibilityLiveRegion="polite"
                 accessibilityLabel={t('common.loading')}
               >
                 <ActivityIndicator color="#818cf8" />
+              </View>
+            ) : (
+              /* Indicador de cámara — indica al usuario que puede cambiar el avatar */
+              <View
+                style={{ position: 'absolute', bottom: 0, right: 0, width: 28, height: 28, borderRadius: 14, backgroundColor: '#818cf8', justifyContent: 'center', alignItems: 'center' }}
+                importantForAccessibility="no"
+                accessibilityElementsHidden
+              >
+                <Ionicons name="camera" size={16} color="#fff" />
               </View>
             )}
           </Pressable>
@@ -756,13 +765,7 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          {/* Tema — por ahora solo Oscuro hasta implementar modo claro completo */}
-          <View className="bg-surface-elevated rounded-xl px-4 py-3">
-            <Text className="text-gray-400 text-xs mb-2">{t('profile.settings_theme')}</Text>
-            <View className="bg-primary/20 border border-primary/40 rounded-lg px-4 py-2 items-center">
-              <Text className="text-primary-light text-sm font-semibold">{t('profile.theme_dark')}</Text>
-            </View>
-          </View>
+          {/* TODO Fase 4: selector de tema — oculto hasta implementar modo claro completo */}
         </View>
 
         {/* Actividad reciente */}
