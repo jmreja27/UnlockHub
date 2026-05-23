@@ -527,7 +527,7 @@ export interface PlatformAdapter {
 
 ### PlayStation Network (psn-api npm)
 - **Modelo**: el backend usa credenciales propias (`PSN_SYSTEM_NPSSO`) para leer perfiles públicos — igual que PSNProfiles/TrueTrophies/Exophase. El usuario solo proporciona su username; no se almacena ningún token de usuario.
-- `getSystemPsnAuth()`: intercambia `PSN_SYSTEM_NPSSO` → Access Token, cacheado en Redis TTL 55 min (`psn:system:access_token`). Lanza `PSN_SYSTEM_NOT_CONFIGURED` (503) si la var no está, `PSN_SYSTEM_NPSSO_EXPIRED` (503) si el NPSSO ha expirado (~60 días).
+- `getSystemPsnAuth()`: intercambia `PSN_SYSTEM_NPSSO` → Access Token, cacheado en Redis TTL 55 min (`psn:system:access_token`). Lanza `PSN_SYSTEM_NOT_CONFIGURED` (503) si la var no está, `PSN_SYSTEM_NPSSO_EXPIRED` (503) si el NPSSO ha expirado (~60 días). **Aviso**: la cookie `npsso` puede aparecer con el mismo valor en el navegador aunque la sesión esté expirada — el síntoma es `Sync fallido err="Expired token"` en logs (RA funciona; solo PSN falla). Renovar: logout + login en my.playstation.com → nuevo `npsso` → Railway Variables.
 - `lookupPsnUser(auth, username)`: resuelve username → `{ accountId, onlineId }` vía `getProfileFromUserName`. Lanza `PSN_USER_NOT_FOUND` (404) si el perfil no existe o es privado.
 - `getUserTitles(auth, accountId, opts)`: acepta cualquier `accountId` (no solo `"me"`) — permite leer cualquier perfil público.
 - `getUserTrophiesEarnedForTitle(auth, accountId, ...)`: igual.
@@ -582,7 +582,7 @@ El servidor valida todas al arrancar mediante schema Zod. Ver `.env.example` en 
 | `EXPO_PUBLIC_ADMOB_REWARDED_ID` | Rewarded (EAS secret) | prod | ✅ Configurado como EAS secret (B9) |
 | `POSTHOG_API_KEY` | Analíticas | staging, prod | ⚙️ Pendiente acción N4 |
 | `ADMIN_SECRET` | Acceso al dashboard admin (bearer) | prod | ✅ Configurada en Railway |
-| `PSN_SYSTEM_NPSSO` | Sync PSN de usuarios (credencial del sistema) | prod | ⚙️ Obtener en my.playstation.com → F12 → Application → Cookies → `npsso`. Caduca ~60 días. Configurar en Railway dashboard → Variables. **Nunca en código ni `.env` commiteado.** |
+| `PSN_SYSTEM_NPSSO` | Sync PSN de usuarios (credencial del sistema) | prod | ⚙️ Obtener en my.playstation.com → F12 → Application → Cookies → `npsso`. Caduca ~60 días. **El valor puede parecer idéntico en el navegador y estar expirado — comparar strings no es diagnóstico fiable.** Síntoma: `Sync fallido err="Expired token"` en logs Railway (RA sigue funcionando). Fix: logout + login → nuevo `npsso` → Railway Variables. Configurar en Railway dashboard → Variables. **Nunca en código ni `.env` commiteado.** |
 
 ---
 
@@ -954,6 +954,8 @@ Métricas disponibles:
 | `sort_last_played` desempata por `completionPct desc` cuando `lastSyncedAt` coincide | `lastSyncedAt` en `LibraryGame` viene de `syncMap.get(g.platform)` — misma fecha para todos los juegos de la misma plataforma. Sin desempate, el orden dentro de una plataforma es el de llegada del backend (no determinista en UI). `pct_desc` como criterio secundario da un orden estable y con sentido visual. | Fase 3 |
 | Badges PSN `platinumEarned` e `isCompleted` son independientes | Un juego PSN puede tener el platino ganado sin `isCompleted=true` si hay DLC con trofeos adicionales posteriores al platino. Renderizar ambos badges simultáneamente es semánticamente correcto y da más información al usuario. | Fase 3 |
 | `lockDuration: 300_000` en sync worker — 5 min en lugar de 30s por defecto | 300 juegos PSN / 10 por lote = 30 lotes; cada lote incluye llamadas API lentas. El default de BullMQ (30s) se agotaba → job marcado como stalled → re-ejecutado → duplicados. `stalledInterval: 30_000` para detección rápida. No afecta syncs cortos. | Fase 3 |
+| `PSN_SYSTEM_NPSSO` puede aparecer idéntico en el navegador y estar expirado en Railway | Sony invalida la sesión subyacente periódicamente sin cambiar el valor visible de la cookie `npsso`. Comparar strings no es un diagnóstico fiable. Síntoma en logs: `Sync fallido err="Expired token"` en cada intento PSN (RA sigue funcionando). Fix: logout + login en my.playstation.com → nuevo NPSSO → Railway Variables. Frecuencia: ~60 días. | Fase 3 |
+| `authRateLimiter` (10 req/15 min) comparte IP entre emulador Android y host en la misma red | El emulador Android usa NAT del router del host — misma IP externa que comandos curl ejecutados desde la terminal. Peticiones de diagnóstico a `/auth/*` consumen el cupo del rate limiter del emulador. En smoke tests, evitar curl masivo a endpoints de auth si hay emulador activo. Fix: esperar ~15 min para reseteo de ventana. | Fase 3 |
 | Toggle ES\|EN en login — `useLanguage` reutilizado, sin estado nuevo | El hook `useLanguage` ya existía para `profile.tsx`. Reutilizarlo en login evita duplicar lógica de `i18n.changeLanguage`. El toggle se coloca fuera del `KeyboardAvoidingView` para que no suba con el teclado. `testID="language-toggle"` para Maestro. | Fase 3 |
 
 ---
@@ -1071,6 +1073,8 @@ Métricas disponibles:
 
 ## Última revisión de código
 
+**Fecha**: 2026-06-05 (sesión 15) — APK #4 build + smoke test. Sin cambios de código. Build local debug 169 MB. PSN sync falla con "Expired token" — NPSSO del sistema expirado. Auth rate limiter (10 req/15 min) disparado por peticiones curl de diagnóstico desde la misma IP del emulador. Dos hallazgos documentados en Decisiones tomadas.
+
 **Fecha**: 2026-06-04 (sesión 14) — 8 bugs/mejoras UI + sync lockDuration. Padding `pt-4→pt-2` en 5 pantallas. Sort button muestra label activo. `last_played` con desempate por `pct_desc`. Contador juegos: denominador gris. Badges PSN independientes. `lib/platformColors.ts` centralizado (fix `#003087→#1e90ff` en GameCard+AchievementSearchCard). Toggle ES|EN en login. BullMQ `lockDuration: 300_000`. Tests: 445 API + 233 mobile. 0 errores TS/lint. Cobertura API 80.8% stmt / 83.66% branch.
 
 **Fecha**: 2026-06-03 (sesión 13) — Fix rate limiter producción: `max: 100→300` req/15min, `/health` excluido del middleware. 0 código nuevo, solo `app.ts` + `rateLimiter.ts`. Tests: 443 API + 216 mobile. 0 errores TS/lint.
@@ -1088,6 +1092,43 @@ Métricas disponibles:
 **Fecha**: 2026-05-30 (sesión 7) — Smoke test APK #3 completo. BUG-6 identificado (PSN screen NPSSO stale — Metro cache). BUG-3/4/5 re-confirmados ✅. AdMob banners ✅. 15/16 pasos completados (offline mode no testeable en emulador). Ver detalles en Sesión 7.
 
 **Fecha**: 2026-05-30 (sesión 6) — APK #3 generada localmente (debug). Downgrade `react-native-google-mobile-ads` v16→v13. `app-debug.apk` 165.7 MB lista para smoke test. Ver detalles en Sesión 6.
+
+### Sesión 15 — 2026-06-05 — APK #4 smoke test + diagnóstico producción
+
+**Objetivo**: build local debug de APK #4 (todos los cambios sesiones 10-14) + smoke test contra API de producción.
+
+**Build APK #4:**
+- Pre-build checks: TS 0 errores, lint 0 errores, 445 API + 233 mobile tests pasando.
+- `npx expo prebuild --platform android --clean` → `react-native bundle --dev false --entry-file expo-router/entry.js` con `EXPO_PUBLIC_API_URL=https://unlockhub-production.up.railway.app` + `NODE_ENV=production` → `gradlew assembleDebug`.
+- `app-debug.apk` generada: **169 MB**, BUILD SUCCESSFUL en 3m 13s.
+- Bundle verificado: contiene `unlockhub-production.up.railway.app` ✅.
+
+**Hallazgos del smoke test:**
+
+**HALLAZGO 1 — PSN sync: "Expired token" (infra, no código)**
+- Síntoma: biblioteca muestra solo ~50 de 300+ juegos PSN; sync nunca completa.
+- Causa: logs Railway muestran `Sync fallido platform="PSN" err="Expired token"` en cada intento desde las 22:43 del día anterior. El error se repite cada hora (background sync scheduler). RA sync funciona correctamente.
+- Raíz: `PSN_SYSTEM_NPSSO` en Railway ha expirado. El valor en el navegador puede parecer idéntico al configurado en Railway, pero Sony invalida la sesión subyacente periódicamente incluso manteniendo el mismo valor de cookie. No es detectable comparando strings.
+- Fix: logout + login en my.playstation.com → F12 → Application → Cookies → copiar nuevo `npsso` → actualizar `PSN_SYSTEM_NPSSO` en Railway Variables → Railway reinicia automáticamente.
+- Frecuencia estimada: cada ~60 días. Los syncs PSN fallidos se reintentarán solos tras la renovación.
+
+**HALLAZGO 2 — Auth rate limiter compartido con emulador (quirk de diagnóstico)**
+- Síntoma: `RATE_LIMIT_EXCEEDED` al intentar login desde el emulador tras ejecutar pruebas curl desde la misma máquina.
+- Causa: `authRateLimiter` (10 req/15 min en `/auth/*`) aplica por IP. El emulador Android y los comandos curl del sistema host comparten la misma IP externa (NAT del router). Múltiples peticiones curl de diagnóstico (incluyendo las mal formateadas) consumen el cupo del rate limiter y bloquean el login del emulador.
+- Fix: esperar ~15 min para que se resetee la ventana. En diagnósticos futuros, evitar curl masivo a `/auth/*` si hay un emulador activo en la misma red.
+
+**Estado de calidad (sin cambios de código):**
+| Categoría | Resultado |
+|---|---|
+| TypeScript strict (API + mobile) | ✅ 0 errores |
+| Lint (API + mobile) | ✅ 0 errores, 0 warnings |
+| Tests backend | ✅ 445/445 — 35 suites |
+| Tests mobile | ✅ 233/233 — 20 suites |
+| APK #4 build | ✅ BUILD SUCCESSFUL — 169 MB |
+| PSN sync | ⚠️ Falla con "Expired token" — NPSSO expirado (acción del desarrollador) |
+| Auth login | ⚠️ Rate limit disparado por curl de diagnóstico — esperar 15 min |
+
+---
 
 ### Sesión 14 — 2026-06-04 — UI polish + sync lockDuration
 
