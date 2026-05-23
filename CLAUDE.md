@@ -957,6 +957,10 @@ Métricas disponibles:
 | `PSN_SYSTEM_NPSSO` puede aparecer idéntico en el navegador y estar expirado en Railway | Sony invalida la sesión subyacente periódicamente sin cambiar el valor visible de la cookie `npsso`. Comparar strings no es un diagnóstico fiable. Síntoma en logs: `Sync fallido err="Expired token"` en cada intento PSN (RA sigue funcionando). Fix: logout + login en my.playstation.com → nuevo NPSSO → Railway Variables. Frecuencia: ~60 días. | Fase 3 |
 | `authRateLimiter` (10 req/15 min) comparte IP entre emulador Android y host en la misma red | El emulador Android usa NAT del router del host — misma IP externa que comandos curl ejecutados desde la terminal. Peticiones de diagnóstico a `/auth/*` consumen el cupo del rate limiter del emulador. En smoke tests, evitar curl masivo a endpoints de auth si hay emulador activo. Fix: esperar ~15 min para reseteo de ventana. | Fase 3 |
 | Toggle ES\|EN en login — `useLanguage` reutilizado, sin estado nuevo | El hook `useLanguage` ya existía para `profile.tsx`. Reutilizarlo en login evita duplicar lógica de `i18n.changeLanguage`. El toggle se coloca fuera del `KeyboardAvoidingView` para que no suba con el teclado. `testID="language-toggle"` para Maestro. | Fase 3 |
+| Badge PSN simplificado: solo tick verde ✓ cuando `isCompleted`, sin texto ni badge de platino | El badge de platino (🏆 Platino) junto al badge 100% creaba ruido visual en la tarjeta. El platino ganado sin `isCompleted` (juego con DLC posterior al platino) no es información relevante para el usuario en la lista — solo que está 100% completado. Tick circular verde minimalista (`w-5 h-5 bg-green-500 rounded-full`) es suficientemente legible sin texto. i18n keys `library.psn_platinum` y `library.psn_100` eliminadas. | Fase 3 |
+| `globalRateLimiter` 300→500 req/15min. **Express rate limiter ≠ Railway plan limits.** | 300 req/15 min seguía siendo insuficiente para uso normal: múltiples tabs activas + TanStack Query con refetch + sync progress polling ≈ 20-30 req en ráfagas al abrir la app. **Distinción crítica**: el rate limiter es código Express (`express-rate-limit`, controla abusos), completamente independiente de los límites del plan Railway (RAM, horas de ejecución, réplicas). Cambiar uno no afecta al otro. `authRateLimiter` (10 req/15 min en `/auth/*`) sin cambios — correcto por seguridad. | Fase 3 |
+| Sync PSN lento es estructural, no rate limiting — sin código de throttling añadido | `getUserTrophiesEarnedForTitle` se llama una vez por juego en el bucle `processTitles` (secuencial) y no está cacheado (el earned status cambia). Para 300 juegos = 300 llamadas HTTP secuenciales (~300-900s). Los logs de Railway no muestran ningún 429 de PSN. El `lockDuration: 300_000` ya resuelve el stalled job. No se añaden delays sin evidencia de rate limiting real. | Fase 3 |
+| Contadores de biblioteca (`totalGames`, `earnedAchievements`) no desnormalizados — calculados en JS | `getMyGames` carga todos los `UserAchievement` del usuario en memoria y calcula agregados en JS. Eficiente a escala actual (<10k achievements por usuario típico). `UserAchievement.userId` tiene `@@index` — query eficiente. Si un usuario supera ~100k achievements (e.g., PSN con 2000 juegos × 50 trofeos), esta carga podría ser lenta. Documentado como T14. No implementar desnormalización sin confirmación del desarrollador (requeriría migración Prisma + lógica de actualización en todos los adapters). | Fase 3 |
 
 ---
 
@@ -1052,6 +1056,7 @@ Métricas disponibles:
 | T11 | Search de logros + endpoint logros de juego | ✅ Backend `GET /api/v1/games/:id/achievements` + `GET /api/v1/search?type=achievements` — JWT opcional, Xbox excluido, paginado 20/pág |
 | T12 | Job "seed de logros populares" | ✅ Completo — BD post-limpieza: 1.406 juegos (78 Steam + 1.001 RA + 327 PSN) + 72.264 logros. Bugs PSN corregidos: guard `trophies ?? []` + refresco token cada 5 usuarios. Campo `console` backfilled: RA (1.001 juegos) + PSN (584 juegos). |
 | T13 | Sync optimization: parallel RA batches + skip completed | 🔲 Documentado como pendiente — no implementado por riesgo de rate limiting RA y pérdida de logros DLC. Ver decisiones sesión 10. |
+| T14 | Desnormalizar contadores de biblioteca (`earnedAchievements`, `totalGames`) | 🔲 Pendiente confirmación del desarrollador — no implementar sin acuerdo. Ver decisiones sesión 16. |
 
 ### 🟢 Features
 
@@ -1073,6 +1078,8 @@ Métricas disponibles:
 
 ## Última revisión de código
 
+**Fecha**: 2026-06-06 (sesión 16) — Padding header reducido (`pt-2→pt-1`) en 6 tabs. Badge PSN simplificado: solo tick ✓ verde cuando `isCompleted` — sin texto ni badge de platino. `globalRateLimiter` 300→500 req/15min. Investigación sync PSN: estructural (300 llamadas secuenciales), sin rate limiting detectado, sin cambios de código. Investigación contadores BD: query eficiente con `@@index([userId])`, documentado como T14. Tests: 445 API + 233 mobile. 0 errores TS/lint. Cobertura API 80.8% stmt / 83.66% branch.
+
 **Fecha**: 2026-06-05 (sesión 15) — APK #4 build + smoke test. Sin cambios de código. Build local debug 169 MB. PSN sync falla con "Expired token" — NPSSO del sistema expirado. Auth rate limiter (10 req/15 min) disparado por peticiones curl de diagnóstico desde la misma IP del emulador. Dos hallazgos documentados en Decisiones tomadas.
 
 **Fecha**: 2026-06-04 (sesión 14) — 8 bugs/mejoras UI + sync lockDuration. Padding `pt-4→pt-2` en 5 pantallas. Sort button muestra label activo. `last_played` con desempate por `pct_desc`. Contador juegos: denominador gris. Badges PSN independientes. `lib/platformColors.ts` centralizado (fix `#003087→#1e90ff` en GameCard+AchievementSearchCard). Toggle ES|EN en login. BullMQ `lockDuration: 300_000`. Tests: 445 API + 233 mobile. 0 errores TS/lint. Cobertura API 80.8% stmt / 83.66% branch.
@@ -1092,6 +1099,52 @@ Métricas disponibles:
 **Fecha**: 2026-05-30 (sesión 7) — Smoke test APK #3 completo. BUG-6 identificado (PSN screen NPSSO stale — Metro cache). BUG-3/4/5 re-confirmados ✅. AdMob banners ✅. 15/16 pasos completados (offline mode no testeable en emulador). Ver detalles en Sesión 7.
 
 **Fecha**: 2026-05-30 (sesión 6) — APK #3 generada localmente (debug). Downgrade `react-native-google-mobile-ads` v16→v13. `app-debug.apk` 165.7 MB lista para smoke test. Ver detalles en Sesión 6.
+
+### Sesión 16 — 2026-06-06 — UI polish + rate limiter + investigaciones
+
+**Objetivo**: reducir espacio header→contenido en las 6 tabs, simplificar badges PSN, investigar sync PSN y contadores BD, aumentar rate limiter global.
+
+**PARTE 1 — Padding header reducido:**
+- `pt-2 → pt-1` en `<View>` de cabecera de contenido en index.tsx, search.tsx, rankings.tsx, friends.tsx (×2 ramas).
+- `mb-4 → mb-2` en el título de search.tsx (reducía el gap antes del input de búsqueda).
+- `py-3 → pt-2 pb-3` en challenges.tsx (solo reduce el top, mantiene bottom por el border visual).
+- `pt-8 → pt-6` en profile.tsx sección avatar (24px en lugar de 32px).
+
+**PARTE 2 — Badge PSN simplificado:**
+- Antes: dos badges independientes con texto (`showPsnPlatinum` → `🏆 Platino`, `showPsn100` → `🥇 100%`).
+- Ahora: único tick circular verde (`w-5 h-5 bg-green-500 rounded-full`) con `✓` solo cuando `game.platform === 'PSN' && game.isCompleted`. `platinumEarned` sin badge propio.
+- i18n keys `library.psn_platinum` y `library.psn_100` eliminadas de ES y EN.
+- `LibraryGameCard.test.tsx` reescrito: 5 tests PSN badge + 2 tests básicos.
+
+**PARTE 3 — Investigación sync PSN:**
+- Logs Railway: mínimos (3 líneas del 2026-05-23). NPSSO expirado → no hay syncs PSN activos en producción.
+- **Sin evidencia de 429** de PSN. La lentitud es estructural: `processTitles` tiene un `for...of` secuencial; `getUserTrophiesEarnedForTitle` (no cacheado) = 1 HTTP call por juego = ~300 calls para 300 juegos. `getTitleTrophies` cacheado 24h = 0 calls tras primer sync.
+- **Conclusión**: no se añaden delays. El `lockDuration: 300_000` ya resuelve el stalled job issue.
+
+**PARTE 4 — Investigación contadores BD:**
+- `Game.totalAchievements` está desnormalizado ✅.
+- `earnedAchievements`, `totalGames`, `totalCompletedGames` se calculan en JS a partir de `UserAchievement.findMany` completo.
+- `UserAchievement.userId` tiene `@@index` — query eficiente a escala actual.
+- Riesgo futuro: >100k achievements por usuario. Documentado como T14. **No implementar sin confirmación.**
+
+**PARTE 5 — Rate limiter global 300→500 req/15min:**
+- `apps/api/src/middleware/rateLimiter.ts`: `max: 300 → max: 500`.
+- `authRateLimiter` (10 req/15 min en `/auth/*`) sin cambios.
+- **Distinción documentada**: Express `express-rate-limit` (código nuestro, evita abusos) es completamente independiente de los límites del plan Railway (RAM, horas de ejecución).
+
+**Tests añadidos/modificados:**
+- `LibraryGameCard.test.tsx`: 5 tests badge PSN + 2 básicos (7 total, reescritos).
+
+**Estado de calidad:**
+| Categoría | Resultado |
+|---|---|
+| TypeScript strict (API + mobile) | ✅ 0 errores |
+| Lint (API + mobile) | ✅ 0 errores, 0 warnings |
+| Tests backend | ✅ 445/445 — 35 suites |
+| Tests mobile | ✅ 233/233 — 20 suites |
+| Cobertura API | ✅ 80.8% stmt / 83.66% branch |
+
+---
 
 ### Sesión 15 — 2026-06-05 — APK #4 smoke test + diagnóstico producción
 
