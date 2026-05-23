@@ -207,7 +207,8 @@
     "sort_alpha_asc": "A → Z",
     "sort_alpha_desc": "Z → A",
     "sort_pct_desc": "Mayor % primero",
-    "sort_pct_asc": "Menor % primero"
+    "sort_pct_asc": "Menor % primero",
+    "psn_platinum_badge": "Platino"
   },
   "feed": {
     "title": "Feed",
@@ -376,6 +377,7 @@
     "premium_label": "Usuario premium",
     "premium_badge": "Premium",
     "change_avatar": "Cambiar foto de perfil",
+    "change_avatar_hint": "Toca para cambiar tu foto de perfil",
     "avatar_error_title": "Error al subir foto",
     "avatar_error_message": "No se pudo subir la foto de perfil. Inténtalo de nuevo.",
     "avatar_permission_title": "Acceso a la galería",
@@ -494,7 +496,7 @@
       "title": "Vincular PlayStation Network",
       "description": "Introduce tu username de PSN. Tu perfil debe ser público para sincronizar tus trofeos.",
       "username_label": "Tu username de PSN",
-      "username_placeholder": "Ej: Sorrow_Lord",
+      "username_placeholder": "Ej: tu_username_psn",
       "username_hint": "El nombre de usuario de tu cuenta de PlayStation Network",
       "guide_title": "¿Cómo hacer tu perfil público?",
       "guide_step1": "Abre la app de PlayStation en tu teléfono o ve a la configuración desde tu consola.",

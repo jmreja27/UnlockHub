@@ -22,6 +22,7 @@ function makeGame(overrides: Partial<LibraryGame> = {}): LibraryGame {
     earnedAchievements: 40,
     completionPct: 100,
     lastSyncedAt: null,
+    lastActivityAt: null,
     hasPlatinum: true,
     platinumEarned: false,
     isCompleted: false,
@@ -31,38 +32,38 @@ function makeGame(overrides: Partial<LibraryGame> = {}): LibraryGame {
 
 beforeEach(() => jest.clearAllMocks());
 
-describe('LibraryGameCard — badge PSN simplificado', () => {
-  it('no muestra el tick verde cuando isCompleted=false y platinumEarned=false', () => {
-    const { queryByText } = render(
-      <LibraryGameCard game={makeGame({ platinumEarned: false, isCompleted: false })} />,
+describe('LibraryGameCard — badge Platino PSN', () => {
+  it('muestra el badge Platino cuando platinumEarned=true en PSN', () => {
+    const { getByText } = render(
+      <LibraryGameCard game={makeGame({ platinumEarned: true })} />,
     );
-    expect(queryByText('✓')).toBeNull();
+    expect(getByText('library.psn_platinum_badge')).toBeTruthy();
   });
 
-  it('no muestra el tick verde cuando solo platinumEarned=true (sin isCompleted)', () => {
+  it('no muestra el badge Platino cuando platinumEarned=false', () => {
     const { queryByText } = render(
+      <LibraryGameCard game={makeGame({ platinumEarned: false })} />,
+    );
+    expect(queryByText('library.psn_platinum_badge')).toBeNull();
+  });
+
+  it('muestra el badge Platino aunque isCompleted sea false (platino sin DLC)', () => {
+    const { getByText } = render(
       <LibraryGameCard game={makeGame({ platinumEarned: true, isCompleted: false })} />,
     );
-    expect(queryByText('✓')).toBeNull();
+    expect(getByText('library.psn_platinum_badge')).toBeTruthy();
   });
 
-  it('muestra el tick verde cuando isCompleted=true (aunque platinumEarned=false)', () => {
-    const { getByText } = render(
-      <LibraryGameCard game={makeGame({ platinumEarned: false, isCompleted: true })} />,
-    );
-    expect(getByText('✓')).toBeTruthy();
-  });
-
-  it('muestra el tick verde cuando isCompleted=true y platinumEarned=true simultáneamente', () => {
-    const { getByText } = render(
-      <LibraryGameCard game={makeGame({ platinumEarned: true, isCompleted: true })} />,
-    );
-    expect(getByText('✓')).toBeTruthy();
-  });
-
-  it('no muestra el tick verde en juegos de Steam aunque isCompleted=true', () => {
+  it('no muestra el badge Platino en juegos de Steam aunque platinumEarned=true', () => {
     const { queryByText } = render(
-      <LibraryGameCard game={makeGame({ platform: 'STEAM', platinumEarned: true, isCompleted: true })} />,
+      <LibraryGameCard game={makeGame({ platform: 'STEAM', platinumEarned: true })} />,
+    );
+    expect(queryByText('library.psn_platinum_badge')).toBeNull();
+  });
+
+  it('no muestra tick verde (comportamiento anterior eliminado)', () => {
+    const { queryByText } = render(
+      <LibraryGameCard game={makeGame({ platinumEarned: true, isCompleted: true })} />,
     );
     expect(queryByText('✓')).toBeNull();
   });

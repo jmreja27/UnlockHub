@@ -207,7 +207,8 @@
     "sort_alpha_asc": "A → Z",
     "sort_alpha_desc": "Z → A",
     "sort_pct_desc": "Highest % first",
-    "sort_pct_asc": "Lowest % first"
+    "sort_pct_asc": "Lowest % first",
+    "psn_platinum_badge": "Platinum"
   },
   "feed": {
     "title": "Feed",
@@ -376,6 +377,7 @@
     "premium_label": "Premium user",
     "premium_badge": "Premium",
     "change_avatar": "Change profile photo",
+    "change_avatar_hint": "Tap to change your profile photo",
     "avatar_error_title": "Upload error",
     "avatar_error_message": "Could not upload profile photo. Please try again.",
     "avatar_permission_title": "Gallery access",
@@ -494,7 +496,7 @@
       "title": "Link PlayStation Network",
       "description": "Enter your PSN username. Your profile must be public to sync your trophies.",
       "username_label": "Your PSN username",
-      "username_placeholder": "e.g. Sorrow_Lord",
+      "username_placeholder": "e.g. your_psn_username",
       "username_hint": "The username of your PlayStation Network account",
       "guide_title": "How to make your profile public?",
       "guide_step1": "Open the PlayStation app on your phone or go to Settings from your console.",
