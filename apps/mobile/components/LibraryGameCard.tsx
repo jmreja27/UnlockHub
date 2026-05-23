@@ -57,8 +57,8 @@ export function LibraryGameCard({ game }: Props) {
       <View className="flex-row items-center">
         <Image
           source={game.iconUrl ?? require('../assets/images/icon.png')}
-          style={{ width: 44, height: 44, borderRadius: 8 }}
-          contentFit="cover"
+          style={{ width: 44, height: 44, borderRadius: 8, backgroundColor: '#1e293b' }}
+          contentFit="contain"
           accessibilityElementsHidden
         />
         <View className="flex-1 ml-3">
@@ -67,13 +67,15 @@ export function LibraryGameCard({ game }: Props) {
               {game.title}
             </Text>
             <View className="flex-row items-center gap-1.5">
-              {/* Tick verde — solo cuando el juego PSN está 100% completado */}
-              {game.platform === 'PSN' && game.isCompleted && (
+              {/* Badge Platino — solo cuando el juego PSN tiene el platino desbloqueado */}
+              {game.platform === 'PSN' && game.platinumEarned && (
                 <View
-                  className="bg-green-500 rounded-full w-5 h-5 items-center justify-center"
+                  className="bg-yellow-400 rounded px-1"
                   importantForAccessibility="no"
                 >
-                  <Text className="text-white text-xs font-bold">✓</Text>
+                  <Text className="text-xs font-bold text-black">
+                    {t('library.psn_platinum_badge')}
+                  </Text>
                 </View>
               )}
               <View
