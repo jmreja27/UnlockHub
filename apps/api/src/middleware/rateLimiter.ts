@@ -7,7 +7,7 @@ function rateLimitMessage(message: string, code: string): ApiError {
 
 export const globalRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 300,
+  max: 500,
   standardHeaders: true,
   legacyHeaders: false,
   message: rateLimitMessage(
