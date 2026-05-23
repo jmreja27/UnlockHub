@@ -120,15 +120,14 @@ function AchievementRow({
 
   return (
     <View
-      className={`rounded-xl px-3 py-3 mb-2 ${
-        isEarned ? 'bg-primary/10 border border-primary/30' : 'bg-surface-card'
-      }`}
+      className="rounded-xl px-3 py-3 mb-2 bg-surface-card"
+      style={isEarned ? { borderWidth: 1, borderColor: 'rgba(129,140,248,0.45)' } : undefined}
     >
       {/* Top row: icon + info + action buttons */}
       <View className="flex-row items-center">
         <Image
           source={achievement.iconUrl ?? require('../../assets/images/icon.png')}
-          style={{ width: 44, height: 44, borderRadius: 8, opacity: isEarned ? 1 : 0.45 }}
+          style={{ width: 44, height: 44, borderRadius: 8, opacity: isEarned ? 1 : 0.4 }}
           contentFit="cover"
           accessibilityElementsHidden
         />
@@ -368,8 +367,8 @@ export default function GameDetailScreen() {
             <View className="flex-row items-center">
               <Image
                 source={game.iconUrl ?? require('../../assets/images/icon.png')}
-                style={{ width: 56, height: 56, borderRadius: 10 }}
-                contentFit="cover"
+                style={{ width: 56, height: 56, borderRadius: 10, backgroundColor: '#1e293b' }}
+                contentFit="contain"
                 accessibilityElementsHidden
               />
               <View className="ml-3 flex-1">
