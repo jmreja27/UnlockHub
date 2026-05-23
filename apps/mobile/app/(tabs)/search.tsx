@@ -110,7 +110,7 @@ export default function SearchScreen() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: 8, paddingVertical: 6 }}
+          contentContainerStyle={{ gap: 10, paddingVertical: 8 }}
           style={{ flexGrow: 0 }}
         >
           {FILTERS.map((f) => (
