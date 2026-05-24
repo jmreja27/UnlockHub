@@ -17,6 +17,7 @@ import { useLanguage } from '../../hooks/useLanguage';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { PremiumBanner } from '../../components/PremiumBanner';
 import { ActivityCard } from '../../components/ActivityCard';
+import { AvatarPlaceholder } from '../../components/AvatarPlaceholder';
 import { FEATURES } from '../../lib/featureFlags';
 import { api } from '../../lib/api';
 import { useFeed } from '../../hooks/useFeed';
@@ -320,14 +321,18 @@ export default function ProfileScreen() {
             accessibilityLabel={t('profile.change_avatar')}
             style={{ width: 96, height: 96, borderRadius: 48, marginBottom: 12 }}
           >
-            <Image
-              source={user.avatar ?? undefined}
-              placeholder={AVATAR_BLURHASH}
-              style={{ width: 96, height: 96, borderRadius: 48 }}
-              contentFit="cover"
-              transition={300}
-              accessibilityElementsHidden
-            />
+            {user.avatar ? (
+              <Image
+                source={{ uri: user.avatar }}
+                placeholder={AVATAR_BLURHASH}
+                style={{ width: 96, height: 96, borderRadius: 48 }}
+                contentFit="cover"
+                transition={300}
+                accessibilityElementsHidden
+              />
+            ) : (
+              <AvatarPlaceholder username={user.username} size={96} />
+            )}
             {avatarMutation.isPending ? (
               <View
                 style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 48, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}

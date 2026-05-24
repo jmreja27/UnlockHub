@@ -4,6 +4,8 @@ import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import type { UserSearchResult } from '@unlockhub/types';
 
+import { AvatarPlaceholder } from './AvatarPlaceholder';
+
 interface Props {
   user: UserSearchResult;
 }
@@ -21,12 +23,16 @@ export function UserCard({ user }: Props) {
         level: user.level,
       })}
     >
-      <Image
-        source={user.avatar ?? require('../assets/images/icon.png')}
-        style={{ width: 48, height: 48, borderRadius: 24 }}
-        contentFit="cover"
-        accessibilityElementsHidden
-      />
+      {user.avatar ? (
+        <Image
+          source={{ uri: user.avatar }}
+          style={{ width: 48, height: 48, borderRadius: 24 }}
+          contentFit="cover"
+          accessibilityElementsHidden
+        />
+      ) : (
+        <AvatarPlaceholder username={user.username} size={48} />
+      )}
       <View className="flex-1 ml-3">
         <Text className="text-white font-semibold text-sm">@{user.username}</Text>
         <Text className="text-gray-400 text-xs mt-0.5">

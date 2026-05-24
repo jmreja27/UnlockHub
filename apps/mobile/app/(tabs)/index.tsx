@@ -175,12 +175,22 @@ export default function LibraryScreen() {
     isLoading,
     isError,
     refetch,
-    isRefetching,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
     dataUpdatedAt,
   } = useMyGames(platform);
+
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    setIsManualRefreshing(true);
+    try {
+      await queryClient.invalidateQueries({ queryKey: ['my-games'] });
+    } finally {
+      setIsManualRefreshing(false);
+    }
+  }, [queryClient]);
 
   const { sync, isSyncing, isInCooldown, cooldownRemaining, hasPlatforms } = useSyncAll(user?.id);
 
@@ -398,10 +408,8 @@ export default function LibraryScreen() {
           onEndReachedThreshold={0.3}
           refreshControl={
             <RefreshControl
-              refreshing={isRefetching}
-              onRefresh={() => {
-                void queryClient.invalidateQueries({ queryKey: ['my-games'] });
-              }}
+              refreshing={isManualRefreshing}
+              onRefresh={() => { void handleRefresh(); }}
               tintColor="#818cf8"
               colors={['#4f46e5']}
               accessibilityLabel={t('library.refresh_label')}

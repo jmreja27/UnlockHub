@@ -10,6 +10,7 @@ import { useFriends } from '../../hooks/useFriends';
 import { useSessionStore } from '../../stores/sessionStore';
 import { api } from '../../lib/api';
 import { SkeletonBox } from '../../components/SkeletonBox';
+import { AvatarPlaceholder } from '../../components/AvatarPlaceholder';
 
 interface CompareResult {
   targetUser: { username: string; level: number; xp: number; avatar: string | null };
@@ -97,13 +98,21 @@ export default function PublicProfileScreen() {
             accessibilityElementsHidden
           />
           <View className="px-4 -mt-10">
-            <Image
-              source={profile.avatar ?? null}
-              style={{ width: 80, height: 80, borderRadius: 40, borderWidth: 3, borderColor: '#16213e' }}
-              contentFit="cover"
-              placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
-              accessibilityLabel={t('public_profile.avatar_label', { username: profile.username })}
-            />
+            {profile.avatar ? (
+              <Image
+                source={{ uri: profile.avatar }}
+                style={{ width: 80, height: 80, borderRadius: 40, borderWidth: 3, borderColor: '#16213e' }}
+                contentFit="cover"
+                placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
+                accessibilityLabel={t('public_profile.avatar_label', { username: profile.username })}
+              />
+            ) : (
+              <AvatarPlaceholder
+                username={profile.username}
+                size={80}
+                style={{ borderWidth: 3, borderColor: '#16213e' } as object}
+              />
+            )}
             <Text
               className="text-white text-xl font-bold mt-2"
               accessibilityRole="header"

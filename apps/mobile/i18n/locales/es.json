@@ -376,6 +376,7 @@
     "refresh_label": "Actualizar perfil",
     "premium_label": "Usuario premium",
     "premium_badge": "Premium",
+    "avatar_placeholder": "Foto de perfil de {{username}}",
     "change_avatar": "Cambiar foto de perfil",
     "change_avatar_hint": "Toca para cambiar tu foto de perfil",
     "avatar_error_title": "Error al subir foto",
