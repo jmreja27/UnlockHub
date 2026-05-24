@@ -4,6 +4,14 @@ import type { UserSearchResult } from '@unlockhub/types';
 
 import { UserCard } from '../../components/UserCard';
 
+jest.mock('../../components/AvatarPlaceholder', () => ({
+  AvatarPlaceholder: ({ username }: { username: string }) => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { Text } = require('react-native');
+    return <Text testID="avatar-placeholder">{username.slice(0, 2).toUpperCase()}</Text>;
+  },
+}));
+
 jest.mock('expo-router', () => ({
   router: { push: jest.fn() },
 }));
@@ -55,5 +63,17 @@ describe('UserCard', () => {
   it('el username es visible en el contenido de la tarjeta', () => {
     const { getByText } = render(<UserCard user={makeUser({ username: 'testuser' })} />);
     expect(getByText('@testuser')).toBeTruthy();
+  });
+
+  it('muestra AvatarPlaceholder cuando el avatar es null', () => {
+    const { getByTestId } = render(<UserCard user={makeUser({ username: 'gamer99', avatar: null })} />);
+    expect(getByTestId('avatar-placeholder')).toBeTruthy();
+  });
+
+  it('no muestra AvatarPlaceholder cuando el usuario tiene avatar', () => {
+    const { queryByTestId } = render(
+      <UserCard user={makeUser({ username: 'gamer99', avatar: 'https://example.com/avatar.jpg' })} />
+    );
+    expect(queryByTestId('avatar-placeholder')).toBeNull();
   });
 });

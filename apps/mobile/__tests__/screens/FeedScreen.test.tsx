@@ -1,6 +1,6 @@
 import React from 'react';
 import { FlatList } from 'react-native';
-import { render } from '@testing-library/react-native';
+import { render, act } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import LibraryScreen from '../../app/(tabs)/index';
@@ -154,12 +154,33 @@ describe('LibraryScreen', () => {
     expect(buttons.length).toBeGreaterThanOrEqual(sampleGames.length);
   });
 
-  it('el pull-to-refresh invalida la query my-games', () => {
+  it('el pull-to-refresh no lanza error al activarse', async () => {
     mockUseMyGames.mockReturnValue({ ...baseMyGamesResult, allGames: sampleGames });
     const { UNSAFE_getByType } = renderWithClient(<LibraryScreen />);
     const list = UNSAFE_getByType(FlatList);
-    // onRefresh llama a queryClient.invalidateQueries — no a refetch directamente
-    expect(() => list.props.refreshControl.props.onRefresh()).not.toThrow();
+    // handleRefresh es async — envolver en act para gestionar correctamente las actualizaciones de estado
+    await act(async () => {
+      list.props.refreshControl.props.onRefresh();
+    });
+    // Si llegamos aquí sin error, el test pasa
+  });
+
+  it('el onEndReached y onRefresh son callbacks distintos en el FlashList', () => {
+    mockUseMyGames.mockReturnValue({ ...baseMyGamesResult, allGames: sampleGames, hasNextPage: true });
+    const { UNSAFE_getByType } = renderWithClient(<LibraryScreen />);
+    const list = UNSAFE_getByType(FlatList);
+    expect(list.props.onEndReached).toBeDefined();
+    expect(list.props.refreshControl.props.onRefresh).toBeDefined();
+    // Son funciones distintas — el infinite scroll no activa el pull-to-refresh
+    expect(list.props.onEndReached).not.toBe(list.props.refreshControl.props.onRefresh);
+  });
+
+  it('el RefreshControl tiene refreshing=false inicialmente (no ligado a isFetchingNextPage)', () => {
+    // isFetchingNextPage=true no debe hacer que refreshing sea true en el RefreshControl
+    mockUseMyGames.mockReturnValue({ ...baseMyGamesResult, allGames: sampleGames, isFetchingNextPage: true });
+    const { UNSAFE_getByType } = renderWithClient(<LibraryScreen />);
+    const list = UNSAFE_getByType(FlatList);
+    expect(list.props.refreshControl.props.refreshing).toBe(false);
   });
 
   it('muestra el botón de sync cuando hay plataformas vinculadas', () => {
