@@ -79,17 +79,19 @@ const psnAccountPrivate: PlatformAccount = {
   psnProfilePrivate: true,
 };
 
-function renderProfile(mockApiGet?: jest.Mock) {
+function renderProfile(mockApiGet?: jest.Mock, mockApiDelete?: jest.Mock) {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { api } = require('../../lib/api') as { api: { get: jest.Mock } };
+  const { api } = require('../../lib/api') as { api: { get: jest.Mock; delete: jest.Mock } };
   api.get = mockApiGet ?? jest.fn(() => Promise.resolve([]));
+  api.delete = mockApiDelete ?? jest.fn(() => Promise.resolve({ ok: true, deletedAchievements: 0 }));
 
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const rendered = render(
     <QueryClientProvider client={client}>
       <ProfileScreen />
     </QueryClientProvider>,
   );
+  return { ...rendered, client };
 }
 
 describe('ProfileScreen', () => {
@@ -267,6 +269,41 @@ describe('ProfileScreen', () => {
       const apiGet = jest.fn(() => Promise.resolve([steamAccount]));
       const { queryByTestId } = renderProfile(apiGet);
       await waitFor(() => expect(queryByTestId('psn-private-badge')).toBeNull());
+    });
+
+    it('tras desvincular exitosamente, invalida my-games y my-stats', async () => {
+      const apiGet = jest.fn(() => Promise.resolve([steamAccount]));
+      const apiDelete = jest.fn(() =>
+        Promise.resolve({ ok: true, deletedAchievements: 12 }),
+      );
+      const { client, getByRole } = renderProfile(apiGet, apiDelete);
+      const invalidateSpy = jest.spyOn(client, 'invalidateQueries');
+
+      // Simular Alert para ejecutar directamente el onPress de confirmación
+      jest.spyOn(Alert, 'alert').mockImplementationOnce(
+        (_title, _msg, buttons) => {
+          const confirmBtn = (
+            buttons as { style?: string; onPress?: () => void }[]
+          )?.find((b) => b.style === 'destructive');
+          confirmBtn?.onPress?.();
+        },
+      );
+
+      // Esperar a que aparezca el botón de desvincular y pulsarlo
+      await waitFor(() =>
+        expect(getByRole('button', { name: 'link_platform.steam.unlink' })).toBeTruthy(),
+      );
+      fireEvent.press(getByRole('button', { name: 'link_platform.steam.unlink' }));
+
+      // Esperar a que se llame api.delete y se invaliden las queries de biblioteca
+      await waitFor(() => expect(apiDelete).toHaveBeenCalled());
+      await waitFor(() => {
+        const keys = invalidateSpy.mock.calls.map(
+          (call) => (call[0] as { queryKey?: string[] })?.queryKey?.[0],
+        );
+        expect(keys).toContain('my-games');
+        expect(keys).toContain('my-stats');
+      });
     });
   });
 });

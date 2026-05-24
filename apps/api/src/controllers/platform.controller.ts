@@ -52,8 +52,8 @@ export async function unlinkSteamHandler(
 ): Promise<void> {
   try {
     const userId = (req as AuthenticatedRequest).user.id;
-    await platformService.unlinkPlatform(userId, 'STEAM');
-    res.json({ ok: true });
+    const result = await platformService.unlinkPlatform(userId, 'STEAM');
+    res.json({ ok: true, deletedAchievements: result.deletedAchievements });
   } catch (err) {
     next(err);
   }
@@ -95,8 +95,8 @@ export async function unlinkRetroAchievementsHandler(
 ): Promise<void> {
   try {
     const userId = (req as AuthenticatedRequest).user.id;
-    await platformService.unlinkPlatform(userId, 'RA');
-    res.json({ ok: true });
+    const result = await platformService.unlinkPlatform(userId, 'RA');
+    res.json({ ok: true, deletedAchievements: result.deletedAchievements });
   } catch (err) {
     next(err);
   }
@@ -151,8 +151,8 @@ export async function unlinkPsnHandler(
 ): Promise<void> {
   try {
     const userId = (req as AuthenticatedRequest).user.id;
-    await platformService.unlinkPlatform(userId, 'PSN');
-    res.json({ ok: true });
+    const result = await platformService.unlinkPlatform(userId, 'PSN');
+    res.json({ ok: true, deletedAchievements: result.deletedAchievements });
   } catch (err) {
     next(err);
   }
@@ -195,8 +195,8 @@ export async function unlinkXboxHandler(
 ): Promise<void> {
   try {
     const userId = (req as AuthenticatedRequest).user.id;
-    await platformService.unlinkPlatform(userId, 'XBOX');
-    res.json({ ok: true });
+    const result = await platformService.unlinkPlatform(userId, 'XBOX');
+    res.json({ ok: true, deletedAchievements: result.deletedAchievements });
   } catch (err) {
     next(err);
   }

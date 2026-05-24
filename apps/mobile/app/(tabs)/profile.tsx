@@ -124,6 +124,9 @@ export default function ProfileScreen() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['platforms', user?.id] });
       void queryClient.invalidateQueries({ queryKey: ['linkedPlatforms'] });
+      // Los logros y juegos de la plataforma se borraron en el backend — actualizar la biblioteca
+      void queryClient.invalidateQueries({ queryKey: ['my-games'] });
+      void queryClient.invalidateQueries({ queryKey: ['my-stats'] });
     },
   });
 

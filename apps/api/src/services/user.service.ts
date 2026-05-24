@@ -7,10 +7,10 @@ import { cloudinary } from '../lib/cloudinary';
 import { upsertUserScore, removeUserFromRankings } from './ranking.service';
 
 // XP necesario por nivel — cada 1000 XP sube un nivel, máximo nivel 100
-const XP_PER_LEVEL = 1000;
-const MAX_LEVEL = 100;
+export const XP_PER_LEVEL = 1000;
+export const MAX_LEVEL = 100;
 
-function calculateLevel(xp: number): number {
+export function calculateLevel(xp: number): number {
   return Math.min(Math.floor(xp / XP_PER_LEVEL) + 1, MAX_LEVEL);
 }
 
