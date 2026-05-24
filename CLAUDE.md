@@ -967,6 +967,9 @@ Métricas disponibles:
 | Tab Challenges gateado con `FEATURES.challenges = false` — pantalla intacta | `href: null` en `Tabs.Screen` oculta el tab del nav bar sin eliminar la ruta. La pantalla `challenges.tsx` sigue siendo accesible via deep link. El código no se toca — solo `_layout.tsx` condiciona `href` en función del flag. Activar cambiando `challenges: false → true` en `featureFlags.ts`. | Fase 3 |
 | Badge PSN en `LibraryGameCard` cambiado: tick verde `isCompleted` → badge amarillo "Platino" `platinumEarned` | El tick verde era ambiguo (el usuario no sabe si significa 100% o platino). El badge "Platino" con fondo amarillo (`bg-yellow-400 text-black`) comunica exactamente qué se logró. Un juego puede tener el platino sin `isCompleted` (DLC añadidos tras el platino). | Fase 3 |
 | Selector de tema eliminado de Profile settings — oculto con TODO comentario | Modo oscuro es el único implementado — mostrar un "selector" con una sola opción confundía. Oculto con `{/* TODO Fase 4 */}` para recordar que debe implementarse con el modo claro. | Fase 3 |
+| `isManualRefreshing` local en lugar de `isRefetching` del hook en el `RefreshControl` de Biblioteca | En TanStack Query, `isRefetching = isFetching && !isLoading`. Cuando `fetchNextPage()` se ejecuta, `isFetching = true` y `isLoading = false` → `isRefetching = true` → el spinner de pull-to-refresh aparecía al llegar al final de la lista. `isManualRefreshing` (estado local) solo se activa al tirar desde arriba, completamente independiente del infinite scroll. `handleRefresh` es async con try/finally para garantizar el reset. | Fase 3 |
+| `AvatarPlaceholder` con iniciales y color determinista por username — `getAvatarColor` usa hash del username sobre paleta de 8 colores | Un usuario sin avatar veía el placeholder genérico de la app (icono). El color determinista garantiza que el mismo usuario siempre tiene el mismo color en todos los dispositivos y sesiones — sin estado adicional. Componente reutilizable en `UserCard`, `profile.tsx` y `profile/[username].tsx`. `accessibilityLabel` via `t('profile.avatar_placeholder', { username })`. `testID="avatar-placeholder-container"` para tests. | Fase 3 |
+| Auto-refresco lista durante sync ya funcionaba — `invalidateQueries({ queryKey: ['my-games'] })` con prefix matching cubre `['my-games', platform]` | TanStack Query usa prefix matching en `invalidateQueries`: `['my-games']` invalida todas las queries cuya key empiece con ese prefijo, incluidas `['my-games', 'all']`, `['my-games', 'STEAM']`, etc. No había bug, solo confirmación de funcionamiento. | Fase 3 |
 
 ---
 
@@ -1084,6 +1087,8 @@ Métricas disponibles:
 
 ## Última revisión de código
 
+**Fecha**: 2026-06-08 (sesión 18) — 3 mejoras: fix pull-to-refresh separado del infinite scroll (`isManualRefreshing` local, elimina confusión con `isRefetching`), confirmación de auto-refresco durante sync (ya funcionaba por prefix matching TanStack Query), `AvatarPlaceholder` con iniciales + color determinista por username en `UserCard`/`profile.tsx`/`profile/[username].tsx`. Tests: 445 API + 248 mobile (+15 nuevos). 0 errores TS/lint. Cobertura API 80.57% stmt.
+
 **Fecha**: 2026-06-07 (sesión 17) — 10 mejoras UI/UX: jerarquía visual logros en `game/[id].tsx` (badge earned vs no-earned), `lastActivityAt` = MAX(unlockedAt) para sort "último jugado" real (campo `UserAchievement.unlockedAt` confirmado en schema), pull-to-refresh via `queryClient.invalidateQueries`, `contentFit="contain"` en iconos de juego, badge "Platino" en `LibraryGameCard` cuando `platinumEarned`, ícono cámara en avatar de perfil, placeholder PSN sin username real, selector de tema oculto, más espaciado en chips de Search, tab Challenges gateado con `FEATURES.challenges = false`. Tests: 445 API + 233 mobile. 0 errores TS/lint. Cobertura API 80.8% stmt / 83.66% branch.
 
 **Fecha**: 2026-06-06 (sesión 16) — Padding header reducido (`pt-2→pt-1`) en 6 tabs. Badge PSN simplificado: solo tick ✓ verde cuando `isCompleted` — sin texto ni badge de platino. `globalRateLimiter` 300→500 req/15min. Investigación sync PSN: estructural (300 llamadas secuenciales), sin rate limiting detectado, sin cambios de código. Investigación contadores BD: query eficiente con `@@index([userId])`, documentado como T14. Tests: 445 API + 233 mobile. 0 errores TS/lint. Cobertura API 80.8% stmt / 83.66% branch.
@@ -1107,6 +1112,42 @@ Métricas disponibles:
 **Fecha**: 2026-05-30 (sesión 7) — Smoke test APK #3 completo. BUG-6 identificado (PSN screen NPSSO stale — Metro cache). BUG-3/4/5 re-confirmados ✅. AdMob banners ✅. 15/16 pasos completados (offline mode no testeable en emulador). Ver detalles en Sesión 7.
 
 **Fecha**: 2026-05-30 (sesión 6) — APK #3 generada localmente (debug). Downgrade `react-native-google-mobile-ads` v16→v13. `app-debug.apk` 165.7 MB lista para smoke test. Ver detalles en Sesión 6.
+
+### Sesión 18 — 2026-06-08 — Fix pull-to-refresh, AvatarPlaceholder con iniciales
+
+**Objetivo**: 3 mejoras UX — fix confusión pull-to-refresh vs infinite scroll, confirmación auto-refresco durante sync, placeholder de avatar con iniciales.
+
+**PARTE 1 — Fix pull-to-refresh vs infinite scroll:**
+- **Causa raíz**: `refreshing={isRefetching}` en el `RefreshControl`. En TanStack Query, `isRefetching = isFetching && !isLoading`. Cuando `fetchNextPage()` carga la página siguiente, `isFetching = true` y `isLoading = false` → `isRefetching = true` → el spinner de pull-to-refresh aparecía en el top al llegar al final de la lista.
+- **Fix**: estado local `isManualRefreshing` (empieza en `false`). `handleRefresh` async con `setIsManualRefreshing(true)` → `await queryClient.invalidateQueries(...)` → `setIsManualRefreshing(false)` en `finally`. `RefreshControl` usa `refreshing={isManualRefreshing}`. `isRefetching` eliminado del destructuring de `useMyGames`.
+- `onEndReached` → `fetchNextPage` | `onRefresh` → `handleRefresh` — gestos completamente independientes.
+
+**PARTE 2 — Auto-refresco durante sync (ya funcionaba):**
+- Confirmado: `useSyncProgress` llama `queryClient.invalidateQueries({ queryKey: ['my-games'] })` en cada batch (`sync:progress`) y al completar (`sync:complete`).
+- TanStack Query usa prefix matching: `['my-games']` invalida `['my-games', 'all']`, `['my-games', 'STEAM']`, etc. No había bug. Documentado sin cambiar código.
+
+**PARTE 3 — `AvatarPlaceholder` con iniciales y color determinista:**
+- `components/AvatarPlaceholder.tsx`: `getAvatarColor(username)` — hash sobre paleta de 8 colores (indigo/violet/pink/amber/emerald/blue/red/teal). `getInitials(username)` — primeras 2 letras en mayúsculas. Tamaño configurable (`size` prop, default 80). `testID="avatar-placeholder-container"`. `accessibilityLabel` via i18n `profile.avatar_placeholder`.
+- `UserCard.tsx`: `user.avatar ? <Image> : <AvatarPlaceholder>` — elimina `require('../assets/images/icon.png')` como fallback.
+- `profile.tsx` (perfil propio): `user.avatar ? <Image> : <AvatarPlaceholder size={96}>` — el ícono de cámara sigue visible sobre el placeholder.
+- `profile/[username].tsx` (perfil público): `profile.avatar ? <Image> : <AvatarPlaceholder size={80} style={borderStyle}>` — mantiene el borde de 3px.
+- i18n: `profile.avatar_placeholder` — `"Foto de perfil de {{username}}"` / `"Profile photo of {{username}}"`.
+
+**Tests añadidos/modificados:**
+- `AvatarPlaceholder.test.tsx` (nuevo, 10 tests): `getInitials` (3), `getAvatarColor` (3), componente (4 — iniciales con `includeHiddenElements`, accessibilityLabel, tamaño, color determinista).
+- `UserCard.test.tsx`: mock `AvatarPlaceholder`, 2 tests nuevos (placeholder cuando avatar null, imagen cuando avatar tiene URL).
+- `FeedScreen.test.tsx`: import `act`, test `handleRefresh` convertido a async con `act()`, 2 tests nuevos (callbacks distintos, `refreshing=false` cuando `isFetchingNextPage=true`).
+
+**Estado de calidad:**
+| Categoría | Resultado |
+|---|---|
+| TypeScript strict (API + mobile) | ✅ 0 errores |
+| Lint (API + mobile) | ✅ 0 errores, 0 warnings |
+| Tests backend | ✅ 445/445 — 35 suites |
+| Tests mobile | ✅ 248/248 — 21 suites |
+| Cobertura API | ✅ 80.57% stmt |
+
+---
 
 ### Sesión 17 — 2026-06-07 — UI/UX polish: jerarquía logros, lastActivityAt, iconos, badges, Challenges gateado
 
