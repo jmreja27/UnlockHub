@@ -25,6 +25,8 @@ export interface UseSyncProgressResult {
 
 const POLL_INTERVAL_MS = 2000;
 const SOCKET_GRACE_MS = 5000;
+// Throttle de refresco de lista desde el path de polling (el socket no tiene throttle — emite por lote)
+const LIST_INVALIDATE_THROTTLE_MS = 15_000;
 
 export function useSyncProgress(onComplete?: SyncCompleteCallback): UseSyncProgressResult {
   const { accessToken, isAuthenticated } = useSessionStore();
@@ -36,6 +38,8 @@ export function useSyncProgress(onComplete?: SyncCompleteCallback): UseSyncProgr
   // Timestamp del último evento Socket.io recibido — para detectar si el socket está recibiendo datos
   const lastSocketEventRef = useRef<number>(0);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Timestamp del último invalidateQueries desde hydrateFromApi — throttle para no saturar la API
+  const lastInvalidateRef = useRef<number>(0);
 
   const stopPolling = useCallback(() => {
     if (pollTimerRef.current) {
@@ -55,8 +59,9 @@ export function useSyncProgress(onComplete?: SyncCompleteCallback): UseSyncProgr
       if (running.length === 0) {
         if (socketSilent) {
           // El socket lleva tiempo silencioso y Redis confirma que no hay nada en curso:
-          // limpiar el mapa para evitar banners de sync que quedaron huérfanos
+          // limpiar el mapa y hacer un refresco final de la lista con el estado definitivo
           setActiveSyncs(new Map());
+          void queryClient.invalidateQueries({ queryKey: ['my-games'] });
         }
         stopPolling();
         return;
@@ -79,10 +84,20 @@ export function useSyncProgress(onComplete?: SyncCompleteCallback): UseSyncProgr
         }
         return next;
       });
+
+      // Throttle: refrescar la lista como máximo cada LIST_INVALIDATE_THROTTLE_MS.
+      // El path de Socket.io tiene su propio invalidateQueries en onSyncProgress (sin throttle,
+      // se ejecuta por cada lote). Este path de fallback es más conservador para no saturar la API
+      // durante syncs largos (PSN ~300 juegos = 30+ minutos de polling cada 2s).
+      const now = Date.now();
+      if (now - lastInvalidateRef.current >= LIST_INVALIDATE_THROTTLE_MS) {
+        lastInvalidateRef.current = now;
+        void queryClient.invalidateQueries({ queryKey: ['my-games'] });
+      }
     } catch {
       // Si falla el poll, no mostrar error — el socket lo cubrirá cuando haya eventos
     }
-  }, [stopPolling]);
+  }, [stopPolling, queryClient]);
 
   // BUG-8: En mount, comprobar si hay syncs en curso vía API para no depender solo del socket
   useEffect(() => {
