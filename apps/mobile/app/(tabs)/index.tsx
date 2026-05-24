@@ -207,16 +207,54 @@ export default function LibraryScreen() {
 
   const [isManualRefreshing, setIsManualRefreshing] = useState(false);
 
+  // Carga todas las páginas restantes — necesario para que el sort client-side sea completo
+  const fetchAllRemainingPages = useCallback(async () => {
+    if (!hasNextPage) return;
+    // Usar el resultado de cada fetchNextPage (no el closure de hasNextPage — puede ser stale)
+    let result = await fetchNextPage();
+    while (result.hasNextPage) {
+      result = await fetchNextPage();
+    }
+  }, [fetchNextPage, hasNextPage]);
+
+  // Ref para disparar fetchAllRemainingPages tras un pull-to-refresh con sort activo
+  const pendingFetchAllAfterRefreshRef = useRef(false);
+
   const handleRefresh = useCallback(async () => {
     setIsManualRefreshing(true);
     setShowNewGamesBanner(false);
     setSeenGamesCount(allGames.length);
+    // Si el sort no es el default, cargar todas las páginas tras la recarga
+    if ((librarySortOrder ?? 'last_played') !== 'last_played') {
+      pendingFetchAllAfterRefreshRef.current = true;
+    }
     try {
       await queryClient.invalidateQueries({ queryKey: ['my-games'] });
     } finally {
       setIsManualRefreshing(false);
     }
-  }, [queryClient, allGames.length]);
+  }, [queryClient, allGames.length, librarySortOrder]);
+
+  // Dispara fetchAllRemainingPages cuando el sort está activo y la primera página ya cargó
+  useEffect(() => {
+    if (!pendingFetchAllAfterRefreshRef.current) return;
+    if (isLoading || isFetchingNextPage) return;
+    pendingFetchAllAfterRefreshRef.current = false;
+    if (hasNextPage) {
+      void fetchAllRemainingPages();
+    }
+  }, [isLoading, isFetchingNextPage, hasNextPage, fetchAllRemainingPages]);
+
+  // Al cambiar el sort, carga todas las páginas pendientes para que la ordenación sea completa
+  const handleSortChange = useCallback(
+    async (newSort: LibrarySortOrder) => {
+      setLibrarySortOrder(newSort);
+      if (hasNextPage) {
+        await fetchAllRemainingPages();
+      }
+    },
+    [hasNextPage, setLibrarySortOrder, fetchAllRemainingPages],
+  );
 
   const handleNewGamesBanner = useCallback(() => {
     flashListRef.current?.scrollToOffset({ offset: 0, animated: true });
@@ -339,14 +377,20 @@ export default function LibraryScreen() {
         />
         <Pressable
           onPress={() => setSortModalVisible(true)}
+          disabled={isFetchingNextPage}
           style={{ minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center' }}
           className="bg-surface-2 px-3 rounded-xl"
           accessibilityRole="button"
           accessibilityLabel={t('library.sort_button_a11y', { current: activeSortLabel })}
+          accessibilityState={{ busy: isFetchingNextPage }}
         >
-          <Text className="text-primary-light text-xs font-semibold" numberOfLines={1}>
-            {activeSortLabel} ▼
-          </Text>
+          {isFetchingNextPage ? (
+            <ActivityIndicator size="small" color="#818cf8" testID="sort-loading-indicator" />
+          ) : (
+            <Text className="text-primary-light text-xs font-semibold" numberOfLines={1}>
+              {activeSortLabel} ▼
+            </Text>
+          )}
         </Pressable>
       </View>
 
@@ -516,8 +560,8 @@ export default function LibraryScreen() {
                 <Pressable
                   key={key}
                   onPress={() => {
-                    setLibrarySortOrder(key);
                     setSortModalVisible(false);
+                    void handleSortChange(key);
                   }}
                   className={`flex-row items-center justify-between py-3.5 border-b border-surface-2`}
                   accessibilityRole="radio"

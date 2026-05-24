@@ -1,6 +1,6 @@
 import React from 'react';
 import { FlatList } from 'react-native';
-import { render, act } from '@testing-library/react-native';
+import { render, act, fireEvent, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import LibraryScreen from '../../app/(tabs)/index';
@@ -320,5 +320,61 @@ describe('LibraryScreen', () => {
     });
 
     expect(queryByTestId('new-games-banner')).toBeNull();
+  });
+
+  // ── Tests de sort con carga completa de páginas ──────────────────────────────
+
+  it('al cambiar el sort con hasNextPage=true, llama fetchNextPage', async () => {
+    const mockFetchNextPage = jest.fn().mockResolvedValue({ hasNextPage: false });
+    mockUseMyGames.mockReturnValue({
+      ...baseMyGamesResult,
+      allGames: sampleGames,
+      hasNextPage: true,
+      fetchNextPage: mockFetchNextPage,
+    });
+    const { getByRole } = renderWithClient(<LibraryScreen />);
+
+    // Pulsar el botón de sort para abrir el modal
+    const sortButton = getByRole('button', { name: /library\.sort_button_a11y/ });
+    fireEvent.press(sortButton);
+
+    // Seleccionar una opción de sort distinta al default
+    await waitFor(() => expect(getByRole('radio', { name: 'library.sort_pct_desc' })).toBeTruthy());
+    await act(async () => {
+      fireEvent.press(getByRole('radio', { name: 'library.sort_pct_desc' }));
+    });
+
+    expect(mockFetchNextPage).toHaveBeenCalled();
+  });
+
+  it('al cambiar el sort con hasNextPage=false, NO llama fetchNextPage', async () => {
+    const mockFetchNextPage = jest.fn();
+    mockUseMyGames.mockReturnValue({
+      ...baseMyGamesResult,
+      allGames: sampleGames,
+      hasNextPage: false,
+      fetchNextPage: mockFetchNextPage,
+    });
+    const { getByRole } = renderWithClient(<LibraryScreen />);
+
+    const sortButton = getByRole('button', { name: /library\.sort_button_a11y/ });
+    fireEvent.press(sortButton);
+
+    await waitFor(() => expect(getByRole('radio', { name: 'library.sort_alpha_asc' })).toBeTruthy());
+    await act(async () => {
+      fireEvent.press(getByRole('radio', { name: 'library.sort_alpha_asc' }));
+    });
+
+    expect(mockFetchNextPage).not.toHaveBeenCalled();
+  });
+
+  it('el botón de sort muestra ActivityIndicator cuando isFetchingNextPage=true', () => {
+    mockUseMyGames.mockReturnValue({
+      ...baseMyGamesResult,
+      allGames: sampleGames,
+      isFetchingNextPage: true,
+    });
+    const { getByTestId } = renderWithClient(<LibraryScreen />);
+    expect(getByTestId('sort-loading-indicator')).toBeTruthy();
   });
 });
