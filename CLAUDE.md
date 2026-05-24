@@ -941,6 +941,7 @@ Métricas disponibles:
 | `totalEarnedAchievements`/`totalAvailableAchievements` calculados antes de paginar en `getMyGames` (BUG-10) | Si se calculaban del subset paginado, el header mostraba "120/1200 logros" en la primera página y cambiaba al cargar más páginas. Los agregados se calculan ahora sobre `allGames` (lista completa antes del `slice`), se devuelven en la respuesta de cada página y el cliente usa siempre los de `pages[0]`. | Fase 3 |
 | XBOX eliminado del filtro de biblioteca (BUG-11) | Xbox está gateado hasta Fase 4 — nunca hay datos Xbox en BD — el filtro mostraba lista vacía confundiendo al usuario. `PlatformFilter` type ahora es `'ALL' \| 'STEAM' \| 'RA' \| 'PSN'`. | Fase 3 |
 | `sort_last_played` usa `lastSyncedAt` como aproximación, no `lastPlayedAt` | Steam expone `rtime_last_played` vía `GetOwnedGames`, pero PSN y RA no tienen campo equivalente. Añadir `lastPlayedAt` requeriría nuevo modelo `UserGame` o campo en `Game`, migración Prisma y actualizaciones en 3 adapters. `lastSyncedAt` es suficientemente buena aproximación para la UX de ordenación. | Fase 3 |
+| `hydrateFromApi` también llama `invalidateQueries({ queryKey: ['my-games'] })` con throttle 15s | `hydrateFromApi` actualizaba el banner de sync pero nunca invalidaba la lista — la lista solo se actualizaba al hacer pull-to-refresh manual. El path de Socket.io (`onSyncProgress`) tiene su propio `invalidateQueries` por lote sin throttle. El path de fallback usa throttle de 15s para no saturar la API en syncs largos (PSN ~30 min = 900 polls a 2s). Cuando el sync termina en modo fallback (socketSilent=true, running→0), se llama sin throttle para el estado final. `queryClient` añadido a deps de `hydrateFromApi`. | Fase 3 |
 | `hydrateFromApi(socketSilent=false)` en mount vs `hydrateFromApi(true)` en timer de polling (BUG-12) | Al montar solo se añaden plataformas nuevas (preserva estado del socket si ya había eventos). Al hacer polling (socket silencioso >5s), se reconstruye el Map desde cero para no mostrar plataformas que ya terminaron pero no llegaron por socket. | Fase 3 |
 | `fallbackLng: 'en'` en i18n — inglés como idioma de fallback universal | `fallbackLng: 'es'` anterior causaba que usuarios con dispositivos en francés/alemán/etc. vieran la app en español en lugar de inglés. El español es solo uno de los dos idiomas soportados, no debe ser fallback universal. | Fase 3 |
 | `PSN: #1e90ff` (DodgerBlue) en lugar de `#003087` para badges de plataforma | `#003087` sobre fondo oscuro tenía ratio de contraste ~2.8:1 (no supera WCAG 2.1 AA mínimo 4.5:1). `#1e90ff` da ~6.5:1 — supera AA y casi llega a AAA. | Fase 3 |
@@ -1087,6 +1088,8 @@ Métricas disponibles:
 
 ## Última revisión de código
 
+**Fecha**: 2026-06-09 (sesión 19) — Fix auto-refresco lista durante sync: `hydrateFromApi` (fallback polling) ahora llama `invalidateQueries({ queryKey: ['my-games'] })` cuando hay syncs activos (throttle 15s) y cuando el sync termina en modo fallback. Tests: 445 API + 250 mobile (+2 nuevos). 0 errores TS/lint.
+
 **Fecha**: 2026-06-08 (sesión 18) — 3 mejoras: fix pull-to-refresh separado del infinite scroll (`isManualRefreshing` local, elimina confusión con `isRefetching`), confirmación de auto-refresco durante sync (ya funcionaba por prefix matching TanStack Query), `AvatarPlaceholder` con iniciales + color determinista por username en `UserCard`/`profile.tsx`/`profile/[username].tsx`. Tests: 445 API + 248 mobile (+15 nuevos). 0 errores TS/lint. Cobertura API 80.57% stmt.
 
 **Fecha**: 2026-06-07 (sesión 17) — 10 mejoras UI/UX: jerarquía visual logros en `game/[id].tsx` (badge earned vs no-earned), `lastActivityAt` = MAX(unlockedAt) para sort "último jugado" real (campo `UserAchievement.unlockedAt` confirmado en schema), pull-to-refresh via `queryClient.invalidateQueries`, `contentFit="contain"` en iconos de juego, badge "Platino" en `LibraryGameCard` cuando `platinumEarned`, ícono cámara en avatar de perfil, placeholder PSN sin username real, selector de tema oculto, más espaciado en chips de Search, tab Challenges gateado con `FEATURES.challenges = false`. Tests: 445 API + 233 mobile. 0 errores TS/lint. Cobertura API 80.8% stmt / 83.66% branch.
@@ -1112,6 +1115,39 @@ Métricas disponibles:
 **Fecha**: 2026-05-30 (sesión 7) — Smoke test APK #3 completo. BUG-6 identificado (PSN screen NPSSO stale — Metro cache). BUG-3/4/5 re-confirmados ✅. AdMob banners ✅. 15/16 pasos completados (offline mode no testeable en emulador). Ver detalles en Sesión 7.
 
 **Fecha**: 2026-05-30 (sesión 6) — APK #3 generada localmente (debug). Downgrade `react-native-google-mobile-ads` v16→v13. `app-debug.apk` 165.7 MB lista para smoke test. Ver detalles en Sesión 6.
+
+### Sesión 19 — 2026-06-09 — Fix auto-refresco lista durante sync
+
+**Objetivo**: la lista de la biblioteca no se actualizaba progresivamente durante un sync de plataforma — solo al hacer pull-to-refresh manual.
+
+**Diagnóstico:**
+- `useSyncProgress` tiene dos paths para mantener el banner actualizado:
+  1. **Socket.io** (`onSyncProgress`): llama `invalidateQueries` en cada lote ✅ — funciona cuando el socket recibe eventos
+  2. **Fallback polling** (`hydrateFromApi`): llama la API Redis cada 2s — solo actualizaba `activeSyncs` (banner), **sin `invalidateQueries`** ❌
+- En emulador/device, el socket frecuentemente no recibe eventos → el fallback polling mantiene el banner activo pero la lista nunca se refresca → el usuario solo ve cambios al deslizar (pull-to-refresh).
+
+**Fix — `apps/mobile/hooks/useSyncProgress.ts`:**
+- Nueva constante `LIST_INVALIDATE_THROTTLE_MS = 15_000`.
+- Nuevo ref `lastInvalidateRef` para throttle.
+- `hydrateFromApi` ahora llama `void queryClient.invalidateQueries({ queryKey: ['my-games'] })` en dos puntos:
+  1. Cuando `running.length > 0` (sync en curso): throttled a 15s — el socket hace lo mismo sin throttle por cada lote
+  2. Cuando `running.length === 0 && socketSilent` (sync completado en modo fallback): sin throttle — es el refresco final
+- `queryClient` añadido a la dependency array de `hydrateFromApi`.
+
+**Tests añadidos — `__tests__/hooks/useSyncProgress.test.ts`:**
+- `BUG-8: invalida my-games cuando hydrateFromApi detecta syncs en curso (fallback polling)`: verifica que `invalidateQueries` se llama cuando la API devuelve syncs activos.
+- `BUG-8: invalida my-games cuando hydrateFromApi detecta que el sync terminó (socketSilent=true)`: simula el ciclo completo (sync activo → timer de gracia → API devuelve vacío) con fake timers.
+- Existente `BUG-8: hidrata el Map desde la API en el mount...`: añadida aserción de `invalidateQueries`.
+
+**Estado de calidad:**
+| Categoría | Resultado |
+|---|---|
+| TypeScript strict (API + mobile) | ✅ 0 errores |
+| Lint (API + mobile) | ✅ 0 errores, 0 warnings |
+| Tests backend | ✅ 445/445 — 35 suites |
+| Tests mobile | ✅ 250/250 — 21 suites |
+
+---
 
 ### Sesión 18 — 2026-06-08 — Fix pull-to-refresh, AvatarPlaceholder con iniciales
 
