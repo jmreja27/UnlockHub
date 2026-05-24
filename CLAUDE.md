@@ -971,6 +971,7 @@ Métricas disponibles:
 | `isManualRefreshing` local en lugar de `isRefetching` del hook en el `RefreshControl` de Biblioteca | En TanStack Query, `isRefetching = isFetching && !isLoading`. Cuando `fetchNextPage()` se ejecuta, `isFetching = true` y `isLoading = false` → `isRefetching = true` → el spinner de pull-to-refresh aparecía al llegar al final de la lista. `isManualRefreshing` (estado local) solo se activa al tirar desde arriba, completamente independiente del infinite scroll. `handleRefresh` es async con try/finally para garantizar el reset. | Fase 3 |
 | `AvatarPlaceholder` con iniciales y color determinista por username — `getAvatarColor` usa hash del username sobre paleta de 8 colores | Un usuario sin avatar veía el placeholder genérico de la app (icono). El color determinista garantiza que el mismo usuario siempre tiene el mismo color en todos los dispositivos y sesiones — sin estado adicional. Componente reutilizable en `UserCard`, `profile.tsx` y `profile/[username].tsx`. `accessibilityLabel` via `t('profile.avatar_placeholder', { username })`. `testID="avatar-placeholder-container"` para tests. | Fase 3 |
 | Auto-refresco lista durante sync ya funcionaba — `invalidateQueries({ queryKey: ['my-games'] })` con prefix matching cubre `['my-games', platform]` | TanStack Query usa prefix matching en `invalidateQueries`: `['my-games']` invalida todas las queries cuya key empiece con ese prefijo, incluidas `['my-games', 'all']`, `['my-games', 'STEAM']`, etc. No había bug, solo confirmación de funcionamiento. | Fase 3 |
+| Banner "X juegos nuevos" en Biblioteca durante sync activo — patrón Twitter/X | `seenGamesCount` se inicializa a `allGames.length` en la primera carga (sin banner). Durante un sync activo (`isRunning = true`), si `allGames.length > seenGamesCount && seenGamesCount > 0` se muestra el banner. Al pulsar: scroll al top (`flashListRef.scrollToOffset`) + `seenGamesCount = allGames.length` + ocultar. Al hacer pull-to-refresh: mismo reset. Cuando `isRunning` pasa a `false`: ocultar + reset. Sin scroll automático (intrusivo si el usuario está revisando un juego). `NewGamesBanner` usa `Animated.spring` para entrada desde arriba, patrón de `OfflineBanner`. | Fase 3 |
 
 ---
 
@@ -1088,6 +1089,8 @@ Métricas disponibles:
 
 ## Última revisión de código
 
+**Fecha**: 2026-06-10 (sesión 20) — Banner "X juegos nuevos" en Biblioteca durante sync activo (patrón Twitter/X). `NewGamesBanner` componente con `Animated.spring` entrada desde arriba. Lógica en `index.tsx`: `seenGamesCount` + `showNewGamesBanner` + `flashListRef`. Se oculta al pulsar (scroll top), al pull-to-refresh y cuando el sync termina. i18n ES/EN `new_games_banner_one/other` + `new_games_banner_a11y`. Tests: 445 API + 259 mobile (+9 nuevos). 0 errores TS/lint.
+
 **Fecha**: 2026-06-09 (sesión 19) — Fix auto-refresco lista durante sync: `hydrateFromApi` (fallback polling) ahora llama `invalidateQueries({ queryKey: ['my-games'] })` cuando hay syncs activos (throttle 15s) y cuando el sync termina en modo fallback. Tests: 445 API + 250 mobile (+2 nuevos). 0 errores TS/lint.
 
 **Fecha**: 2026-06-08 (sesión 18) — 3 mejoras: fix pull-to-refresh separado del infinite scroll (`isManualRefreshing` local, elimina confusión con `isRefetching`), confirmación de auto-refresco durante sync (ya funcionaba por prefix matching TanStack Query), `AvatarPlaceholder` con iniciales + color determinista por username en `UserCard`/`profile.tsx`/`profile/[username].tsx`. Tests: 445 API + 248 mobile (+15 nuevos). 0 errores TS/lint. Cobertura API 80.57% stmt.
@@ -1115,6 +1118,50 @@ Métricas disponibles:
 **Fecha**: 2026-05-30 (sesión 7) — Smoke test APK #3 completo. BUG-6 identificado (PSN screen NPSSO stale — Metro cache). BUG-3/4/5 re-confirmados ✅. AdMob banners ✅. 15/16 pasos completados (offline mode no testeable en emulador). Ver detalles en Sesión 7.
 
 **Fecha**: 2026-05-30 (sesión 6) — APK #3 generada localmente (debug). Downgrade `react-native-google-mobile-ads` v16→v13. `app-debug.apk` 165.7 MB lista para smoke test. Ver detalles en Sesión 6.
+
+### Sesión 20 — 2026-06-10 — Banner "X juegos nuevos" durante sync activo
+
+**Objetivo**: mostrar un chip discreto en la parte superior de la lista cuando llegan juegos nuevos durante un sync activo, sin interrumpir al usuario si está revisando un juego.
+
+**Análisis previo (PARTE 1):**
+- No existía `flashListRef` en el FlashList — añadido.
+- `isRunning` ya estaba disponible desde `useSyncProgress` (línea 157).
+- No existía detección de juegos nuevos. Se usa `allGames.length` (no `games.length` que varía con filtros) como baseline.
+
+**Componente `components/NewGamesBanner.tsx`:**
+- `Animated.spring` para entrada (opacity 0→1, translateY -20→0) — mismo patrón que `OfflineBanner`.
+- `position: 'absolute'` para flotar sobre la lista sin desplazar contenido.
+- `testID="new-games-banner"` para tests y Maestro.
+- `accessibilityRole="button"` + `accessibilityLabel` via `library.new_games_banner_a11y`.
+
+**Lógica en `app/(tabs)/index.tsx`:**
+- `flashListRef = useRef<FlashList<LibraryGame>>(null)`.
+- `seenGamesCount = useState(0)` — inicializado a `allGames.length` en primera carga (previene banner en load inicial).
+- `showNewGamesBanner = useState(false)`.
+- `useEffect 1` (inicialización): `if allGames.length > 0 && seenGamesCount === 0 → setSeenGamesCount(allGames.length)`.
+- `useEffect 2` (lógica): `!isRunning → hide + reset; isRunning && allGames.length > seenGamesCount && seenGamesCount > 0 → show`.
+- `handleNewGamesBanner`: scroll top + `seenGamesCount = allGames.length` + hide.
+- `handleRefresh` actualizado: hide + `seenGamesCount = allGames.length` antes de invalidar.
+- El FlashList se envuelve en `<View style={{ flex: 1, position: 'relative' }}>` para que el banner flote correctamente.
+
+**i18n ES/EN:**
+- `library.new_games_banner_one/other` + `library.new_games_banner_a11y_one/other` — patrón `_one/_other` de i18next.
+
+**Tests:**
+- `NewGamesBanner.test.tsx` (nuevo, 5 tests): testID presente, accessibilityRole button, accessibilityLabel definido, onPress llamado, texto i18n clave presente.
+- `FeedScreen.test.tsx` (+4 tests): banner NO con `isRunning=false`, banner NO en carga inicial, banner SÍ con sync activo + juegos nuevos, banner desaparece en pull-to-refresh.
+- Mock de `NewGamesBanner` en `FeedScreen.test.tsx` para testear solo lógica de `index.tsx`.
+- `renderWithClient` refactorizado para exponer `rerender` con mismo `QueryClientProvider` wrapper.
+
+**Estado de calidad:**
+| Categoría | Resultado |
+|---|---|
+| TypeScript strict (API + mobile) | ✅ 0 errores |
+| Lint (API + mobile) | ✅ 0 errores, 0 warnings |
+| Tests backend | ✅ 445/445 — 35 suites |
+| Tests mobile | ✅ 259/259 — 22 suites |
+
+---
 
 ### Sesión 19 — 2026-06-09 — Fix auto-refresco lista durante sync
 

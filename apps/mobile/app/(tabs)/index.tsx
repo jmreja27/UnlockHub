@@ -14,6 +14,7 @@ import type { LibrarySortOrder } from '../../stores/preferencesStore';
 import { useSyncAll } from '../../hooks/useSyncAll';
 import { useSyncProgress } from '../../hooks/useSyncProgress';
 import { LibraryGameCard } from '../../components/LibraryGameCard';
+import { NewGamesBanner } from '../../components/NewGamesBanner';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { EmptyState } from '../../components/EmptyState';
 import { AdBanner } from '../../components/AdBanner';
@@ -155,6 +156,11 @@ export default function LibraryScreen() {
 
   const { activeSyncs, isRunning } = useSyncProgress(handleSyncComplete);
 
+  // ── Banner "X juegos nuevos" — patrón Twitter/X ───────────────────────────
+  const flashListRef = useRef<FlashList<LibraryGame>>(null);
+  const [seenGamesCount, setSeenGamesCount] = useState<number>(0);
+  const [showNewGamesBanner, setShowNewGamesBanner] = useState(false);
+
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!toast) return;
@@ -181,16 +187,42 @@ export default function LibraryScreen() {
     dataUpdatedAt,
   } = useMyGames(platform);
 
+  // Inicializa el contador de juegos vistos en la primera carga (sin banner)
+  useEffect(() => {
+    if (allGames.length > 0 && seenGamesCount === 0) {
+      setSeenGamesCount(allGames.length);
+    }
+  }, [allGames.length, seenGamesCount]);
+
+  // Muestra el banner cuando llegan juegos nuevos durante un sync activo;
+  // lo oculta cuando el sync termina y resetea el contador base
+  useEffect(() => {
+    if (!isRunning) {
+      setShowNewGamesBanner(false);
+      setSeenGamesCount(allGames.length);
+    } else if (seenGamesCount > 0 && allGames.length > seenGamesCount) {
+      setShowNewGamesBanner(true);
+    }
+  }, [allGames.length, isRunning, seenGamesCount]);
+
   const [isManualRefreshing, setIsManualRefreshing] = useState(false);
 
   const handleRefresh = useCallback(async () => {
     setIsManualRefreshing(true);
+    setShowNewGamesBanner(false);
+    setSeenGamesCount(allGames.length);
     try {
       await queryClient.invalidateQueries({ queryKey: ['my-games'] });
     } finally {
       setIsManualRefreshing(false);
     }
-  }, [queryClient]);
+  }, [queryClient, allGames.length]);
+
+  const handleNewGamesBanner = useCallback(() => {
+    flashListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    setSeenGamesCount(allGames.length);
+    setShowNewGamesBanner(false);
+  }, [allGames.length]);
 
   const { sync, isSyncing, isInCooldown, cooldownRemaining, hasPlatforms } = useSyncAll(user?.id);
 
@@ -393,59 +425,68 @@ export default function LibraryScreen() {
 
       {/* Lista de juegos */}
       {!isLoading && !isError && (
-        <FlashList
-          data={games}
-          renderItem={renderItem}
-          keyExtractor={(item) => item.id}
-          estimatedItemSize={76}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}
-          accessibilityLabel={t('library.list_label')}
-          onEndReached={() => {
-            if (hasNextPage && !isFetchingNextPage && !search.trim()) {
-              void fetchNextPage();
-            }
-          }}
-          onEndReachedThreshold={0.3}
-          refreshControl={
-            <RefreshControl
-              refreshing={isManualRefreshing}
-              onRefresh={() => { void handleRefresh(); }}
-              tintColor="#818cf8"
-              colors={['#4f46e5']}
-              accessibilityLabel={t('library.refresh_label')}
-            />
-          }
-          ListEmptyComponent={
-            search.trim() ? (
-              <View className="items-center justify-center py-8" accessible accessibilityLiveRegion="polite">
-                <Text className="text-gray-400 text-base text-center">{t('library.no_results')}</Text>
-              </View>
-            ) : (
-              <EmptyState
-                emoji="🎮"
-                title={t('library.empty_title')}
-                body={t('library.empty_body')}
-                ctaLabel={t('library.empty_cta')}
-                onCta={() => router.push('/(tabs)/profile')}
+        <View style={{ flex: 1, position: 'relative' }}>
+          <FlashList
+            ref={flashListRef}
+            data={games}
+            renderItem={renderItem}
+            keyExtractor={(item) => item.id}
+            estimatedItemSize={76}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}
+            accessibilityLabel={t('library.list_label')}
+            onEndReached={() => {
+              if (hasNextPage && !isFetchingNextPage && !search.trim()) {
+                void fetchNextPage();
+              }
+            }}
+            onEndReachedThreshold={0.3}
+            refreshControl={
+              <RefreshControl
+                refreshing={isManualRefreshing}
+                onRefresh={() => { void handleRefresh(); }}
+                tintColor="#818cf8"
+                colors={['#4f46e5']}
+                accessibilityLabel={t('library.refresh_label')}
               />
-            )
-          }
-          ListFooterComponent={
-            <>
-              {isFetchingNextPage && (
-                <View
-                  className="py-4 items-center"
-                  accessible
-                  accessibilityLiveRegion="polite"
-                  accessibilityLabel={t('common.loading')}
-                >
-                  <ActivityIndicator size="small" color="#818cf8" />
+            }
+            ListEmptyComponent={
+              search.trim() ? (
+                <View className="items-center justify-center py-8" accessible accessibilityLiveRegion="polite">
+                  <Text className="text-gray-400 text-base text-center">{t('library.no_results')}</Text>
                 </View>
-              )}
-              <AdBanner unitId="home" />
-            </>
-          }
-        />
+              ) : (
+                <EmptyState
+                  emoji="🎮"
+                  title={t('library.empty_title')}
+                  body={t('library.empty_body')}
+                  ctaLabel={t('library.empty_cta')}
+                  onCta={() => router.push('/(tabs)/profile')}
+                />
+              )
+            }
+            ListFooterComponent={
+              <>
+                {isFetchingNextPage && (
+                  <View
+                    className="py-4 items-center"
+                    accessible
+                    accessibilityLiveRegion="polite"
+                    accessibilityLabel={t('common.loading')}
+                  >
+                    <ActivityIndicator size="small" color="#818cf8" />
+                  </View>
+                )}
+                <AdBanner unitId="home" />
+              </>
+            }
+          />
+          {showNewGamesBanner && (
+            <NewGamesBanner
+              count={allGames.length - seenGamesCount}
+              onPress={handleNewGamesBanner}
+            />
+          )}
+        </View>
       )}
 
       {/* Modal de ordenación */}
