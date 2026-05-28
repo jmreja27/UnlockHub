@@ -643,6 +643,21 @@ app.get('/api/v1/challenges/me', auth, (_req, res) => res.json(MY_CHALLENGE_STAT
 
 // ─── SYNC ────────────────────────────────────────────────────────────────────
 
+// Resumen agregado de sync para SyncStatusBar — cooldown, próximo auto, syncs usados hoy
+app.get('/api/v1/sync/my-summary', auth, (_req, res) => {
+  const lastSyncAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(); // hace 2h
+  res.json({
+    lastSyncAt,
+    nextAutoSyncAt: new Date(Date.now() + 58 * 60 * 1000).toISOString(), // en 58 min
+    cooldownRemainingSeconds: 0,
+    cooldownUntil: null,
+    canSyncNow: true,
+    manualSyncsUsedToday: 1,
+    dailySyncsLimit: 5,
+    anyPlatformLinked: DEMO_PLATFORMS.length > 0,
+  });
+});
+
 // Estado agregado de todos los syncs activos — usado por useSyncProgress.hydrateFromApi
 app.get('/api/v1/sync/status', auth, (_req, res) => {
   res.json(

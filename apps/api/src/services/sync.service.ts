@@ -157,6 +157,98 @@ export async function getActiveSyncStatus(userId: string) {
   return statuses.filter((s) => s.linked);
 }
 
+export interface AggregateSyncStatus {
+  lastSyncAt: string | null;
+  nextAutoSyncAt: string | null;
+  cooldownRemainingSeconds: number;
+  cooldownUntil: string | null;
+  canSyncNow: boolean;
+  manualSyncsUsedToday: number;
+  dailySyncsLimit: number | null;
+  anyPlatformLinked: boolean;
+}
+
+// Devuelve un resumen agregado del estado de sync para mostrar en la UI de la Biblioteca
+export async function getAggregateSyncStatus(
+  userId: string,
+  isPremium: boolean,
+): Promise<AggregateSyncStatus> {
+  const effectivePremium = FEATURES.premium && isPremium;
+  const config = SYNC_COOLDOWNS[effectivePremium ? 'premium' : 'free'];
+
+  const linkedAccounts = await prisma.platformAccount.findMany({
+    where: { userId },
+    select: { platform: true, lastSyncedAt: true },
+  });
+
+  if (linkedAccounts.length === 0) {
+    return {
+      lastSyncAt: null,
+      nextAutoSyncAt: null,
+      cooldownRemainingSeconds: 0,
+      cooldownUntil: null,
+      canSyncNow: false,
+      manualSyncsUsedToday: 0,
+      dailySyncsLimit: config.dailyManualSyncLimit,
+      anyPlatformLinked: false,
+    };
+  }
+
+  // Leer cooldown y contador diario de cada plataforma vinculada en paralelo
+  const perPlatform = await Promise.all(
+    linkedAccounts.map(async (acc) => {
+      const platform = acc.platform as Platform;
+      const [ttl, dailyRaw] = await Promise.all([
+        redis.ttl(cooldownKey(userId, platform)),
+        redis.get(dailyCountKey(userId, platform)),
+      ]);
+      return {
+        lastSyncedAt: acc.lastSyncedAt,
+        cooldownRemainingSeconds: ttl > 0 ? ttl : 0,
+        dailySyncsUsed: parseInt(dailyRaw ?? '0', 10),
+      };
+    }),
+  );
+
+  // Último sync global = el más reciente entre todas las plataformas
+  const lastSyncDate = perPlatform
+    .map((p) => p.lastSyncedAt)
+    .filter((d): d is Date => d !== null)
+    .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+
+  const lastSyncAt = lastSyncDate?.toISOString() ?? null;
+  const nextAutoSyncAt = lastSyncAt
+    ? new Date(lastSyncDate!.getTime() + config.autoSyncIntervalMinutes * 60 * 1000).toISOString()
+    : null;
+
+  // Cooldown mínimo = tiempo hasta que la PRIMERA plataforma esté disponible
+  const minCooldown = Math.min(...perPlatform.map((p) => p.cooldownRemainingSeconds));
+
+  // canSyncNow = al menos una plataforma sin cooldown y sin límite diario agotado
+  const canSyncNow = perPlatform.some((p) => {
+    const limitOk =
+      config.dailyManualSyncLimit === null || p.dailySyncsUsed < config.dailyManualSyncLimit;
+    return p.cooldownRemainingSeconds === 0 && limitOk;
+  });
+
+  const cooldownUntil =
+    minCooldown > 0 ? new Date(Date.now() + minCooldown * 1000).toISOString() : null;
+
+  // Syncs usados hoy = el máximo entre plataformas (representativo de cuántos "sync all" hizo el usuario)
+  const manualSyncsUsedToday = Math.max(...perPlatform.map((p) => p.dailySyncsUsed));
+
+  return {
+    lastSyncAt,
+    nextAutoSyncAt,
+    cooldownRemainingSeconds: minCooldown,
+    cooldownUntil,
+    canSyncNow,
+    manualSyncsUsedToday,
+    dailySyncsLimit: config.dailyManualSyncLimit,
+    anyPlatformLinked: true,
+  };
+}
+
 /**
  * Sync express: obtiene los N juegos/trofeos más recientes de forma síncrona (~30 s max).
  * Se llama al vincular una plataforma por primera vez para poblar la biblioteca antes

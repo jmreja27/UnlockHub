@@ -38,3 +38,13 @@ export async function getActiveSyncStatusHandler(req: Request, res: Response, ne
     next(err);
   }
 }
+
+export async function getAggregateSyncStatusHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id: userId, isPremium } = (req as AuthenticatedRequest).user;
+    const summary = await syncService.getAggregateSyncStatus(userId, isPremium);
+    res.json(summary);
+  } catch (err) {
+    next(err);
+  }
+}

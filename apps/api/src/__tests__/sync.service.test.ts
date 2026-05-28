@@ -1,4 +1,4 @@
-import * as syncService from '../services/sync.service';
+﻿import * as syncService from '../services/sync.service';
 import { AppError } from '../middleware/errorHandler';
 
 jest.mock('../lib/redis', () => ({
@@ -15,7 +15,7 @@ jest.mock('../lib/redis', () => ({
 
 jest.mock('../lib/prisma', () => ({
   prisma: {
-    platformAccount: { findUnique: jest.fn(), update: jest.fn() },
+    platformAccount: { findUnique: jest.fn(), findMany: jest.fn(), update: jest.fn() },
     user: { update: jest.fn() },
   },
 }));
@@ -48,7 +48,7 @@ beforeEach(() => jest.clearAllMocks());
 describe('syncService.triggerManualSync', () => {
   it('encola el job y devuelve jobId cuando no hay cooldown', async () => {
     mockRedis.ttl.mockResolvedValue(-1);
-    // INCR devuelve 1 (primer sync del día) → dentro del límite
+    // INCR devuelve 1 (primer sync del dÃ­a) â†’ dentro del lÃ­mite
     mockRedis.incr.mockResolvedValue(1);
     mockRedis.expire.mockResolvedValue(1);
     mockRedis.set.mockResolvedValue('OK');
@@ -60,7 +60,7 @@ describe('syncService.triggerManualSync', () => {
     expect(result.platform).toBe('STEAM');
   });
 
-  it('lanza SYNC_COOLDOWN si el cooldown de Redis está activo', async () => {
+  it('lanza SYNC_COOLDOWN si el cooldown de Redis estÃ¡ activo', async () => {
     // SET NX devuelve null cuando la clave ya existe (cooldown activo)
     mockRedis.set.mockResolvedValue(null);
     mockRedis.ttl.mockResolvedValue(120);
@@ -71,10 +71,10 @@ describe('syncService.triggerManualSync', () => {
   });
 
   it('lanza DAILY_SYNC_LIMIT_EXCEEDED para free con 5 syncs ya realizados (INCR devuelve 6)', async () => {
-    // SET NX devuelve 'OK' → cooldown adquirido correctamente, no hay bloqueo por cooldown
+    // SET NX devuelve 'OK' â†’ cooldown adquirido correctamente, no hay bloqueo por cooldown
     mockRedis.set.mockResolvedValue('OK');
     mockRedis.ttl.mockResolvedValue(-1);
-    // INCR devuelve 6 → supera el límite de 5
+    // INCR devuelve 6 â†’ supera el lÃ­mite de 5
     mockRedis.incr.mockResolvedValue(6);
     mockRedis.decr.mockResolvedValue(5);
 
@@ -87,7 +87,7 @@ describe('syncService.triggerManualSync', () => {
   });
 
   // Con FEATURES.premium = false todos los usuarios siguen el tier free (incluidos isPremium=true)
-  it('isPremium=true aplica límite diario mientras premium está desactivado por feature flag', async () => {
+  it('isPremium=true aplica lÃ­mite diario mientras premium estÃ¡ desactivado por feature flag', async () => {
     mockRedis.ttl.mockResolvedValue(-1);
     mockRedis.incr.mockResolvedValue(1);
     mockRedis.expire.mockResolvedValue(1);
@@ -111,7 +111,7 @@ describe('syncService.triggerManualSync', () => {
     ).rejects.toMatchObject({ code: 'PLATFORM_NOT_LINKED', statusCode: 404 });
   });
 
-  it('fija el TTL con expire solo en el primer sync del día (INCR = 1)', async () => {
+  it('fija el TTL con expire solo en el primer sync del dÃ­a (INCR = 1)', async () => {
     mockRedis.ttl.mockResolvedValue(-1);
     mockRedis.incr.mockResolvedValue(1);
     mockRedis.expire.mockResolvedValue(1);
@@ -123,7 +123,7 @@ describe('syncService.triggerManualSync', () => {
     expect(mockRedis.expire).toHaveBeenCalledTimes(1);
   });
 
-  it('no llama a expire si el contador ya existía (INCR > 1)', async () => {
+  it('no llama a expire si el contador ya existÃ­a (INCR > 1)', async () => {
     mockRedis.ttl.mockResolvedValue(-1);
     mockRedis.incr.mockResolvedValue(3);
     mockRedis.set.mockResolvedValue('OK');
@@ -177,3 +177,99 @@ describe('AppError details', () => {
     }
   });
 });
+
+describe('syncService.getAggregateSyncStatus', () => {
+  const steamLastSync = new Date('2024-06-01T10:00:00.000Z');
+  const raLastSync = new Date('2024-06-01T09:00:00.000Z');
+
+  beforeEach(() => {
+    // Por defecto: dos plataformas vinculadas, sin cooldown, 2 syncs usados
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([
+      { platform: 'STEAM', lastSyncedAt: steamLastSync },
+      { platform: 'RA', lastSyncedAt: raLastSync },
+    ]);
+    mockRedis.ttl.mockResolvedValue(-1); // sin cooldown
+    mockRedis.get.mockResolvedValue('2'); // 2 syncs usados
+  });
+
+  it('devuelve anyPlatformLinked: false cuando no hay plataformas vinculadas', async () => {
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
+
+    const result = await syncService.getAggregateSyncStatus('user-1', false);
+
+    expect(result.anyPlatformLinked).toBe(false);
+    expect(result.canSyncNow).toBe(false);
+    expect(result.lastSyncAt).toBeNull();
+  });
+
+  it('devuelve lastSyncAt del sync mÃ¡s reciente entre plataformas', async () => {
+    const result = await syncService.getAggregateSyncStatus('user-1', false);
+
+    expect(result.lastSyncAt).toBe(steamLastSync.toISOString());
+  });
+
+  it('calcula nextAutoSyncAt: lastSyncAt + 60 min para free', async () => {
+    const result = await syncService.getAggregateSyncStatus('user-1', false);
+
+    const expected = new Date(steamLastSync.getTime() + 60 * 60 * 1000).toISOString();
+    expect(result.nextAutoSyncAt).toBe(expected);
+  });
+
+  it('calcula nextAutoSyncAt: +60 min (FEATURES.premium=false aplica tier free a todos)', async () => {
+    const result = await syncService.getAggregateSyncStatus('user-1', true);
+
+    const expected = new Date(steamLastSync.getTime() + 60 * 60 * 1000).toISOString();
+    expect(result.nextAutoSyncAt).toBe(expected);
+  });
+
+  it('canSyncNow: false cuando todas las plataformas tienen cooldown activo', async () => {
+    mockRedis.ttl.mockResolvedValue(300); // cooldown de 5 min en todas
+
+    const result = await syncService.getAggregateSyncStatus('user-1', false);
+
+    expect(result.canSyncNow).toBe(false);
+    expect(result.cooldownRemainingSeconds).toBe(300);
+    expect(result.cooldownUntil).not.toBeNull();
+  });
+
+  it('canSyncNow: true cuando al menos una plataforma no tiene cooldown', async () => {
+    // STEAM sin cooldown (TTL = -1), RA con cooldown (TTL = 300)
+    mockRedis.ttl
+      .mockResolvedValueOnce(-1)  // STEAM: sin cooldown
+      .mockResolvedValueOnce(300); // RA: con cooldown
+
+    const result = await syncService.getAggregateSyncStatus('user-1', false);
+
+    expect(result.canSyncNow).toBe(true);
+  });
+
+  it('dailySyncsLimit: 5 siempre mientras FEATURES.premium=false (aplica config free a todos)', async () => {
+    const freeResult = await syncService.getAggregateSyncStatus('user-1', false);
+    const premiumResult = await syncService.getAggregateSyncStatus('user-1', true);
+
+    expect(freeResult.dailySyncsLimit).toBe(5);
+    expect(premiumResult.dailySyncsLimit).toBe(5);
+  });
+
+  it('manualSyncsUsedToday es el mÃ¡ximo de todos los contadores por plataforma', async () => {
+    // STEAM: 3 syncs, RA: 1 sync
+    mockRedis.get
+      .mockResolvedValueOnce('3')
+      .mockResolvedValueOnce('1');
+
+    const result = await syncService.getAggregateSyncStatus('user-1', false);
+
+    expect(result.manualSyncsUsedToday).toBe(3);
+  });
+
+  it('canSyncNow: false cuando free ha agotado el lÃ­mite diario en todas las plataformas', async () => {
+    // Ambas plataformas sin cooldown pero con 5 syncs (lÃ­mite agotado)
+    mockRedis.ttl.mockResolvedValue(-1);
+    mockRedis.get.mockResolvedValue('5');
+
+    const result = await syncService.getAggregateSyncStatus('user-1', false);
+
+    expect(result.canSyncNow).toBe(false);
+  });
+});
+
