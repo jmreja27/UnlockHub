@@ -38,6 +38,14 @@ jest.mock('../../components/EmptyState', () => ({
     return <Text>{title}</Text>;
   },
 }));
+jest.mock('../../components/SyncStatusBar', () => ({
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  SyncStatusBar: () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { View } = require('react-native');
+    return <View testID="sync-status-bar" />;
+  },
+}));
 jest.mock('../../components/NewGamesBanner', () => ({
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   NewGamesBanner: ({ onPress }: { count: number; onPress: () => void }) => {
@@ -198,11 +206,16 @@ describe('LibraryScreen', () => {
     expect(list.props.refreshControl.props.refreshing).toBe(false);
   });
 
-  it('muestra el botón de sync cuando hay plataformas vinculadas', () => {
+  it('muestra el SyncStatusBar cuando totalGames > 0', () => {
+    mockUseMyGames.mockReturnValue({ ...baseMyGamesResult, allGames: sampleGames, totalGames: 2 });
+    const { getByTestId } = renderWithClient(<LibraryScreen />);
+    expect(getByTestId('sync-status-bar')).toBeTruthy();
+  });
+
+  it('no muestra el SyncStatusBar cuando totalGames === 0', () => {
     mockUseMyGames.mockReturnValue(baseMyGamesResult);
-    mockUseSyncAll.mockReturnValue({ ...baseSyncResult, hasPlatforms: true });
-    const { getByRole } = renderWithClient(<LibraryScreen />);
-    expect(getByRole('button', { name: 'library.sync_button' })).toBeTruthy();
+    const { queryByTestId } = renderWithClient(<LibraryScreen />);
+    expect(queryByTestId('sync-status-bar')).toBeNull();
   });
 
   it('muestra el contador de juegos completados/totales cuando hay juegos', () => {

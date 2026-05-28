@@ -11,10 +11,10 @@ import { useMyGames } from '../../hooks/useMyGames';
 import { useSessionStore } from '../../stores/sessionStore';
 import { usePreferencesStore } from '../../stores/preferencesStore';
 import type { LibrarySortOrder } from '../../stores/preferencesStore';
-import { useSyncAll } from '../../hooks/useSyncAll';
 import { useSyncProgress } from '../../hooks/useSyncProgress';
 import { LibraryGameCard } from '../../components/LibraryGameCard';
 import { NewGamesBanner } from '../../components/NewGamesBanner';
+import { SyncStatusBar } from '../../components/SyncStatusBar';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { EmptyState } from '../../components/EmptyState';
 import { AdBanner } from '../../components/AdBanner';
@@ -262,7 +262,7 @@ export default function LibraryScreen() {
     setShowNewGamesBanner(false);
   }, [allGames.length]);
 
-  const { sync, isSyncing, isInCooldown, cooldownRemaining, hasPlatforms } = useSyncAll(user?.id);
+  // useSyncAll se consume en SyncStatusBar internamente
 
   const games = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -335,33 +335,11 @@ export default function LibraryScreen() {
               </Text>
             </View>
           )}
-          {hasPlatforms && (
-            <Pressable
-              onPress={() => sync()}
-              disabled={isSyncing || isInCooldown}
-              style={{ minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center' }}
-              accessibilityRole="button"
-              accessibilityLabel={
-                isInCooldown
-                  ? t('library.sync_cooldown', { min: cooldownRemaining })
-                  : t('library.sync_button')
-              }
-              accessibilityState={{ disabled: isSyncing || isInCooldown, busy: isSyncing }}
-            >
-              {isSyncing || isRunning ? (
-                <ActivityIndicator size="small" color="#818cf8" />
-              ) : (
-                <View className="items-center">
-                  <Text className={`text-xl ${isInCooldown ? 'text-gray-600' : 'text-primary-light'}`}>⟳</Text>
-                  {isInCooldown && (
-                    <Text className="text-gray-600 text-xs leading-none">{cooldownRemaining}m</Text>
-                  )}
-                </View>
-              )}
-            </Pressable>
-          )}
         </View>
       </View>
+
+      {/* Barra de sync — botón manual, última sync, próximo auto sync, syncs restantes */}
+      {!isLoading && !isError && totalGames > 0 && <SyncStatusBar />}
 
       {/* Buscador + botón ordenación */}
       <View className="mx-4 mb-2 flex-row gap-2">
