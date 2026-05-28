@@ -428,6 +428,77 @@ describe('PsnAdapter.syncUser — perfil privado', () => {
   });
 });
 
+// ─── Tests: processTitles — paralelismo y aislamiento de fallos ───────────────
+
+describe('PsnAdapter — processTitles: paralelismo y aislamiento de fallos', () => {
+  let adapter: PsnAdapter;
+
+  const mockTitle2 = {
+    ...mockTitle,
+    npCommunicationId: 'NPWR99999_00',
+    trophyTitleName: 'FailGame PS5',
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    adapter = new PsnAdapter();
+    process.env.PSN_SYSTEM_NPSSO = 'test-system-npsso';
+    setupSystemTokenCached();
+
+    (mocked.prisma.game.upsert as jest.Mock).mockResolvedValue({ id: 'db-game-1' });
+    (mocked.prisma.achievement.upsert as jest.Mock).mockResolvedValue({ id: 'db-ach-1' });
+    (mocked.prisma.userAchievement.upsert as jest.Mock).mockResolvedValue({});
+  });
+
+  afterEach(() => {
+    delete process.env.PSN_SYSTEM_NPSSO;
+  });
+
+  it('procesa todos los títulos de un lote correctamente', async () => {
+    mocked.getUserTitles.mockResolvedValue({
+      trophyTitles: [mockTitle, mockTitle2],
+      totalItemCount: 2,
+    });
+    mocked.getTitleTrophies.mockResolvedValue(mockTitleTrophies);
+    mocked.getUserTrophiesEarnedForTitle.mockResolvedValue(mockEarnedTrophies);
+
+    const result = await adapter.syncUser(mockPlatformAccount);
+
+    expect(result.gamesUpdated).toBe(2);
+  });
+
+  it('aísla el fallo de un título: el resto del lote se completa', async () => {
+    mocked.getUserTitles.mockResolvedValue({
+      trophyTitles: [mockTitle, mockTitle2],
+      totalItemCount: 2,
+    });
+    // Primer título: tiene éxito
+    mocked.getTitleTrophies.mockResolvedValueOnce(mockTitleTrophies);
+    mocked.getUserTrophiesEarnedForTitle.mockResolvedValueOnce(mockEarnedTrophies);
+    // Segundo título: falla en la obtención de trofeos
+    mocked.getTitleTrophies.mockRejectedValueOnce(new Error('PSN error para este juego'));
+
+    const result = await adapter.syncUser(mockPlatformAccount);
+
+    // Solo 1 juego procesado correctamente — el que falló no cancela el lote
+    expect(result.gamesUpdated).toBe(1);
+    expect(result.achievementsSynced).toBe(1);
+  });
+
+  it('devuelve gamesUpdated=0 y achievementsSynced=0 si todos los títulos fallan', async () => {
+    mocked.getUserTitles.mockResolvedValue({
+      trophyTitles: [mockTitle, mockTitle2],
+      totalItemCount: 2,
+    });
+    mocked.getTitleTrophies.mockRejectedValue(new Error('PSN error'));
+
+    const result = await adapter.syncUser(mockPlatformAccount);
+
+    expect(result.gamesUpdated).toBe(0);
+    expect(result.achievementsSynced).toBe(0);
+  });
+});
+
 // ─── Tests: PsnAdapter.getGameInfo ────────────────────────────────────────────
 
 describe('PsnAdapter.getGameInfo', () => {

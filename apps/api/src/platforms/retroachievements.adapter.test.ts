@@ -490,6 +490,42 @@ describe('retroAchievementsAdapter.syncUser', () => {
     // Los logros 101 y 103 sí → 2 upserts de UserAchievement
     expect(mockPrisma.userAchievement.upsert).toHaveBeenCalledTimes(2);
   });
+
+  it('procesa múltiples juegos en paralelo — gamesUpdated refleja todos los procesados', async () => {
+    const twoCompletedGames = [
+      { GameID: 1234, Title: 'Sonic', NumAchievements: 3 },
+      { GameID: 5678, Title: 'Mario', NumAchievements: 3 },
+    ];
+
+    mockAxios.get
+      .mockResolvedValueOnce({ data: twoCompletedGames })
+      .mockResolvedValue({ data: mockRaGameProgress }); // ambos juegos devuelven logros
+
+    const result = await retroAchievementsAdapter.syncUser(mockPlatformAccount);
+
+    expect(result.gamesUpdated).toBe(2);
+    expect(result.platform).toBe('RA');
+  });
+
+  it('no lanza excepción aunque todos los juegos fallen — aislamiento por Promise.allSettled', async () => {
+    const twoCompletedGames = [
+      { GameID: 1234, Title: 'Sonic', NumAchievements: 3 },
+      { GameID: 5678, Title: 'Mario', NumAchievements: 3 },
+    ];
+
+    mockAxios.get
+      .mockResolvedValueOnce({ data: twoCompletedGames })
+      .mockResolvedValue({ data: mockRaGameProgress });
+
+    // Prisma falla en todos los upserts de juego
+    mockPrisma.game.upsert.mockRejectedValue(new Error('DB connection lost'));
+
+    const result = await retroAchievementsAdapter.syncUser(mockPlatformAccount);
+
+    // La función no lanza — los fallos quedan aislados
+    expect(result.gamesUpdated).toBe(0);
+    expect(result.achievementsSynced).toBe(0);
+  });
 });
 
 // ─── Tests del campo platform ─────────────────────────────────────────────────

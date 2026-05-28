@@ -13,6 +13,7 @@ const RA_API_BASE = 'https://retroachievements.org/API';
 
 const EXPRESS_GAME_LIMIT = 15;
 const BATCH_SIZE_RA = 15;
+const RA_PROCESS_CONCURRENCY = 3;    // juegos procesados en paralelo dentro de cada lote
 
 // TTLs de caché en segundos
 const CACHE_TTL_COMPLETED_GAMES = 60 * 60; // 1 hora
@@ -429,14 +430,24 @@ export const retroAchievementsAdapter: PlatformAdapter = {
   async syncUser(account: PlatformAccount): Promise<SyncResult> {
     const username = account.externalId;
     const uniqueGames = await fetchRaUniqueGames(username);
+    const entries = [...uniqueGames.entries()];
 
     let achievementsSynced = 0;
     let gamesUpdated = 0;
 
-    for (const [gameId, gameEntry] of uniqueGames) {
-      const r = await processRaGame(gameId, gameEntry, username, account.userId);
-      achievementsSynced += r.achievementsSynced;
-      gamesUpdated += r.gamesUpdated;
+    // Procesamiento paralelo con aislamiento por juego
+    for (let i = 0; i < entries.length; i += RA_PROCESS_CONCURRENCY) {
+      const chunk = entries.slice(i, i + RA_PROCESS_CONCURRENCY);
+      const results = await Promise.allSettled(
+        chunk.map(([gameId, gameEntry]) => processRaGame(gameId, gameEntry, username, account.userId)),
+      );
+      for (const result of results) {
+        if (result.status === 'fulfilled') {
+          achievementsSynced += result.value.achievementsSynced;
+          gamesUpdated += result.value.gamesUpdated;
+        }
+        // juego fallido: aislado, no cancela el resto del lote
+      }
     }
 
     await prisma.platformAccount.update({
@@ -483,10 +494,19 @@ export const retroAchievementsAdapter: PlatformAdapter = {
       let batchGames = 0;
       let batchAchievements = 0;
 
-      for (const [gameId, gameEntry] of batch) {
-        const r = await processRaGame(gameId, gameEntry, username, account.userId);
-        batchGames += r.gamesUpdated;
-        batchAchievements += r.achievementsSynced;
+      // Procesamiento paralelo dentro del lote con aislamiento por juego
+      for (let j = 0; j < batch.length; j += RA_PROCESS_CONCURRENCY) {
+        const chunk = batch.slice(j, j + RA_PROCESS_CONCURRENCY);
+        const results = await Promise.allSettled(
+          chunk.map(([gameId, gameEntry]) => processRaGame(gameId, gameEntry, username, account.userId)),
+        );
+        for (const result of results) {
+          if (result.status === 'fulfilled') {
+            batchGames += result.value.gamesUpdated;
+            batchAchievements += result.value.achievementsSynced;
+          }
+          // juego fallido: aislado, no cancela el resto del lote
+        }
       }
 
       achievementsSynced += batchAchievements;

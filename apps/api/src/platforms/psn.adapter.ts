@@ -28,6 +28,7 @@ import type { PlatformAdapter, SyncBatchCallback } from './platform.interface';
 
 const EXPRESS_TITLE_LIMIT = 10;
 const BATCH_SIZE = 10;
+const PSN_PROCESS_CONCURRENCY = 5;   // títulos procesados en paralelo dentro de cada lote
 
 const TTL_TITLE_TROPHIES = 86400;    // 24 horas — metadatos de trofeos raramente cambian
 const TTL_USER_TITLES   = 3600;     // 1 hora — lista de juegos del usuario
@@ -350,6 +351,90 @@ export class PsnAdapter implements PlatformAdapter {
 
   // ── Lógica de procesamiento compartida ────────────────────────────────────
 
+  /**
+   * Procesa un único título PSN: descarga trofeos, hace upsert de Game + Achievement + UserAchievement.
+   * El try/catch externo garantiza que un fallo en este título no cancele el lote completo.
+   */
+  private async processSingleTitle(
+    title: TrophyTitle,
+    auth: AuthorizationPayload,
+    account: PlatformAccount,
+  ): Promise<{ achievementsSynced: number; gamesUpdated: number }> {
+    const trophies = await this.fetchMergedTrophies(auth, title, account.externalId);
+    if (trophies.length === 0) return { achievementsSynced: 0, gamesUpdated: 0 };
+
+    const dbGame = await prisma.game.upsert({
+      where: { platform_externalId: { platform: 'PSN', externalId: title.npCommunicationId } },
+      create: {
+        platform: 'PSN',
+        externalId: title.npCommunicationId,
+        title: title.trophyTitleName,
+        console: title.trophyTitlePlatform ?? null,
+        iconUrl: title.trophyTitleIconUrl ?? null,
+        headerUrl: null,
+        totalAchievements: title.definedTrophies.bronze +
+          title.definedTrophies.silver +
+          title.definedTrophies.gold +
+          (title.definedTrophies.platinum ?? 0),
+      },
+      update: {
+        title: title.trophyTitleName,
+        console: title.trophyTitlePlatform ?? null,
+        iconUrl: title.trophyTitleIconUrl ?? null,
+        totalAchievements: title.definedTrophies.bronze +
+          title.definedTrophies.silver +
+          title.definedTrophies.gold +
+          (title.definedTrophies.platinum ?? 0),
+      },
+    });
+
+    let achievementsSynced = 0;
+
+    for (const t of trophies) {
+      const dbAchievement = await prisma.achievement.upsert({
+        where: { platform_gameId_externalId: { platform: 'PSN', gameId: dbGame.id, externalId: `${title.npCommunicationId}:${t.trophyId}` } },
+        create: {
+          gameId: dbGame.id,
+          platform: 'PSN',
+          externalId: `${title.npCommunicationId}:${t.trophyId}`,
+          title: t.trophyName ?? String(t.trophyId),
+          description: t.trophyDetail ?? null,
+          iconUrl: t.trophyIconUrl ?? null,
+          rawValue: t.trophyEarnedRate ? parseFloat(t.trophyEarnedRate) : null,
+          normalizedPoints: normalizePoints(t.trophyType, t.trophyEarnedRate),
+          rarity: t.trophyEarnedRate ? parseFloat(t.trophyEarnedRate) : null,
+          externalUrl: `https://psnprofiles.com/${account.username}`,
+        },
+        update: {
+          title: t.trophyName ?? String(t.trophyId),
+          description: t.trophyDetail ?? null,
+          rawValue: t.trophyEarnedRate ? parseFloat(t.trophyEarnedRate) : null,
+          normalizedPoints: normalizePoints(t.trophyType, t.trophyEarnedRate),
+          rarity: t.trophyEarnedRate ? parseFloat(t.trophyEarnedRate) : null,
+        },
+      });
+
+      if (t.earned && t.earnedDateTime) {
+        await prisma.userAchievement.upsert({
+          where: { userId_achievementId: { userId: account.userId, achievementId: dbAchievement.id } },
+          create: {
+            userId: account.userId,
+            achievementId: dbAchievement.id,
+            unlockedAt: new Date(t.earnedDateTime),
+          },
+          update: { unlockedAt: new Date(t.earnedDateTime) },
+        });
+        achievementsSynced++;
+      }
+    }
+
+    return { achievementsSynced, gamesUpdated: 1 };
+  }
+
+  /**
+   * Procesa un lote de títulos en paralelo (máx. PSN_PROCESS_CONCURRENCY simultáneos).
+   * Cada título tiene aislamiento de fallos: un error en un título no cancela el resto.
+   */
   private async processTitles(
     titles: TrophyTitle[],
     auth: AuthorizationPayload,
@@ -358,73 +443,18 @@ export class PsnAdapter implements PlatformAdapter {
     let achievementsSynced = 0;
     let gamesUpdated = 0;
 
-    for (const title of titles) {
-      const trophies = await this.fetchMergedTrophies(auth, title, account.externalId);
-      if (trophies.length === 0) continue;
+    for (let i = 0; i < titles.length; i += PSN_PROCESS_CONCURRENCY) {
+      const chunk = titles.slice(i, i + PSN_PROCESS_CONCURRENCY);
+      const results = await Promise.allSettled(
+        chunk.map((title) => this.processSingleTitle(title, auth, account)),
+      );
 
-      const dbGame = await prisma.game.upsert({
-        where: { platform_externalId: { platform: 'PSN', externalId: title.npCommunicationId } },
-        create: {
-          platform: 'PSN',
-          externalId: title.npCommunicationId,
-          title: title.trophyTitleName,
-          console: title.trophyTitlePlatform ?? null,
-          iconUrl: title.trophyTitleIconUrl ?? null,
-          headerUrl: null,
-          totalAchievements: title.definedTrophies.bronze +
-            title.definedTrophies.silver +
-            title.definedTrophies.gold +
-            (title.definedTrophies.platinum ?? 0),
-        },
-        update: {
-          title: title.trophyTitleName,
-          console: title.trophyTitlePlatform ?? null,
-          iconUrl: title.trophyTitleIconUrl ?? null,
-          totalAchievements: title.definedTrophies.bronze +
-            title.definedTrophies.silver +
-            title.definedTrophies.gold +
-            (title.definedTrophies.platinum ?? 0),
-        },
-      });
-
-      gamesUpdated++;
-
-      for (const t of trophies) {
-        const dbAchievement = await prisma.achievement.upsert({
-          where: { platform_gameId_externalId: { platform: 'PSN', gameId: dbGame.id, externalId: `${title.npCommunicationId}:${t.trophyId}` } },
-          create: {
-            gameId: dbGame.id,
-            platform: 'PSN',
-            externalId: `${title.npCommunicationId}:${t.trophyId}`,
-            title: t.trophyName ?? String(t.trophyId),
-            description: t.trophyDetail ?? null,
-            iconUrl: t.trophyIconUrl ?? null,
-            rawValue: t.trophyEarnedRate ? parseFloat(t.trophyEarnedRate) : null,
-            normalizedPoints: normalizePoints(t.trophyType, t.trophyEarnedRate),
-            rarity: t.trophyEarnedRate ? parseFloat(t.trophyEarnedRate) : null,
-            externalUrl: `https://psnprofiles.com/${account.username}`,
-          },
-          update: {
-            title: t.trophyName ?? String(t.trophyId),
-            description: t.trophyDetail ?? null,
-            rawValue: t.trophyEarnedRate ? parseFloat(t.trophyEarnedRate) : null,
-            normalizedPoints: normalizePoints(t.trophyType, t.trophyEarnedRate),
-            rarity: t.trophyEarnedRate ? parseFloat(t.trophyEarnedRate) : null,
-          },
-        });
-
-        if (t.earned && t.earnedDateTime) {
-          await prisma.userAchievement.upsert({
-            where: { userId_achievementId: { userId: account.userId, achievementId: dbAchievement.id } },
-            create: {
-              userId: account.userId,
-              achievementId: dbAchievement.id,
-              unlockedAt: new Date(t.earnedDateTime),
-            },
-            update: { unlockedAt: new Date(t.earnedDateTime) },
-          });
-          achievementsSynced++;
+      for (const result of results) {
+        if (result.status === 'fulfilled') {
+          achievementsSynced += result.value.achievementsSynced;
+          gamesUpdated += result.value.gamesUpdated;
         }
+        // título rechazado: el fallo queda aislado y no cancela el lote
       }
     }
 
