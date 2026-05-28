@@ -25,6 +25,9 @@ Esta sección lista todo lo que **el desarrollador debe hacer manualmente** ante
 | ~~B15~~ | ✅ **Privacy Policy publicada** | `docs/privacy-policy.html` → https://jmreja27.github.io/UnlockHub/privacy-policy.html | Gratis | ✅ Completado — GitHub Pages activo (repo público, branch `develop`, carpeta `/docs`). Datos del desarrollador rellenados. |
 | ~~B16~~ | ✅ **Términos y Condiciones publicados** | `docs/terms-of-service.html` → https://jmreja27.github.io/UnlockHub/terms-of-service.html | Gratis | ✅ Completado — igual que B15. |
 | B17 | ✅ **Migración Prisma en producción** | Automática en cada deploy — `npx prisma migrate deploy` configurado en `startCommand` de `railway.json` | Gratis | Aplicar todos los modelos nuevos en prod |
+| B18 | Crear cuenta **RevenueCat** + configurar productos + webhook | app.revenuecat.com → crear app Android → crear productos `unlockhub_premium_monthly` + `unlockhub_premium_annual` → Integrations → Webhooks → apuntar a `POST /api/v1/webhooks/revenuecat` | Gratis hasta 2.500 MAU | Billing real en producción |
+| B19 | Configurar `EXPO_PUBLIC_REVENUECAT_API_KEY` como EAS secret | expo.dev → proyecto → Secrets → añadir `EXPO_PUBLIC_REVENUECAT_API_KEY` (Public SDK Key de RevenueCat) | Gratis | Sin esta key, `usePremiumPlans` devuelve precios hardcoded y no puede procesar compras reales |
+| B20 | Configurar `REVENUECAT_WEBHOOK_SECRET` en Railway | Railway dashboard → service → Variables → añadir `REVENUECAT_WEBHOOK_SECRET` (cualquier string seguro — RevenueCat lo enviará en `Authorization: Bearer`) | Gratis | Sin esta key, el endpoint webhook no verifica la firma y acepta cualquier petición |
 
 > **Estado de acciones completadas ✅**
 > - B1-B2 (Sentry): ✅ DSNs configurados en Railway y EAS
@@ -90,6 +93,7 @@ Aplicación móvil (iOS + Android) para tracking unificado de logros de videojue
 | expo-notifications | Push notifications iOS y Android |
 | expo-network | Detección de conectividad (OfflineBanner global) |
 | Intl.NumberFormat / Intl.DateTimeFormat | Formateo localizado — usar siempre, nunca hardcodear formatos |
+| react-native-purchases (RevenueCat) v10 | Google Play Billing — compra, restauración, offerings desde RevenueCat |
 
 ### Backend — `apps/api`
 
@@ -235,7 +239,7 @@ Todas las features gateadas se controlan desde `lib/featureFlags.ts`. No crear m
 ```typescript
 // lib/featureFlags.ts
 export const FEATURES = {
-  premium: false,        // Activar cuando Google Play Billing esté integrado (B7)
+  premium: true,         // ✅ ACTIVO — RevenueCat integrado. Requiere B18/B19/B20 en prod.
   challenges: false,     // Activar cuando los retos semanales estén listos para Fase 4
   wrapped: true,         // ✅ ACTIVO
   pointsRedeem: true,    // ✅ ACTIVO
@@ -584,6 +588,8 @@ El servidor valida todas al arrancar mediante schema Zod. Ver `.env.example` en 
 | `POSTHOG_API_KEY` | Analíticas | staging, prod | ⚙️ Pendiente acción N4 |
 | `ADMIN_SECRET` | Acceso al dashboard admin (bearer) | prod | ✅ Configurada en Railway |
 | `PSN_SYSTEM_NPSSO` | Sync PSN de usuarios (credencial del sistema) | prod | ⚙️ Obtener en my.playstation.com → F12 → Application → Cookies → `npsso`. Caduca ~60 días. **El valor puede parecer idéntico en el navegador y estar expirado — comparar strings no es diagnóstico fiable.** Síntoma: `Sync fallido err="Expired token"` en logs Railway (RA sigue funcionando). Fix: logout + login → nuevo `npsso` → Railway Variables. Configurar en Railway dashboard → Variables. **Nunca en código ni `.env` commiteado.** |
+| `EXPO_PUBLIC_REVENUECAT_API_KEY` | RevenueCat SDK key (EAS secret) | prod | ⚙️ Pendiente acción B19 — sin esta key `usePremiumPlans` devuelve precios hardcoded, no se pueden procesar compras reales |
+| `REVENUECAT_WEBHOOK_SECRET` | Webhook RevenueCat bearer token | prod | ⚙️ Pendiente acción B20 — sin esta key el webhook no verifica la firma (acepta cualquier petición, riesgo de abuso) |
 
 ---
 
@@ -840,7 +846,7 @@ Métricas disponibles:
 | `app/link-platform/xbox.tsx` | 🚩 Gateado | Banner "Próximamente" hasta Fase 4 |
 | `app/notifications.tsx` | ✅ | Centro de notificaciones in-app |
 | `app/privacy.tsx` | ✅ | URL pública activa: https://jmreja27.github.io/UnlockHub/privacy-policy.html |
-| `app/premium.tsx` | 🚩 Gateado | `FEATURES.premium = false` — espera B7 |
+| `app/premium.tsx` | ✅ | RevenueCat integrado — título + 4 beneficios + 2 planes + CTA + canje puntos + restaurar + legal. Requiere B18/B19/B20 para funcionar en prod. |
 | `app/wrapped/[year].tsx` | ✅ | Soporta period mensual ("2025-01") y anual ("2025") |
 
 ### Preferencias de usuario
@@ -979,6 +985,12 @@ Métricas disponibles:
 | `SyncStatusBar` no muestra contador cuando `dailySyncsLimit === null` (premium) | Mostrar "ilimitados" añade texto sin valor en la barra ya densa. El usuario premium sabe que no tiene límite (es la ventaja que pagó). La barra muestra `canSyncNow` y `timeUntilNextAutoSync` — suficiente contexto. La key i18n `sync_unlimited` queda sin usar (puede eliminarse en limpieza futura). | Fase 3 |
 | `SyncStatusBar` integrado en `index.tsx` reemplazando el `Pressable ⟳` antiguo + elimina `useSyncAll` de `index.tsx` | El botón antiguo no mostraba estado de cooldown ni syncs restantes. `SyncStatusBar` encapsula toda la lógica de sync (llama `useSyncAll`, `useSyncProgress`, `useSyncStatus` internamente). Eliminar `useSyncAll` de `index.tsx` evita duplicación de responsabilidades. | Fase 3 |
 | `FeedScreen.test.tsx` mockea `SyncStatusBar` como `<View testID="sync-status-bar" />` | `SyncStatusBar` llama `useSyncStatus` → `useQuery` → necesita `QueryClientProvider` + `api.get` mock. En lugar de añadir toda esa infraestructura al test de pantalla, se mockea el componente completo. El test de `SyncStatusBar` cubre el componente individualmente. | Fase 3 |
+| RevenueCat (`react-native-purchases` v10) en lugar de `react-native-iap` | RevenueCat gestiona la complejidad de Google Play Billing (recibos, renovaciones, reembolsos, expiración) en el servidor. `react-native-iap` requiere implementar toda esa lógica manualmente. El webhook de RC es la fuente de verdad — el cliente solo confirma el estado post-compra. | Fase 3 |
+| Webhook RevenueCat siempre devuelve 200 — incluso con userId desconocido | RevenueCat reintenta indefinidamente si recibe un código != 2xx. Si el usuario borra su cuenta y RC sigue enviando eventos, devolver 200 evita bucles infinitos. La idempotencia se garantiza con `storeTransactionId` en el upsert. | Fase 3 |
+| `refreshAccessToken()` exportada de `lib/api.ts` y llamada tras compra exitosa | El JWT contiene `isPremium` — tras una compra, el token quedaría stale hasta el siguiente refresh automático (15 min). Forzar el refresh inmediatamente actualiza `isPremium: true` en el token sin pedir logout al usuario. | Fase 3 |
+| `usePremiumPlans` con fallback a precios hardcoded cuando no hay API key de RC | Sin `EXPO_PUBLIC_REVENUECAT_API_KEY`, los offerings de RC no están disponibles — la pantalla premium muestra precios hardcoded de `PLAN_PRICES` pero no puede procesar compras reales. Comportamiento seguro en development/preview sin key configurada. | Fase 3 |
+| `react-native-purchases` mockeado globalmente en `jest.setup.ts` | Es un módulo nativo que Jest no puede cargar sin mock. Al ser una dependencia transitiva de `useSubscription`, que a su vez es importado por `PremiumBanner.tsx`, cualquier test que renderice `PremiumBanner` fallaba con "cannot parse file". Mock global en `jest.setup.ts` previene la cascada de fallos. | Fase 3 |
+| `accessibilityState={{ busy: isPurchasing }}` en el botón de suscripción | WCAG recomienda `busy` para operaciones asíncronas en curso — es más semántico que solo `disabled`. El test verifica `busy: true` para validar el estado de carga accesible. | Fase 3 |
 
 ---
 
@@ -1011,7 +1023,7 @@ Métricas disponibles:
 10. ✅ Escudo de racha
 11. ✅ Centro de notificaciones in-app
 12. ✅ Variables Railway configuradas: `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `APP_SCHEME`, `CLOUDINARY_URL`, `ADMIN_SECRET`. ⚙️ Pendiente: `POSTHOG_API_KEY` (N4)
-13. ⚙️ Google Play Billing — activar cuando Play Console esté listo (B7)
+13. ✅ Google Play Billing vía RevenueCat — `react-native-purchases` v10, `useSubscription`, `usePremiumPlans`, `useRevenueCat`, webhook `POST /api/v1/webhooks/revenuecat`, `FEATURES.premium = true`. ⚙️ Pendiente: B18 (cuenta RC + productos), B19 (EAS secret), B20 (Railway secret)
 14. ✅ Analíticas — analytics.ts preparado. ⚙️ POSTHOG_API_KEY pendiente (N4)
 15. ✅ Ayuda contextual en vinculación de plataformas
 16. ✅ Wrapped mensual + anual
@@ -1041,6 +1053,9 @@ Métricas disponibles:
 | P5 | ✅ Privacy Policy + ToS en URL pública | `docs/privacy-policy.html` + `docs/terms-of-service.html` — GitHub Pages activo, URLs en vivo, datos del desarrollador rellenados. |
 | P6 | Google Play Console | $25 + listing completo |
 | P7 | ✅ Smoke tests producción — APK #3 completo | APK debug local (build 2026-05-21, 165.7 MB). BUG-3/4/5 re-confirmados ✅. AdMob banners Home+Search ✅. Registro+onboarding ✅. Game detail+Wrapped+perfil público ✅. **BUG-6**: PSN screen muestra flujo NPSSO antiguo (Metro cache stale) — fix: rebuild con `--clean`. Pendiente: vinculación plataformas reales, sync progresivo E2E, Forgot Password (requiere RESEND_API_KEY). |
+| B18 | Cuenta RevenueCat + productos + webhook | app.revenuecat.com → crear app Android → productos `unlockhub_premium_monthly` + `unlockhub_premium_annual` → webhook a `/api/v1/webhooks/revenuecat` |
+| B19 | `EXPO_PUBLIC_REVENUECAT_API_KEY` como EAS secret | expo.dev → proyecto → Secrets → Public SDK Key de RevenueCat |
+| B20 | `REVENUECAT_WEBHOOK_SECRET` en Railway | Railway dashboard → Variables → string seguro, mismo que en RC webhook config |
 
 ### 🟡 UX — todas implementadas ✅
 
@@ -1092,10 +1107,13 @@ Métricas disponibles:
 | F10 | OG profiles | 🔲 Fase 4 |
 | F11 | Búsqueda de logros con filtro de plataforma | ✅ Search tab: chip Achievements + sub-filtro Steam/RA/PSN, infinite scroll, estado locked/unlocked |
 | F12 | SyncStatusBar — feedback de sync en biblioteca | ✅ Botón sync, syncs restantes (free), cooldown countdown, última sync, próximo auto sync |
+| F13 | Google Play Billing — pantalla premium + RevenueCat | ✅ `react-native-purchases` v10, `usePremiumPlans`, `useSubscription`, `useRevenueCat`, `premium.tsx` reescrito, webhook backend, `FEATURES.premium = true`. Requiere B18/B19/B20 para prod. |
 
 ---
 
 ## Última revisión de código
+
+**Fecha**: 2026-06-13 (sesión 23) — Google Play Billing vía RevenueCat + pantalla premium. Mobile: `react-native-purchases` v10 instalado, `hooks/useRevenueCat.ts` (initRevenueCat/cleanupRevenueCat, logIn al autenticarse), `hooks/usePremiumPlans.ts` (offerings RC → PremiumPlan[], fallback hardcoded), `hooks/useSubscription.ts` reescrito (purchasePackage, restorePurchases v10 devuelve CustomerInfo directo, cancelSubscription), `refreshAccessToken()` exportada de `lib/api.ts`, `app/premium.tsx` reescrito (título + 4 beneficios + 2 planes radio + CTA con `busy` + separador + canje 300 pts + restaurar + legal), `app/_layout.tsx` añade `<RevenueCatInit />`, `FEATURES.premium = true`, `jest.setup.ts` mock global `react-native-purchases`. Backend: `REVENUECAT_WEBHOOK_SECRET` en `env.ts`, `controllers/webhooks.controller.ts` (verifica bearer, INITIAL_PURCHASE/RENEWAL activa, EXPIRATION/CANCELLATION expira, siempre 200), `services/subscription.service.ts` añade `expireSubscriptionFromWebhook`, `routes/webhooks.routes.ts`, registrado en `routes/index.ts`. i18n ES/EN: `common.close`, `common.or`, sección `premium` completa. Tests: 470 API (+25 webhook tests) + 301 mobile (+13 premium + 3 PremiumBanner fix). 0 errores TS/lint.
 
 **Fecha**: 2026-06-12 (sesión 22) — SyncStatusBar en Biblioteca: feedback completo de sync en tiempo real. Backend: `getAggregateSyncStatus(userId, isPremium)` en `sync.service.ts` — agrega estado Redis por plataforma (`cooldownKey`, `dailyCountKey`), expone `lastSyncAt`, `nextAutoSyncAt`, `canSyncNow`, `manualSyncsUsedToday`, `dailySyncsLimit`, `anyPlatformLinked`. Endpoint `GET /api/v1/sync/my-summary` (declarado antes de `/:platform` para evitar match falso). Mock server actualizado. Hook `useSyncStatus` con `refetchInterval: 60_000`, `staleTime: 30_000`, formateo via claves i18n. `SyncStatusBar` component: botón sync (spinner si activo, cooldown countdown si no puede), syncs restantes (solo free), última sync relativa, próximo auto sync. Integrado en `index.tsx` sustituyendo el botón `⟳` antiguo. Tests: 460 API (+9) + 288 mobile (+25). 0 errores TS/lint.
 
