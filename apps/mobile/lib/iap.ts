@@ -6,18 +6,20 @@ export const PRODUCT_IDS = {
     android: 'unlockhub_premium_monthly',
     ios: 'unlockhub_premium_monthly',
     default: 'unlockhub_premium_monthly',
-  }),
-  LIFETIME: Platform.select({
-    android: 'unlockhub_premium_lifetime',
-    ios: 'unlockhub_premium_lifetime',
-    default: 'unlockhub_premium_lifetime',
-  }),
+  }) as string,
+  ANNUAL: Platform.select({
+    android: 'unlockhub_premium_annual',
+    ios: 'unlockhub_premium_annual',
+    default: 'unlockhub_premium_annual',
+  }) as string,
 } as const;
 
-// Precios que se muestran en la UI — deben coincidir con los configurados en la tienda
+// Precios fallback cuando RevenueCat no está configurado o no devuelve offerings
 export const PLAN_PRICES = {
-  MONTHLY: '€2,99/mes',
-  LIFETIME: '€4,99',
+  MONTHLY: '2,99 €',
+  ANNUAL: '19,99 €',
+  ANNUAL_PER_MONTH: '1,67 €/mes',
+  ANNUAL_SAVINGS: '44%',
 } as const;
 
-export type PurchasablePlan = 'MONTHLY' | 'LIFETIME';
+export type PurchasablePlan = 'MONTHLY' | 'ANNUAL';

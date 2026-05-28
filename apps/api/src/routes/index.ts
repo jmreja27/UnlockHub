@@ -17,6 +17,7 @@ import searchRouter from './search.routes';
 import gamesRouter from './games.routes';
 import achievementRouter from './achievement.routes';
 import guideRouter from './guide.routes';
+import webhooksRouter from './webhooks.routes';
 
 const router = Router();
 
@@ -41,5 +42,6 @@ router.use('/search', searchRouter);
 router.use('/games', gamesRouter);
 router.use('/achievements', achievementRouter);
 router.use('/guides', guideRouter);
+router.use('/webhooks', webhooksRouter);
 
 export default router;

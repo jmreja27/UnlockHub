@@ -110,6 +110,21 @@ jest.mock('react-native-reanimated', () => {
   return Reanimated;
 });
 
+// react-native-purchases (RevenueCat) — módulo nativo, requiere mock en tests
+jest.mock('react-native-purchases', () => ({
+  default: {
+    configure: jest.fn(),
+    setLogLevel: jest.fn(),
+    logIn: jest.fn(() => Promise.resolve({ customerInfo: {} })),
+    logOut: jest.fn(() => Promise.resolve({ customerInfo: {} })),
+    purchasePackage: jest.fn(),
+    restorePurchases: jest.fn(),
+    getOfferings: jest.fn(() => Promise.resolve({ current: null })),
+  },
+  PURCHASES_ERROR_CODE: { PURCHASE_CANCELLED_ERROR: 'PURCHASE_CANCELLED_ERROR' },
+  LOG_LEVEL: { DEBUG: 'DEBUG', ERROR: 'ERROR' },
+}));
+
 // @react-native-async-storage/async-storage — módulo nativo, requiere mock en tests
 jest.mock('@react-native-async-storage/async-storage', () => ({
   getItem: jest.fn(() => Promise.resolve(null)),

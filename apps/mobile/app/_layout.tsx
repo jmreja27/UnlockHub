@@ -15,6 +15,7 @@ import { useSessionStore } from '../stores/sessionStore';
 import { usePreferencesStore } from '../stores/preferencesStore';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 import { useGdprConsent } from '../hooks/useGdprConsent';
+import { useRevenueCat } from '../hooks/useRevenueCat';
 import { useMaintenanceCheck } from '../hooks/useMaintenanceCheck';
 import { MaintenanceScreen } from '../components/MaintenanceScreen';
 import { OfflineBanner } from '../components/OfflineBanner';
@@ -100,6 +101,11 @@ function GdprConsentInit() {
   return null;
 }
 
+function RevenueCatInit() {
+  useRevenueCat();
+  return null;
+}
+
 function PreferencesInit() {
   const { loadPreferences, theme } = usePreferencesStore();
   const { setColorScheme } = useColorScheme();
@@ -140,6 +146,7 @@ export default function RootLayout() {
         <SessionRestorer onReady={handleReady} />
         <PushNotificationsInit />
         <GdprConsentInit />
+        <RevenueCatInit />
         <StatusBar style="light" />
         <OfflineBanner />
         {ready && <Stack screenOptions={{ headerShown: false }} />}

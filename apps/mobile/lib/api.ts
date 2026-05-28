@@ -38,7 +38,7 @@ interface RefreshResponse {
   refreshToken: string;
 }
 
-async function refreshAccessToken(): Promise<void> {
+export async function refreshAccessToken(): Promise<void> {
   const refreshToken = await getRefreshToken();
   if (!refreshToken) throw new Error('Sin refresh token. Inicia sesión de nuevo.');
 

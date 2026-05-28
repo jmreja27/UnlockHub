@@ -249,6 +249,37 @@ export async function redeemPointsForPremium(
   };
 }
 
+// Invocado por el webhook de RevenueCat cuando una suscripción expira o se cancela.
+// No lanza error si el userId no existe — el webhook debe devolver 200 siempre.
+export async function expireSubscriptionFromWebhook(
+  userId: string,
+  storeTransactionId: string,
+): Promise<void> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true },
+  });
+  if (!user) return; // userId desconocido — ignorar silenciosamente
+
+  // Marcar la suscripción concreta como expirada si existe
+  await prisma.subscription.updateMany({
+    where: { userId, storeTransactionId, status: ACTIVE_STATUS },
+    data: { status: EXPIRED_STATUS },
+  });
+
+  // Verificar si quedan suscripciones activas — por canje de puntos u otras plataformas
+  const remaining = await prisma.subscription.count({
+    where: { userId, status: ACTIVE_STATUS },
+  });
+
+  if (remaining === 0) {
+    await prisma.user.update({
+      where: { id: userId },
+      data: { isPremium: false, premiumUntil: null },
+    });
+  }
+}
+
 // Job para expirar suscripciones caducadas. Devuelve el número de suscripciones expiradas.
 // Llamar desde un cron job al arrancar el servidor o periódicamente.
 export async function expireOldSubscriptions(): Promise<number> {

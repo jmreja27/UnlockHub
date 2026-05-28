@@ -22,6 +22,8 @@ const envSchema = z.object({
   RA_SYSTEM_USER: z.string().optional(),
   RA_SYSTEM_KEY: z.string().optional(),
   CLOUDINARY_URL: z.string().url().optional(),
+  // RevenueCat — bearer token que RevenueCat envía en cada webhook para verificar autenticidad
+  REVENUECAT_WEBHOOK_SECRET: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
