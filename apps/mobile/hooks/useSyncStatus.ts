@@ -22,6 +22,7 @@ export interface SyncStatusResult {
   manualSyncsUsedToday: number;
   dailySyncsLimit: number | null;
   anyPlatformLinked: boolean;
+  cooldownRemainingSeconds: number; // segundos en bruto — útil para timer local en UI
   // Helpers calculados — string listo para mostrar en UI
   timeUntilNextAutoSync: string | null;
   timeUntilCooldownEnds: string | null;
@@ -72,6 +73,7 @@ export function useSyncStatus(userId: string | undefined): SyncStatusResult {
       manualSyncsUsedToday: 0,
       dailySyncsLimit: null,
       anyPlatformLinked: false,
+      cooldownRemainingSeconds: 0,
       timeUntilNextAutoSync: null,
       timeUntilCooldownEnds: null,
       lastSyncRelative: null,
@@ -109,6 +111,7 @@ export function useSyncStatus(userId: string | undefined): SyncStatusResult {
     manualSyncsUsedToday: data.manualSyncsUsedToday,
     dailySyncsLimit: data.dailySyncsLimit,
     anyPlatformLinked: data.anyPlatformLinked,
+    cooldownRemainingSeconds: data.cooldownRemainingSeconds,
     timeUntilNextAutoSync,
     timeUntilCooldownEnds,
     lastSyncRelative,
