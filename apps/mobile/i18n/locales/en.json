@@ -235,7 +235,8 @@
     "sync_ago_d": "{{d}} d ago",
     "sync_button_a11y": "Sync now",
     "sync_button_cooldown_a11y": "Sync available in {{time}}",
-    "sync_button_syncing_a11y": "Sync in progress"
+    "sync_button_syncing_a11y": "Sync in progress",
+    "sync_long_warning": "May take a few minutes..."
   },
   "feed": {
     "title": "Feed",
@@ -616,8 +617,14 @@
     "step2_body": "Connect your gaming accounts and we'll sync all your achievements automatically. Start with Steam or RetroAchievements.",
     "step3_title": "Ready to unlock!",
     "step3_body": "Compete in global rankings, challenge your friends, and track your gaming legacy. Your journey starts now.",
+    "step4_title": "Connect your platforms!",
+    "step4_body": "Choose where to start. You can link the rest from your profile at any time.",
     "cta_next": "Next",
     "cta_start": "Get started",
-    "cta_skip": "Skip"
+    "cta_skip": "Skip",
+    "cta_skip_platforms": "Do this later",
+    "platform_steam": "Connect Steam",
+    "platform_psn": "Connect PlayStation",
+    "platform_ra": "Connect RetroAchievements"
   }
 }
