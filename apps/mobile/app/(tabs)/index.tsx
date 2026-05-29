@@ -158,6 +158,15 @@ export default function LibraryScreen() {
   const [toast, setToast] = useState<string | null>(null);
   const [sortModalVisible, setSortModalVisible] = useState(false);
 
+  // Al montar con sesión activa, forzar background refetch para obtener datos frescos
+  // aunque el caché sea reciente (< staleTime). Resuelve el caso donde el sync nocturno
+  // terminó mientras la app estaba en background y la lista muestra datos del caché stale.
+  useEffect(() => {
+    if (user?.id) {
+      void queryClient.invalidateQueries({ queryKey: ['my-games'] });
+    }
+  }, [user?.id, queryClient]);
+
   const handleSyncComplete = useCallback((event: SyncCompleteEvent) => {
     const label = PLATFORM_LABELS[event.platform] ?? event.platform;
     setToast(`${label}: +${event.newAchievements} ${t('library.achievements_short')} · +${event.xpEarned} XP`);

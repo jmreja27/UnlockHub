@@ -439,4 +439,32 @@ describe('LibraryScreen', () => {
     // refreshing vuelve a false en el finally
     expect(list.props.refreshControl.props.refreshing).toBe(false);
   });
+
+  // ── Mount invalidation: fuerza refetch al abrir la app ───────────────────────
+
+  it('invalida my-games al montar cuando el usuario tiene ID', async () => {
+    mockUseMyGames.mockReturnValue({ ...baseMyGamesResult, allGames: sampleGames });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const spy = jest.spyOn(queryClient, 'invalidateQueries');
+
+    render(<QueryClientProvider client={queryClient}><LibraryScreen /></QueryClientProvider>);
+
+    await waitFor(() => {
+      expect(spy).toHaveBeenCalledWith({ queryKey: ['my-games'] });
+    });
+  });
+
+  it('NO invalida my-games al montar cuando el usuario no tiene ID', async () => {
+    mockUseSessionStore.mockReturnValue({ user: null });
+    mockUseMyGames.mockReturnValue({ ...baseMyGamesResult });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const spy = jest.spyOn(queryClient, 'invalidateQueries');
+
+    render(<QueryClientProvider client={queryClient}><LibraryScreen /></QueryClientProvider>);
+
+    // Dejar que los efectos se ejecuten
+    await act(async () => { await Promise.resolve(); });
+
+    expect(spy).not.toHaveBeenCalledWith({ queryKey: ['my-games'] });
+  });
 });
