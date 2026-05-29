@@ -189,6 +189,19 @@ export interface GamingWrapped {
     totalXpGained: number;
     bestStreak: number;
   } | null;
+  // Estadísticas extendidas — solo presentes en el wrapped anual
+  completedGamesByPlatform?: {
+    steam: number;
+    ra: number;
+    psn: number;
+  };
+  platinumsEarned?: number;
+  longestStreakInYear?: number;
+  mostActivePlatform?: Platform | null;
+  mostProductiveDay?: {
+    date: string;  // "YYYY-MM-DD"
+    achievementsCount: number;
+  } | null;
 }
 
 // Search

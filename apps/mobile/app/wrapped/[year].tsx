@@ -76,6 +76,12 @@ function buildShareText(wrapped: GamingWrapped, t: (key: string, opts?: Record<s
   if (wrapped.bestStreak > 0) {
     lines.push(`🔥 ${t('wrapped.best_streak')}: ${wrapped.bestStreak} ${t('wrapped.days')}`);
   }
+  if ((wrapped.platinumsEarned ?? 0) > 0) {
+    lines.push(`🏅 ${t('wrapped.platinums_earned')}: ${wrapped.platinumsEarned}`);
+  }
+  if ((wrapped.longestStreakInYear ?? 0) > 1) {
+    lines.push(`⚡ ${t('wrapped.longest_streak')}: ${wrapped.longestStreakInYear} ${t('wrapped.days')}`);
+  }
   lines.push('\n#UnlockHub #GamingWrapped');
   return lines.join('\n');
 }
@@ -350,8 +356,107 @@ export default function WrappedScreen() {
             </Animated.View>
           )}
 
+          {/* Estadísticas extendidas — solo en wrapped anual */}
+
+          {/* Platinos PSN */}
+          {(wrapped.platinumsEarned ?? 0) > 0 && (
+            <View className="mt-3">
+              <StatCard
+                label={t('wrapped.platinums_earned')}
+                value={String(wrapped.platinumsEarned)}
+                sub={t('wrapped.platinums_sub')}
+                delay={500}
+              />
+            </View>
+          )}
+
+          {/* Juegos completados al 100% por plataforma */}
+          {wrapped.completedGamesByPlatform &&
+            (wrapped.completedGamesByPlatform.steam +
+              wrapped.completedGamesByPlatform.ra +
+              wrapped.completedGamesByPlatform.psn) > 0 && (
+            <Animated.View
+              entering={FadeInDown.delay(550).duration(400)}
+              className="bg-surface-elevated rounded-2xl p-4 mt-3"
+              accessible
+              accessibilityLabel={t('wrapped.completed_games_a11y', {
+                steam: wrapped.completedGamesByPlatform.steam,
+                ra: wrapped.completedGamesByPlatform.ra,
+                psn: wrapped.completedGamesByPlatform.psn,
+              })}
+            >
+              <Text className="text-gray-400 text-xs uppercase tracking-wider mb-2">
+                {t('wrapped.completed_games_title')}
+              </Text>
+              <View className="flex-row gap-4">
+                {wrapped.completedGamesByPlatform.steam > 0 && (
+                  <View className="items-center">
+                    <Text className="text-white font-bold text-2xl">
+                      {wrapped.completedGamesByPlatform.steam}
+                    </Text>
+                    <Text className="text-gray-400 text-xs mt-0.5">Steam</Text>
+                  </View>
+                )}
+                {wrapped.completedGamesByPlatform.ra > 0 && (
+                  <View className="items-center">
+                    <Text className="text-white font-bold text-2xl">
+                      {wrapped.completedGamesByPlatform.ra}
+                    </Text>
+                    <Text className="text-gray-400 text-xs mt-0.5">RetroAch.</Text>
+                  </View>
+                )}
+                {wrapped.completedGamesByPlatform.psn > 0 && (
+                  <View className="items-center">
+                    <Text className="text-white font-bold text-2xl">
+                      {wrapped.completedGamesByPlatform.psn}
+                    </Text>
+                    <Text className="text-gray-400 text-xs mt-0.5">PlayStation</Text>
+                  </View>
+                )}
+              </View>
+            </Animated.View>
+          )}
+
+          {/* Racha más larga del año */}
+          {(wrapped.longestStreakInYear ?? 0) > 1 && (
+            <View className="mt-3">
+              <StatCard
+                label={t('wrapped.longest_streak')}
+                value={`${wrapped.longestStreakInYear} ${t('wrapped.days')}`}
+                delay={600}
+              />
+            </View>
+          )}
+
+          {/* Día más productivo */}
+          {wrapped.mostProductiveDay && wrapped.mostProductiveDay.achievementsCount > 0 && (
+            <View className="mt-3">
+              <StatCard
+                label={t('wrapped.most_productive_day')}
+                value={new Intl.DateTimeFormat(undefined, {
+                  day: 'numeric', month: 'long'
+                }).format(new Date(wrapped.mostProductiveDay.date + 'T12:00:00Z'))}
+                sub={t('wrapped.most_productive_count', {
+                  count: wrapped.mostProductiveDay.achievementsCount,
+                })}
+                delay={650}
+              />
+            </View>
+          )}
+
+          {/* Plataforma más activa */}
+          {wrapped.mostActivePlatform && (
+            <View className="mt-3">
+              <StatCard
+                label={t('wrapped.most_active_platform')}
+                value={PLATFORM_LABELS[wrapped.mostActivePlatform] ?? wrapped.mostActivePlatform}
+                delay={700}
+              />
+            </View>
+          )}
+
           {/* Botón compartir */}
-          <Animated.View entering={FadeInDown.delay(500).duration(400)} className="mt-6">
+          <Animated.View entering={FadeInDown.delay(750).duration(400)} className="mt-6">
             <Pressable
               className="w-full bg-primary rounded-xl py-4 items-center active:opacity-80"
               onPress={handleShare}
