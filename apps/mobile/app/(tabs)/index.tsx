@@ -1,5 +1,6 @@
 import { useCallback, useState, useMemo, useEffect, useRef } from 'react';
-import { View, Text, RefreshControl, ScrollView, Pressable, TextInput, ActivityIndicator, Modal } from 'react-native';
+import { View, Text, RefreshControl, ScrollView, Pressable, TextInput, ActivityIndicator, Modal, AppState } from 'react-native';
+import type { AppStateStatus } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import { useTranslation } from 'react-i18next';
@@ -165,6 +166,19 @@ export default function LibraryScreen() {
     if (user?.id) {
       void queryClient.invalidateQueries({ queryKey: ['my-games'] });
     }
+  }, [user?.id, queryClient]);
+
+  // AppState listener: refrescar la lista cuando la app vuelve al frente desde background.
+  // TanStack Query en React Native no tiene refetchOnWindowFocus — este listener lo suple.
+  useEffect(() => {
+    const handleAppStateChange = (nextState: AppStateStatus) => {
+      if (nextState === 'active' && user?.id) {
+        void queryClient.invalidateQueries({ queryKey: ['my-games'] });
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription.remove();
   }, [user?.id, queryClient]);
 
   const handleSyncComplete = useCallback((event: SyncCompleteEvent) => {

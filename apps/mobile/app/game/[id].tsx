@@ -266,7 +266,6 @@ export default function GameDetailScreen() {
   const currentUserId = user?.id ?? '';
 
   const [filter, setFilter] = useState<AchievementFilter>('all');
-  const [sortByRarity, setSortByRarity] = useState(false);
   const [challengeAchievementId, setChallengeAchievementId] = useState<string | null>(null);
   const [writeGuideAchievementId, setWriteGuideAchievementId] = useState<string | null>(null);
   const [guideContent, setGuideContent] = useState('');
@@ -284,11 +283,8 @@ export default function GameDetailScreen() {
     let list = game.achievements as AchievementDetail[];
     if (filter === 'earned') list = list.filter((a) => earnedSet.has(a.id));
     if (filter === 'pending') list = list.filter((a) => !earnedSet.has(a.id));
-    if (sortByRarity) {
-      list = [...list].sort((a, b) => (a.rarity ?? 100) - (b.rarity ?? 100));
-    }
     return list;
-  }, [game, filter, sortByRarity, earnedSet]);
+  }, [game, filter, earnedSet]);
 
   const acceptedFriends = useMemo(
     () => friends.filter((f) => f.status === 'ACCEPTED'),
@@ -424,22 +420,6 @@ export default function GameDetailScreen() {
               ))}
             </View>
 
-            <Pressable
-              onPress={() => setSortByRarity((v) => !v)}
-              className={`self-start flex-row items-center px-3 py-1.5 rounded-full border ${
-                sortByRarity ? 'border-primary bg-primary/20' : 'border-gray-700 bg-transparent'
-              }`}
-              accessibilityRole="button"
-              accessibilityLabel={t('game.sort_by_rarity')}
-              accessibilityState={{ selected: sortByRarity }}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Text
-                className={`text-xs font-medium ${sortByRarity ? 'text-primary-light' : 'text-gray-400'}`}
-              >
-                {t('game.sort_by_rarity')}
-              </Text>
-            </Pressable>
           </View>
         )}
 
