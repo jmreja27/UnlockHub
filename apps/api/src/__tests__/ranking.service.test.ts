@@ -15,6 +15,7 @@ jest.mock('../lib/redis', () => ({
 jest.mock('../lib/prisma', () => ({
   prisma: {
     user: { findMany: jest.fn() },
+    userAchievement: { findMany: jest.fn() },
     rankingSnapshot: { createMany: jest.fn() },
   },
 }));
@@ -30,7 +31,11 @@ const users = [
   { id: 'u2', username: 'beta', avatar: null, countryCode: 'ES' },
 ];
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  // Por defecto getPlatformXp devuelve 0 (sin logros en esa plataforma)
+  (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([]);
+});
 
 describe('rankingService.getGlobalRanking', () => {
   it('devuelve ranking paginado correctamente', async () => {
@@ -59,7 +64,7 @@ describe('rankingService.getGlobalRanking', () => {
 
 describe('rankingService.getUserRank', () => {
   it('devuelve la posición global del usuario (1-indexed)', async () => {
-    mockRedis.zrevrank.mockResolvedValue(0); // posición 0 = rank 1
+    mockRedis.zrevrank.mockResolvedValue(0);
     mockRedis.zscore.mockResolvedValue('1500');
 
     const result = await rankingService.getUserRank('u1');
@@ -80,71 +85,74 @@ describe('rankingService.getUserRank', () => {
 });
 
 describe('rankingService.upsertUserScore', () => {
-  it('llama a zadd para global, país y plataformas', async () => {
-    const execMock = jest.fn().mockResolvedValue([]);
-    const pipelineMock = { zadd: jest.fn().mockReturnThis(), exec: execMock };
-    mockRedis.pipeline.mockReturnValue(pipelineMock as never);
+  it('usa XP total para global y XP por plataforma para los sorted sets de plataforma', async () => {
+    mockRedis.zadd.mockResolvedValue(1 as never);
+    // Steam: 200 XP en BD
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValueOnce([
+      { achievement: { normalizedPoints: 200 } },
+    ]);
 
-    await rankingService.upsertUserScore('u1', 500, 'ES', ['STEAM']);
+    await rankingService.upsertUserScore('u1', 500, ['STEAM']);
 
-    expect(pipelineMock.zadd).toHaveBeenCalledTimes(3); // global + ES + steam
-    expect(execMock).toHaveBeenCalled();
+    expect(mockRedis.zadd).toHaveBeenCalledWith('ranking:global', 500, 'u1');
+    expect(mockRedis.zadd).toHaveBeenCalledWith('ranking:platform:steam', 200, 'u1');
+    expect(mockRedis.zadd).toHaveBeenCalledTimes(2);
   });
 
-  it('no añade clave de país si countryCode es null', async () => {
-    const execMock = jest.fn().mockResolvedValue([]);
-    const pipelineMock = { zadd: jest.fn().mockReturnThis(), exec: execMock };
-    mockRedis.pipeline.mockReturnValue(pipelineMock as never);
+  it('actualiza múltiples plataformas con su XP específico desde BD', async () => {
+    mockRedis.zadd.mockResolvedValue(1 as never);
+    (mockPrisma.userAchievement.findMany as jest.Mock)
+      .mockResolvedValueOnce([{ achievement: { normalizedPoints: 100 } }])  // Steam 100 XP
+      .mockResolvedValueOnce([{ achievement: { normalizedPoints: 50 } }]);  // RA 50 XP
 
-    await rankingService.upsertUserScore('u1', 500, null, ['STEAM']);
+    await rankingService.upsertUserScore('u1', 150, ['STEAM', 'RA']);
 
-    expect(pipelineMock.zadd).toHaveBeenCalledTimes(2); // global + steam
+    expect(mockRedis.zadd).toHaveBeenCalledWith('ranking:global', 150, 'u1');
+    expect(mockRedis.zadd).toHaveBeenCalledWith('ranking:platform:steam', 100, 'u1');
+    expect(mockRedis.zadd).toHaveBeenCalledWith('ranking:platform:ra', 50, 'u1');
+    expect(mockRedis.zadd).toHaveBeenCalledTimes(3);
+  });
+
+  it('sin plataformas solo actualiza el ranking global', async () => {
+    mockRedis.zadd.mockResolvedValue(1 as never);
+
+    await rankingService.upsertUserScore('u1', 500, []);
+
+    expect(mockRedis.zadd).toHaveBeenCalledTimes(1);
+    expect(mockRedis.zadd).toHaveBeenCalledWith('ranking:global', 500, 'u1');
+  });
+
+  it('no hay sorted set de país — ranking nacional eliminado', async () => {
+    mockRedis.zadd.mockResolvedValue(1 as never);
+
+    await rankingService.upsertUserScore('u1', 500, []);
+
+    const calls = (mockRedis.zadd as jest.Mock).mock.calls as string[][];
+    const countryCall = calls.find((c) => (c[0] as string).includes('ranking:global:'));
+    expect(countryCall).toBeUndefined();
   });
 });
 
 describe('rankingService.removeUserFromRankings', () => {
-  it('llama a zrem para global, país y plataformas', async () => {
+  it('llama a zrem para global y plataformas', async () => {
     const execMock = jest.fn().mockResolvedValue([]);
     const pipelineMock = { zrem: jest.fn().mockReturnThis(), exec: execMock };
     mockRedis.pipeline.mockReturnValue(pipelineMock as never);
 
-    await rankingService.removeUserFromRankings('u1', 'ES', ['STEAM', 'RA']);
+    await rankingService.removeUserFromRankings('u1', ['STEAM', 'RA']);
 
-    expect(pipelineMock.zrem).toHaveBeenCalledTimes(4); // global + ES + steam + ra
+    expect(pipelineMock.zrem).toHaveBeenCalledTimes(3); // global + steam + ra
     expect(execMock).toHaveBeenCalled();
   });
 
-  it('no llama a zrem de país si countryCode es null', async () => {
+  it('solo borra global si no hay plataformas', async () => {
     const execMock = jest.fn().mockResolvedValue([]);
     const pipelineMock = { zrem: jest.fn().mockReturnThis(), exec: execMock };
     mockRedis.pipeline.mockReturnValue(pipelineMock as never);
 
-    await rankingService.removeUserFromRankings('u1', null, ['STEAM']);
+    await rankingService.removeUserFromRankings('u1', []);
 
-    expect(pipelineMock.zrem).toHaveBeenCalledTimes(2); // global + steam
-  });
-});
-
-describe('rankingService.getCountryRanking', () => {
-  it('devuelve ranking paginado por país', async () => {
-    mockRedis.zcard.mockResolvedValue(1);
-    mockRedis.zrevrange.mockResolvedValue(['u1', '200'] as never);
-    (mockPrisma.user.findMany as jest.Mock).mockResolvedValue([
-      { id: 'u1', username: 'alpha', avatar: null, countryCode: 'ES' },
-    ]);
-
-    const result = await rankingService.getCountryRanking('ES', 1, 20);
-
-    expect(result.total).toBe(1);
-    expect(result.data[0]?.username).toBe('alpha');
-  });
-
-  it('devuelve lista vacía si no hay usuarios en el ranking de país', async () => {
-    mockRedis.zcard.mockResolvedValue(0);
-
-    const result = await rankingService.getCountryRanking('JP', 1, 20);
-
-    expect(result.data).toHaveLength(0);
+    expect(pipelineMock.zrem).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -212,16 +220,21 @@ describe('rankingService.takeRankingSnapshot', () => {
 describe('rankingService.seedRankingsFromDb', () => {
   it('reconstruye el ranking en Redis desde todos los usuarios de la BD', async () => {
     (mockPrisma.user.findMany as jest.Mock).mockResolvedValue([
-      { id: 'u1', xp: 500, countryCode: 'ES', platformAccounts: [{ platform: 'STEAM' }] },
-      { id: 'u2', xp: 200, countryCode: null, platformAccounts: [] },
+      { id: 'u1', xp: 500, platformAccounts: [{ platform: 'STEAM' }] },
+      { id: 'u2', xp: 200, platformAccounts: [] },
     ]);
-    const execMock = jest.fn().mockResolvedValue([]);
-    const pipelineMock = { zadd: jest.fn().mockReturnThis(), exec: execMock };
-    mockRedis.pipeline.mockReturnValue(pipelineMock as never);
+    mockRedis.zadd.mockResolvedValue(1 as never);
+    // u1 tiene 300 XP de Steam
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValueOnce([
+      { achievement: { normalizedPoints: 300 } },
+    ]);
 
     await rankingService.seedRankingsFromDb();
 
-    // u1: global + ES + steam = 3 zadd; u2: global = 1 zadd
-    expect(pipelineMock.zadd).toHaveBeenCalledTimes(4);
+    // u1: global(500) + steam(300) = 2; u2: global(200) = 1 → 3 total
+    expect(mockRedis.zadd).toHaveBeenCalledTimes(3);
+    expect(mockRedis.zadd).toHaveBeenCalledWith('ranking:global', 500, 'u1');
+    expect(mockRedis.zadd).toHaveBeenCalledWith('ranking:platform:steam', 300, 'u1');
+    expect(mockRedis.zadd).toHaveBeenCalledWith('ranking:global', 200, 'u2');
   });
 });

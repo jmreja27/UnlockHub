@@ -224,7 +224,7 @@ describe('userService.addXp', () => {
 
     await userService.addXp('user-1', 200, 'CHALLENGE');
 
-    expect(mockUpsertUserScore).toHaveBeenCalledWith('user-1', 200, 'ES', ['STEAM']);
+    expect(mockUpsertUserScore).toHaveBeenCalledWith('user-1', 200, ['STEAM']);
   });
 
   it('lanza USER_NOT_FOUND si el usuario no existe', async () => {

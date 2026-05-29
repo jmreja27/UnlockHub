@@ -190,7 +190,6 @@ export async function addXp(
   await upsertUserScore(
     userId,
     newXp,
-    dbUser.countryCode,
     platforms.map((p) => p.platform),
   );
 
@@ -473,7 +472,7 @@ export async function deleteAccount(userId: string): Promise<void> {
   const platforms = user.platformAccounts.map((a) => a.platform);
 
   // Limpiar Redis antes de borrar BD para evitar datos huérfanos si falla la transacción
-  await removeUserFromRankings(userId, user.countryCode, platforms);
+  await removeUserFromRankings(userId, platforms);
 
   await prisma.$transaction([
     prisma.user.delete({ where: { id: userId } }),

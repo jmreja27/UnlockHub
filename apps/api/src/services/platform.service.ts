@@ -113,7 +113,6 @@ export async function linkPlatform(
   await upsertUserScore(
     userId,
     user.xp,
-    user.countryCode,
     allPlatforms.map((p) => p.platform),
   );
 
@@ -139,7 +138,7 @@ export async function unlinkPlatform(
   }
 
   // Transacción atómica: borrar logros → borrar cuenta → actualizar XP
-  const { deletedAchievements, newXp, countryCode } = await prisma.$transaction(
+  const { deletedAchievements, newXp } = await prisma.$transaction(
     async (tx) => {
       // 1. Obtener los logros del usuario en esta plataforma para calcular XP a restar
       const toDelete = await tx.userAchievement.findMany({
@@ -172,7 +171,7 @@ export async function unlinkPlatform(
       // 4. Actualizar XP y nivel del usuario si había logros que restaban XP
       const user = await tx.user.findUnique({
         where: { id: userId },
-        select: { xp: true, countryCode: true },
+        select: { xp: true },
       });
 
       const currentXp = user?.xp ?? 0;
@@ -188,7 +187,6 @@ export async function unlinkPlatform(
         deletedAchievements: count,
         newXp: updatedXp,
         newLevel: updatedLevel,
-        countryCode: user?.countryCode ?? null,
       };
     },
   );
@@ -197,9 +195,9 @@ export async function unlinkPlatform(
   await cancelAutoSync(userId, platform);
 
   // Eliminar al usuario del ranking de esta plataforma y actualizar su puntuación global
-  await removeUserFromRankings(userId, countryCode, [platform]);
+  await removeUserFromRankings(userId, [platform]);
 
-  // Obtener plataformas restantes para recalcular el score global/nacional con el XP actualizado
+  // Obtener plataformas restantes para recalcular el score global con el XP actualizado
   const remainingPlatforms = await prisma.platformAccount.findMany({
     where: { userId },
     select: { platform: true },
@@ -208,7 +206,6 @@ export async function unlinkPlatform(
   await upsertUserScore(
     userId,
     newXp,
-    countryCode,
     remainingPlatforms.map((p) => p.platform as Platform),
   );
 

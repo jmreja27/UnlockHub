@@ -12,7 +12,6 @@ interface MyRankingResponse {
 
 const RANKING_KEYS = {
   global: (page: number, limit: number) => ['rankings', 'global', page, limit] as const,
-  country: (code: string, page: number, limit: number) => ['rankings', 'country', code, page, limit] as const,
   platform: (platform: string, page: number, limit: number) => ['rankings', 'platform', platform, page, limit] as const,
   me: ['rankings', 'me'] as const,
 };
@@ -25,18 +24,6 @@ export function useGlobalRankings(page: number = 1, limit: number = 50) {
     queryKey: RANKING_KEYS.global(page, limit),
     queryFn: () =>
       api.get<PaginatedResponse<RankingEntry>>(`/api/v1/rankings/global?page=${page}&limit=${limit}`),
-    staleTime: RANKING_STALE,
-    gcTime: RANKING_GC,
-    placeholderData: (previousData) => previousData,
-  });
-}
-
-export function useCountryRanking(countryCode: string, page: number = 1, limit: number = 50) {
-  return useQuery({
-    queryKey: RANKING_KEYS.country(countryCode, page, limit),
-    queryFn: () =>
-      api.get<PaginatedResponse<RankingEntry>>(`/api/v1/rankings/country/${countryCode}?page=${page}&limit=${limit}`),
-    enabled: !!countryCode,
     staleTime: RANKING_STALE,
     gcTime: RANKING_GC,
     placeholderData: (previousData) => previousData,

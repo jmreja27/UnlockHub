@@ -185,7 +185,7 @@ export function startSyncWorker() {
         // y que ya no generan XP nuevo en syncs posteriores.
         const dbUser = await prisma.user.findUnique({
           where: { id: userId },
-          select: { xp: true, countryCode: true },
+          select: { xp: true },
         });
         if (dbUser) {
           const platformsData = await prisma.platformAccount.findMany({
@@ -195,7 +195,6 @@ export function startSyncWorker() {
           await upsertUserScore(
             userId,
             dbUser.xp,
-            dbUser.countryCode,
             platformsData.map((p) => p.platform),
           );
         }

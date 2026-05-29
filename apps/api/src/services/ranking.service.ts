@@ -1,3 +1,4 @@
+import type { Platform } from '@prisma/client';
 import type { RankingEntry, PaginatedResponse } from '@unlockhub/types';
 
 import { redis } from '../lib/redis';
@@ -7,37 +8,45 @@ import { logger } from '../lib/logger';
 // Claves de Redis Sorted Sets (score = XP, mayor score = mayor rango)
 const KEYS = {
   global: 'ranking:global',
-  country: (code: string) => `ranking:global:${code.toLowerCase()}`,
   platform: (p: string) => `ranking:platform:${p.toLowerCase()}`,
 };
+
+// ─── Helpers internos ─────────────────────────────────────────────────────────
+
+// Calcula el XP total acumulado por un usuario en una plataforma específica
+async function getPlatformXp(userId: string, platform: string): Promise<number> {
+  const achievements = await prisma.userAchievement.findMany({
+    where: {
+      userId,
+      achievement: { platform: platform as Platform },
+    },
+    select: {
+      achievement: { select: { normalizedPoints: true } },
+    },
+  });
+  return achievements.reduce((sum, ua) => sum + ua.achievement.normalizedPoints, 0);
+}
 
 // ─── Escritura ────────────────────────────────────────────────────────────────
 
 export async function upsertUserScore(
   userId: string,
-  xp: number,
-  countryCode: string | null,
+  totalXp: number,
   platforms: string[],
 ) {
-  const pipeline = redis.pipeline();
+  // Global: score = XP total del usuario
+  await redis.zadd(KEYS.global, totalXp, userId);
 
-  pipeline.zadd(KEYS.global, xp, userId);
-
-  if (countryCode) {
-    pipeline.zadd(KEYS.country(countryCode), xp, userId);
-  }
-
+  // Plataformas: score = XP ganado SOLO en esa plataforma (no XP total)
   for (const platform of platforms) {
-    pipeline.zadd(KEYS.platform(platform), xp, userId);
+    const platformXp = await getPlatformXp(userId, platform);
+    await redis.zadd(KEYS.platform(platform), platformXp, userId);
   }
-
-  await pipeline.exec();
 }
 
-export async function removeUserFromRankings(userId: string, countryCode: string | null, platforms: string[]) {
+export async function removeUserFromRankings(userId: string, platforms: string[]) {
   const pipeline = redis.pipeline();
   pipeline.zrem(KEYS.global, userId);
-  if (countryCode) pipeline.zrem(KEYS.country(countryCode), userId);
   for (const platform of platforms) pipeline.zrem(KEYS.platform(platform), userId);
   await pipeline.exec();
 }
@@ -49,14 +58,6 @@ export async function getGlobalRanking(
   limit: number,
 ): Promise<PaginatedResponse<RankingEntry>> {
   return getRankingFromKey(KEYS.global, page, limit);
-}
-
-export async function getCountryRanking(
-  countryCode: string,
-  page: number,
-  limit: number,
-): Promise<PaginatedResponse<RankingEntry>> {
-  return getRankingFromKey(KEYS.country(countryCode), page, limit);
 }
 
 export async function getPlatformRanking(
@@ -113,12 +114,12 @@ export async function takeRankingSnapshot() {
 // Reconstruye Redis desde la BD en caso de pérdida de datos (reinicio, flush)
 export async function seedRankingsFromDb() {
   const users = await prisma.user.findMany({
-    select: { id: true, xp: true, countryCode: true, platformAccounts: { select: { platform: true } } },
+    select: { id: true, xp: true, platformAccounts: { select: { platform: true } } },
   });
 
   for (const user of users) {
     const platforms = user.platformAccounts.map((a) => a.platform);
-    await upsertUserScore(user.id, user.xp, user.countryCode, platforms);
+    await upsertUserScore(user.id, user.xp, platforms);
   }
 
   logger.info({ count: users.length }, 'Rankings reconstruidos desde BD');

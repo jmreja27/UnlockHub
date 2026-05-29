@@ -171,7 +171,6 @@ describe('platformService.linkPlatform', () => {
     expect(mockUpsertUserScore).toHaveBeenCalledWith(
       'user-1',
       500,
-      'ES',
       expect.arrayContaining(['STEAM', 'PSN']),
     );
   });
@@ -363,7 +362,7 @@ describe('platformService.unlinkPlatform', () => {
     await platformService.unlinkPlatform('user-1', 'STEAM');
 
     expect(mockCancelAutoSync).toHaveBeenCalledWith('user-1', 'STEAM');
-    expect(mockRemoveUserFromRankings).toHaveBeenCalledWith('user-1', 'ES', ['STEAM']);
+    expect(mockRemoveUserFromRankings).toHaveBeenCalledWith('user-1', ['STEAM']);
   });
 
   it('actualiza el ranking global con el XP restante tras desvincular', async () => {
@@ -380,7 +379,7 @@ describe('platformService.unlinkPlatform', () => {
 
     await platformService.unlinkPlatform('user-1', 'STEAM');
 
-    expect(mockUpsertUserScore).toHaveBeenCalledWith('user-1', 350, 'ES', ['RA']);
+    expect(mockUpsertUserScore).toHaveBeenCalledWith('user-1', 350, ['RA']);
   });
 
   it('lanza PLATFORM_NOT_LINKED si la plataforma no está vinculada', async () => {

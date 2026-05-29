@@ -14,17 +14,6 @@ export async function getGlobalRankingHandler(req: Request, res: Response, next:
   }
 }
 
-export async function getCountryRankingHandler(req: Request, res: Response, next: NextFunction) {
-  try {
-    const { page, limit } = paginationSchema.parse(req.query);
-    const countryCode = (req.params['country'] ?? '').toUpperCase();
-    const result = await rankingService.getCountryRanking(countryCode, page, limit);
-    res.json(result);
-  } catch (err) {
-    next(err);
-  }
-}
-
 export async function getPlatformRankingHandler(req: Request, res: Response, next: NextFunction) {
   try {
     const { page, limit } = paginationSchema.parse(req.query);

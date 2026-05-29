@@ -6,14 +6,14 @@ import { useTranslation } from 'react-i18next';
 import { useRouter } from 'expo-router';
 import type { RankingEntry } from '@unlockhub/types';
 
-import { useGlobalRankings, useCountryRanking, usePlatformRanking, useMyRanking } from '../../hooks/useRankings';
+import { useGlobalRankings, usePlatformRanking, useMyRanking } from '../../hooks/useRankings';
 import { useSessionStore } from '../../stores/sessionStore';
 import { ApiRequestError } from '../../lib/api';
 import { RankingItem } from '../../components/RankingItem';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { AdBanner } from '../../components/AdBanner';
 
-type RankingFilter = 'global' | 'national' | 'STEAM' | 'RA' | 'PSN';
+type RankingFilter = 'global' | 'STEAM' | 'RA' | 'PSN';
 
 function classifyError(err: Error | null): 'network' | 'auth' | 'server' {
   if (!err) return 'server';
@@ -26,11 +26,10 @@ function classifyError(err: Error | null): 'network' | 'auth' | 'server' {
 }
 
 const FILTERS: { key: RankingFilter; labelKey: string }[] = [
-  { key: 'global',   labelKey: 'rankings.filter_global' },
-  { key: 'national', labelKey: 'rankings.filter_national' },
-  { key: 'STEAM',    labelKey: 'rankings.filter_steam' },
-  { key: 'RA',       labelKey: 'rankings.filter_ra' },
-  { key: 'PSN',      labelKey: 'rankings.filter_psn' },
+  { key: 'global', labelKey: 'rankings.filter_global' },
+  { key: 'STEAM',  labelKey: 'rankings.filter_steam' },
+  { key: 'RA',     labelKey: 'rankings.filter_ra' },
+  { key: 'PSN',    labelKey: 'rankings.filter_psn' },
 ];
 
 const SKELETON_COUNT = 10;
@@ -61,29 +60,19 @@ function RankingSkeletonList() {
 
 function RankingList({
   filter,
-  countryCode,
   currentUserId,
   onPressUser,
 }: {
   filter: RankingFilter;
-  countryCode: string | null;
   currentUserId: string | undefined;
   onPressUser: (username: string) => void;
 }) {
   const { t } = useTranslation();
 
   const globalQuery = useGlobalRankings(1, 50);
-  const countryQuery = useCountryRanking(countryCode ?? '', 1, 50);
-  const platformQuery = usePlatformRanking(
-    filter !== 'global' && filter !== 'national' ? filter : '',
-    1,
-    50,
-  );
+  const platformQuery = usePlatformRanking(filter !== 'global' ? filter : '', 1, 50);
 
-  const query =
-    filter === 'global' ? globalQuery
-    : filter === 'national' ? countryQuery
-    : platformQuery;
+  const query = filter === 'global' ? globalQuery : platformQuery;
 
   const { data, isLoading, isError, error, refetch, isRefetching } = query;
 
@@ -97,16 +86,6 @@ function RankingList({
     ),
     [currentUserId, onPressUser],
   );
-
-  if (filter === 'national' && !countryCode) {
-    return (
-      <View className="flex-1 items-center justify-center px-6">
-        <Text className="text-gray-400 text-center text-base">
-          {t('rankings.national_no_country')}
-        </Text>
-      </View>
-    );
-  }
 
   if (isLoading) return <RankingSkeletonList />;
 
@@ -241,7 +220,6 @@ export default function RankingsScreen() {
 
       <RankingList
         filter={activeFilter}
-        countryCode={user?.countryCode ?? null}
         currentUserId={user?.id}
         onPressUser={handlePressUser}
       />
