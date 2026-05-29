@@ -2,6 +2,10 @@ jest.mock('../services/user.service', () => ({
   addXp: jest.fn().mockResolvedValue({ newXp: 100, newLevel: 1, leveledUp: false }),
 }));
 
+jest.mock('../services/ranking.service', () => ({
+  upsertUserScore: jest.fn().mockResolvedValue(undefined),
+}));
+
 jest.mock('../lib/redis', () => ({
   redis: {
     setex: jest.fn().mockResolvedValue('OK'),
@@ -18,9 +22,9 @@ jest.mock('../lib/redis', () => ({
 
 jest.mock('../lib/prisma', () => ({
   prisma: {
-    platformAccount: { findUnique: jest.fn(), update: jest.fn() },
+    platformAccount: { findUnique: jest.fn(), update: jest.fn(), findMany: jest.fn() },
     userAchievement: { findMany: jest.fn() },
-    user: { update: jest.fn() },
+    user: { update: jest.fn(), findUnique: jest.fn() },
   },
 }));
 
@@ -67,6 +71,7 @@ import { AppError } from '../middleware/errorHandler';
 import { steamAdapter } from '../platforms/steam.adapter';
 import { syncQueue } from '../jobs/sync.queue';
 import { addXp } from '../services/user.service';
+import { upsertUserScore } from '../services/ranking.service';
 import { startSyncWorker } from '../jobs/sync.worker';
 
 const mockRedis = redis as jest.Mocked<typeof redis>;
@@ -74,6 +79,7 @@ const mockPrisma = prisma as jest.Mocked<typeof prisma>;
 const mockGetIO = getIO as jest.MockedFunction<typeof getIO>;
 const mockSteamAdapter = steamAdapter as jest.Mocked<typeof steamAdapter>;
 const mockAddXp = addXp as jest.Mock;
+const mockUpsertUserScore = upsertUserScore as jest.Mock;
 const MockWorker = Worker as jest.MockedClass<typeof Worker>;
 
 const mockEmit = jest.fn();
@@ -313,8 +319,9 @@ describe('startSyncWorker — addXp persistido cuando hay logros nuevos (BUG-9)'
     expect(mockAddXp).toHaveBeenCalledWith('user-1', 150, 'ACHIEVEMENT');
   });
 
-  it('no llama a addXp cuando xpEarned es 0 (sin logros nuevos)', async () => {
+  it('no llama a addXp cuando xpEarned es 0 pero sí llama a upsertUserScore (BUG-2)', async () => {
     MockWorker.mockClear();
+    mockUpsertUserScore.mockClear();
     startSyncWorker();
 
     const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
@@ -327,8 +334,16 @@ describe('startSyncWorker — addXp persistido cuando hay logros nuevos (BUG-9)'
       gamesUpdated: 0, achievementsSynced: 0, syncedAt: new Date().toISOString(),
     });
 
+    // Setup mocks para el else branch: user.findUnique + platformAccount.findMany
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValueOnce({ xp: 500, countryCode: 'ES' });
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValueOnce([
+      { platform: 'STEAM' }, { platform: 'RA' },
+    ]);
+
     await processFn({ data: { userId: 'user-1', platformAccountId: 'acc-1', platform: 'STEAM', triggerType: 'manual' } });
 
     expect(mockAddXp).not.toHaveBeenCalled();
+    // upsertUserScore debe llamarse para mantener al usuario en los sorted sets de plataforma
+    expect(mockUpsertUserScore).toHaveBeenCalledWith('user-1', 500, 'ES', ['STEAM', 'RA']);
   });
 });

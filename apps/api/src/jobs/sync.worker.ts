@@ -14,6 +14,7 @@ import { xboxAdapter } from '../platforms/xbox.adapter';
 import { sendPush } from '../services/notification.service';
 import { createNotification } from '../services/inapp-notification.service';
 import { addXp } from '../services/user.service';
+import { upsertUserScore } from '../services/ranking.service';
 
 import type { SyncJobData, SyncJobResult } from './sync.queue';
 
@@ -178,6 +179,26 @@ export function startSyncWorker() {
       // Acumular XP de los nuevos logros y actualizar BD + rankings Redis
       if (xpEarned > 0) {
         await addXp(userId, xpEarned, 'ACHIEVEMENT');
+      } else {
+        // Sin nuevos logros — garantizar que el usuario sigue en todos los sorted sets de plataforma.
+        // Cubre usuarios que vincularon plataformas antes de que linkPlatform llamara a upsertUserScore
+        // y que ya no generan XP nuevo en syncs posteriores.
+        const dbUser = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { xp: true, countryCode: true },
+        });
+        if (dbUser) {
+          const platformsData = await prisma.platformAccount.findMany({
+            where: { userId },
+            select: { platform: true },
+          });
+          await upsertUserScore(
+            userId,
+            dbUser.xp,
+            dbUser.countryCode,
+            platformsData.map((p) => p.platform),
+          );
+        }
       }
 
       await redis.del(syncProgressKey(userId, platform as Platform));
