@@ -68,7 +68,7 @@ const mockRaGameProgress = {
       Title: 'Speed Demon',
       Description: 'Finish act in under 1 minute',
       BadgeName: 'badge102',
-      Points: 150, // Mayor que 100 — debe normalizarse a 100
+      Points: 150, // 150/5 = 30 con la fórmula correcta
       TrueRatio: 200,
       DateEarned: null,
       DateEarnedHardcore: null,
@@ -78,7 +78,7 @@ const mockRaGameProgress = {
       Title: 'First Steps',
       Description: 'Start the game',
       BadgeName: 'badge103',
-      Points: 0, // Menor que 1 — debe normalizarse a 1
+      Points: 0, // 0 → mínimo 5 con la fórmula correcta
       TrueRatio: 0,
       DateEarned: '2024-01-14 09:00:00',
       DateEarnedHardcore: null,
@@ -239,27 +239,27 @@ describe('normalización de puntos (via getUserAchievements)', () => {
     expect(ach?.rawValue).toBe(5);
   });
 
-  it('Points=150 → normalizedPoints=100 (capped al máximo)', async () => {
+  it('Points=150 → normalizedPoints=30 (Math.round(150/5)=30)', async () => {
     mockAxios.get.mockResolvedValue({ data: mockRaGameProgress });
 
     const achievements = await retroAchievementsAdapter.getUserAchievements(EXTERNAL_ID, API_KEY);
 
     const ach = achievements.find((a) => a.externalId === '102');
-    expect(ach?.normalizedPoints).toBe(100);
+    expect(ach?.normalizedPoints).toBe(30);
     expect(ach?.rawValue).toBe(150);
   });
 
-  it('Points=0 → normalizedPoints=1 (mínimo garantizado)', async () => {
+  it('Points=0 → normalizedPoints=5 (mínimo garantizado)', async () => {
     mockAxios.get.mockResolvedValue({ data: mockRaGameProgress });
 
     const achievements = await retroAchievementsAdapter.getUserAchievements(EXTERNAL_ID, API_KEY);
 
     const ach = achievements.find((a) => a.externalId === '103');
-    expect(ach?.normalizedPoints).toBe(1);
+    expect(ach?.normalizedPoints).toBe(5);
     expect(ach?.rawValue).toBe(0);
   });
 
-  it('Points=undefined → normalizedPoints=1 (fallback al mínimo)', async () => {
+  it('Points=undefined → normalizedPoints=5 (fallback al mínimo)', async () => {
     const dataWithUndefinedPoints = {
       ...mockRaGameProgress,
       Achievements: {
@@ -275,7 +275,7 @@ describe('normalización de puntos (via getUserAchievements)', () => {
 
     const achievements = await retroAchievementsAdapter.getUserAchievements(EXTERNAL_ID, API_KEY);
 
-    expect(achievements[0]?.normalizedPoints).toBe(1);
+    expect(achievements[0]?.normalizedPoints).toBe(5);
   });
 });
 

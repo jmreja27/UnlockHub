@@ -58,11 +58,13 @@ interface RaCompletedGame {
 // ─── Helpers de normalización ─────────────────────────────────────────────────
 
 /**
- * Normaliza los puntos de RetroAchievements al rango [1, 100].
- * RA tiene su propio sistema de puntos en `Points` y `TrueRatio`.
+ * Normaliza los puntos de RetroAchievements al sistema de XP de UnlockHub.
+ * Fórmula: Math.round(puntosRA / 5), mínimo 5 XP.
+ * RA Points range: 1–500 → normalizedPoints range: 5–100.
  */
 function normalizePoints(points: number | undefined): number {
-  return Math.min(100, Math.max(1, points ?? 1));
+  if (!points || points <= 0) return 5;
+  return Math.max(5, Math.round(points / 5));
 }
 
 /**
