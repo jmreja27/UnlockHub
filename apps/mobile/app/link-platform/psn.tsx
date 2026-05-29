@@ -125,13 +125,15 @@ export default function LinkPsnScreen() {
     onSuccess: (account) => {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       void queryClient.invalidateQueries({ queryKey: ['linkedPlatforms'] });
+      void queryClient.invalidateQueries({ queryKey: ['platforms'] });
+      void queryClient.invalidateQueries({ queryKey: ['sync-summary'] });
+      void queryClient.invalidateQueries({ queryKey: ['my-games'] });
 
       if (account.psnProfilePrivate) {
         // No navegar — mostrar el banner de perfil privado en la misma pantalla
         setLinkedPrivate(true);
       } else {
-        // Perfil público: navegar de vuelta como antes
-        void queryClient.invalidateQueries({ queryKey: ['my-games'] });
+        // Perfil público: navegar de vuelta
         router.back();
       }
     },
@@ -223,7 +225,7 @@ export default function LinkPsnScreen() {
             onPress={() => router.replace('/(tabs)/')}
             accessibilityRole="button"
             accessibilityLabel={t('link_platform.psn.profile_private_go_library')}
-            className="rounded-xl py-4 items-center bg-blue-600 mt-2"
+            className="rounded-xl py-4 items-center justify-center bg-blue-600 mt-2"
             style={{ minHeight: 52 }}
             testID="psn-private-go-library"
           >
@@ -328,7 +330,7 @@ export default function LinkPsnScreen() {
           accessibilityRole="button"
           accessibilityLabel={t('link_platform.psn.submit_label')}
           accessibilityState={{ disabled: linkMutation.isPending, busy: linkMutation.isPending }}
-          className={`rounded-xl py-4 items-center ${
+          className={`rounded-xl py-4 items-center justify-center ${
             linkMutation.isPending ? 'bg-blue-800' : 'bg-blue-600'
           }`}
           style={{ minHeight: 52 }}

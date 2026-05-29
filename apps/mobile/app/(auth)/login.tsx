@@ -185,7 +185,7 @@ export default function LoginScreen() {
 
             {/* Botón de inicio de sesión */}
             <Pressable
-              className="w-full bg-primary rounded-xl py-4 items-center mb-4 active:opacity-80"
+              className="w-full bg-primary rounded-xl py-4 items-center justify-center mb-4 active:opacity-80"
               onPress={handleSubmit}
               disabled={isLoggingIn}
               accessibilityRole="button"
@@ -221,7 +221,7 @@ export default function LoginScreen() {
             {/* Enlace a registro */}
             <Link href="/(auth)/register" asChild>
               <Pressable
-                className="w-full border border-primary rounded-xl py-4 items-center active:opacity-80"
+                className="w-full border border-primary rounded-xl py-4 items-center justify-center active:opacity-80"
                 accessibilityRole="button"
                 accessibilityLabel={t('auth.login.create_account_label')}
                 accessibilityHint={t('auth.login.create_account_hint')}

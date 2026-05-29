@@ -316,7 +316,7 @@ export default function RegisterScreen() {
 
             {/* Botón de registro */}
             <Pressable
-              className="w-full bg-primary rounded-xl py-4 items-center active:opacity-80"
+              className="w-full bg-primary rounded-xl py-4 items-center justify-center active:opacity-80"
               onPress={handleSubmit}
               disabled={isRegistering}
               accessibilityRole="button"

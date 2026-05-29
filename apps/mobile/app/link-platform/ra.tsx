@@ -51,6 +51,8 @@ export default function LinkRAScreen() {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       void queryClient.invalidateQueries({ queryKey: ['linkedPlatforms'] });
       void queryClient.invalidateQueries({ queryKey: ['platforms'] });
+      void queryClient.invalidateQueries({ queryKey: ['sync-summary'] });
+      void queryClient.invalidateQueries({ queryKey: ['my-games'] });
       Alert.alert(t('link_platform.ra.success'), '', [
         { text: 'OK', onPress: () => router.back() },
       ]);
@@ -209,7 +211,7 @@ export default function LinkRAScreen() {
           accessibilityRole="button"
           accessibilityLabel={t('link_platform.ra.submit_label')}
           accessibilityState={{ disabled: linkMutation.isPending, busy: linkMutation.isPending }}
-          className={`rounded-xl py-4 items-center ${
+          className={`rounded-xl py-4 items-center justify-center ${
             linkMutation.isPending ? 'bg-red-800' : 'bg-red-600'
           }`}
           style={{ minHeight: 52 }}
