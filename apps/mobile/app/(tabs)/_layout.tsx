@@ -1,4 +1,4 @@
-import { Tabs } from 'expo-router';
+import { Tabs, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
@@ -31,7 +31,9 @@ export default function TabsLayout() {
   const { t } = useTranslation();
   const isAuthenticated = useSessionStore((s) => s.isAuthenticated);
 
-  // Reutiliza la misma queryKey que useFriends para no crear peticiones duplicadas
+  // Reutiliza la misma queryKey que useFriends para no crear peticiones duplicadas.
+  // Se llama aquí (antes del guard) para respetar React Rules of Hooks — nunca
+  // puede haber un return condicional entre llamadas a hooks.
   const { data: pendingData } = useQuery({
     queryKey: ['friends', 'pending'],
     queryFn: () => api.get<PaginatedResponse<Friendship>>('/api/v1/friends/pending?limit=1'),
@@ -39,6 +41,13 @@ export default function TabsLayout() {
     staleTime: 1000 * 60 * 2,
   });
   const pendingCount = pendingData?.total ?? 0;
+
+  // Guard de autenticación — redirige a login si el usuario no está autenticado.
+  // Evita que el botón "atrás" de Android acceda a los tabs tras hacer logout.
+  // Debe ir después de todos los hooks para no violar React Rules of Hooks.
+  if (!isAuthenticated) {
+    return <Redirect href="/(auth)/login" />;
+  }
 
   return (
     <Tabs
