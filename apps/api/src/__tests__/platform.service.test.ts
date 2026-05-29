@@ -61,6 +61,8 @@ const mockUpsertUserScore = upsertUserScore as jest.Mock;
 const baseUser = {
   id: 'user-1',
   isPremium: false,
+  xp: 0,
+  countryCode: null,
 };
 
 // Cuenta de plataforma base para los tests
@@ -84,6 +86,7 @@ describe('platformService.linkPlatform', () => {
     (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(baseUser);
     (mockPrisma.platformAccount.findFirst as jest.Mock).mockResolvedValue(null);
     (mockPrisma.platformAccount.upsert as jest.Mock).mockResolvedValue(basePlatformAccount);
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([{ platform: 'STEAM' }]);
 
     const account = await platformService.linkPlatform(
       'user-1',
@@ -116,6 +119,7 @@ describe('platformService.linkPlatform', () => {
     (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(baseUser);
     (mockPrisma.platformAccount.findFirst as jest.Mock).mockResolvedValue(null);
     (mockPrisma.platformAccount.upsert as jest.Mock).mockResolvedValue(basePlatformAccount);
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([{ platform: 'STEAM' }]);
 
     await platformService.linkPlatform(
       'user-1',
@@ -132,6 +136,7 @@ describe('platformService.linkPlatform', () => {
     (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({ ...baseUser, isPremium: true });
     (mockPrisma.platformAccount.findFirst as jest.Mock).mockResolvedValue(null);
     (mockPrisma.platformAccount.upsert as jest.Mock).mockResolvedValue(basePlatformAccount);
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([{ platform: 'STEAM' }]);
 
     await platformService.linkPlatform(
       'user-1',
@@ -142,6 +147,33 @@ describe('platformService.linkPlatform', () => {
     );
 
     expect(mockScheduleAutoSync).toHaveBeenCalledWith('user-1', 'acc-1', 'STEAM', true);
+  });
+
+  it('llama a upsertUserScore con todas las plataformas vinculadas tras vincular', async () => {
+    const userWithXp = { ...baseUser, xp: 500, countryCode: 'ES' };
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(userWithXp);
+    (mockPrisma.platformAccount.findFirst as jest.Mock).mockResolvedValue(null);
+    (mockPrisma.platformAccount.upsert as jest.Mock).mockResolvedValue(basePlatformAccount);
+    // Simula que el usuario ya tiene PSN vinculada y acaba de vincular Steam
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([
+      { platform: 'STEAM' },
+      { platform: 'PSN' },
+    ]);
+
+    await platformService.linkPlatform(
+      'user-1',
+      'STEAM',
+      '76561198000000000',
+      'steamuser',
+      'api-key',
+    );
+
+    expect(mockUpsertUserScore).toHaveBeenCalledWith(
+      'user-1',
+      500,
+      'ES',
+      expect.arrayContaining(['STEAM', 'PSN']),
+    );
   });
 
   it('lanza USER_NOT_FOUND si el usuario no existe', async () => {
@@ -182,6 +214,7 @@ describe('platformService.linkPlatform', () => {
     // findFirst devuelve null → no hay otra cuenta con el mismo externalId en otro usuario
     (mockPrisma.platformAccount.findFirst as jest.Mock).mockResolvedValue(null);
     (mockPrisma.platformAccount.upsert as jest.Mock).mockResolvedValue(basePlatformAccount);
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([{ platform: 'STEAM' }]);
 
     const account = await platformService.linkPlatform(
       'user-1',
@@ -199,6 +232,7 @@ describe('platformService.linkPlatform', () => {
     (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(baseUser);
     (mockPrisma.platformAccount.findFirst as jest.Mock).mockResolvedValue(null);
     (mockPrisma.platformAccount.upsert as jest.Mock).mockResolvedValue(basePlatformAccount);
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([{ platform: 'STEAM' }]);
 
     const account = await platformService.linkPlatform(
       'user-1',

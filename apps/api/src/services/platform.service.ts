@@ -43,7 +43,7 @@ export async function linkPlatform(
   // Verificar que el usuario existe
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, isPremium: true },
+    select: { id: true, isPremium: true, xp: true, countryCode: true },
   });
 
   if (!user) {
@@ -103,6 +103,19 @@ export async function linkPlatform(
   // Al vincular una plataforma, resetear requiresReauth (nueva vinculación limpia el estado)
   // Programar el sync automático para esta plataforma
   await scheduleAutoSync(userId, dbAccount.id, platform, user.isPremium);
+
+  // Añadir al usuario en el sorted set de esta plataforma para que aparezca en rankings
+  // inmediatamente, incluso antes de que el primer sync complete
+  const allPlatforms = await prisma.platformAccount.findMany({
+    where: { userId },
+    select: { platform: true },
+  });
+  await upsertUserScore(
+    userId,
+    user.xp,
+    user.countryCode,
+    allPlatforms.map((p) => p.platform),
+  );
 
   return mapPlatformAccount(dbAccount);
 }
