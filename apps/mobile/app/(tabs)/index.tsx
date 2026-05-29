@@ -250,7 +250,11 @@ export default function LibraryScreen() {
       // resetQueries elimina el caché y recarga solo la primera página (no todas las cargadas),
       // lo que reduce el tiempo del spinner de N requests a 1 request. El scroll infinito
       // recargará el resto de páginas conforme el usuario haga scroll hacia abajo.
-      await queryClient.resetQueries({ queryKey: ['my-games'] });
+      // Invalidar sync-summary para refrescar anyPlatformLinked y el estado de cooldown.
+      await Promise.all([
+        queryClient.resetQueries({ queryKey: ['my-games'] }),
+        queryClient.invalidateQueries({ queryKey: ['sync-summary'] }),
+      ]);
     } finally {
       setIsManualRefreshing(false);
     }
