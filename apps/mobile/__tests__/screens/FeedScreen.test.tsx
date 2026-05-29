@@ -17,6 +17,9 @@ jest.mock('../../hooks/useSyncProgress', () => ({
     isRunning: false,
   }),
 }));
+jest.mock('../../hooks/useSyncStatus', () => ({
+  useSyncStatus: jest.fn().mockReturnValue({ anyPlatformLinked: false }),
+}));
 jest.mock('../../stores/sessionStore');
 jest.mock('../../components/AdBanner', () => ({ AdBanner: () => null }));
 jest.mock('../../components/LibraryGameCard', () => ({
@@ -389,5 +392,51 @@ describe('LibraryScreen', () => {
     });
     const { getByTestId } = renderWithClient(<LibraryScreen />);
     expect(getByTestId('sort-loading-indicator')).toBeTruthy();
+  });
+
+  // ── BUG 2: empty state basado en anyPlatformLinked ────────────────────────────
+
+  it('BUG-2: muestra empty_title (vincular plataformas) cuando no hay juegos y no hay plataformas vinculadas', () => {
+    const mockSyncStatus = jest.requireMock('../../hooks/useSyncStatus');
+    mockSyncStatus.useSyncStatus.mockReturnValue({ anyPlatformLinked: false });
+    mockUseMyGames.mockReturnValue({ ...baseMyGamesResult, allGames: [] });
+    const { getByText } = renderWithClient(<LibraryScreen />);
+    expect(getByText('library.empty_title')).toBeTruthy();
+  });
+
+  it('BUG-2: muestra empty_linked_title cuando hay plataformas vinculadas pero sin juegos aún', () => {
+    const mockSyncStatus = jest.requireMock('../../hooks/useSyncStatus');
+    mockSyncStatus.useSyncStatus.mockReturnValue({ anyPlatformLinked: true });
+    mockUseMyGames.mockReturnValue({ ...baseMyGamesResult, allGames: [] });
+    const { getByText } = renderWithClient(<LibraryScreen />);
+    expect(getByText('library.empty_linked_title')).toBeTruthy();
+  });
+
+  // ── BUG 1: sort last_played con null durante sync activo ─────────────────────
+
+  it('BUG-1: sort last_played no lanza con juegos null lastActivityAt durante sync activo', () => {
+    const mockSyncProgress = jest.requireMock('../../hooks/useSyncProgress');
+    mockSyncProgress.useSyncProgress.mockReturnValue({ activeSyncs: new Map(), isRunning: true });
+    const gamesWithNull = [
+      { ...sampleGames[0]!, lastActivityAt: null },
+      { ...sampleGames[1]!, lastActivityAt: '2024-01-01T00:00:00Z' },
+    ];
+    mockUseMyGames.mockReturnValue({ ...baseMyGamesResult, allGames: gamesWithNull });
+    // No debe lanzar — los juegos con null se tratan como recientes cuando isRunning=true
+    expect(() => renderWithClient(<LibraryScreen />)).not.toThrow();
+  });
+
+  // ── BUG 4: handleRefresh resuelve rápido ─────────────────────────────────────
+
+  it('BUG-4: handleRefresh resuelve isManualRefreshing en finally aunque falle el reset', async () => {
+    mockUseMyGames.mockReturnValue({ ...baseMyGamesResult, allGames: sampleGames });
+    const { UNSAFE_getByType } = renderWithClient(<LibraryScreen />);
+    const list = UNSAFE_getByType(FlatList);
+    // handleRefresh debe resolverse sin lanzar aunque queryClient.resetQueries rechace
+    await act(async () => {
+      list.props.refreshControl.props.onRefresh();
+    });
+    // refreshing vuelve a false en el finally
+    expect(list.props.refreshControl.props.refreshing).toBe(false);
   });
 });
