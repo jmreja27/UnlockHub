@@ -8,6 +8,7 @@ import {
 
 import * as platformService from '../services/platform.service';
 import { triggerExpressSync, queueInitialSync } from '../services/sync.service';
+import { logger } from '../lib/logger';
 import type { AuthenticatedRequest } from '../middleware/authenticate';
 import { getSystemPsnAuth, lookupPsnUser, checkPsnProfilePrivacy } from '../platforms/psn.adapter';
 import { resolveVanityUrl } from '../platforms/steam.adapter';
@@ -36,7 +37,9 @@ export async function linkSteamHandler(
       triggerExpressSync(userId, 'STEAM'),
       new Promise<void>((resolve) => setTimeout(resolve, EXPRESS_SYNC_TIMEOUT_MS)),
     ]);
-    void queueInitialSync(userId, 'STEAM');
+    queueInitialSync(userId, 'STEAM').catch((err: unknown) => {
+      logger.error({ err: (err as Error).message, userId, platform: 'STEAM' }, '[Platform] queueInitialSync fallido');
+    });
 
     res.status(201).json(account);
   } catch (err) {
@@ -79,7 +82,9 @@ export async function linkRetroAchievementsHandler(
       triggerExpressSync(userId, 'RA'),
       new Promise<void>((resolve) => setTimeout(resolve, EXPRESS_SYNC_TIMEOUT_MS)),
     ]);
-    void queueInitialSync(userId, 'RA');
+    queueInitialSync(userId, 'RA').catch((err: unknown) => {
+      logger.error({ err: (err as Error).message, userId, platform: 'RA' }, '[Platform] queueInitialSync fallido');
+    });
 
     res.status(201).json(account);
   } catch (err) {
@@ -134,7 +139,9 @@ export async function linkPsnHandler(
         triggerExpressSync(userId, 'PSN'),
         new Promise<void>((resolve) => setTimeout(resolve, EXPRESS_SYNC_TIMEOUT_MS)),
       ]);
-      void queueInitialSync(userId, 'PSN');
+      queueInitialSync(userId, 'PSN').catch((err: unknown) => {
+        logger.error({ err: (err as Error).message, userId, platform: 'PSN' }, '[Platform] queueInitialSync fallido');
+      });
     }
 
     res.status(201).json(account);
