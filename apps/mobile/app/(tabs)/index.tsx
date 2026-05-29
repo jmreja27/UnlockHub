@@ -12,6 +12,7 @@ import { useSessionStore } from '../../stores/sessionStore';
 import { usePreferencesStore } from '../../stores/preferencesStore';
 import type { LibrarySortOrder } from '../../stores/preferencesStore';
 import { useSyncProgress } from '../../hooks/useSyncProgress';
+import { useSyncStatus } from '../../hooks/useSyncStatus';
 import { LibraryGameCard } from '../../components/LibraryGameCard';
 import { NewGamesBanner } from '../../components/NewGamesBanner';
 import { SyncStatusBar } from '../../components/SyncStatusBar';
@@ -87,7 +88,7 @@ function formatUpdatedAt(timestamp: number, t: (key: string, opts?: Record<strin
   return t('library.last_updated', { min: diffMin });
 }
 
-function sortGames(games: LibraryGame[], order: LibrarySortOrder): LibraryGame[] {
+function sortGames(games: LibraryGame[], order: LibrarySortOrder, isRunning: boolean): LibraryGame[] {
   const copy = [...games];
   switch (order) {
     case 'alpha_asc':
@@ -99,16 +100,23 @@ function sortGames(games: LibraryGame[], order: LibrarySortOrder): LibraryGame[]
     case 'pct_asc':
       return copy.sort((a, b) => a.completionPct - b.completionPct);
     case 'last_played':
-    default:
-      // lastActivityAt = MAX(unlockedAt) de los logros del juego — refleja la actividad real
-      // en la plataforma original. Desempatar por completionPct desc cuando coincida (e.g.
-      // juegos sin ningún logro desbloqueado todavía, donde lastActivityAt es null).
+    default: {
+      // lastActivityAt = MAX(unlockedAt) de los logros del juego — refleja la actividad real.
+      // Durante un sync activo, los juegos recién llegados tienen lastActivityAt = null porque
+      // aún no tienen logros desbloqueados. Tratarlos como muy recientes para que aparezcan
+      // al inicio de la lista y sean visibles inmediatamente.
+      const FAR_FUTURE = Date.now() + 1_000_000_000;
       return copy.sort((a, b) => {
-        const aDate = a.lastActivityAt ? new Date(a.lastActivityAt).getTime() : 0;
-        const bDate = b.lastActivityAt ? new Date(b.lastActivityAt).getTime() : 0;
+        const aDate = a.lastActivityAt
+          ? new Date(a.lastActivityAt).getTime()
+          : isRunning ? FAR_FUTURE : 0;
+        const bDate = b.lastActivityAt
+          ? new Date(b.lastActivityAt).getTime()
+          : isRunning ? FAR_FUTURE : 0;
         const dateDiff = bDate - aDate;
         return dateDiff !== 0 ? dateDiff : b.completionPct - a.completionPct;
       });
+    }
   }
 }
 
@@ -143,6 +151,7 @@ export default function LibraryScreen() {
   const { t } = useTranslation();
   const { user } = useSessionStore();
   const queryClient = useQueryClient();
+  const { anyPlatformLinked } = useSyncStatus(user?.id);
   const { librarySortOrder, setLibrarySortOrder } = usePreferencesStore();
   const [activeFilter, setActiveFilter] = useState<PlatformFilter>('ALL');
   const [search, setSearch] = useState('');
@@ -229,7 +238,10 @@ export default function LibraryScreen() {
       pendingFetchAllAfterRefreshRef.current = true;
     }
     try {
-      await queryClient.invalidateQueries({ queryKey: ['my-games'] });
+      // resetQueries elimina el caché y recarga solo la primera página (no todas las cargadas),
+      // lo que reduce el tiempo del spinner de N requests a 1 request. El scroll infinito
+      // recargará el resto de páginas conforme el usuario haga scroll hacia abajo.
+      await queryClient.resetQueries({ queryKey: ['my-games'] });
     } finally {
       setIsManualRefreshing(false);
     }
@@ -270,8 +282,8 @@ export default function LibraryScreen() {
       ? allGames.filter((g) => g.title.toLowerCase().includes(q))
       : allGames;
     // Ordenación cliente-side — no afecta a la paginación del backend
-    return sortGames(filtered, librarySortOrder ?? 'last_played');
-  }, [allGames, search, librarySortOrder]);
+    return sortGames(filtered, librarySortOrder ?? 'last_played', isRunning);
+  }, [allGames, search, librarySortOrder, isRunning]);
 
   const updatedAtLabel = formatUpdatedAt(dataUpdatedAt, t);
 
@@ -476,6 +488,13 @@ export default function LibraryScreen() {
                 <View className="items-center justify-center py-8" accessible accessibilityLiveRegion="polite">
                   <Text className="text-gray-400 text-base text-center">{t('library.no_results')}</Text>
                 </View>
+              ) : anyPlatformLinked ? (
+                // Usuario ya tiene plataformas vinculadas pero sin juegos (sync aún no corrió)
+                <EmptyState
+                  emoji="⏳"
+                  title={t('library.empty_linked_title')}
+                  body={t('library.empty_linked_body')}
+                />
               ) : (
                 <EmptyState
                   emoji="🎮"

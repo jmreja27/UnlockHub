@@ -194,6 +194,8 @@
     "empty_title": "Sin juegos todavía",
     "empty_body": "Vincula tu cuenta de Steam, RetroAchievements o PlayStation para empezar a trackear tus logros.",
     "empty_cta": "Vincular plataforma",
+    "empty_linked_title": "Tus juegos aparecerán pronto",
+    "empty_linked_body": "Tus plataformas están vinculadas. El primer sync puede tardar unos minutos.",
     "sync_button": "Sincronizar",
     "sync_cooldown": "Espera {{min}} min",
     "syncing": "Sincronizando {{platform}}…",
@@ -394,7 +396,15 @@
     "invalid_year": "El año indicado no es válido.",
     "error_title": "No se pudo cargar el Wrapped",
     "error_message": "Comprueba tu conexión e inténtalo de nuevo.",
-    "coming_soon": "Gaming Wrapped llega en diciembre"
+    "coming_soon": "Gaming Wrapped llega en diciembre",
+    "platinums_earned": "Platinos PSN conseguidos",
+    "platinums_sub": "Trofeos de platino",
+    "completed_games_title": "Juegos completados al 100%",
+    "completed_games_a11y": "Completados al 100%: {{steam}} Steam, {{ra}} RetroAchievements, {{psn}} PlayStation",
+    "longest_streak": "Racha más larga del año",
+    "most_productive_day": "Tu día más épico",
+    "most_productive_count": "{{count}} logros en un día",
+    "most_active_platform": "Plataforma más activa"
   },
   "profile": {
     "title": "Tu perfil",
