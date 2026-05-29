@@ -126,6 +126,41 @@ export async function resolveVanityUrl(usernameOrId: string): Promise<string> {
   return steamid;
 }
 
+/**
+ * Verifica que el perfil de Steam es público antes de vincularlo.
+ * communityvisibilitystate: 1=privado, 3=público.
+ * Lanza STEAM_PROFILE_PRIVATE (400) si el perfil no es público.
+ * Lanza STEAM_SYSTEM_NOT_CONFIGURED (503) si STEAM_API_KEY no está configurada.
+ */
+export async function checkSteamProfilePublic(steamId: string): Promise<void> {
+  const apiKey = process.env['STEAM_API_KEY'] ?? '';
+  if (!apiKey) {
+    throw new AppError(
+      'Steam API key del sistema no configurada.',
+      'STEAM_SYSTEM_NOT_CONFIGURED',
+      503,
+    );
+  }
+
+  const url = `${STEAM_API_BASE}/ISteamUser/GetPlayerSummaries/v2/`;
+  const response = await axios.get<{
+    response: { players: Array<{ steamid: string; communityvisibilitystate: number }> };
+  }>(url, {
+    params: { key: apiKey, steamids: steamId },
+    timeout: 10_000,
+  });
+
+  const player = response.data.response.players[0];
+  if (!player || player.communityvisibilitystate !== 3) {
+    throw new AppError(
+      'El perfil de Steam es privado. Hazlo público en la configuración de Steam para vincularlo.',
+      'STEAM_PROFILE_PRIVATE',
+      400,
+      { steamId },
+    );
+  }
+}
+
 // ─── Steam Adapter ────────────────────────────────────────────────────────────
 
 export class SteamAdapter implements PlatformAdapter {
@@ -471,11 +506,12 @@ export class SteamAdapter implements PlatformAdapter {
 
   /**
    * Obtiene el schema del juego (metadatos de logros) desde la Steam Web API.
-   * Caché: steam:schema:{appId}, TTL 24 horas.
+   * Solicita los nombres en español — Steam hace fallback a inglés automáticamente si no hay traducción.
+   * Caché: steam:schema:{appId}:es, TTL 24 horas.
    */
   private async fetchGameSchema(apiKey: string, appId: string): Promise<SteamSchemaAchievement[]> {
     return cachedFetch<SteamSchemaAchievement[]>(
-      `steam:schema:${appId}`,
+      `steam:schema:${appId}:es`,
       TTL_SCHEMA,
       async () => {
         const url = `${STEAM_API_BASE}/ISteamUserStats/GetSchemaForGame/v2/`;
@@ -490,6 +526,7 @@ export class SteamAdapter implements PlatformAdapter {
             params: {
               key: apiKey,
               appid: appId,
+              l: 'spanish',
               format: 'json',
             },
           });

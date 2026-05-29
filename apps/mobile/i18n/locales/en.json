@@ -589,6 +589,7 @@
       "error_not_found": "No Steam account found with that username. Please check that it is correct.",
       "error_already_linked": "This Steam account is already linked to another UnlockHub user.",
       "error_service_unavailable": "The Steam service is currently unavailable. Please try again later.",
+      "error_profile_private": "Your Steam profile is private. Make it public in Steam settings to link it.",
       "privacy_note": "We only need your public Steam username. No personal API key is stored.",
       "unlink": "Unlink Steam",
       "unlink_confirm": "Are you sure you want to unlink your Steam account? Sync data will be removed.",

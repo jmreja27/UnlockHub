@@ -11,7 +11,7 @@ import { triggerExpressSync, queueInitialSync } from '../services/sync.service';
 import { logger } from '../lib/logger';
 import type { AuthenticatedRequest } from '../middleware/authenticate';
 import { getSystemPsnAuth, lookupPsnUser, checkPsnProfilePrivacy } from '../platforms/psn.adapter';
-import { resolveVanityUrl } from '../platforms/steam.adapter';
+import { resolveVanityUrl, checkSteamProfilePublic } from '../platforms/steam.adapter';
 import { lookupRaUser } from '../platforms/retroachievements.adapter';
 import { exchangeXboxCodeForTokens } from '../platforms/xbox.adapter';
 
@@ -29,6 +29,9 @@ export async function linkSteamHandler(
 
     // Resuelve vanityURL → SteamID64 (o usa SteamID64 directo si son 17 dígitos)
     const steamId = await resolveVanityUrl(username);
+
+    // Verificar que el perfil es público — perfil privado = STEAM_PROFILE_PRIVATE 400
+    await checkSteamProfilePublic(steamId);
 
     // Steam no requiere token de usuario — el sistema usa STEAM_API_KEY
     const account = await platformService.linkPlatform(userId, 'STEAM', steamId, username, '');

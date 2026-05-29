@@ -589,6 +589,7 @@
       "error_not_found": "No se encontró ninguna cuenta de Steam con ese nombre de usuario. Comprueba que es correcto.",
       "error_already_linked": "Esta cuenta de Steam ya está vinculada a otro usuario de UnlockHub.",
       "error_service_unavailable": "El servicio de Steam no está disponible en este momento. Inténtalo de nuevo más tarde.",
+      "error_profile_private": "Tu perfil de Steam es privado. Hazlo público en la configuración de Steam para vincularlo.",
       "privacy_note": "Solo necesitamos tu username público de Steam. No se almacena ninguna API key personal.",
       "unlink": "Desvincular Steam",
       "unlink_confirm": "¿Seguro que quieres desvincular tu cuenta de Steam? Se eliminarán los datos de sincronización.",

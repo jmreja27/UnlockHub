@@ -64,6 +64,10 @@ export default function LinkSteamScreen() {
           setFieldError(t('link_platform.steam.error_not_found'));
           return;
         }
+        if (err.statusCode === 400 && err.apiError.code === 'STEAM_PROFILE_PRIVATE') {
+          setFieldError(t('link_platform.steam.error_profile_private'));
+          return;
+        }
         if (err.statusCode === 409) {
           setFieldError(t('link_platform.steam.error_already_linked'));
           return;
