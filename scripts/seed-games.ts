@@ -78,6 +78,13 @@ interface RaGameExtended {
   Achievements?: Record<string, RaAchievement>;
 }
 
+interface SteamOwnedGameEntry {
+  appid: number;
+  name: string;
+  img_icon_url?: string;
+  has_community_visible_stats?: boolean;
+}
+
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
 const STEAM_API_BASE = 'https://api.steampowered.com';
@@ -272,6 +279,181 @@ async function seedSteam(prisma: PrismaClient): Promise<SeedResult> {
   }
 
   console.log(`  Steam: ${processed}/${appIds.size} procesados, ${result.gamesCreated} juegos insertados, ${result.achievementsCreated} logros`);
+  return result;
+}
+
+// ─── STEAM USUARIOS ───────────────────────────────────────────────────────────
+
+async function seedSteamUsers(prisma: PrismaClient, usernamesOverride?: string[]): Promise<SeedResult> {
+  const apiKey = process.env['STEAM_API_KEY'];
+  if (!apiKey) {
+    console.error('  ✗ STEAM_API_KEY no configurada. Configura la variable de entorno antes de ejecutar --only-steam.');
+    process.exit(1);
+  }
+  const key: string = apiKey;
+
+  const usernamesToProcess = usernamesOverride ?? [];
+  if (usernamesToProcess.length === 0) {
+    console.log('  ⚠️  --only-steam requiere --usernames="username1,username2"');
+    return { gamesProcessed: 0, gamesCreated: 0, achievementsCreated: 0, errors: 0 };
+  }
+
+  console.log('\n🎮 Steam usuarios: procesando perfiles de usuario...');
+  console.log(`  Usuarios a procesar: ${usernamesToProcess.join(', ')}`);
+
+  const STEAMID64_REGEX = /^\d{17}$/;
+
+  async function resolveSteamId(usernameOrId: string): Promise<string> {
+    if (STEAMID64_REGEX.test(usernameOrId)) return usernameOrId;
+    const resp = await axios.get<{ response: { success: number; steamid?: string } }>(
+      `${STEAM_API_BASE}/ISteamUser/ResolveVanityURL/v1/`,
+      { params: { key, vanityurl: usernameOrId }, timeout: 10_000 },
+    );
+    const { success, steamid } = resp.data.response;
+    if (success !== 1 || !steamid) {
+      throw new Error(`No se encontró ninguna cuenta de Steam con el username "${usernameOrId}"`);
+    }
+    return steamid;
+  }
+
+  const result: SeedResult = { gamesProcessed: 0, gamesCreated: 0, achievementsCreated: 0, errors: 0 };
+
+  for (const username of usernamesToProcess) {
+    console.log(`  → Procesando perfil Steam: ${username}`);
+
+    let steamId: string;
+    try {
+      steamId = await resolveSteamId(username);
+      console.log(`     SteamID64: ${steamId}`);
+    } catch (err) {
+      console.error(`  ✗ No se pudo resolver "${username}": ${(err as Error).message}`);
+      result.errors++;
+      continue;
+    }
+
+    let eligibleGames: SteamOwnedGameEntry[] = [];
+    try {
+      const resp = await axios.get<{ response: { games?: SteamOwnedGameEntry[] } }>(
+        `${STEAM_API_BASE}/IPlayerService/GetOwnedGames/v0001/`,
+        {
+          params: {
+            key,
+            steamid: steamId,
+            include_appinfo: true,
+            include_played_free_games: true,
+            format: 'json',
+          },
+          timeout: 20_000,
+        },
+      );
+      const allGames = resp.data.response.games ?? [];
+      eligibleGames = allGames.filter((g) => g.has_community_visible_stats);
+      console.log(`     ${allGames.length} juegos en biblioteca, ${eligibleGames.length} con logros`);
+    } catch (err) {
+      console.error(`  ✗ No se pudieron obtener juegos de ${username}: ${(err as Error).message}`);
+      result.errors++;
+      continue;
+    }
+
+    let gameIdx = 0;
+    for (const game of eligibleGames) {
+      gameIdx++;
+      const appId = String(game.appid);
+
+      if (gameIdx % 25 === 0) {
+        console.log(`     ${username}: ${gameIdx}/${eligibleGames.length} juegos revisados, ${result.gamesProcessed} procesados, ${result.achievementsCreated} logros`);
+      }
+
+      try {
+        const schemaResp = await axios.get<{
+          game?: { availableGameStats?: { achievements?: SteamSchemaAchievement[] } };
+        }>(
+          `${STEAM_API_BASE}/ISteamUserStats/GetSchemaForGame/v2/`,
+          { params: { key, appid: appId, l: 'spanish', format: 'json' }, timeout: 10_000 },
+        );
+        await delay(STEAM_DELAY_MS);
+
+        const achievements = schemaResp.data.game?.availableGameStats?.achievements;
+        if (!achievements || achievements.length === 0) continue;
+
+        let rarityMap = new Map<string, number>();
+        try {
+          const rarityResp = await axios.get<{
+            achievementpercentages?: { achievements?: SteamGlobalAchievementPercentage[] };
+          }>(
+            `${STEAM_API_BASE}/ISteamUserStats/GetGlobalAchievementPercentagesForApp/v0002/`,
+            { params: { gameid: appId, format: 'json' }, timeout: 10_000 },
+          );
+          await delay(STEAM_DELAY_MS);
+          const raw = rarityResp.data.achievementpercentages?.achievements ?? [];
+          rarityMap = new Map(raw.map((r) => [r.name, parseFloat(String(r.percent))]));
+        } catch {
+          // Sin rareza — puntos calculados con rareza 100 por defecto
+        }
+
+        const dbGame = await prisma.game.upsert({
+          where: { platform_externalId: { platform: 'STEAM', externalId: appId } },
+          create: {
+            platform: 'STEAM',
+            externalId: appId,
+            title: game.name,
+            iconUrl: game.img_icon_url
+              ? `${STEAM_STORE_CDN}/${appId}/${game.img_icon_url}.jpg`
+              : null,
+            headerUrl: `${STEAM_HEADER_CDN}/${appId}/header.jpg`,
+            totalAchievements: achievements.length,
+          },
+          update: {
+            title: game.name,
+            totalAchievements: achievements.length,
+          },
+        });
+
+        result.gamesCreated++;
+
+        for (const ach of achievements) {
+          const rarityPercent = parseFloat(String(rarityMap.get(ach.name) ?? 100));
+          const normalized = normalizeSteamPoints(rarityPercent);
+
+          await prisma.achievement.upsert({
+            where: { platform_gameId_externalId: { platform: 'STEAM', gameId: dbGame.id, externalId: ach.name } },
+            create: {
+              gameId: dbGame.id,
+              platform: 'STEAM',
+              externalId: ach.name,
+              title: ach.displayName ?? ach.name,
+              description: ach.description ?? null,
+              iconUrl: ach.icon ? `${STEAM_STORE_CDN}/${appId}/${ach.icon}.jpg` : null,
+              rawValue: rarityPercent,
+              normalizedPoints: normalized,
+              rarity: rarityPercent,
+              externalUrl: `https://store.steampowered.com/app/${appId}`,
+            },
+            update: {
+              title: ach.displayName ?? ach.name,
+              description: ach.description ?? null,
+              rawValue: rarityPercent,
+              normalizedPoints: normalized,
+              rarity: rarityPercent,
+            },
+          });
+          result.achievementsCreated++;
+        }
+
+        result.gamesProcessed++;
+      } catch (err) {
+        result.errors++;
+        const status = axios.isAxiosError(err) ? err.response?.status : undefined;
+        if (status !== 403 && status !== 400) {
+          const e = err as Error & { code?: string };
+          console.error(`  ✗ Steam appid ${appId} | status=${status ?? 'n/a'} | msg=${e.message}`);
+        }
+      }
+    }
+
+    console.log(`     ${username}: seed completado — ${result.gamesProcessed} juegos, ${result.achievementsCreated} logros`);
+  }
+
   return result;
 }
 
@@ -605,6 +787,7 @@ async function main(): Promise<void> {
   // Parsear flags CLI
   const args = process.argv.slice(2);
   const onlyPsn = args.includes('--only-psn');
+  const onlySteam = args.includes('--only-steam');
   const usernamesArg = args.find((a) => a.startsWith('--usernames='));
   const usernamesOverride = usernamesArg
     ? usernamesArg.replace('--usernames=', '').split(',').map((u) => u.trim()).filter(Boolean)
@@ -613,6 +796,7 @@ async function main(): Promise<void> {
   console.log('════════════════════════════════════════════════════════');
   console.log('   UnlockHub — Seed de juegos y logros populares');
   if (onlyPsn) console.log('   Modo: --only-psn');
+  if (onlySteam) console.log('   Modo: --only-steam');
   if (usernamesOverride) console.log(`   Usuarios: ${usernamesOverride.join(', ')}`);
   console.log('════════════════════════════════════════════════════════\n');
 
@@ -633,23 +817,36 @@ async function main(): Promise<void> {
     console.log('✓ Conectado a la base de datos\n');
 
     const noopResult: SeedResult = { gamesProcessed: 0, gamesCreated: 0, achievementsCreated: 0, errors: 0 };
-    const steamResult = onlyPsn ? noopResult : await seedSteam(prisma);
-    const raResult = onlyPsn ? noopResult : await seedRetroAchievements(prisma);
-    const psnResult = await seedPSN(prisma, usernamesOverride);
+    const skipCatalog = onlyPsn || onlySteam;
+
+    const steamResult = skipCatalog ? noopResult : await seedSteam(prisma);
+    const raResult = skipCatalog ? noopResult : await seedRetroAchievements(prisma);
+    const psnResult = onlySteam ? noopResult : await seedPSN(prisma, usernamesOverride);
+    const steamUsersResult = onlySteam ? await seedSteamUsers(prisma, usernamesOverride) : noopResult;
 
     const totalGames =
-      steamResult.gamesCreated + raResult.gamesCreated + psnResult.gamesCreated;
+      steamResult.gamesCreated + steamUsersResult.gamesCreated +
+      raResult.gamesCreated + psnResult.gamesCreated;
     const totalAchievements =
-      steamResult.achievementsCreated + raResult.achievementsCreated + psnResult.achievementsCreated;
+      steamResult.achievementsCreated + steamUsersResult.achievementsCreated +
+      raResult.achievementsCreated + psnResult.achievementsCreated;
     const totalErrors =
-      steamResult.errors + raResult.errors + psnResult.errors;
+      steamResult.errors + steamUsersResult.errors + raResult.errors + psnResult.errors;
 
     console.log('\n════════════════════════════════════════════════════════');
     console.log('   SEED COMPLETADO');
     console.log('────────────────────────────────────────────────────────');
-    console.log(`   Steam:              ${steamResult.gamesCreated.toString().padStart(4)} juegos, ${steamResult.achievementsCreated.toString().padStart(6)} logros`);
-    console.log(`   RetroAchievements:  ${raResult.gamesCreated.toString().padStart(4)} juegos, ${raResult.achievementsCreated.toString().padStart(6)} logros`);
-    console.log(`   PSN:                ${psnResult.gamesCreated.toString().padStart(4)} juegos, ${psnResult.achievementsCreated.toString().padStart(6)} logros`);
+    if (!skipCatalog) {
+      console.log(`   Steam (catálogo):   ${steamResult.gamesCreated.toString().padStart(4)} juegos, ${steamResult.achievementsCreated.toString().padStart(6)} logros`);
+      console.log(`   RetroAchievements:  ${raResult.gamesCreated.toString().padStart(4)} juegos, ${raResult.achievementsCreated.toString().padStart(6)} logros`);
+      console.log(`   PSN:                ${psnResult.gamesCreated.toString().padStart(4)} juegos, ${psnResult.achievementsCreated.toString().padStart(6)} logros`);
+    }
+    if (onlySteam) {
+      console.log(`   Steam (usuarios):   ${steamUsersResult.gamesCreated.toString().padStart(4)} juegos, ${steamUsersResult.achievementsCreated.toString().padStart(6)} logros`);
+    }
+    if (onlyPsn) {
+      console.log(`   PSN:                ${psnResult.gamesCreated.toString().padStart(4)} juegos, ${psnResult.achievementsCreated.toString().padStart(6)} logros`);
+    }
     console.log('────────────────────────────────────────────────────────');
     console.log(`   TOTAL:              ${totalGames.toString().padStart(4)} juegos, ${totalAchievements.toString().padStart(6)} logros`);
     if (totalErrors > 0) console.log(`   Errores omitidos:   ${totalErrors}`);
