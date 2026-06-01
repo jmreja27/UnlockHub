@@ -1,0 +1,21 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_login.yaml
+
+- tapOn:
+    index: 0
+    text: "achievements"
+- waitForAnimationToEnd
+
+# Scroll para encontrar un logro con guías
+- scroll
+- waitForAnimationToEnd
+
+- tapOn: "See guides"
+- waitForAnimationToEnd
+- assertNotVisible: "Something went wrong"
+
+- assertVisible: "Write a guide"
+
+- tapOn: "← Back"
+- waitForAnimationToEnd

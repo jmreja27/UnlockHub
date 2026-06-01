@@ -1,0 +1,12 @@
+appId: com.unlockhub.app
+---
+# Con plataformas ya vinculadas, verifica el empty state correcto cuando hay juegos.
+# Si la biblioteca ya tiene juegos, no verá "Link a platform" sino la lista.
+- runFlow: _setup_login.yaml
+
+- tapOn: "Home"
+- waitForAnimationToEnd
+
+# Con plataformas vinculadas y con datos: NO debe mostrar "Link a platform"
+- assertNotVisible: "Link a platform"
+- assertVisible: "Library"

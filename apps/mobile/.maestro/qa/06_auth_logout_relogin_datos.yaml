@@ -1,0 +1,29 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_login.yaml
+
+- tapOn: "Profile"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element:
+      text: "Log out"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Log out"
+- waitForAnimationToEnd
+- tapOn: "Log out"
+- waitForAnimationToEnd
+
+# Verificar que estamos en login screen
+- assertVisible: "Your achievements hub"
+
+# Re-login con patrón correcto (cerrar teclado entre email y password)
+- tapOn: "you@email.com"
+- inputText: "test99@example.com"
+- tapOn: "Your achievements hub"
+- tapOn: "Password"
+- inputText: "Test1234!"
+- tapOn: "Log in"
+- waitForAnimationToEnd
+
+- assertVisible: "Library"

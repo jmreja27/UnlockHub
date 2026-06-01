@@ -1,0 +1,21 @@
+appId: com.unlockhub.app
+---
+# Precondición: Steam vinculada en TestUser99. Si no está vinculada, el flow
+# no encontrará "Unlink Steam" y fallará — se documenta en el reporte.
+- runFlow: _setup_login.yaml
+
+- tapOn: "Profile"
+- waitForAnimationToEnd
+
+- assertVisible: "Linked platforms"
+
+- tapOn: "Unlink Steam"
+- waitForAnimationToEnd
+
+- assertVisible: "Are you sure you want to unlink your Steam account?"
+- tapOn: "Unlink Steam"
+- waitForAnimationToEnd
+
+# Tras desvincular, Steam ya no debería aparecer en "Linked platforms"
+- assertNotVisible: "Linked as Seithek"
+- assertNotVisible: "Something went wrong"

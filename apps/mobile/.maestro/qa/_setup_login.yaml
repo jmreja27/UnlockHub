@@ -1,0 +1,57 @@
+appId: com.unlockhub.app
+---
+# Objetivo: acabar en Home tab autenticado
+- launchApp
+- waitForAnimationToEnd
+
+# Descartar UMP/GDPR si aparece
+- runFlow:
+    when:
+      visible: "Publisher Test Ads"
+    commands:
+      - tapOn: "Consent"
+      - waitForAnimationToEnd
+
+# Si ya estamos en login screen (tiene subtitle "Your achievements hub") → hacer login
+- runFlow:
+    when:
+      visible: "Your achievements hub"
+    commands:
+      - tapOn: "you@email.com"
+      - inputText: "test99@example.com"
+      - tapOn: "Your achievements hub"
+      - tapOn: "Password"
+      - inputText: "Test1234!"
+      - tapOn: "Log in"
+      - waitForAnimationToEnd
+
+# Si NOT en login screen → ir a Profile para detectar estado de auth
+- runFlow:
+    when:
+      notVisible: "Your achievements hub"
+    commands:
+      - tapOn: "Profile"
+      - waitForAnimationToEnd
+
+      # Si NO LOGUEADO en Profile (botón "Log in" visible) → ir al login screen y loguear
+      - runFlow:
+          when:
+            visible: "Log in"
+          commands:
+            - runFlow:
+                when:
+                  notVisible: "Your achievements hub"
+                commands:
+                  - tapOn: "Log in"
+                  - waitForAnimationToEnd
+                  - tapOn: "you@email.com"
+                  - inputText: "test99@example.com"
+                  - tapOn: "Your achievements hub"
+                  - tapOn: "Password"
+                  - inputText: "Test1234!"
+                  - tapOn: "Log in"
+                  - waitForAnimationToEnd
+
+# Siempre terminar en Home tab
+- tapOn: "Home"
+- waitForAnimationToEnd

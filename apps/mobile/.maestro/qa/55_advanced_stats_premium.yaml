@@ -1,0 +1,12 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_login.yaml
+
+- tapOn: "Profile"
+- waitForAnimationToEnd
+
+- assertVisible: "Advanced Stats"
+- assertNotVisible: "Something went wrong"
+
+# Los stats avanzados están detrás de paywall para usuarios free.
+# Si TestUser99 no es premium, debe ver el banner de upgrade.

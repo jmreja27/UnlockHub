@@ -1,0 +1,27 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_login.yaml
+
+- tapOn: "Profile"
+- waitForAnimationToEnd
+
+# Log out está al final del scroll — necesita scroll para encontrarlo
+- scrollUntilVisible:
+    element:
+      text: "Log out"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Log out"
+- waitForAnimationToEnd
+
+- assertVisible: "Are you sure you want to log out?"
+- tapOn: "Log out"
+- waitForAnimationToEnd
+
+- assertVisible: "Log in"
+- pressKey: Back
+- waitForAnimationToEnd
+
+# El back button NO debe navegar de vuelta a los tabs (guard Redirect)
+- assertVisible: "Log in"
+- assertNotVisible: "Library"

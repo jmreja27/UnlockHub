@@ -1,0 +1,19 @@
+appId: com.unlockhub.app
+---
+# Precondición: Steam desvinculada (ejecutar flow 40 antes).
+# Re-vincula Seithek después de haber desvinculado.
+- runFlow: _setup_login.yaml
+
+- tapOn: "Profile"
+- waitForAnimationToEnd
+
+- tapOn: "Link Steam"
+- waitForAnimationToEnd
+
+- tapOn: "Steam username"
+- inputText: "Seithek"
+- tapOn: "Link Steam"
+- waitForAnimationToEnd
+
+- assertNotVisible: "Something went wrong"
+- assertNotVisible: "No Steam account found"

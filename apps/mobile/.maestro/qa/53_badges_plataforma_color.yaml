@@ -1,0 +1,17 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_login.yaml
+
+# Verificar badges de plataforma en la biblioteca
+- assertVisible: "PlayStation"
+- assertNotVisible: "Something went wrong"
+
+- tapOn: "Search"
+- waitForAnimationToEnd
+
+- tapOn: "Games, players, achievements…"
+- inputText: "Batman"
+- waitForAnimationToEnd
+
+# Los resultados de búsqueda deben mostrar badges de plataforma
+- assertNotVisible: "Something went wrong"

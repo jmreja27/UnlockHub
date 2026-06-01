@@ -1,0 +1,30 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_login.yaml
+
+- tapOn: "Search"
+- waitForAnimationToEnd
+
+- tapOn: "Achievements"
+- waitForAnimationToEnd
+- assertVisible: "Achievements"
+
+- tapOn: "Games, players, achievements…"
+- inputText: "Win"
+- waitForAnimationToEnd
+- assertNotVisible: "Something went wrong"
+
+- tapOn: "Steam"
+- waitForAnimationToEnd
+- assertNotVisible: "Something went wrong"
+
+- tapOn: "RetroAchievements"
+- waitForAnimationToEnd
+- assertNotVisible: "Something went wrong"
+
+- tapOn: "PlayStation"
+- waitForAnimationToEnd
+- assertNotVisible: "Something went wrong"
+
+- tapOn: "All"
+- waitForAnimationToEnd

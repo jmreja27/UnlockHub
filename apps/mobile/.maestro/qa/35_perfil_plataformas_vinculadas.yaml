@@ -1,0 +1,12 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_login.yaml
+
+- tapOn: "Profile"
+- waitForAnimationToEnd
+
+- assertVisible: "Linked platforms"
+- assertNotVisible: "Something went wrong"
+
+# Las plataformas vinculadas muestran "Linked as username"
+- assertVisible: "Linked as"

@@ -1,0 +1,24 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_logout.yaml
+
+# Confirmar que estamos en login screen
+- assertVisible: "Your achievements hub"
+
+# Email field — usar placeholder "you@email.com" para focalizarlo
+- tapOn: "you@email.com"
+- inputText: "test99@example.com"
+
+# Cerrar teclado tapeando el subtitle (evita que el teclado desplace los elementos)
+- tapOn: "Your achievements hub"
+
+# Password field — accesible por content-desc="Password" ahora que el teclado está cerrado
+- tapOn: "Password"
+- inputText: "Test1234!"
+
+# Submit
+- tapOn: "Log in"
+- waitForAnimationToEnd
+
+# Confirmar login exitoso — assertVisible con el tab "Home" que es el primer tab
+- assertVisible: "Library"

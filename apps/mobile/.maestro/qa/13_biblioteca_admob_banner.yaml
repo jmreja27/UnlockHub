@@ -1,0 +1,9 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_login.yaml
+
+# El banner AdMob aparece debajo del header. Con IDs de prueba muestra el placeholder.
+# No podemos assertVisible de texto específico de AdMob, pero sí verificar que no crashea.
+- assertVisible: "Library"
+- assertNotVisible: "Something went wrong"
+- assertNotVisible: "error_boundary_title"

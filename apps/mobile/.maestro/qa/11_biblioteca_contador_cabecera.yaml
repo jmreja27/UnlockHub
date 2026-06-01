@@ -1,0 +1,6 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_login.yaml
+
+- assertVisible: "achievements"
+- assertVisible: "completed"

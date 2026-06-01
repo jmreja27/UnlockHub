@@ -1,0 +1,37 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_login.yaml
+
+# Abrir modal de ordenación (el botón muestra el sort actual + ▼)
+- tapOn: "▼"
+- waitForAnimationToEnd
+- assertVisible: "Sort by"
+
+- tapOn: "A → Z"
+- waitForAnimationToEnd
+- assertNotVisible: "Something went wrong"
+
+- tapOn: "▼"
+- waitForAnimationToEnd
+- tapOn: "Highest % first"
+- waitForAnimationToEnd
+- assertNotVisible: "Something went wrong"
+
+- tapOn: "▼"
+- waitForAnimationToEnd
+- tapOn: "Lowest % first"
+- waitForAnimationToEnd
+- assertNotVisible: "Something went wrong"
+
+- tapOn: "▼"
+- waitForAnimationToEnd
+- tapOn: "Z → A"
+- waitForAnimationToEnd
+- assertNotVisible: "Something went wrong"
+
+- tapOn: "▼"
+- waitForAnimationToEnd
+- tapOn: "Last played"
+- waitForAnimationToEnd
+- assertNotVisible: "Something went wrong"
+- assertVisible: "Library"

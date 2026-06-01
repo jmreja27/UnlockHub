@@ -1,0 +1,51 @@
+appId: com.unlockhub.app
+---
+# Objetivo: acabar en pantalla de LOGIN (formulario visible con "Your achievements hub")
+- launchApp
+- waitForAnimationToEnd
+
+# Descartar UMP/GDPR si aparece
+- runFlow:
+    when:
+      visible: "Publisher Test Ads"
+    commands:
+      - tapOn: "Consent"
+      - waitForAnimationToEnd
+
+# Navegar a Profile si no estamos ya en login screen
+- runFlow:
+    when:
+      notVisible: "Your achievements hub"
+    commands:
+      - tapOn: "Profile"
+      - waitForAnimationToEnd
+
+# Si logueado: scroll para encontrar Log out y hacer logout (optional si no logueado)
+- scrollUntilVisible:
+    element:
+      text: "Log out"
+    direction: DOWN
+    timeout: 4000
+    optional: true
+
+- tapOn:
+    text: "Log out"
+    optional: true
+
+- waitForAnimationToEnd
+
+# Confirmar diálogo de logout (solo aparece si lo anterior tuvo éxito)
+- tapOn:
+    text: "Log out"
+    optional: true
+
+- waitForAnimationToEnd
+
+# Si NO logueado (o ya terminamos logout): "Log in" button visible en Profile
+# pero NO si ya estamos en login screen ("Your achievements hub" visible)
+- runFlow:
+    when:
+      notVisible: "Your achievements hub"
+    commands:
+      - tapOn: "Log in"
+      - waitForAnimationToEnd

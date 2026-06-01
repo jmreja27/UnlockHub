@@ -1,0 +1,18 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_login.yaml
+
+- tapOn: "Profile"
+- waitForAnimationToEnd
+
+- tapOn: "Link Steam"
+- waitForAnimationToEnd
+
+- assertVisible: "Link Steam"
+
+- tapOn: "Steam username"
+- inputText: "xyzsteamusernoexiste99abc"
+- tapOn: "Link Steam"
+- waitForAnimationToEnd
+
+- assertVisible: "No Steam account found"

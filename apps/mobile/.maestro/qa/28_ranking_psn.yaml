@@ -1,0 +1,11 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_login.yaml
+
+- tapOn: "Rankings"
+- waitForAnimationToEnd
+
+- tapOn: "PlayStation"
+- waitForAnimationToEnd
+- assertNotVisible: "Something went wrong"
+- assertNotVisible: "Server error"

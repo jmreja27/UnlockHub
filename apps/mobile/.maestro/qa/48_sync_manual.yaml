@@ -1,0 +1,14 @@
+appId: com.unlockhub.app
+---
+# Precondición: plataforma vinculada. El cooldown puede estar activo (se documenta).
+- runFlow: _setup_login.yaml
+
+- assertVisible: "Library"
+
+# Tap en el botón de sync dentro de SyncStatusBar
+- tapOn: "Sync now"
+- waitForAnimationToEnd
+
+# Si hay cooldown activo: aparece mensaje de cooldown. Si no: empieza sync.
+# Ambas respuestas son válidas.
+- assertNotVisible: "Something went wrong"

@@ -1,0 +1,16 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_login.yaml
+
+- tapOn: "Profile"
+- waitForAnimationToEnd
+
+# Abrir pantalla premium desde el banner o botón de upgrade
+- tapOn: "Upgrade to Premium"
+- waitForAnimationToEnd
+
+- assertVisible: "UnlockHub Premium"
+- assertNotVisible: "Something went wrong"
+
+- pressKey: Back
+- waitForAnimationToEnd

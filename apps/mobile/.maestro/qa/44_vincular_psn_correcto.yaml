@@ -1,0 +1,19 @@
+appId: com.unlockhub.app
+---
+# Si PSN ya está vinculado → error already_linked. Si no → success o private profile.
+- runFlow: _setup_login.yaml
+
+- tapOn: "Profile"
+- waitForAnimationToEnd
+
+- tapOn: "Link PlayStation"
+- waitForAnimationToEnd
+
+- assertVisible: "Link PlayStation Network"
+
+- tapOn: "Your PSN username"
+- inputText: "Sorrow_Lord"
+- tapOn: "Link PlayStation"
+- waitForAnimationToEnd
+
+- assertNotVisible: "Something went wrong"

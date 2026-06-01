@@ -1,0 +1,19 @@
+appId: com.unlockhub.app
+---
+# Si RA ya está vinculado → error already_linked. Si no → success.
+- runFlow: _setup_login.yaml
+
+- tapOn: "Profile"
+- waitForAnimationToEnd
+
+- tapOn: "Link RetroAchievements"
+- waitForAnimationToEnd
+
+- assertVisible: "Link RetroAchievements"
+
+- tapOn: "RetroAchievements username"
+- inputText: "Sovelyss"
+- tapOn: "Link RetroAchievements"
+- waitForAnimationToEnd
+
+- assertNotVisible: "Something went wrong"
