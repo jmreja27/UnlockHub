@@ -14,20 +14,20 @@ Esta sección lista todo lo que **el desarrollador debe hacer manualmente** ante
 |---|---|---|---|---|
 | ~~B3~~ | ✅ **Resend — cuenta + dominio verificado** | resend.com | Gratis hasta 3k emails/mes | ✅ Completado |
 | ~~B4~~ | ✅ **`RESEND_API_KEY` y `RESEND_FROM_EMAIL` configuradas** | resend.com → API Keys → Railway Variables | Gratis | ✅ Completado |
-| B5 | Verificar que **Railway PostgreSQL** tiene backups activados | Railway dashboard → servicio PostgreSQL → Settings → Backups | Según plan | Recuperación ante pérdida de datos |
-| B6 | Verificar persistencia de **Railway Redis** | Railway dashboard → servicio Redis → Settings | Según plan | Evitar pérdida de rankings en reinicios |
-| B7 | Crear cuenta de **Google Play Developer** | play.google.com/console | $25 pago único | Publicar en Play Store |
+| ~~B5~~ | ✅ **Backups Railway PostgreSQL verificados** | Railway dashboard → servicio PostgreSQL → Settings → Backups | Según plan | ✅ Completado |
+| ~~B6~~ | ✅ **Persistencia Railway Redis verificada** | Railway dashboard → servicio Redis → Settings | Según plan | ✅ Completado |
+| ~~B7~~ | ✅ **Cuenta Google Play Developer creada** | play.google.com/console | $25 pago único | ✅ Completado |
 | B8 | Crear cuenta de **AdMob** y vincularla a la app | admob.google.com | Gratis | Anuncios para usuarios free |
 | ~~B9~~ | ✅ **Ad unit IDs configurados como EAS secrets** | `EXPO_PUBLIC_ADMOB_HOME_BANNER_ID`, `SEARCH_BANNER_ID`, `INTERSTITIAL_ID`, `REWARDED_ID` — todos configurados | Gratis | ✅ Completado — IDs de producción inyectados en builds EAS. |
 | ~~B10~~ | ✅ **UMP SDK integrado** | `hooks/useGdprConsent.ts` + `_layout.tsx` — UMP SDK activo, muestra formulario si `status === REQUIRED` | Gratis | ✅ Código integrado. UMP message ya publicado en AdMob dashboard. |
 | ~~B13~~ | ✅ **`APP_SCHEME=unlockhub` configurado en Railway** | Railway dashboard → service → Variables | Gratis | ✅ Completado |
-| B14 | Crear email de soporte `soporte@unlockhub.app` | Proveedor de dominio/email | ~1-5€/mes | Requerido por Google Play |
+| ~~B14~~ | ✅ **Email de soporte `soporte@unlockhub.app` creado** | Dominio Cloudflare | ~1-5€/mes | ✅ Completado |
 | ~~B15~~ | ✅ **Privacy Policy publicada** | `docs/privacy-policy.html` → https://jmreja27.github.io/UnlockHub/privacy-policy.html | Gratis | ✅ Completado — GitHub Pages activo (repo público, branch `develop`, carpeta `/docs`). Datos del desarrollador rellenados. |
 | ~~B16~~ | ✅ **Términos y Condiciones publicados** | `docs/terms-of-service.html` → https://jmreja27.github.io/UnlockHub/terms-of-service.html | Gratis | ✅ Completado — igual que B15. |
 | B17 | ✅ **Migración Prisma en producción** | Automática en cada deploy — `npx prisma migrate deploy` configurado en `startCommand` de `railway.json` | Gratis | Aplicar todos los modelos nuevos en prod |
-| B18 | Crear cuenta **RevenueCat** + configurar productos + webhook | app.revenuecat.com → crear app Android → crear productos `unlockhub_premium_monthly` + `unlockhub_premium_annual` → Integrations → Webhooks → apuntar a `POST /api/v1/webhooks/revenuecat` | Gratis hasta 2.500 MAU | Billing real en producción |
-| B19 | Configurar `EXPO_PUBLIC_REVENUECAT_API_KEY` como EAS secret | expo.dev → proyecto → Secrets → añadir `EXPO_PUBLIC_REVENUECAT_API_KEY` (Public SDK Key de RevenueCat) | Gratis | Sin esta key, `usePremiumPlans` devuelve precios hardcoded y no puede procesar compras reales |
-| B20 | Configurar `REVENUECAT_WEBHOOK_SECRET` en Railway | Railway dashboard → service → Variables → añadir `REVENUECAT_WEBHOOK_SECRET` (cualquier string seguro — RevenueCat lo enviará en `Authorization: Bearer`) | Gratis | Sin esta key, el endpoint webhook no verifica la firma y acepta cualquier petición |
+| B18 | Crear cuenta **RevenueCat** + configurar productos + webhook | app.revenuecat.com → crear app Android → crear productos `unlockhub_premium_monthly` + `unlockhub_premium_annual` → Integrations → Webhooks → apuntar a `POST /api/v1/webhooks/revenuecat` | Gratis hasta 2.500 MAU | Billing real en producción — diferido a Fase 4 |
+| B19 | Configurar `EXPO_PUBLIC_REVENUECAT_API_KEY` como EAS secret | expo.dev → proyecto → Secrets → añadir `EXPO_PUBLIC_REVENUECAT_API_KEY` (Public SDK Key de RevenueCat) | Gratis | Sin esta key, `usePremiumPlans` devuelve precios hardcoded y no puede procesar compras reales — diferido a Fase 4 |
+| B20 | Configurar `REVENUECAT_WEBHOOK_SECRET` en Railway | Railway dashboard → service → Variables → añadir `REVENUECAT_WEBHOOK_SECRET` (cualquier string seguro — RevenueCat lo enviará en `Authorization: Bearer`) | Gratis | Sin esta key, el endpoint webhook no verifica la firma y acepta cualquier petición — diferido a Fase 4 |
 
 > **Estado de acciones completadas ✅**
 > - B1-B2 (Sentry): ✅ DSNs configurados en Railway y EAS
@@ -42,6 +42,11 @@ Esta sección lista todo lo que **el desarrollador debe hacer manualmente** ante
 > - B17 (Migraciones Prisma): ✅ Automáticas en cada deploy — `startCommand` en `railway.json`
 > - STEAM_API_KEY: ✅ Configurada en Railway
 > - N1 (UptimeRobot): ⚙️ Actualizar URL del monitor a https://unlockhub-production.up.railway.app
+> - B5 (Backups PostgreSQL): ✅ Verificado en Railway dashboard
+> - B6 (Persistencia Redis): ✅ Verificado en Railway dashboard
+> - B7 (Google Play Developer): ✅ Cuenta creada — $25 pagados
+> - B14 (Email soporte): ✅ `soporte@unlockhub.app` creado con dominio Cloudflare
+> - N5 (Keystore Android): ✅ Guardado desde expo.dev → proyecto → Credentials
 
 ### 🟡 Necesarios antes del lanzamiento
 
@@ -50,7 +55,7 @@ Esta sección lista todo lo que **el desarrollador debe hacer manualmente** ante
 | N2 | Conectar **Logtail** a Railway | logtail.com → Create Source → Railway → configurar `LOGTAIL_SOURCE_TOKEN` en variables | Gratis (7 días retención) | Logs estructurados y persistentes — pino ya genera JSON |
 | N3 | Escalar Railway a **mínimo 2 réplicas** en producción | Railway dashboard → service → Settings → Replicas → 2 | ~5€/mes adicional | Alta disponibilidad — redis-adapter ya configurado |
 | N4 | Crear cuenta en **PostHog** y obtener Project API Key | posthog.com → Create Project → copia API Key | Gratis hasta 1M eventos/mes | Analíticas — `lib/analytics.ts` ya preparado, solo necesita la key |
-| N5 | Guardar copia de seguridad del **keystore Android** de EAS | expo.dev → proyecto → Credentials → descargarlo | Gratis | Sin keystore no se pueden publicar actualizaciones |
+| ~~N5~~ | ✅ **Keystore Android guardado desde Expo credentials** | expo.dev → proyecto → Credentials | Gratis | ✅ Completado |
 
 ### 🟢 Cuando el volumen lo justifique
 
@@ -114,8 +119,8 @@ Aplicación móvil (iOS + Android) para tracking unificado de logros de videojue
 
 | Servicio | Uso | Estado |
 |---|---|---|
-| PostgreSQL (Railway) | Base de datos principal | ✅ Activo — backups pendiente verificar (B5) — migración de datos Neon pendiente |
-| Redis (Railway) | Rankings + caché + BullMQ | ✅ Activo — persistencia gestionada por Railway (B6) |
+| PostgreSQL (Railway) | Base de datos principal | ✅ Activo — backups verificados ✅ (B5) |
+| Redis (Railway) | Rankings + caché + BullMQ | ✅ Activo — persistencia verificada ✅ (B6) |
 | Cloudinary | Avatares y banners | ✅ Activo — `CLOUDINARY_URL` configurada en Railway |
 | Railway | Deploy API | ✅ Activo — https://unlockhub-production.up.railway.app |
 | AdMob | Anuncios usuarios free | ⚙️ Pendiente cuenta AdMob (B8) — IDs producción ✅ (B9) — código integrado (B10 ✅) |
@@ -239,11 +244,11 @@ Todas las features gateadas se controlan desde `lib/featureFlags.ts`. No crear m
 ```typescript
 // lib/featureFlags.ts
 export const FEATURES = {
-  premium: true,         // ✅ ACTIVO — RevenueCat integrado. Requiere B18/B19/B20 en prod.
+  premium: false,        // 🚩 Desactivado — activar en Fase 4 tras configurar RevenueCat (B18/B19/B20)
   challenges: false,     // Activar cuando los retos semanales estén listos para Fase 4
   wrapped: true,         // ✅ ACTIVO
-  pointsRedeem: true,    // ✅ ACTIVO
-  advancedStats: true,   // ✅ ACTIVO
+  pointsRedeem: false,   // 🚩 Desactivado — sin destino útil sin premium activo
+  advancedStats: false,  // 🚩 Desactivado — feature premium, activar junto a premium
   ugcGuides: true,       // ✅ ACTIVO
   notifications: true,   // ✅ ACTIVO
 } as const;
@@ -857,6 +862,187 @@ Métricas disponibles:
 
 ---
 
+## Inventario de funcionalidades
+
+> Generado el 2026-06-22 leyendo el código real. Actualizar en cada sesión que añada o cambie una funcionalidad.
+> Leyenda: ✅ Activo | 🚩 Gateado | ⚙️ Parcial | 🔲 Futuro/Eliminado
+
+### Autenticación y cuenta
+
+| Funcionalidad | Estado | Plataformas | Detalle |
+|---|---|---|---|
+| Login con email/contraseña | ✅ Activo | Ambos | `app/(auth)/login.tsx` · `POST /api/v1/auth/login` |
+| Registro con validación GDPR (edad ≥16) | ✅ Activo | Ambos | `app/(auth)/register.tsx` · `POST /api/v1/auth/register` · Texto legal con enlaces a ToS/PP |
+| Recuperación de contraseña | ✅ Activo | Ambos | `app/(auth)/forgot-password.tsx` · `POST /api/v1/auth/forgot-password` · Requiere `RESEND_API_KEY` |
+| Reset de contraseña via token | ✅ Activo | Ambos | `app/reset-password.tsx` · `POST /api/v1/auth/reset-password` · Deep link `unlockhub://reset-password?token=…` |
+| Refresh automático de sesión | ✅ Activo | Ambos | `lib/api.ts` interceptor · `POST /api/v1/auth/refresh` · `{ skipRefresh: true }` en login/register |
+| Logout individual | ✅ Activo | Ambos | `profile.tsx` · `POST /api/v1/auth/logout` |
+| Logout de todos los dispositivos | ✅ Activo | Ambos | `profile.tsx` · `POST /api/v1/auth/logout-all` |
+| Onboarding post-registro (4 pasos) | ✅ Activo | Mobile | `app/onboarding.tsx` · CTAs de vinculación Steam/PSN/RA en paso 4 |
+| Actualizar perfil (bio, banner, país) | ✅ Activo | Ambos | `profile.tsx` · `PATCH /api/v1/users/me` |
+| Upload de avatar (Cloudinary) | ✅ Activo | Ambos | `profile.tsx` · `POST /api/v1/users/me/avatar` · `CLOUDINARY_URL` configurada en Railway |
+| Borrado de cuenta GDPR (soft delete + físico 30d) | ✅ Activo | Ambos | `profile.tsx` · `DELETE /api/v1/users/me` · `gdpr-cleanup.scheduler.ts` · Transacción Prisma atómica |
+| Toggle idioma ES/EN en login | ✅ Activo | Mobile | `login.tsx` · `useLanguage` hook · fuera del KeyboardAvoidingView |
+| Privacy Policy in-app | ✅ Activo | Mobile | `app/privacy.tsx` · URL GitHub Pages activa |
+| Consentimiento GDPR / ATT (iOS) | ⚙️ Parcial | Mobile | `hooks/useGdprConsent.ts` · UMP SDK activo · Requiere B8 (cuenta AdMob real) para formulario GDPR en EEA |
+
+### Plataformas vinculadas
+
+| Funcionalidad | Estado | Plataformas | Detalle |
+|---|---|---|---|
+| Vinculación Steam (username o SteamID64) | ✅ Activo | Ambos | `app/link-platform/steam.tsx` · `POST /api/v1/platforms/steam/link` · `resolveVanityUrl` |
+| Verificación perfil Steam público | ✅ Activo | Backend | `steam.adapter.ts` · `checkSteamProfilePublic()` · Error `STEAM_PROFILE_PRIVATE` (400) |
+| Sync Steam (full + batched + express) | ✅ Activo | Backend | `steam.adapter.ts` · `POST /api/v1/sync/STEAM` · batch 20 juegos |
+| Vinculación RetroAchievements (username) | ✅ Activo | Ambos | `app/link-platform/ra.tsx` · `POST /api/v1/platforms/ra/link` · `lookupRaUser` |
+| Sync RA (full + batched + express) | ✅ Activo | Backend | `retroachievements.adapter.ts` · `POST /api/v1/sync/RA` · batch 15 · concurrencia 3 |
+| Vinculación PSN (username, NPSSO del sistema) | ✅ Activo | Ambos | `app/link-platform/psn.tsx` · `POST /api/v1/platforms/psn/link` · `getSystemPsnAuth()` |
+| Sync PSN (full + batched + express) | ✅ Activo | Backend | `psn.adapter.ts` · `POST /api/v1/sync/PSN` · batch 10 · concurrencia 5 |
+| Detección perfil PSN privado + banner ⚠️ | ✅ Activo | Ambos | `psn.adapter.ts` · `checkPsnProfilePrivacy()` · `psnProfilePrivate` en BD · banner en `link-platform/psn.tsx` |
+| Vinculación Xbox | 🚩 Gateado | Mobile | `app/link-platform/xbox.tsx` · Banner "Próximamente" hasta Fase 4 |
+| Sync Xbox | 🚩 Gateado | Backend | `xbox.adapter.ts` · Código presente, no registrado en router hasta Fase 4 |
+| Desvinculación (cascade UserAchievement + XP) | ✅ Activo | Ambos | `profile.tsx` · `DELETE /api/v1/platforms/:platform` · Transacción Prisma atómica |
+| Sync manual con cooldown por tier | ✅ Activo | Ambos | `POST /api/v1/sync/:platform` · Free: 30min / 5 por día · Premium: 5min / ilimitados |
+| Sync automático scheduler (03:00 UTC) | ✅ Activo | Backend | `jobs/background-sync.scheduler.ts` · Free 60min · Premium 15min · Respeta límite Steam API |
+| Sync express al vincular (top N juegos) | ✅ Activo | Backend | `platform.service.ts` · `syncUserExpress()` · Steam top 20, PSN top 10, RA top 15 · `Promise.race` 25s |
+| Sync progresivo por lotes (Socket.io) | ✅ Activo | Ambos | `sync.worker.ts` · `syncUserBatched()` · emit `sync:progress` · Redis TTL 2h fallback |
+| Resumen estado sync (cooldown, límites diarios) | ✅ Activo | Ambos | `GET /api/v1/sync/my-summary` · `getAggregateSyncStatus()` |
+| Cooldown Steam API (80% alert, 90% pausa) | ✅ Activo | Backend | `steam.adapter.ts` · `steam:api:calls:<date>` Redis counter |
+
+### Biblioteca de juegos
+
+| Funcionalidad | Estado | Plataformas | Detalle |
+|---|---|---|---|
+| Listado paginado (infinite scroll, 20/pág) | ✅ Activo | Ambos | `app/(tabs)/index.tsx` · `GET /api/v1/users/me/games` · `useMyGames` hook |
+| Filtros por plataforma (All/Steam/RA/PSN) | ✅ Activo | Ambos | `index.tsx` · query param `platform` · Xbox excluido hasta Fase 4 |
+| Ordenación en 5 modos (client-side) | ✅ Activo | Mobile | `index.tsx` · `sortGames()` · `last_played/alpha_asc/alpha_desc/pct_desc/pct_asc` · persistido en `preferencesStore` |
+| Sort con carga completa de páginas | ✅ Activo | Mobile | `index.tsx` · `fetchAllRemainingPages()` antes de ordenar · spinner + botón deshabilitado |
+| Contadores logros earned/total (pre-paginación) | ✅ Activo | Ambos | `user.service.ts` · `getMyGames()` · calculados sobre `allGames` antes del `slice` |
+| Contadores juegos completados/total | ✅ Activo | Ambos | `user.service.ts` · `getMyGames()` · pre-paginación · `isCompleted` reutilizado |
+| Pull-to-refresh (resetQueries, solo pág 1) | ✅ Activo | Mobile | `index.tsx` · `isManualRefreshing` estado local · independiente de `isFetchingNextPage` |
+| Banner "X juegos nuevos" durante sync | ✅ Activo | Mobile | `components/NewGamesBanner.tsx` · `Animated.spring` · `seenGamesCount` baseline |
+| SyncStatusBar (cooldown, syncs, countdown) | ✅ Activo | Mobile | `components/SyncStatusBar.tsx` · `useSyncStatus` · `setTimeout`-chain countdown |
+| Invalidación automática al montar | ✅ Activo | Mobile | `index.tsx` · `useEffect([user?.id])` · background refetch sin spinner |
+| AppState listener (sync nocturno en background) | ✅ Activo | Mobile | `index.tsx` · `AppState.addEventListener('change')` · invalida `my-games` al volver al frente |
+
+### Logros
+
+| Funcionalidad | Estado | Plataformas | Detalle |
+|---|---|---|---|
+| Búsqueda global de logros | ✅ Activo | Ambos | `app/(tabs)/search.tsx` · `GET /api/v1/search?type=achievements&q=...` · JWT opcional |
+| Filtro logros por plataforma (Steam/RA/PSN) | ✅ Activo | Ambos | `search.tsx` · sub-filtro · Xbox excluido |
+| Estado locked/unlocked en búsqueda | ✅ Activo | Ambos | `AchievementSearchCard.tsx` · `isUnlocked` desde JWT opcional · opacity 0.4 si bloqueado |
+| XP y rareza en logros | ✅ Activo | Ambos | `Achievement.normalizedPoints` · `Achievement.rarity` · fórmulas por plataforma |
+| Detalle de juego con progreso (X/Y · Z%) | ✅ Activo | Ambos | `app/game/[id].tsx` · `GET /api/v1/games/:id/achievements` · header cuando autenticado |
+| Filtros en detalle (All/Unlocked/Pending) | ✅ Activo | Mobile | `game/[id].tsx` · estados con jerarquía visual (borde earned vs no-earned) |
+| Guías UGC de logros (crear + ver) | ✅ Activo | Ambos | `game/[id].tsx` · `GET/POST /api/v1/achievements/:id/guides` · `FEATURES.ugcGuides = true` |
+| Retar amigo en logro | ⚙️ Parcial | Ambos | `game/[id].tsx` UI presente · `POST /api/v1/achievements/:id/challenge` · notificación `ACHIEVEMENT_CHALLENGE` backend |
+| Compartir logro | ✅ Activo | Mobile | `game/[id].tsx` · `Share.share()` con URL · sin imagen (viola ToS de plataformas) |
+
+### Rankings
+
+| Funcionalidad | Estado | Plataformas | Detalle |
+|---|---|---|---|
+| Ranking global (XP total) | ✅ Activo | Ambos | `app/(tabs)/rankings.tsx` · `GET /api/v1/rankings/global` · Redis Sorted Set `ranking:global` |
+| Ranking por plataforma (Steam/RA/PSN) | ✅ Activo | Ambos | `rankings.tsx` · `GET /api/v1/rankings/platform/:platform` · XP específico de plataforma |
+| Mi posición en ranking | ✅ Activo | Ambos | `rankings.tsx` · `GET /api/v1/rankings/me` · O(log n) Redis ZRANK |
+| Snapshot diario a PostgreSQL | ✅ Activo | Backend | `ranking.service.ts` · `takeRankingSnapshot()` |
+| Ranking nacional | 🔲 Eliminado | - | Eliminado en sesión 28 — XP no es comparable entre países · `countryCode` en `User` intacto |
+
+### Social
+
+| Funcionalidad | Estado | Plataformas | Detalle |
+|---|---|---|---|
+| Enviar solicitud de amistad | ✅ Activo | Ambos | `friends.tsx` · `POST /api/v1/friends` · búsqueda previa en `search.tsx` |
+| Listar amigos | ✅ Activo | Ambos | `app/(tabs)/friends.tsx` · `GET /api/v1/friends` |
+| Solicitudes pendientes (badge contador) | ✅ Activo | Ambos | `friends.tsx` · `GET /api/v1/friends/pending` · badge en tab bar |
+| Aceptar solicitud de amistad | ✅ Activo | Ambos | `friends.tsx` · `POST /api/v1/friends/:id/accept` |
+| Rechazar solicitud de amistad | ✅ Activo | Ambos | `friends.tsx` · `DELETE /api/v1/friends/:id/reject` |
+| Eliminar amigo | ✅ Activo | Ambos | `friends.tsx` · `DELETE /api/v1/friends/:id` |
+| Bloquear usuario | ✅ Activo | Backend | `friendship.service.ts` · `FriendshipStatus.BLOCKED` |
+| Feed de actividad | ✅ Activo | Ambos | `app/(tabs)/index.tsx` (feed section) · `GET /api/v1/feed` · `ActivityEvent` |
+| Perfil público (sin email) | ✅ Activo | Ambos | `app/profile/[username].tsx` · `GET /api/v1/users/:username` · `mapPublicUser()` excluye email/passwordHash |
+| Comparación de perfiles ("vs tú") | ✅ Activo | Ambos | `profile/[username].tsx` · `GET /api/v1/users/:username/compare` |
+
+### Notificaciones
+
+| Funcionalidad | Estado | Plataformas | Detalle |
+|---|---|---|---|
+| Centro in-app (listar, leer, contador) | ✅ Activo | Ambos | `app/notifications.tsx` · `GET/PATCH /api/v1/notifications/me` |
+| Campana con badge en header | ✅ Activo | Mobile | `components/NotificationBell.tsx` · `GET /api/v1/notifications/me/unread-count` |
+| Push notifications (Expo Notifications) | ✅ Activo | Ambos | `hooks/usePushNotifications.ts` · `POST /api/v1/notifications/device-token` |
+| Notificación: FRIEND_REQUEST | ✅ Activo | Backend | `notification.service.ts` |
+| Notificación: ACHIEVEMENT_CHALLENGE | ✅ Activo | Backend | `notification.service.ts` |
+| Notificación: RANKING_UP | ✅ Activo | Backend | `notification.service.ts` |
+| Notificación: CHALLENGE_COMPLETED | ✅ Activo | Backend | `notification.service.ts` |
+| Notificación: STREAK_RISK | ✅ Activo | Backend | `notification.service.ts` |
+| Notificación: PSN reauth requerido | ✅ Activo | Backend | `sync.worker.ts` · `PSN_REFRESH_TOKEN_EXPIRED` → `requiresReauth=true` + notificación in-app |
+
+### Gamificación
+
+| Funcionalidad | Estado | Plataformas | Detalle |
+|---|---|---|---|
+| Sistema de XP normalizado por plataforma | ✅ Activo | Backend | `sync.worker.ts` · `addXp()` · Steam/RA/PSN/Xbox con fórmulas distintas |
+| Niveles basados en XP | ✅ Activo | Backend | `user.service.ts` · `calculateLevel()` · visible en perfil y rankings |
+| Racha diaria (streak) | ✅ Activo | Backend | `jobs/streak.scheduler.ts` · 00:00 UTC · incrementa o resetea |
+| Escudo de racha (Free: 1/mes · Premium: 3/mes) | ✅ Activo | Backend | `streak.scheduler.ts` · `User.streakShields` · consume shield antes de resetear |
+| Sistema de puntos (historial auditable) | ✅ Activo | Ambos | `GET /api/v1/users/me/points` · saldo = suma del historial (`UserPoint`) |
+| Puntos por anuncio rewarded (10 pts, cooldown 3h) | ✅ Activo | Ambos | `points.service.ts` · `claimRewardedAdPoints()` · `rewarded-ad:{userId}` Redis TTL 3h |
+| Canje de puntos por premium (300 pts = 7 días) | 🚩 Gateado | Ambos | `POST /api/v1/subscriptions/redeem-points` · `FEATURES.pointsRedeem = false` |
+| Retos semanales (progreso + completación) | 🚩 Gateado | Ambos | `app/(tabs)/challenges.tsx` · `GET /api/v1/challenges/active` · `FEATURES.challenges = false` |
+| Wrapped anual (básico + extendido) | ✅ Activo | Ambos | `app/wrapped/[year].tsx` · `GET /api/v1/wrapped/:period` · `FEATURES.wrapped = true` |
+| Wrapped mensual | ✅ Activo | Ambos | `wrapped/[year].tsx` · param `"2025-01"` · `computeStats` + `computeExtendedStats` |
+| Compartir Wrapped | ✅ Activo | Mobile | `wrapped/[year].tsx` · `Share.share()` con texto + #UnlockHub |
+
+### Monetización
+
+| Funcionalidad | Estado | Plataformas | Detalle |
+|---|---|---|---|
+| AdMob banner Home | ✅ Activo | Mobile | `components/AdBanner.tsx` · `unitId='home'` · Test IDs en código, prod IDs en EAS secrets |
+| AdMob banner Search | ✅ Activo | Mobile | `components/AdBanner.tsx` · `unitId='search'` |
+| AdMob interstitial | ✅ Activo | Mobile | `hooks/useInterstitialAd.ts` · pre-carga al montar · solo usuarios free |
+| AdMob rewarded (10 pts por visualización) | ✅ Activo | Ambos | `hooks/useRewardedAd.ts` · `POST /api/v1/points/rewarded-ad` · solo paga si `EARNED_REWARD` antes de `CLOSED` |
+| Pantalla premium (RevenueCat) | 🚩 Gateado | Mobile | `app/premium.tsx` · `FEATURES.premium = false` → muestra `ComingSoon` |
+| Compra de suscripción (RevenueCat) | 🚩 Gateado | Mobile | `hooks/useSubscription.ts` · `react-native-purchases` v10 · Pendiente B18/B19/B20 |
+| Webhook RevenueCat (backend) | ⚙️ Parcial | Backend | `POST /api/v1/webhooks/revenuecat` · código completo · Pendiente `REVENUECAT_WEBHOOK_SECRET` (B20) y B18 |
+| Restauración de compras | 🚩 Gateado | Mobile | `premium.tsx` · `FEATURES.premium = false` |
+| PremiumBanner (paywall inline) | 🚩 Gateado | Mobile | `components/PremiumBanner.tsx` · `FEATURES.premium = false` → devuelve null |
+
+### Perfil y personalización
+
+| Funcionalidad | Estado | Plataformas | Detalle |
+|---|---|---|---|
+| Avatar placeholder con iniciales | ✅ Activo | Mobile | `components/AvatarPlaceholder.tsx` · color determinista por username (paleta 8 colores) |
+| Bio y banner de perfil | ✅ Activo | Ambos | `profile.tsx` · `PATCH /api/v1/users/me` |
+| País (countryCode) | ✅ Activo | Ambos | `profile.tsx` · afecta entrada en `ranking:global:{countryCode}` Redis set |
+| Idioma ES/EN persistente | ✅ Activo | Mobile | `stores/preferencesStore.ts` · `useLanguage` hook · AsyncStorage |
+| Tema (solo oscuro activo) | ⚙️ Parcial | Mobile | `profile.tsx` · selector oculto (`{/* TODO Fase 4 */}`) · modo claro no implementado |
+| Estadísticas avanzadas premium | 🚩 Gateado | Ambos | `profile.tsx` · `FEATURES.advancedStats = false` → `PaywallOverlay` |
+
+### Infraestructura y operaciones
+
+| Funcionalidad | Estado | Plataformas | Detalle |
+|---|---|---|---|
+| Dashboard admin (HTML + JSON métricas) | ✅ Activo | Backend | `admin/` · `GET /admin/` · Bearer `ADMIN_SECRET` · usuarios/syncs/rankings/colas/errores/Steam API% |
+| Health check endpoint | ✅ Activo | Backend | `GET /health` · declarado antes del rate limiter · Railway healthcheck + UptimeRobot |
+| Background sync scheduler (03:00 UTC) | ✅ Activo | Backend | `jobs/background-sync.scheduler.ts` · usuarios activos últimos 7 días · respeta límite Steam |
+| GDPR cleanup job (04:00 UTC, físico 30d) | ✅ Activo | Backend | `jobs/gdpr-cleanup.scheduler.ts` · `deletedAt <= now() - 30 días` · registrado en `index.ts` |
+| Streak scheduler (00:00 UTC) | ✅ Activo | Backend | `jobs/streak.scheduler.ts` |
+| Challenge scheduler | 🚩 Gateado | Backend | `jobs/challenge.scheduler.ts` · activa cuando `FEATURES.challenges = true` |
+| Seed catálogo (admin BullMQ job) | ✅ Activo | Backend | `admin/` · `seed-catalog` queue |
+| Socket.io multi-instancia (redis-adapter) | ✅ Activo | Backend | `sockets/` · `@socket.io/redis-adapter` · listo para 2 réplicas Railway (N3) |
+| Sync progress Socket.io | ✅ Activo | Backend | `sockets/sync.handler.ts` · rooms `user:{userId}` · `sync:progress/complete/error` |
+| Activity feed Socket.io | ✅ Activo | Backend | `sockets/activity.handler.ts` · `activity:new` |
+| Rate limiting global (500 req/15min) | ✅ Activo | Backend | `middleware/rateLimiter.ts` · `/health` excluido |
+| Rate limiting auth (10 req/15min) | ✅ Activo | Backend | `middleware/rateLimiter.ts` · aplicado a `/auth/*` |
+| Rate limiting search (60 req/min) | ✅ Activo | Backend | `middleware/rateLimiter.ts` · aplicado a `/search` |
+| Sentry crash reporting (mobile + API) | ✅ Activo | Ambos | DSNs configurados en Railway y EAS secrets · integrado en `ErrorBoundary` |
+| Analytics PostHog (stub) | ⚙️ Parcial | Mobile | `lib/analytics.ts` · modo silencioso sin `POSTHOG_API_KEY` · Pendiente N4 |
+| OfflineBanner global | ✅ Activo | Mobile | `components/OfflineBanner.tsx` · `expo-network` |
+| ErrorBoundary global | ✅ Activo | Mobile | `components/ErrorBoundary.tsx` · integrado con Sentry |
+| Modo mantenimiento | ✅ Activo | Mobile | `hooks/useMaintenanceCheck.ts` · sondeo `/health` cada 30s |
+
+---
+
 ## Decisiones tomadas — no revertir sin consultar
 
 | Decisión | Motivo | Fase |
@@ -880,6 +1066,10 @@ Métricas disponibles:
 | `rotate-encryption-key.ts` debe ejecutarse desde `apps/api/` | `@prisma/client` solo está en `apps/api/node_modules` | Fase 3 |
 | `while(true)` con eslint-disable en cursor pagination | Patrón cursor batch necesita bucle infinito con break interno — regla `no-constant-condition` se desactiva línea por línea | Fase 3 |
 | `useSessionStore as unknown as jest.Mock` en tests móvil | TypeScript no acepta la conversión directa porque los tipos no se solapan — doble aserción vía `unknown` es el patrón estándar | Fase 3 |
+| Soft delete GDPR con `deletedAt` + job de borrado físico a 30 días | `deleteAccount` hace soft delete atómico (update + anonimizar ActivityEvent + borrar PlatformAccount/PasswordResetToken), sin borrar UserPoint/UserChallenge (auditoría). `gdpr-cleanup.scheduler.ts` borra físicamente a los 30 días (cron 04:00 UTC). | Fase 3 |
+| `authenticate.ts` verifica `deletedAt: null` en BD tras JWT — fail-open ante error de BD | La verificación añade ~1-5ms por request autenticada. Si la BD falla transitoriamente (timeout), la request continúa sin bloquear (fail-open). Trade-off aceptado: JWTs de usuarios soft-deleted válidos por hasta 15 min (la ventana de expiración) es riesgo mínimo. Sin la verificación, usuarios eliminados podrían acceder a endpoints distintos de login/perfil durante la ventana de 15 min. | Fase 3 |
+| `rcApiKey` leído en el cuerpo del hook `useSubscription` (no a nivel de módulo) | Leer `process.env['EXPO_PUBLIC_REVENUECAT_API_KEY']` a nivel de módulo crea una constante fija al cargar el módulo — imposible controlar en tests sin `jest.resetModules()`. Leerlo en el cuerpo de la función permite controlar el env var por test. | Fase 3 |
+| `PublicUser` interface en `packages/types` omite `email`, `isPremium`, `premiumUntil`, `lastSyncAt` | `User` incluye `email` para uso interno (perfil propio autenticado). `PublicUser` es el subset seguro para perfiles públicos. `getPublicProfile` usa `mapPublicUser` → garantiza que el email nunca se filtra en respuestas no autenticadas. `getProfile` (perfil propio) sigue usando `mapUser` con todos los campos. | Fase 3 |
 | `apps/mobile` lint script usa `../../.gitignore` | El script usaba `--ignore-path .gitignore` pero `apps/mobile/.gitignore` no existe; la raíz del monorepo tiene el `.gitignore` correcto | Fase 3 |
 | `no-var-requires` en `require()` de tests Jest | Patrón legítimo para acceder a módulos mockeados tras `jest.mock()` — se suprime con eslint-disable-next-line | Fase 3 |
 | Cloudinary auto-lee `CLOUDINARY_URL` de `process.env` | SDK de Cloudinary v2 no necesita configuración explícita si `CLOUDINARY_URL` está en el entorno — basta con `import { v2 as cloudinary }` | Fase 3 |
@@ -1012,6 +1202,10 @@ Métricas disponibles:
 | link-platform `onSuccess` invalida `sync-summary` y `my-games` | Sin estas invalidaciones, el usuario navegaba a la biblioteca y veía el empty state incorrecto ("Vincula tus plataformas" en lugar de "Tus juegos aparecerán pronto") durante hasta 30s (staleTime de sync-summary). La invalidación inmediata al vincular actualiza `anyPlatformLinked` sin esperar al timer. | Fase 3 |
 | `queueInitialSync` cambiado de `void` a `.catch(logger.error)` en platform.controller | El patrón `void` tragaba silenciosamente errores de BullMQ/Redis (conexión caída, Redis reiniciando). El usuario obtenía un 201 pero sus juegos nunca aparecían y no había trazas en logs Railway para diagnosticarlo. El `.catch` loguea el error con contexto (`userId`, `platform`) sin cambiar el comportamiento externo (el 201 ya fue enviado). | Fase 3 |
 | BUG-4 (plataformas no cargan al login) y BUG-7 (409 no muestra mensaje) no tienen código a cambiar | `loginMutation.onSuccess` ya llama `queryClient.removeQueries()` que vacía el caché, forzando refetch fresco. Steam/RA/PSN ya manejan `err.statusCode === 409` con `setFieldError(t('...error_already_linked'))` y las claves i18n existen. El smoke test probablemente usaba un APK anterior. | Fase 3 |
+| `mapPublicUser()` separada de `mapUser()` — perfil público nunca expone `email`, `passwordHash` ni `birthDate` | `getPublicProfile` no requiere autenticación — exponer el email permitía obtener el email de cualquier usuario sin cuenta. `PublicUser` type en `packages/types` garantiza que TypeScript detecte futuros leaks en tiempo de compilación | Fase 3 |
+| `deleteAccount` implementa soft delete GDPR en transacción atómica + job de borrado físico a 30 días | El borrado físico inmediato destruía `UserPoint`/`UserChallenge` con cascade, violando la especificación GDPR del CLAUDE.md. El soft delete permite el período de gracia legal. `authenticate.ts` verifica `deletedAt: null` en cada request para que el token no sirva tras el soft delete | Fase 3 |
+| Lanzamiento sin premium — `FEATURES.premium = false`, `pointsRedeem = false`, `advancedStats = false` | Simplificar lanzamiento inicial — RevenueCat (B18/B19/B20) pendiente de configuración; toda la lógica de backend (webhook, subscription service, endpoints) queda intacta para activar en Fase 4 cambiando `FEATURES.premium = true`. `PremiumBanner` devuelve null. `premium.tsx` muestra `ComingSoon`. `profile.tsx` ya gateaba con `FEATURES.premium`. Tests de premium UI se ejecutan con `jest.mock` que fuerza `premium: true` (mismo patrón que `ProfileScreen.test.tsx`). | Fase 3 |
+| Lanzamiento inicial sin premium (`FEATURES.premium = false`) | Elimina dependencia de B18/B19/B20 (RevenueCat) no resueltos antes del lanzamiento. Con todos los usuarios en tier free, el inventario AdMob es máximo desde el día 1. Toda la lógica de backend (webhook, subscription service, RevenueCat hooks) queda intacta — reactivar en Fase 4 cambiando `premium: true`, `pointsRedeem: true`, `advancedStats: true` en `featureFlags.ts` | Fase 3 |
 
 ---
 
@@ -1021,7 +1215,7 @@ Métricas disponibles:
 |---|---|---|
 | **Fase 1 — MVP** | Monorepo, auth, Steam + RA, logros, rankings, perfil, i18n, AdMob | ✅ Completa |
 | **Fase 2 — Social** | Amigos, feed, retos, puntos, racha, push notifications, Wrapped, perfil público, búsqueda | ✅ Completa |
-| **Fase 3 — Producción** | Railway, Sentry, GDPR, escudo de racha, notificaciones, Wrapped mensual, canje puntos, stats, guías UGC, dashboard admin, tests k6, Play Store | 🔄 En progreso |
+| **Fase 3 — Producción** | Railway, Sentry, GDPR, escudo de racha, notificaciones, Wrapped mensual, canje puntos, stats, guías UGC, dashboard admin, tests k6, Play Store, premium diferido a Fase 4 | 🔄 En progreso |
 | **Fase 4 — Avanzado** | Torneos internos, App Store iOS, Xbox, OG profiles | 🔲 Futuro |
 
 > **Aviso legal Fase 4**: Torneos con recompensas económicas pueden clasificarse como juegos de azar en España (Ley 13/2011). Solo recompensas en puntos/días premium hasta consultar con abogado.
@@ -1044,7 +1238,7 @@ Métricas disponibles:
 10. ✅ Escudo de racha
 11. ✅ Centro de notificaciones in-app
 12. ✅ Variables Railway configuradas: `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `APP_SCHEME`, `CLOUDINARY_URL`, `ADMIN_SECRET`. ⚙️ Pendiente: `POSTHOG_API_KEY` (N4)
-13. ✅ Google Play Billing vía RevenueCat — `react-native-purchases` v10, `useSubscription`, `usePremiumPlans`, `useRevenueCat`, webhook `POST /api/v1/webhooks/revenuecat`, `FEATURES.premium = true`. ⚙️ Pendiente: B18 (cuenta RC + productos), B19 (EAS secret), B20 (Railway secret)
+13. 🚩 Google Play Billing vía RevenueCat — diferido a Fase 4. Código intacto. Activar con `FEATURES.premium = true` + completar B18/B19/B20.
 14. ✅ Analíticas — analytics.ts preparado. ⚙️ POSTHOG_API_KEY pendiente (N4)
 15. ✅ Ayuda contextual en vinculación de plataformas
 16. ✅ Wrapped mensual + anual
@@ -1052,9 +1246,9 @@ Métricas disponibles:
 18. ✅ Estadísticas avanzadas premium
 19. ✅ Guías UGC
 20. ✅ Tests de carga k6
-21. ⚙️ EAS Build producción (N5) — NO lanzar sin pedirlo explícitamente
+21. ✅ Keystore Android guardado (N5 ✅) — EAS Build producción NO lanzar sin pedirlo explícitamente
 22. ⚙️ Smoke tests de producción
-23. ⚙️ Play Store submit (B7)
+23. ⚙️ Play Store submit — cuenta creada (B7 ✅) · pendiente listing completo
 
 ---
 
@@ -1072,11 +1266,12 @@ Métricas disponibles:
 | ~~P4~~ | ✅ UMP SDK AdMob | Código integrado — `useGdprConsent.ts` activo, GDPR message ya publicado en AdMob. |
 | ~~P4b~~ | ✅ EAS secrets AdMob configurados | Los 4 IDs de producción están en EAS secrets — `HOME_BANNER_ID`, `SEARCH_BANNER_ID`, `INTERSTITIAL_ID`, `REWARDED_ID`. |
 | P5 | ✅ Privacy Policy + ToS en URL pública | `docs/privacy-policy.html` + `docs/terms-of-service.html` — GitHub Pages activo, URLs en vivo, datos del desarrollador rellenados. |
-| P6 | Google Play Console | $25 + listing completo |
+| ~~P6~~ | ✅ Google Play Console | Cuenta creada (B7 ✅) — pendiente listing completo antes del submit |
 | P7 | ✅ Smoke tests producción — APK #3 completo | APK debug local (build 2026-05-21, 165.7 MB). BUG-3/4/5 re-confirmados ✅. AdMob banners Home+Search ✅. Registro+onboarding ✅. Game detail+Wrapped+perfil público ✅. **BUG-6**: PSN screen muestra flujo NPSSO antiguo (Metro cache stale) — fix: rebuild con `--clean`. Pendiente: vinculación plataformas reales, sync progresivo E2E, Forgot Password (requiere RESEND_API_KEY). |
-| B18 | Cuenta RevenueCat + productos + webhook | app.revenuecat.com → crear app Android → productos `unlockhub_premium_monthly` + `unlockhub_premium_annual` → webhook a `/api/v1/webhooks/revenuecat` |
-| B19 | `EXPO_PUBLIC_REVENUECAT_API_KEY` como EAS secret | expo.dev → proyecto → Secrets → Public SDK Key de RevenueCat |
-| B20 | `REVENUECAT_WEBHOOK_SECRET` en Railway | Railway dashboard → Variables → string seguro, mismo que en RC webhook config |
+| B18 | ~~Cuenta RevenueCat + productos + webhook~~ | 🚩 **Diferido a Fase 4** — `FEATURES.premium = false`. El backend está intacto; activar cambiando el flag cuando RC esté configurado. |
+| B19 | ~~`EXPO_PUBLIC_REVENUECAT_API_KEY` como EAS secret~~ | 🚩 **Diferido a Fase 4** — no necesario hasta activar `FEATURES.premium = true`. |
+| B20 | ~~`REVENUECAT_WEBHOOK_SECRET` en Railway~~ | 🚩 **Diferido a Fase 4** — no necesario hasta activar `FEATURES.premium = true`. |
+| T17 | Verificar que migración gdpr_soft_delete se aplica en Railway | Railway dashboard → Logs del deploy → buscar `migrate deploy` sin errores. Sin esto `deleteAccount` fallará en producción si `deletedAt` no existe en el esquema |
 
 ### 🟡 UX — todas implementadas ✅
 
@@ -1108,11 +1303,13 @@ Métricas disponibles:
 | T9 | Resolver 145 warnings import/order en API | ✅ Resuelto — `eslint --fix` + override en `.eslintrc.js` para ficheros de test |
 | T10 | Flows Maestro E2E | ✅ 5 flows en `apps/mobile/.maestro/` — todos pasando contra emulador Android con APK preview |
 | T11 | Search de logros + endpoint logros de juego | ✅ Backend `GET /api/v1/games/:id/achievements` + `GET /api/v1/search?type=achievements` — JWT opcional, Xbox excluido, paginado 20/pág |
-| T12 | Job "seed de logros populares" | ✅ Completo — BD post-limpieza: 1.406 juegos (78 Steam + 1.001 RA + 327 PSN) + 72.264 logros. Bugs PSN corregidos: guard `trophies ?? []` + refresco token cada 5 usuarios. Campo `console` backfilled: RA (1.001 juegos) + PSN (584 juegos). |
+| T12 | Job "seed de logros populares" | ✅ Completo — BD post-limpieza: 1.406 juegos (78 Steam + 1.001 RA + 327 PSN) + 72.264 logros. Bugs PSN corregidos: guard `trophies ?? []` + refresco token cada 5 usuarios. Campo `console` backfilled: RA (1.001 juegos) + PSN (584 juegos). Flag `--only-steam --usernames="X"` implementado en `scripts/seed-games.ts`. **Seithek Steam**: 0 juegos obtenidos — perfil de Steam privado (`GetOwnedGames` devuelve lista vacía). Hacer público en Configuración de Steam para seedear. |
 | T13 | Sync optimization: parallel RA batches + skip completed | 🔲 Documentado como pendiente — no implementado por riesgo de rate limiting RA y pérdida de logros DLC. Ver decisiones sesión 10. |
 | T14 | Desnormalizar contadores de biblioteca (`earnedAchievements`, `totalGames`) | 🔲 Pendiente confirmación del desarrollador — no implementar sin acuerdo. Ver decisiones sesión 16. |
 | T15 | Steam skip-completed optimization via `rtime_last_played` | 🔲 `GetOwnedGames` devuelve `rtime_last_played` (Unix timestamp) por juego. Usarlo para saltar juegos sin actividad reciente reduciría llamadas a Steam. No implementado: requiere añadir `lastPlayedAt` al modelo de caché Redis + interfaz `GameCacheEntry`, con riesgo de saltar achievements de DLC. Documentar como pendiente post-lanzamiento. |
 | T16 | Backfill RA XP con fórmula correcta | 🔲 Script `scripts/backfill-ra-xp.ts` creado e idempotente. Ejecutar desde `apps/api/` con `DATABASE_URL="${DIRECT_URL}"` tras hacer deploy de la nueva fórmula. Nota: el XP de usuarios en BD/Redis NO se actualiza automáticamente — los usuarios verán el XP corregido en su próximo sync. |
+| T17 | BUG-CRÍTICO-1/2 + BUG-MEDIO-3/4 corregidos | ✅ Sesión 31: soft delete GDPR, email eliminado de perfil público, RA syncUserExpress con Promise.allSettled, deletedAt:null filters, gdpr-cleanup scheduler, authenticate con DB check, rankings RefreshControl fix, upsertUserScore paralelo, useSubscription RC CustomerInfo |
+| T18 | Migración Prisma gdpr_soft_delete en producción | ⚙️ Aplicar `npx prisma migrate deploy` en Railway tras el próximo deploy — la migración añade el campo `deletedAt` a `User` si no existía ya |
 
 ### 🟢 Features
 
@@ -1130,7 +1327,7 @@ Métricas disponibles:
 | F10 | OG profiles | 🔲 Fase 4 |
 | F11 | Búsqueda de logros con filtro de plataforma | ✅ Search tab: chip Achievements + sub-filtro Steam/RA/PSN, infinite scroll, estado locked/unlocked |
 | F12 | SyncStatusBar — feedback de sync en biblioteca | ✅ Botón sync, syncs restantes (free), cooldown countdown, última sync, próximo auto sync |
-| F13 | Google Play Billing — pantalla premium + RevenueCat | ✅ `react-native-purchases` v10, `usePremiumPlans`, `useSubscription`, `useRevenueCat`, `premium.tsx` reescrito, webhook backend, `FEATURES.premium = true`. Requiere B18/B19/B20 para prod. |
+| F13 | Google Play Billing — pantalla premium + RevenueCat | ✅ `react-native-purchases` v10, `usePremiumPlans`, `useSubscription`, `useRevenueCat`, `premium.tsx` reescrito, webhook backend. 🚩 `FEATURES.premium = false` — activar en Fase 4 tras B18/B19/B20. |
 | F14 | PSN sync paralelo — `Promise.allSettled` con concurrencia 5 | ✅ `processSingleTitle()` extraído; `processTitles()` procesa chunks de 5 en paralelo con aislamiento de fallos por título |
 | F15 | RA sync paralelo — `Promise.allSettled` con concurrencia 3 | ✅ `syncUser()` y `syncUserBatched()` procesan chunks de 3 juegos en paralelo con `Promise.allSettled` |
 | F16 | SyncStatusBar — countdown local + aviso sync largo | ✅ Countdown `setTimeout`-chain independiente del `refetchInterval` 60s; aviso ámbar tras 30s de sync activo |
@@ -1139,6 +1336,32 @@ Métricas disponibles:
 ---
 
 ## Última revisión de código
+
+**Fecha**: 2026-06-22 (sesión 33) — Inventario completo de funcionalidades generado leyendo código real. Nueva sección "Inventario de funcionalidades" añadida al CLAUDE.md con 119 funcionalidades catalogadas (103 activas, 10 gateadas, 5 parciales, 1 eliminada). Checks B5, B6, B7, B14, N5 marcados como completados con información confirmada por el desarrollador.
+
+**Fecha**: 2026-06-21 (sesión 32) — `FEATURES.premium = false` para lanzamiento inicial. Tests: 507 API (39 suites) + 314 mobile (26 suites). 0 errores TS/lint. Cobertura API 81.72% stmt / 82.4% branch.
+**PREMIUM DESACTIVADO**: `featureFlags.ts` — `premium: false`, `pointsRedeem: false`, `advancedStats: false`. `PremiumBanner` devuelve null. `premium.tsx` muestra `ComingSoon` (nuevo componente). i18n: `common.coming_soon_title/body` añadidas. Tests de premium UI con `jest.mock('../../lib/featureFlags', ...)` que fuerza `premium: true` — mismo patrón que `ProfileScreen.test.tsx`. Backend (webhook, subscription service, endpoints) intacto para Fase 4. CLAUDE.md: featureFlags actualizado, B18/B19/B20 diferidos a Fase 4, decisión documentada.
+
+**Fecha**: 2026-06-21 (sesión 31) — 6 fixes aplicados. Tests: 507 API (39 suites) + 314 mobile (26 suites). 0 errores TS/lint. Cobertura API 81.72% stmt / 82.4% branch.
+**FIX1 — BUG-CRÍTICO-1 (seguridad/GDPR)**: `PublicUser` añadido a `packages/types/src/index.ts` (omite `email`, `isPremium`, `premiumUntil`, `lastSyncAt`). `mapPublicUser()` creado en `user.service.ts`. `getPublicProfile` cambiado a retornar `PublicUser` (sin email) + filtro `deletedAt: null`. Tests: 4 tests nuevos en `user.service.test.ts` (no expone email, no expone passwordHash, NOT_FOUND para usuarios eliminados, where incluye deletedAt:null).
+**FIX2 — BUG-CRÍTICO-2 (GDPR)**: `deleteAccount` reescrito con flujo completo: soft delete (`deletedAt = now()`), anonimizar `ActivityEvent.payload → {}`, borrar `PlatformAccount` y `PasswordResetToken`, mantener `UserPoint`/`UserChallenge` (auditoría). `prisma.$transaction(async tx => {...})` atómica. `compareProfiles` añade `deletedAt: null` al targetUser lookup. `findUserByEmail` en `user.repository.ts` añade `deletedAt: null`. `authenticate.ts` verifica `deletedAt: null` en BD tras verificar el JWT (fail-open ante error de BD transitorio). `gdpr-cleanup.scheduler.ts` creado: `runGdprCleanup()` borra físicamente usuarios con `deletedAt <= now() - 30 días`; cron `0 4 * * * UTC`; registrado en `index.ts`. Tests: 6 tests nuevos en `user.service.test.ts`, 3 tests nuevos en `middleware.test.ts`, 4 tests nuevos en `gdpr-cleanup.scheduler.test.ts`. Actualizado `repositories.test.ts` para el nuevo where con `deletedAt: null`.
+**FIX3 — BUG-MEDIO-3**: `syncUserExpress` en `retroachievements.adapter.ts` cambiado de `for...of` secuencial a `Promise.allSettled` con chunks de `RA_PROCESS_CONCURRENCY=3` — igual que `syncUser`/`syncUserBatched`. `logger.warn` por cada juego que falla individualmente. Tests: `retroachievements.adapter.test.ts` creado (3 tests: no aborta cuando DB upsert falla, loguea warn, procesa correctamente cuando todo OK).
+**FIX4**: `rankings.tsx` `RankingList` — `isRefetching` eliminado del destructuring. `isManualRefreshing = useState(false)`. `handleRefresh` async: `setIsManualRefreshing(true)` → `queryClient.invalidateQueries` → `finally(false)`. `RefreshControl` usa `refreshing={isManualRefreshing}`. `useQueryClient` añadido. Tests: `RankingsScreen.test.tsx` migrado a `renderWithClient` + `QueryClientProvider`, 1 test nuevo (refreshing=false aunque isRefetching=true).
+**FIX5**: `upsertUserScore` en `ranking.service.ts` paraleliza las queries de `getPlatformXp`: `Promise.all(platforms.map(p => getPlatformXp(userId, p)))` + `Promise.all(platforms.map(...zadd))`. Antes: bucle `for...of` secuencial. Tests existentes verificados.
+**FIX6**: `useSubscription.ts` — `rcApiKey` leído en el cuerpo del hook (no a nivel de módulo) para testabilidad. `customerInfo = useState<CustomerInfo | null>(null)`. `useEffect` llama `Purchases.getCustomerInfo()` si RC configurado → `setCustomerInfo`. `subscriptionStatus.isPremium` deriva de RC (fuente primaria) con fallback a `user.isPremium` del JWT. `isLoadingStatus` verdadero mientras RC carga. `syncPremiumState` actualiza `customerInfo` tras compra. `getCustomerInfo: jest.fn()` añadido al mock global en `jest.setup.ts`. Tests: 5 tests nuevos en `useSubscription.test.ts`.
+**Decisión soft delete GDPR**: `deleteAccount` implementa soft delete completo según spec de CLAUDE.md. `authenticate.ts` añade DB check (fail-open ante errores transitorios para no bloquear requests). La verificación en middleware añade ~1-5ms de latencia por request autenticada — trade-off aceptado por requisito de seguridad GDPR.
+
+**Fecha**: 2026-06-20 (sesión 30) — Revisión exhaustiva sin cambios de código. 4 bugs confirmados:
+**BUG-CRITICO-1** (seguridad/GDPR): `getPublicProfile` en `user.service.ts` llama a `mapUser` que incluye `email: string`, y la ruta `GET /api/v1/users/:username` no tiene `authenticate` — cualquier llamada no autenticada obtiene el email del usuario. Fix: crear `mapPublicUser` que excluye `email` y usarlo en `getPublicProfile`.
+**BUG-CRITICO-2** (GDPR): `deleteAccount` hace `prisma.user.delete` (hard delete inmediato) en lugar del flujo especificado: soft delete `deletedAt = now()` → anonimizar `ActivityEvent.payload` → borrar `PlatformAccount`/`PasswordResetToken` → mantener `UserPoint`/`UserChallenge` → job físico a los 30 días. Los registros de auditoría de puntos se destruyen inmediatamente con el cascade.
+**BUG-MEDIO-3**: `retroachievements.adapter.ts` `syncUserExpress` usa `for...of` secuencial sin `Promise.allSettled` — un error en un juego aborta el express sync completo (sync llamado al vincular RA). `syncUser`/`syncUserBatched` ya usan `Promise.allSettled` correctamente.
+**BUG-MEDIO-4**: `getPublicProfile` y `compareProfiles` no filtran `deletedAt: null` — si BUG-CRITICO-2 se corrige a soft delete, los usuarios borrados seguirían siendo accesibles via perfil público. Code smells: `isRefetching` en `rankings.tsx` RefreshControl (patrón incorrecto vs sesión 18), `subscriptionStatus` hardcoded en `useSubscription.ts`, `getPlatformXp` secuencial en `upsertUserScore` (paralelizable). Tests: 491 API (37 suites) + 308 mobile (25 suites). 0 errores TS/lint. Cobertura API 81.57% stmt / 82.47% branch.
+
+**Fecha**: 2026-06-19 (sesión 29) — Flag `--only-steam` en seed-games.ts. `seedSteamUsers(prisma, usernamesOverride)` añadida en `scripts/seed-games.ts`: resuelve vanity URL → SteamID64 vía `ISteamUser/ResolveVanityURL/v1/`, obtiene `GetOwnedGames`, filtra por `has_community_visible_stats`, hace upsert de juegos y logros igual que `seedSteam` con `normalizeSteamPoints` y `l: 'spanish'`. Guard temprano: `process.exit(1)` si `STEAM_API_KEY` no está en el entorno. `const key: string = apiKey` evita el problema de narrowing de tipo en el closure (mismo patrón que `seedPSN`). `main()` actualizado: `onlySteam` flag, `skipCatalog = onlyPsn || onlySteam`, cuarto resultado `steamUsersResult`, summary condicional por modo. Interfaz `SteamOwnedGameEntry` añadida a la sección de tipos. **Ejecución Seithek**: SteamID64 resuelto correctamente a `76561198088669581`, pero `GetOwnedGames` devolvió 0 juegos — perfil de Steam privado. Comando: `cd apps/api && railway run -- npx tsx ../../scripts/seed-games.ts --only-steam --usernames="Seithek"`. API TS: 0 errores. Mobile TS: 0 errores.
+
+**Fecha**: 2026-05-31 (sesión 30) — Premium desactivado para lanzamiento inicial. `featureFlags.ts`: `premium: false`, `pointsRedeem: false`, `advancedStats: false`. `ComingSoon.tsx` creado (icono rocket, i18n `common.coming_soon_title/body`, botón Volver). `PremiumBanner.tsx`: guard `if (!FEATURES.premium) return null` antes de cualquier lógica. `premium.tsx`: guard `if (!FEATURES.premium) return <ComingSoon />` tras todos los hooks. `es.json` + `en.json`: claves `common.coming_soon_title/body` añadidas. Tests mockeados con `premium: true` en `PremiumBanner.test.tsx` y `PremiumScreen.test.tsx` para preservar cobertura del código de compra. Para reactivar en Fase 4: `premium: true`, `pointsRedeem: true`, `advancedStats: true` en `featureFlags.ts` — todo el backend (webhook RevenueCat, subscription service, hooks) intacto. TypeScript 0 errores · Lint 0 errores · 314/314 mobile tests pasando.
+
+**Fecha**: 2026-05-30 (sesión 29) — Revisión exhaustiva + 6 fixes. BUG-CRÍTICO-1 (email en perfil público): `mapPublicUser()` creada en `user.service.ts` excluyendo `email`/`passwordHash`/`birthDate`; `getPublicProfile` y `compareProfiles` usan `mapPublicUser`; tipo `PublicUser` nuevo en `packages/types`. BUG-CRÍTICO-2 (GDPR hard delete): `deleteAccount` reescrito con transacción Prisma atómica (soft delete → anonimizar ActivityEvent → eliminar PlatformAccount/PasswordResetToken → mantener UserPoint/UserChallenge); `authenticate.ts` verifica `deletedAt: null` en cada request; `gdpr-cleanup.scheduler.ts` nuevo — cron diario que borra físicamente usuarios con `deletedAt > 30 días`. BUG-MEDIO-3 (RA syncUserExpress con Promise.all): sustituido por `Promise.allSettled` con chunks de 3 — un juego fallido no aborta los demás. FIX-4 (rankings.tsx RefreshControl): `isManualRefreshing` local, elimina `isRefetching` del RefreshControl — mismo patrón que `index.tsx` sesión 18. FIX-5 (upsertUserScore secuencial): `getPlatformXp` lanzado en paralelo con `Promise.all` por plataforma. FIX-6 (useSubscription hardcoded): `CustomerInfo` de RevenueCat leído al montar; `subscriptionStatus.isPremium` deriva de RC con fallback a `user.isPremium` del JWT cuando RC no está configurado. Tests: 507 API (39 suites) + 314 mobile (26 suites). Cobertura API 81.72% stmt. 0 errores TS/lint.
 
 **Fecha**: 2026-06-18 (sesión 28) — 8 bugs + mejoras. BUG-1 (Steam privado): `checkSteamProfilePublic(steamId)` añadido en `steam.adapter.ts`; `linkSteamHandler` lo llama tras `resolveVanityUrl` — lanza `STEAM_PROFILE_PRIVATE` (400) antes de vincular; `steam.tsx` lo maneja con `err.apiError.code === 'STEAM_PROFILE_PRIVATE'`; i18n `error_profile_private` ES/EN. BUG-2 (ranking nacional eliminado): `KEYS.country` eliminado de `ranking.service.ts`; `upsertUserScore`/`removeUserFromRankings` sin `countryCode`; `getCountryRanking` eliminada; route `/country/:country` eliminada; `useCountryRanking` eliminada de `useRankings.ts`; filtro "Nacional" eliminado de `rankings.tsx`. BUG-3 (rankings plataforma usan XP total): `upsertUserScore` ahora llama `getPlatformXp(userId, platform)` por cada plataforma y usa el XP específico de esa plataforma para el sorted set — un usuario con 50k XP de Steam ya no aparece #1 en RA. BUG-4 (normalización RA): fórmula corregida a `Math.max(5, Math.round(points/5))` (antes `Math.min(100, Math.max(1, points))`); creado `scripts/backfill-ra-xp.ts` idempotente. BUG-5 (AppState listener): `AppState.addEventListener('change', ...)` en `index.tsx` invalida `my-games` cuando la app vuelve al frente — cubre el caso donde el sync nocturno terminó mientras la app estaba en background. BUG-6 (sort por rareza eliminado): `sortByRarity` state y botón eliminados de `game/[id].tsx` — rareza no es consistente entre plataformas. BUG-7 (Steam en español): `fetchGameSchema` añade `l: 'spanish'` y cambia clave de caché a `steam:schema:{appId}:es` — Steam hace fallback a inglés automáticamente. Tests nuevos: `steam.adapter.test.ts` (8 tests: `checkSteamProfilePublic` + `resolveVanityUrl`); actualización de fórmula RA en `retroachievements.adapter.test.ts`; `ranking.service.test.ts` reescrito con nueva API sin `countryCode` y con XP por plataforma; `sync.worker.test.ts` + `platform.service.test.ts` + `user.service.test.ts` actualizados. Tests: 491 API (37 suites) + 308 mobile (25 suites). 0 errores TS/lint.
 
