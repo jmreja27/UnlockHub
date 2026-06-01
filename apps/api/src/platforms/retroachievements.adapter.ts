@@ -5,6 +5,7 @@ import type { Achievement, Game, SyncResult } from '@unlockhub/types';
 import { prisma } from '../lib/prisma';
 import { redis } from '../lib/redis';
 import { AppError } from '../middleware/errorHandler';
+import { logger } from '../lib/logger';
 
 import type { PlatformAdapter, SyncBatchCallback } from './platform.interface';
 
@@ -472,10 +473,22 @@ export const retroAchievementsAdapter: PlatformAdapter = {
     let achievementsSynced = 0;
     let gamesUpdated = 0;
 
-    for (const [gameId, gameEntry] of entries) {
-      const r = await processRaGame(gameId, gameEntry, username, account.userId);
-      achievementsSynced += r.achievementsSynced;
-      gamesUpdated += r.gamesUpdated;
+    // Procesamiento paralelo con aislamiento por juego — igual que syncUser/syncUserBatched
+    for (let i = 0; i < entries.length; i += RA_PROCESS_CONCURRENCY) {
+      const chunk = entries.slice(i, i + RA_PROCESS_CONCURRENCY);
+      const results = await Promise.allSettled(
+        chunk.map(([gameId, gameEntry]) => processRaGame(gameId, gameEntry, username, account.userId)),
+      );
+      for (let j = 0; j < results.length; j++) {
+        const result = results[j];
+        if (result?.status === 'fulfilled') {
+          achievementsSynced += result.value.achievementsSynced;
+          gamesUpdated += result.value.gamesUpdated;
+        } else if (result?.status === 'rejected') {
+          const gameId = chunk[j]?.[0] ?? 'unknown';
+          logger.warn({ gameId, err: result.reason }, '[RA] syncUserExpress: error en juego individual — continuando');
+        }
+      }
     }
 
     return { platform: 'RA', achievementsSynced, gamesUpdated, syncedAt: new Date().toISOString() };

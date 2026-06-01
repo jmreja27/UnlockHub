@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import { useTranslation } from 'react-i18next';
 import { useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import type { RankingEntry } from '@unlockhub/types';
 
 import { useGlobalRankings, usePlatformRanking, useMyRanking } from '../../hooks/useRankings';
@@ -68,13 +69,24 @@ function RankingList({
   onPressUser: (username: string) => void;
 }) {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
 
   const globalQuery = useGlobalRankings(1, 50);
   const platformQuery = usePlatformRanking(filter !== 'global' ? filter : '', 1, 50);
 
   const query = filter === 'global' ? globalQuery : platformQuery;
 
-  const { data, isLoading, isError, error, refetch, isRefetching } = query;
+  const { data, isLoading, isError, error, refetch } = query;
+
+  async function handleRefresh(): Promise<void> {
+    setIsManualRefreshing(true);
+    try {
+      await queryClient.invalidateQueries({ queryKey: ['rankings'] });
+    } finally {
+      setIsManualRefreshing(false);
+    }
+  }
 
   const renderItem = useCallback(
     ({ item }: { item: RankingEntry }) => (
@@ -130,8 +142,8 @@ function RankingList({
       accessibilityLabel={t('rankings.list_label')}
       refreshControl={
         <RefreshControl
-          refreshing={isRefetching}
-          onRefresh={() => void refetch()}
+          refreshing={isManualRefreshing}
+          onRefresh={() => void handleRefresh()}
           tintColor="#818cf8"
           colors={['#4f46e5']}
           accessibilityLabel={t('rankings.refresh_label')}

@@ -1,4 +1,4 @@
-import type { User, PlatformAccount, PointReason, Platform } from '@unlockhub/types';
+import type { User, PublicUser, PlatformAccount, PointReason, Platform } from '@unlockhub/types';
 
 import { AppError } from '../middleware/errorHandler';
 import { prisma } from '../lib/prisma';
@@ -12,6 +12,33 @@ export const MAX_LEVEL = 100;
 
 export function calculateLevel(xp: number): number {
   return Math.min(Math.floor(xp / XP_PER_LEVEL) + 1, MAX_LEVEL);
+}
+
+// Transforma el usuario de Prisma al tipo público (sin email, passwordHash ni campos privados)
+function mapPublicUser(dbUser: {
+  id: string;
+  username: string;
+  avatar: string | null;
+  banner: string | null;
+  bio: string | null;
+  level: number;
+  xp: number;
+  streakDays: number;
+  countryCode: string | null;
+  createdAt: Date;
+}): PublicUser {
+  return {
+    id: dbUser.id,
+    username: dbUser.username,
+    avatar: dbUser.avatar,
+    banner: dbUser.banner,
+    bio: dbUser.bio,
+    level: dbUser.level,
+    xp: dbUser.xp,
+    streakDays: dbUser.streakDays,
+    countryCode: dbUser.countryCode,
+    createdAt: dbUser.createdAt.toISOString(),
+  };
 }
 
 // Transforma el usuario de Prisma al tipo compartido User (sin passwordHash)
@@ -104,12 +131,14 @@ export async function getProfile(
   };
 }
 
-// Obtiene el perfil público de un usuario por su username
+// Obtiene el perfil público de un usuario por su username.
+// Usa mapPublicUser para excluir email y otros campos privados.
+// Filtra usuarios con deletedAt !== null (GDPR soft delete — BUG-MEDIO-4).
 export async function getPublicProfile(
   username: string,
-): Promise<User & { platformAccounts: PlatformAccount[] }> {
+): Promise<PublicUser & { platformAccounts: PlatformAccount[] }> {
   const dbUser = await prisma.user.findUnique({
-    where: { username },
+    where: { username, deletedAt: null },
     include: {
       platformAccounts: {
         select: {
@@ -131,7 +160,7 @@ export async function getPublicProfile(
   }
 
   return {
-    ...mapUser(dbUser),
+    ...mapPublicUser(dbUser),
     platformAccounts: dbUser.platformAccounts.map(mapPlatformAccount),
   };
 }
@@ -413,7 +442,7 @@ export async function compareProfiles(
   sharedGameCount: number;
 }> {
   const targetUser = await prisma.user.findUnique({
-    where: { username: targetUsername },
+    where: { username: targetUsername, deletedAt: null },
     select: { id: true, username: true, level: true, xp: true, avatar: true },
   });
   if (!targetUser) throw new AppError('Usuario no encontrado', 'USER_NOT_FOUND', 404);
@@ -458,10 +487,12 @@ export async function compareProfiles(
   };
 }
 
-// Elimina la cuenta del usuario y todos sus datos asociados.
-// El cascade en Prisma borra automáticamente PlatformAccount, UserAchievement,
-// Friendship, ActivityEvent, UserPoint, Subscription, DeviceToken y RefreshToken.
-// También limpia las puntuaciones del usuario en todos los Sorted Sets de Redis.
+// Aplica el flujo de borrado GDPR especificado en CLAUDE.md:
+// 1. Soft delete: User.deletedAt = now() — el usuario no puede hacer login
+// 2. Anonimizar: ActivityEvent.payload → {}
+// 3. Eliminar: PlatformAccount y PasswordResetToken
+// 4. Mantener: UserPoint y UserChallenge (auditoría de puntos)
+// 5. El borrado físico lo ejecuta gdpr-cleanup.scheduler a los 30 días
 export async function deleteAccount(userId: string): Promise<void> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -471,12 +502,27 @@ export async function deleteAccount(userId: string): Promise<void> {
 
   const platforms = user.platformAccounts.map((a) => a.platform);
 
-  // Limpiar Redis antes de borrar BD para evitar datos huérfanos si falla la transacción
-  await removeUserFromRankings(userId, platforms);
+  await prisma.$transaction(async (tx) => {
+    // 1. Soft delete — impide login inmediatamente
+    await tx.user.update({
+      where: { id: userId },
+      data: { deletedAt: new Date() },
+    });
 
-  await prisma.$transaction([
-    prisma.user.delete({ where: { id: userId } }),
-  ]);
+    // 2. Anonimizar eventos de actividad
+    await tx.activityEvent.updateMany({
+      where: { userId },
+      data: { payload: {} },
+    });
+
+    // 3. Eliminar cuentas de plataforma y tokens de reset de contraseña
+    await tx.platformAccount.deleteMany({ where: { userId } });
+    await tx.passwordResetToken.deleteMany({ where: { userId } });
+    // UserPoint y UserChallenge se mantienen para integridad de auditoría
+  });
+
+  // Limpiar Redis fuera de la transacción (no admite operaciones externas)
+  await removeUserFromRankings(userId, platforms);
 }
 
 // Sube un avatar a Cloudinary y actualiza el campo avatar del usuario

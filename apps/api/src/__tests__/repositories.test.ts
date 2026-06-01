@@ -35,10 +35,12 @@ beforeEach(() => {
 // ─── user.repository ──────────────────────────────────────────────────────────
 
 describe('userRepository.findUserByEmail', () => {
-  it('llama a prisma.user.findUnique con where email', async () => {
+  it('llama a prisma.user.findUnique con where email y deletedAt null (GDPR)', async () => {
     (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
     await userRepo.findUserByEmail('test@example.com');
-    expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { email: 'test@example.com' } });
+    expect(prisma.user.findUnique).toHaveBeenCalledWith({
+      where: { email: 'test@example.com', deletedAt: null },
+    });
   });
 });
 

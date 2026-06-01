@@ -11,7 +11,9 @@
     "error_boundary_body": "An unexpected error occurred.",
     "error_boundary_retry": "Try again",
     "close": "Close",
-    "or": "or"
+    "or": "or",
+    "coming_soon_title": "Coming Soon",
+    "coming_soon_body": "We're working on this feature. Check back soon!"
   },
   "auth": {
     "login": {

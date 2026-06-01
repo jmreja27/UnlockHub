@@ -27,6 +27,20 @@ export interface User {
   createdAt: string;
 }
 
+// Perfil público: excluye email, isPremium, premiumUntil y lastSyncAt (campos privados)
+export interface PublicUser {
+  id: string;
+  username: string;
+  avatar: string | null;
+  banner: string | null;
+  bio: string | null;
+  level: number;
+  xp: number;
+  streakDays: number;
+  countryCode: string | null;
+  createdAt: string;
+}
+
 // Cuenta de plataforma externa (sin token cifrado)
 export interface PlatformAccount {
   id: string;

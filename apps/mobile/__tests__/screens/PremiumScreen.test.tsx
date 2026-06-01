@@ -10,6 +10,10 @@ import { usePremiumPlans } from '../../hooks/usePremiumPlans';
 jest.mock('../../hooks/useSubscription');
 jest.mock('../../hooks/usePremiumPlans');
 jest.mock('../../lib/api');
+// Activamos FEATURES.premium para testear la pantalla — en producción está desactivado hasta Fase 4
+jest.mock('../../lib/featureFlags', () => ({
+  FEATURES: { premium: true, pointsRedeem: true, advancedStats: true, challenges: false, wrapped: true, ugcGuides: true, notifications: true },
+}));
 jest.mock('expo-router', () => ({ router: { back: jest.fn(), push: jest.fn() } }));
 jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(),

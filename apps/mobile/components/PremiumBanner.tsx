@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useSubscription } from '../hooks/useSubscription';
 import { useSessionStore } from '../stores/sessionStore';
 import { PLAN_PRICES } from '../lib/iap';
+import { FEATURES } from '../lib/featureFlags';
 
 function formatExpiryDate(isoDate: string): string {
   return new Date(isoDate).toLocaleDateString('es-ES', {
@@ -95,6 +96,7 @@ export function PremiumBanner() {
   const { isAuthenticated } = useSessionStore();
   const { subscriptionStatus, isLoadingStatus } = useSubscription();
 
+  if (!FEATURES.premium) return null;
   if (!isAuthenticated || isLoadingStatus) return null;
 
   if (subscriptionStatus?.isPremium) {

@@ -37,10 +37,12 @@ export async function upsertUserScore(
   // Global: score = XP total del usuario
   await redis.zadd(KEYS.global, totalXp, userId);
 
-  // Plataformas: score = XP ganado SOLO en esa plataforma (no XP total)
-  for (const platform of platforms) {
-    const platformXp = await getPlatformXp(userId, platform);
-    await redis.zadd(KEYS.platform(platform), platformXp, userId);
+  // Plataformas: score = XP ganado SOLO en esa plataforma — queries en paralelo
+  if (platforms.length > 0) {
+    const platformXps = await Promise.all(platforms.map((p) => getPlatformXp(userId, p)));
+    await Promise.all(
+      platforms.map((p, i) => redis.zadd(KEYS.platform(p), platformXps[i] ?? 0, userId)),
+    );
   }
 }
 

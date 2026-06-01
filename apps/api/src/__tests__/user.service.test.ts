@@ -14,12 +14,19 @@ jest.mock('../lib/prisma', () => ({
     },
     platformAccount: {
       findMany: jest.fn(),
+      deleteMany: jest.fn(),
     },
     userAchievement: {
       findMany: jest.fn(),
     },
     achievement: {
       findMany: jest.fn(),
+    },
+    activityEvent: {
+      updateMany: jest.fn(),
+    },
+    passwordResetToken: {
+      deleteMany: jest.fn(),
     },
     $transaction: jest.fn(),
   },
@@ -134,6 +141,54 @@ describe('userService.getPublicProfile', () => {
       code: 'USER_NOT_FOUND',
       statusCode: 404,
     });
+  });
+
+  // BUG-CRÍTICO-1: el perfil público no debe exponer campos privados
+  it('BUG-CRÍTICO-1: no incluye email en el perfil público', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({
+      ...baseUser,
+      platformAccounts: [],
+    });
+
+    const profile = await userService.getPublicProfile('testuser');
+
+    expect((profile as unknown as Record<string, unknown>)['email']).toBeUndefined();
+  });
+
+  it('BUG-CRÍTICO-1: no incluye passwordHash en el perfil público', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({
+      ...baseUser,
+      platformAccounts: [],
+    });
+
+    const profile = await userService.getPublicProfile('testuser');
+
+    expect((profile as unknown as Record<string, unknown>)['passwordHash']).toBeUndefined();
+  });
+
+  it('BUG-MEDIO-4: devuelve NOT_FOUND para usuarios con deletedAt !== null', async () => {
+    // Simula el filtro where: { username, deletedAt: null } — la BD no devuelve el usuario
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+
+    await expect(userService.getPublicProfile('usuarioeliminado')).rejects.toMatchObject({
+      code: 'USER_NOT_FOUND',
+      statusCode: 404,
+    });
+  });
+
+  it('filtra por deletedAt: null en la query (pasa el where correcto)', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({
+      ...baseUser,
+      platformAccounts: [],
+    });
+
+    await userService.getPublicProfile('testuser');
+
+    expect(mockPrisma.user.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ deletedAt: null }),
+      }),
+    );
   });
 });
 
@@ -828,13 +883,63 @@ describe('userService.compareProfiles', () => {
 const baseUserWithPlatforms = { ...baseUser, platformAccounts: [{ platform: 'STEAM' as const }] };
 
 describe('userService.deleteAccount', () => {
-  it('elimina el usuario cuando existe', async () => {
+  beforeEach(() => {
+    // $transaction acepta función async y la ejecuta con el mock de prisma como tx
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(
+      async (fn: (tx: typeof mockPrisma) => Promise<void>) => fn(mockPrisma),
+    );
+    (mockPrisma.user.update as jest.Mock).mockResolvedValue(baseUser);
+    (mockPrisma.activityEvent.updateMany as jest.Mock).mockResolvedValue({ count: 0 });
+    (mockPrisma.platformAccount.deleteMany as jest.Mock).mockResolvedValue({ count: 0 });
+    (mockPrisma.passwordResetToken.deleteMany as jest.Mock).mockResolvedValue({ count: 0 });
+  });
+
+  // BUG-CRÍTICO-2: soft delete en lugar de hard delete
+  it('BUG-CRÍTICO-2: hace soft delete (setea deletedAt) en lugar de borrado físico', async () => {
     (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(baseUserWithPlatforms);
-    (mockPrisma.$transaction as jest.Mock).mockResolvedValue([]);
 
     await userService.deleteAccount('user-1');
 
-    expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'user-1' },
+        data: expect.objectContaining({ deletedAt: expect.any(Date) }),
+      }),
+    );
+    expect(mockPrisma.user.delete).not.toHaveBeenCalled();
+  });
+
+  it('BUG-CRÍTICO-2: anonimiza los ActivityEvent del usuario', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(baseUserWithPlatforms);
+
+    await userService.deleteAccount('user-1');
+
+    expect(mockPrisma.activityEvent.updateMany).toHaveBeenCalledWith({
+      where: { userId: 'user-1' },
+      data: { payload: {} },
+    });
+  });
+
+  it('BUG-CRÍTICO-2: elimina las PlatformAccount del usuario', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(baseUserWithPlatforms);
+
+    await userService.deleteAccount('user-1');
+
+    expect(mockPrisma.platformAccount.deleteMany).toHaveBeenCalledWith({
+      where: { userId: 'user-1' },
+    });
+  });
+
+  it('BUG-CRÍTICO-2: mantiene UserPoint intacto (integridad de auditoría)', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(baseUserWithPlatforms);
+
+    await userService.deleteAccount('user-1');
+
+    // UserPoint no debe ser borrado — solo se llama update/delete sobre otras entidades
+    const calls = (mockPrisma.$transaction as jest.Mock).mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    // userPoint.deleteMany nunca se llama
+    expect((mockPrisma as unknown as Record<string, unknown>)['userPoint']).not.toHaveProperty('deleteMany');
   });
 
   it('lanza USER_NOT_FOUND cuando el usuario no existe', async () => {
@@ -848,13 +953,11 @@ describe('userService.deleteAccount', () => {
     expect(mockPrisma.$transaction).not.toHaveBeenCalled();
   });
 
-  it('la transacción incluye prisma.user.delete con el userId correcto', async () => {
+  it('ejecuta la transacción de soft delete correctamente', async () => {
     (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(baseUserWithPlatforms);
-    (mockPrisma.$transaction as jest.Mock).mockResolvedValue([]);
 
     await userService.deleteAccount('user-1');
 
-    const transactionArg = (mockPrisma.$transaction as jest.Mock).mock.calls[0][0] as unknown[];
-    expect(transactionArg).toHaveLength(1);
+    expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
   });
 });

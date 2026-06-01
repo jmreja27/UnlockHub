@@ -11,7 +11,9 @@
     "error_boundary_body": "Se produjo un error inesperado.",
     "error_boundary_retry": "Reintentar",
     "close": "Cerrar",
-    "or": "o"
+    "or": "o",
+    "coming_soon_title": "Próximamente",
+    "coming_soon_body": "Estamos trabajando en esta funcionalidad. ¡Vuelve pronto!"
   },
   "auth": {
     "login": {

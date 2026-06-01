@@ -9,6 +9,10 @@ import { useSubscription } from '../../hooks/useSubscription';
 
 jest.mock('../../stores/sessionStore');
 jest.mock('../../hooks/useSubscription');
+// Activamos FEATURES.premium para testear el banner — en producción está desactivado hasta Fase 4
+jest.mock('../../lib/featureFlags', () => ({
+  FEATURES: { premium: true, pointsRedeem: true, advancedStats: true, challenges: false, wrapped: true, ugcGuides: true, notifications: true },
+}));
 
 const mockUseSessionStore = useSessionStore as unknown as jest.Mock;
 const mockUseSubscription = useSubscription as jest.Mock;

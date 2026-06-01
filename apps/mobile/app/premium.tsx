@@ -15,6 +15,8 @@ import { api } from '../lib/api';
 import { useSubscription } from '../hooks/useSubscription';
 import { usePremiumPlans } from '../hooks/usePremiumPlans';
 import type { PremiumPlan } from '../hooks/usePremiumPlans';
+import { FEATURES } from '../lib/featureFlags';
+import { ComingSoon } from '../components/ComingSoon';
 const PRIVACY_POLICY_URL = 'https://jmreja27.github.io/UnlockHub/privacy-policy.html';
 const TERMS_URL = 'https://jmreja27.github.io/UnlockHub/terms-of-service.html';
 const POINTS_PER_REDEEM = 300;
@@ -104,6 +106,9 @@ export default function PremiumScreen() {
   const canRedeem = pointsBalance >= POINTS_PER_REDEEM;
 
   const selectedPlan = plans.find((p) => p.packageType === selectedType) ?? plans[0];
+
+  // Guard — activar en Fase 4 tras configurar RevenueCat (B18/B19/B20)
+  if (!FEATURES.premium) return <ComingSoon />;
 
   async function handlePurchase() {
     if (!selectedPlan) return;

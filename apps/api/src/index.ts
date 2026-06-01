@@ -13,6 +13,7 @@ import { scheduleStreakJob } from './jobs/streak.scheduler';
 import { challengeWorker, scheduleChallengeEvaluation } from './jobs/challenge.scheduler';
 import { scheduleBackgroundSyncJob } from './jobs/background-sync.scheduler';
 import { scheduleShieldRecharge, shieldWorker } from './jobs/streak-shields.scheduler';
+import { scheduleGdprCleanupJob, gdprCleanupWorker } from './jobs/gdpr-cleanup.scheduler';
 import { redis } from './lib/redis';
 import { prisma } from './lib/prisma';
 import { logger } from './lib/logger';
@@ -36,6 +37,7 @@ server.listen(env.PORT, async () => {
     try { await scheduleChallengeEvaluation(); } catch (e) { logger.error({ err: e }, 'scheduleChallengeEvaluation falló (no fatal)'); }
     try { await scheduleBackgroundSyncJob(); } catch (e) { logger.error({ err: e }, 'scheduleBackgroundSyncJob falló (no fatal)'); }
     try { await scheduleShieldRecharge(); } catch (e) { logger.error({ err: e }, 'scheduleShieldRecharge falló (no fatal)'); }
+    try { await scheduleGdprCleanupJob(); } catch (e) { logger.error({ err: e }, 'scheduleGdprCleanupJob falló (no fatal)'); }
   }
 });
 
@@ -45,6 +47,7 @@ process.on('SIGTERM', async () => {
   await streakWorker.close();
   await challengeWorker.close();
   await shieldWorker.close();
+  await gdprCleanupWorker.close();
   io.close();
   await prisma.$disconnect();
   await redis.quit();

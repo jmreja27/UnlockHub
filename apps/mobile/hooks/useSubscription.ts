@@ -1,12 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import Purchases, { PURCHASES_ERROR_CODE } from 'react-native-purchases';
+import type { CustomerInfo } from 'react-native-purchases';
 
 import { api, refreshAccessToken } from '../lib/api';
+import { useSessionStore } from '../stores/sessionStore';
 
 import type { PremiumPlan } from './usePremiumPlans';
-
-const RC_API_KEY = process.env['EXPO_PUBLIC_REVENUECAT_API_KEY'];
 
 interface SubscriptionStatus {
   isPremium: boolean;
@@ -33,21 +33,43 @@ interface UseSubscriptionResult {
 
 export function useSubscription(): UseSubscriptionResult {
   const queryClient = useQueryClient();
+  const { user } = useSessionStore();
+  // Leer en el cuerpo del hook (no a nivel de módulo) para que los tests puedan controlar el valor
+  const rcApiKey = process.env['EXPO_PUBLIC_REVENUECAT_API_KEY'];
 
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [purchaseError, setPurchaseError] = useState<Error | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
+  const [isLoadingStatus, setIsLoadingStatus] = useState(!!rcApiKey);
+
+  // Cargar CustomerInfo al montar — fuente de verdad para el estado premium en UI
+  useEffect(() => {
+    if (!rcApiKey) return;
+    void Purchases.getCustomerInfo()
+      .then(setCustomerInfo)
+      .catch(() => {})
+      .finally(() => { setIsLoadingStatus(false); });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Derivar isPremium: RC es la fuente primaria; user.isPremium del JWT es fallback
+  const isPremiumFromRC =
+    customerInfo !== null
+      ? typeof customerInfo.entitlements.active['premium'] !== 'undefined'
+      : null;
 
   const subscriptionStatus: SubscriptionStatus = {
-    isPremium: false,
+    isPremium: isPremiumFromRC !== null ? isPremiumFromRC : (user?.isPremium ?? false),
     plan: null,
     expiresAt: null,
     provider: null,
   };
 
-  // Refresca el JWT tras una compra para que isPremium: true esté en el token sin hacer logout
-  async function syncPremiumState(): Promise<void> {
+  // Refresca el JWT y el CustomerInfo de RC tras una compra
+  async function syncPremiumState(newCustomerInfo?: CustomerInfo): Promise<void> {
+    if (newCustomerInfo) setCustomerInfo(newCustomerInfo);
     try {
       await refreshAccessToken();
       await queryClient.invalidateQueries({ queryKey: ['me'] });
@@ -61,14 +83,14 @@ export function useSubscription(): UseSubscriptionResult {
     setPurchaseError(null);
 
     try {
-      if (!RC_API_KEY || !plan.rcPackage) {
+      if (!rcApiKey || !plan.rcPackage) {
         throw new Error('RevenueCat no configurado. Configura EXPO_PUBLIC_REVENUECAT_API_KEY.');
       }
 
-      const { customerInfo } = await Purchases.purchasePackage(plan.rcPackage);
-      const isPremiumNow = typeof customerInfo.entitlements.active['premium'] !== 'undefined';
+      const { customerInfo: purchasedInfo } = await Purchases.purchasePackage(plan.rcPackage);
+      const isPremiumNow = typeof purchasedInfo.entitlements.active['premium'] !== 'undefined';
       if (isPremiumNow) {
-        await syncPremiumState();
+        await syncPremiumState(purchasedInfo);
       }
     } catch (err) {
       setPurchaseError(err instanceof Error ? err : new Error('Error desconocido'));
@@ -81,11 +103,11 @@ export function useSubscription(): UseSubscriptionResult {
   async function restorePurchases(): Promise<void> {
     setIsRestoring(true);
     try {
-      if (RC_API_KEY) {
-        const customerInfo = await Purchases.restorePurchases();
-        const isPremiumNow = typeof customerInfo.entitlements.active['premium'] !== 'undefined';
+      if (rcApiKey) {
+        const restoredInfo = await Purchases.restorePurchases();
+        const isPremiumNow = typeof restoredInfo.entitlements.active['premium'] !== 'undefined';
         if (isPremiumNow) {
-          await syncPremiumState();
+          await syncPremiumState(restoredInfo);
         }
       }
     } finally {
@@ -105,7 +127,7 @@ export function useSubscription(): UseSubscriptionResult {
 
   return {
     subscriptionStatus,
-    isLoadingStatus: false,
+    isLoadingStatus,
     statusError: null,
     purchase,
     isPurchasing,

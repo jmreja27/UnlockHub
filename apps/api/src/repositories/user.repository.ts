@@ -1,7 +1,8 @@
 import { prisma } from '../lib/prisma';
 
 export async function findUserByEmail(email: string) {
-  return prisma.user.findUnique({ where: { email } });
+  // deletedAt: null garantiza que usuarios con soft delete GDPR no pueden volver a autenticarse
+  return prisma.user.findUnique({ where: { email, deletedAt: null } });
 }
 
 export async function findUserById(id: string) {

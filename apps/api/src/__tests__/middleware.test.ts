@@ -6,6 +6,17 @@ import { authenticate } from '../middleware/authenticate';
 import { adminAuth } from '../middleware/adminAuth';
 import { signAccessToken } from '../lib/jwt';
 
+jest.mock('../lib/prisma', () => ({
+  prisma: {
+    user: {
+      findUnique: jest.fn(),
+    },
+  },
+}));
+
+import { prisma } from '../lib/prisma';
+const mockPrismaMiddleware = prisma as jest.Mocked<typeof prisma>;
+
 beforeEach(() => {
   process.env['JWT_ACCESS_SECRET'] = 'test_secret_at_least_32_characters_long_x';
 });
@@ -104,6 +115,11 @@ describe('errorHandler', () => {
 // ─── authenticate ─────────────────────────────────────────────────────────────
 
 describe('authenticate', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    process.env['JWT_ACCESS_SECRET'] = 'test_secret_at_least_32_characters_long_x';
+  });
+
   it('llama a next con AppError UNAUTHORIZED si no hay header Authorization', () => {
     const req = mockReq({});
     const res = mockRes();
@@ -124,16 +140,53 @@ describe('authenticate', () => {
     expect(next).toHaveBeenCalledWith(expect.objectContaining({ code: 'INVALID_TOKEN' }));
   });
 
-  it('adjunta user a req y llama a next sin errores con token válido', () => {
+  it('adjunta user a req y llama a next sin errores con token válido', async () => {
     const token = signAccessToken({ sub: 'user-1', email: 'a@b.com', isPremium: true });
     const req = mockReq({ authorization: `Bearer ${token}` });
     const res = mockRes();
     const next = jest.fn();
 
+    (mockPrismaMiddleware.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1' });
+
     authenticate(req, res, next);
+    await Promise.resolve(); // flush microtasks de la Promise de prisma
 
     expect(next).toHaveBeenCalledWith();
     expect((req as unknown as Record<string, unknown>).user).toMatchObject({ id: 'user-1', email: 'a@b.com', isPremium: true });
+  });
+
+  it('GDPR: rechaza tokens de usuarios con soft delete (deletedAt !== null)', async () => {
+    const token = signAccessToken({ sub: 'deleted-user', email: 'del@b.com', isPremium: false });
+    const req = mockReq({ authorization: `Bearer ${token}` });
+    const res = mockRes();
+    const next = jest.fn();
+
+    // La BD devuelve null porque deletedAt: null filtra el usuario eliminado
+    (mockPrismaMiddleware.user.findUnique as jest.Mock).mockResolvedValue(null);
+
+    authenticate(req, res, next);
+    await Promise.resolve();
+
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ code: 'ACCOUNT_DELETED' }));
+  });
+
+  it('continúa sin bloquear si la BD lanza error transitorio', async () => {
+    const token = signAccessToken({ sub: 'user-2', email: 'b@b.com', isPremium: false });
+    const req = mockReq({ authorization: `Bearer ${token}` });
+    const res = mockRes();
+    const next = jest.fn();
+
+    (mockPrismaMiddleware.user.findUnique as jest.Mock).mockRejectedValue(new Error('DB timeout'));
+
+    authenticate(req, res, next);
+    // La propagación de rechazo por .then().catch() requiere dos rondas de microtasks:
+    // 1ª ronda: rechazo de findUnique atraviesa .then() → p2 rechazada
+    // 2ª ronda: p2 rechazada dispara .catch() → next() llamado
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // Ante error de BD, la request no se bloquea (fail-open: seguridad vs disponibilidad)
+    expect(next).toHaveBeenCalledWith();
   });
 });
 
