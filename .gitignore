@@ -66,6 +66,7 @@ Thumbs.db
 
 # Expo / React Native
 *.jks
+*.keystore
 *.p8
 *.p12
 *.key
