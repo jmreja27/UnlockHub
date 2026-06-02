@@ -284,3 +284,60 @@ describe('POST /api/v1/users/me/avatar', () => {
     expect(res.body.code).toBe('UPLOAD_ERROR');
   });
 });
+
+// ─── POST /me/banner ──────────────────────────────────────────────────────────
+
+describe('POST /api/v1/users/me/banner', () => {
+  const updatedProfile = { ...baseProfile, banner: 'https://res.cloudinary.com/x/image/upload/banner.jpg' };
+
+  it('401 sin token de acceso', async () => {
+    const res = await request(app)
+      .post('/api/v1/users/me/banner')
+      .attach('banner', Buffer.from('fake-image'), { filename: 'banner.jpg', contentType: 'image/jpeg' });
+
+    expect(res.status).toBe(401);
+  });
+
+  it('400 cuando no se adjunta ningún archivo', async () => {
+    const res = await request(app)
+      .post('/api/v1/users/me/banner')
+      .set('Authorization', `Bearer ${validToken}`);
+
+    expect(res.status).toBe(400);
+  });
+
+  it('400 cuando el tipo de archivo no está permitido', async () => {
+    const res = await request(app)
+      .post('/api/v1/users/me/banner')
+      .set('Authorization', `Bearer ${validToken}`)
+      .attach('banner', Buffer.from('fake-gif'), { filename: 'banner.gif', contentType: 'image/gif' });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('200 con banner URL cuando la subida es exitosa', async () => {
+    mockUserService.uploadBanner.mockResolvedValue(updatedProfile);
+
+    const res = await request(app)
+      .post('/api/v1/users/me/banner')
+      .set('Authorization', `Bearer ${validToken}`)
+      .attach('banner', Buffer.from('fake-png'), { filename: 'banner.png', contentType: 'image/png' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.banner).toBe(updatedProfile.banner);
+  });
+
+  it('propaga errores del servicio', async () => {
+    mockUserService.uploadBanner.mockRejectedValue(
+      new AppError('Error al subir banner', 'UPLOAD_ERROR', 500),
+    );
+
+    const res = await request(app)
+      .post('/api/v1/users/me/banner')
+      .set('Authorization', `Bearer ${validToken}`)
+      .attach('banner', Buffer.from('fake-png'), { filename: 'banner.png', contentType: 'image/png' });
+
+    expect(res.status).toBe(500);
+    expect(res.body.code).toBe('UPLOAD_ERROR');
+  });
+});

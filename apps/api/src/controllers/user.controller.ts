@@ -163,3 +163,24 @@ export async function uploadAvatarHandler(
     next(err);
   }
 }
+
+// POST /api/v1/users/me/banner — subir banner del usuario autenticado
+export async function uploadBannerHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const userId = (req as AuthenticatedRequest).user.id;
+
+    if (!req.file) {
+      res.status(400).json({ error: 'No se proporcionó ningún archivo', code: 'NO_FILE' });
+      return;
+    }
+
+    const updated = await userService.uploadBanner(userId, req.file.buffer, req.file.mimetype);
+    res.json(updated);
+  } catch (err) {
+    next(err);
+  }
+}

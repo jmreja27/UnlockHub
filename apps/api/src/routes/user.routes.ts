@@ -11,9 +11,10 @@ import {
   compareProfilesHandler,
   deleteAccountHandler,
   uploadAvatarHandler,
+  uploadBannerHandler,
 } from '../controllers/user.controller';
 import { getMyStatsHandler } from '../controllers/stats.controller';
-import { uploadAvatar } from '../middleware/upload.middleware';
+import { uploadAvatar, uploadBanner } from '../middleware/upload.middleware';
 
 const router = Router();
 
@@ -21,6 +22,7 @@ const router = Router();
 router.get('/me', authenticate, getMeHandler);
 router.patch('/me', authenticate, updateMeHandler);
 router.post('/me/avatar', authenticate, uploadAvatar, uploadAvatarHandler);
+router.post('/me/banner', authenticate, uploadBanner, uploadBannerHandler);
 router.get('/me/games', authenticate, getMyGamesHandler);
 router.get('/me/games/:gameId/achievements', authenticate, getMyGameAchievementsHandler);
 router.get('/me/streak-milestone', authenticate, getStreakMilestoneHandler);

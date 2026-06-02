@@ -1,6 +1,15 @@
 import * as userService from '../services/user.service';
 import { AppError } from '../middleware/errorHandler';
 
+// Mock de Cloudinary
+jest.mock('../lib/cloudinary', () => ({
+  cloudinary: {
+    uploader: {
+      upload: jest.fn(),
+    },
+  },
+}));
+
 // Mock de Prisma
 jest.mock('../lib/prisma', () => ({
   prisma: {
@@ -39,6 +48,7 @@ jest.mock('../services/ranking.service', () => ({
 }));
 
 import { prisma } from '../lib/prisma';
+import { cloudinary } from '../lib/cloudinary';
 import { upsertUserScore } from '../services/ranking.service';
 
 const mockPrisma = prisma as jest.Mocked<typeof prisma>;
@@ -959,5 +969,107 @@ describe('userService.deleteAccount', () => {
     await userService.deleteAccount('user-1');
 
     expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ─── uploadAvatar ─────────────────────────────────────────────────────────────
+
+const mockCloudinary = cloudinary as jest.Mocked<typeof cloudinary>;
+
+describe('userService.uploadAvatar', () => {
+  beforeEach(() => {
+    (mockCloudinary.uploader.upload as jest.Mock).mockResolvedValue({
+      secure_url: 'https://res.cloudinary.com/test/avatars/user_user-1.jpg',
+    });
+    (mockPrisma.user.update as jest.Mock).mockResolvedValue({
+      ...baseUser,
+      avatar: 'https://res.cloudinary.com/test/avatars/user_user-1.jpg',
+    });
+  });
+
+  it('sube la imagen a Cloudinary con la carpeta y public_id correctos', async () => {
+    const buffer = Buffer.from('fake-image-data');
+
+    await userService.uploadAvatar('user-1', buffer, 'image/jpeg');
+
+    expect(mockCloudinary.uploader.upload).toHaveBeenCalledWith(
+      expect.stringContaining('data:image/jpeg;base64,'),
+      expect.objectContaining({
+        folder: 'unlockhub/avatars',
+        public_id: 'user_user-1',
+        overwrite: true,
+      }),
+    );
+  });
+
+  it('actualiza User.avatar con la URL segura de Cloudinary', async () => {
+    const buffer = Buffer.from('fake-image-data');
+
+    const result = await userService.uploadAvatar('user-1', buffer, 'image/jpeg');
+
+    expect(mockPrisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'user-1' },
+        data: { avatar: 'https://res.cloudinary.com/test/avatars/user_user-1.jpg' },
+      }),
+    );
+    expect(result.avatar).toBe('https://res.cloudinary.com/test/avatars/user_user-1.jpg');
+  });
+});
+
+// ─── uploadBanner ─────────────────────────────────────────────────────────────
+
+describe('userService.uploadBanner', () => {
+  beforeEach(() => {
+    (mockCloudinary.uploader.upload as jest.Mock).mockResolvedValue({
+      secure_url: 'https://res.cloudinary.com/test/banners/user-1-banner.jpg',
+    });
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1' });
+    (mockPrisma.user.update as jest.Mock).mockResolvedValue({
+      ...baseUser,
+      banner: 'https://res.cloudinary.com/test/banners/user-1-banner.jpg',
+    });
+  });
+
+  it('sube la imagen a Cloudinary con folder banners y public_id correcto', async () => {
+    const buffer = Buffer.from('fake-banner-data');
+
+    await userService.uploadBanner('user-1', buffer, 'image/jpeg');
+
+    expect(mockCloudinary.uploader.upload).toHaveBeenCalledWith(
+      expect.stringContaining('data:image/jpeg;base64,'),
+      expect.objectContaining({
+        folder: 'unlockhub/banners',
+        public_id: 'user-1-banner',
+        overwrite: true,
+      }),
+    );
+  });
+
+  it('actualiza User.banner con la URL segura de Cloudinary', async () => {
+    const buffer = Buffer.from('fake-banner-data');
+
+    const result = await userService.uploadBanner('user-1', buffer, 'image/jpeg');
+
+    expect(mockPrisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'user-1' },
+        data: { banner: 'https://res.cloudinary.com/test/banners/user-1-banner.jpg' },
+      }),
+    );
+    expect(result.banner).toBe('https://res.cloudinary.com/test/banners/user-1-banner.jpg');
+  });
+
+  it('lanza USER_NOT_FOUND si el userId no existe', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+
+    const buffer = Buffer.from('fake-banner-data');
+
+    await expect(userService.uploadBanner('noexiste', buffer, 'image/jpeg')).rejects.toMatchObject({
+      code: 'USER_NOT_FOUND',
+      statusCode: 404,
+    });
+
+    expect(mockCloudinary.uploader.upload).not.toHaveBeenCalled();
   });
 });

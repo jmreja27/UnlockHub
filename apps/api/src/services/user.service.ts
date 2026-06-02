@@ -543,3 +543,25 @@ export async function uploadAvatar(userId: string, fileBuffer: Buffer, mimetype:
 
   return mapUser(updated);
 }
+
+// Sube un banner a Cloudinary y actualiza el campo banner del usuario
+export async function uploadBanner(userId: string, fileBuffer: Buffer, mimetype: string): Promise<User> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+  if (!user) throw new AppError('Usuario no encontrado', 'USER_NOT_FOUND', 404);
+
+  const dataUri = `data:${mimetype};base64,${fileBuffer.toString('base64')}`;
+
+  const result = await cloudinary.uploader.upload(dataUri, {
+    folder: 'unlockhub/banners',
+    public_id: `${userId}-banner`,
+    overwrite: true,
+    transformation: [{ width: 1500, height: 500, crop: 'fill' }],
+  });
+
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data: { banner: result.secure_url },
+  });
+
+  return mapUser(updated);
+}

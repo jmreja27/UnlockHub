@@ -16,3 +16,15 @@ export const uploadAvatar = multer({
     }
   },
 }).single('avatar');
+
+export const uploadBanner = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_SIZE_BYTES },
+  fileFilter: (_req, file, cb) => {
+    if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new AppError('Formato no permitido. Usa JPG, PNG o WebP.', 'INVALID_FILE_TYPE', 400));
+    }
+  },
+}).single('banner');

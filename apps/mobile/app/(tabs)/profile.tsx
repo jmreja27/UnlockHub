@@ -132,6 +132,41 @@ export default function ProfileScreen() {
     },
   });
 
+  const bannerMutation = useMutation({
+    mutationFn: async () => {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(t('profile.avatar_permission_title'), t('profile.avatar_permission_message'));
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [3, 1],
+        quality: 0.8,
+      });
+      if (result.canceled || !result.assets[0]) return;
+      const uri = result.assets[0].uri;
+      const filename = uri.split('/').pop() ?? 'banner.jpg';
+      const ext = filename.split('.').pop()?.toLowerCase() ?? 'jpg';
+      const mimeMap: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
+      const type = mimeMap[ext] ?? 'image/jpeg';
+      const form = new FormData();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      form.append('banner', { uri, name: filename, type } as any);
+      return api.post('/api/v1/users/me/banner', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['profile'] });
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+    onError: () => {
+      Alert.alert(t('profile.banner_error_title'), t('profile.banner_error_message'));
+    },
+  });
+
   const avatarMutation = useMutation({
     mutationFn: async (uri: string) => {
       const form = new FormData();
@@ -310,6 +345,42 @@ export default function ProfileScreen() {
           />
         }
       >
+        {/* Banner de perfil — franja horizontal superior */}
+        <Pressable
+          onPress={() => { bannerMutation.mutate(); }}
+          accessibilityRole="button"
+          accessibilityLabel={t('profile.change_banner')}
+          style={{ width: '100%', height: 120 }}
+        >
+          {user.banner ? (
+            <Image
+              source={{ uri: user.banner }}
+              style={{ width: '100%', height: 120 }}
+              contentFit="cover"
+              accessibilityElementsHidden
+            />
+          ) : (
+            <View style={{ width: '100%', height: 120, backgroundColor: '#1e293b' }} />
+          )}
+          {bannerMutation.isPending ? (
+            <View
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' }}
+              accessibilityLiveRegion="polite"
+              accessibilityLabel={t('common.loading')}
+            >
+              <ActivityIndicator color="white" />
+            </View>
+          ) : (
+            <View
+              style={{ position: 'absolute', bottom: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20, padding: 6 }}
+              importantForAccessibility="no"
+              accessibilityElementsHidden
+            >
+              <Ionicons name="camera" size={18} color="white" />
+            </View>
+          )}
+        </Pressable>
+
         {/* Sección de avatar y datos principales */}
         <View
           className="items-center pt-6 pb-6 px-6"

@@ -1014,7 +1014,9 @@ Métricas disponibles:
 | Funcionalidad | Estado | Plataformas | Detalle |
 |---|---|---|---|
 | Avatar placeholder con iniciales | ✅ Activo | Mobile | `components/AvatarPlaceholder.tsx` · color determinista por username (paleta 8 colores) |
-| Bio y banner de perfil | ✅ Activo | Ambos | `profile.tsx` · `PATCH /api/v1/users/me` |
+| Upload de avatar (Cloudinary) | ✅ Activo | Ambos | `profile.tsx` · `POST /api/v1/users/me/avatar` · Cloudinary 256×256 crop/fill gravity face · expo-image-picker · badge cámara + spinner |
+| Bio y banner de perfil | ✅ Activo | Ambos | `profile.tsx` · `PATCH /api/v1/users/me` (bio/país) · `POST /api/v1/users/me/banner` (upload Cloudinary, crop 1500×500, aspect 3:1) |
+| Upload de banner (Cloudinary) | ✅ Activo | Ambos | `profile.tsx` · Pressable 120px sobre área de banner · `bannerMutation` aspect 3:1 · `folder: 'unlockhub/banners'` · mismo patrón que avatar |
 | País (countryCode) | ✅ Activo | Ambos | `profile.tsx` · afecta entrada en `ranking:global:{countryCode}` Redis set |
 | Idioma ES/EN persistente | ✅ Activo | Mobile | `stores/preferencesStore.ts` · `useLanguage` hook · AsyncStorage |
 | Tema (solo oscuro activo) | ⚙️ Parcial | Mobile | `profile.tsx` · selector oculto (`{/* TODO Fase 4 */}`) · modo claro no implementado |
@@ -1367,10 +1369,13 @@ Métricas disponibles:
 | F16 | SyncStatusBar — countdown local + aviso sync largo | ✅ Countdown `setTimeout`-chain independiente del `refetchInterval` 60s; aviso ámbar tras 30s de sync activo |
 | F17 | Onboarding paso 4 — CTAs de vinculación de plataformas | ✅ Paso 4 con botones Steam/PSN/RA → `router.replace('/link-platform/[x]')`, CTA secundario "Hacer esto más tarde" |
 | F18 | FriendshipButton consciente del estado de relación en perfil público | ✅ 5 estados (none/pending_sent/pending_received/accepted/blocked) · GET /api/v1/friends/status/:username · confirmación Alert en eliminar · sesión 35 |
+| F19 | Banner upload (Cloudinary) | ✅ POST /api/v1/users/me/banner · Pressable 120px en profile.tsx · aspect 3:1 · crop/fill 1500×500 · sesión 42 |
 
 ---
 
 ## Última revisión de código
+
+**Fecha**: 2026-07-01 (sesión 42) — Banner upload implementado. Backend: `uploadBanner` multer middleware en `upload.middleware.ts`; `uploadBanner()` en `user.service.ts` con guard `USER_NOT_FOUND`, Cloudinary `folder: 'unlockhub/banners'`, `public_id: '{userId}-banner'`, crop/fill 1500×500; `uploadBannerHandler` en `user.controller.ts` idéntico a avatar; `POST /api/v1/users/me/banner` con `authenticate` + middleware en `user.routes.ts`. Mobile: `Pressable` de 120px sobre el área del banner en `profile.tsx`; `bannerMutation` con `aspect: [3,1]` y FormData; badge cámara + spinner sobre el banner; 3 claves i18n ES/EN (`change_banner`, `banner_error_title`, `banner_error_message`). Tests: 15 nuevos (5 `user.service.test.ts` + 5 `user.routes.test.ts` + 5 mobile). Tests: 553 API + 358 mobile. Cobertura 83.45% stmt. 0 errores TS/lint.
 
 **Fecha**: 2026-06-30 (sesión 41) — Fix deploy Railway: `gdpr-cleanup.scheduler.ts` usaba conexión Redis por defecto (`maxRetriesPerRequest: 3`) para su BullMQ Worker — BullMQ Workers requieren `maxRetriesPerRequest: null`. Fix: import `createWorkerConnection` desde `../lib/redis` y sustituir `{ connection: redis }` por `{ connection: createWorkerConnection() }` en la creación del Worker (línea 52). Mock de `createWorkerConnection` añadido en `gdpr-cleanup.scheduler.test.ts`. Tests: 543/543. 0 errores TS/lint.
 
