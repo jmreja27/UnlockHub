@@ -165,7 +165,9 @@ export default function RankingsScreen() {
   const { user } = useSessionStore();
   const [activeFilter, setActiveFilter] = useState<RankingFilter>('global');
 
-  const { data: myRanking } = useMyRanking();
+  // Pasar el filtro activo para que "Mi posición" muestre XP del mismo sorted set que la lista.
+  // Sin filtro ('global') → XP total; con filtro ('STEAM'/'RA'/'PSN') → XP específico de plataforma.
+  const { data: myRanking } = useMyRanking(activeFilter !== 'global' ? activeFilter : undefined);
 
   const handlePressUser = useCallback(
     (username: string) => {

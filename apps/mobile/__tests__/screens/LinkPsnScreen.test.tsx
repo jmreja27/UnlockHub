@@ -65,53 +65,70 @@ describe('LinkPsnScreen', () => {
     expect(getByText('link_platform.psn.error_empty')).toBeTruthy();
   });
 
-  it('muestra el banner de perfil privado tras vincular con perfil privado', async () => {
-    mockedApi.post.mockResolvedValue(makeAccount({ psnProfilePrivate: true }));
-
-    const { getByTestId, getByText } = renderScreen();
-    fireEvent.changeText(getByTestId('psn-username-input'), 'PSNUser99');
-    fireEvent.press(getByText('link_platform.psn.submit'));
-
-    await waitFor(() => expect(getByTestId('psn-private-banner')).toBeTruthy());
-  });
-
-  it('muestra el botón "ir a biblioteca" cuando el perfil es privado', async () => {
-    mockedApi.post.mockResolvedValue(makeAccount({ psnProfilePrivate: true }));
-
-    const { getByTestId, getByText } = renderScreen();
-    fireEvent.changeText(getByTestId('psn-username-input'), 'PSNUser99');
-    fireEvent.press(getByText('link_platform.psn.submit'));
-
-    await waitFor(() => expect(getByTestId('psn-private-go-library')).toBeTruthy());
-  });
-
-  it('NO muestra el banner de perfil privado cuando el perfil es público', async () => {
+  it('navega de vuelta cuando el perfil PSN es público (201)', async () => {
     mockedApi.post.mockResolvedValue(makeAccount({ psnProfilePrivate: false }));
 
     // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/consistent-type-imports
     const { router } = require('expo-router') as typeof import('expo-router');
 
-    const { getByTestId, getByText, queryByTestId } = renderScreen();
-    fireEvent.changeText(getByTestId('psn-username-input'), 'PSNUser99');
-    fireEvent.press(getByText('link_platform.psn.submit'));
-
-    await waitFor(() => expect(router.back).toHaveBeenCalled());
-    expect(queryByTestId('psn-private-banner')).toBeNull();
-  });
-
-  it('NO muestra el banner antes de enviar el formulario', () => {
-    const { queryByTestId } = renderScreen();
-    expect(queryByTestId('psn-private-banner')).toBeNull();
-  });
-
-  it('muestra el toggle de pasos para hacer el perfil público en la vista privada', async () => {
-    mockedApi.post.mockResolvedValue(makeAccount({ psnProfilePrivate: true }));
-
     const { getByTestId, getByText } = renderScreen();
     fireEvent.changeText(getByTestId('psn-username-input'), 'PSNUser99');
     fireEvent.press(getByText('link_platform.psn.submit'));
 
-    await waitFor(() => expect(getByTestId('psn-private-guide-toggle')).toBeTruthy());
+    await waitFor(() => expect(router.back).toHaveBeenCalled());
+  });
+
+  // ── BUG-4: perfil privado ahora devuelve 400 y muestra error inline ─────────
+
+  it('BUG-4: muestra error inline error_profile_private cuando el servidor devuelve PSN_PROFILE_PRIVATE (400)', async () => {
+    mockedApi.post.mockRejectedValue(
+      new ApiRequestError({ error: 'Private profile', code: 'PSN_PROFILE_PRIVATE' }, 400),
+    );
+
+    const { getByTestId, getByText } = renderScreen();
+    fireEvent.changeText(getByTestId('psn-username-input'), 'PrivateUser');
+    fireEvent.press(getByText('link_platform.psn.submit'));
+
+    await waitFor(() => {
+      expect(getByText('link_platform.psn.error_profile_private')).toBeTruthy();
+    });
+  });
+
+  it('BUG-4: la vinculación no se completa cuando el perfil es privado — onSuccess no se llama', async () => {
+    mockedApi.post.mockRejectedValue(
+      new ApiRequestError({ error: 'Private profile', code: 'PSN_PROFILE_PRIVATE' }, 400),
+    );
+
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/consistent-type-imports
+    const { router } = require('expo-router') as typeof import('expo-router');
+
+    const { getByTestId, getByText } = renderScreen();
+    fireEvent.changeText(getByTestId('psn-username-input'), 'PrivateUser');
+    fireEvent.press(getByText('link_platform.psn.submit'));
+
+    await waitFor(() => {
+      expect(getByText('link_platform.psn.error_profile_private')).toBeTruthy();
+    });
+
+    // router.back nunca debe haberse llamado — la vinculación no se completó
+    expect(router.back).not.toHaveBeenCalled();
+  });
+
+  it('BUG-4: el campo de username queda editable y con su valor tras el error PSN_PROFILE_PRIVATE', async () => {
+    mockedApi.post.mockRejectedValue(
+      new ApiRequestError({ error: 'Private profile', code: 'PSN_PROFILE_PRIVATE' }, 400),
+    );
+
+    const { getByTestId, getByText } = renderScreen();
+    fireEvent.changeText(getByTestId('psn-username-input'), 'PrivateUser');
+    fireEvent.press(getByText('link_platform.psn.submit'));
+
+    await waitFor(() => {
+      expect(getByText('link_platform.psn.error_profile_private')).toBeTruthy();
+    });
+
+    // El input debe seguir con el valor original
+    expect(getByTestId('psn-username-input').props.value).toBe('PrivateUser');
   });
 
   it('muestra error_not_found en respuesta 404', async () => {

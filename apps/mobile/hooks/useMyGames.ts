@@ -52,7 +52,12 @@ export function useMyGames(platform?: string) {
     gcTime: 1000 * 60 * 15,
   });
 
-  const allGames = query.data?.pages.flatMap((p) => p.data) ?? [];
+  const seen = new Set<string>();
+  const allGames = (query.data?.pages.flatMap((p) => p.data) ?? []).filter((g) => {
+    if (seen.has(g.id)) return false;
+    seen.add(g.id);
+    return true;
+  });
   const total = query.data?.pages[0]?.total ?? 0;
   // Los aggregate stats vienen de la primera página y cubren TODOS los juegos (pre-paginación)
   const totalEarnedAchievements = query.data?.pages[0]?.totalEarnedAchievements ?? 0;

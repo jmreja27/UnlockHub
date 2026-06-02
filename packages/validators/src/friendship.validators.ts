@@ -1,8 +1,9 @@
 import { z } from 'zod';
 
-export const sendFriendRequestSchema = z.object({
-  receiverId: z.string().cuid(),
-});
+export const sendFriendRequestSchema = z.union([
+  z.object({ receiverId: z.string().cuid() }),
+  z.object({ username: z.string().min(3).max(30) }),
+]);
 
 export const friendshipActionSchema = z.object({
   friendshipId: z.string().cuid(),

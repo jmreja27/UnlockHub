@@ -70,13 +70,19 @@ export async function getPlatformRanking(
   return getRankingFromKey(KEYS.platform(platform), page, limit);
 }
 
-export async function getUserRank(userId: string): Promise<{
+export async function getUserRank(
+  userId: string,
+  platform?: string,
+): Promise<{
   rank: number | null;
   xp: number;
 }> {
+  // Sin filtro → sorted set global; con filtro → sorted set de plataforma
+  const key = platform ? KEYS.platform(platform) : KEYS.global;
+
   const [rankRaw, scoreRaw] = await Promise.all([
-    redis.zrevrank(KEYS.global, userId),
-    redis.zscore(KEYS.global, userId),
+    redis.zrevrank(key, userId),
+    redis.zscore(key, userId),
   ]);
 
   return {

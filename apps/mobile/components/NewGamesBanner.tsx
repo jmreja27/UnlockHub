@@ -48,7 +48,10 @@ export function NewGamesBanner({ count, onPress }: NewGamesBannerProps) {
         testID="new-games-banner"
         onPress={onPress}
         accessibilityRole="button"
-        accessibilityLabel={t('library.new_games_banner_a11y', { count })}
+        accessibilityLabel={t(
+          count === 1 ? 'library.new_games_banner_a11y_one' : 'library.new_games_banner_a11y_other',
+          { count },
+        )}
         style={({ pressed }) => ({
           flexDirection: 'row',
           alignItems: 'center',
@@ -66,7 +69,7 @@ export function NewGamesBanner({ count, onPress }: NewGamesBannerProps) {
       >
         <Ionicons name="arrow-up" size={14} color="white" />
         <Text style={{ color: 'white', fontSize: 12, fontWeight: '600' }}>
-          {t('library.new_games_banner', { count })}
+          {t(count === 1 ? 'library.new_games_banner_one' : 'library.new_games_banner_other', { count })}
         </Text>
       </Pressable>
     </Animated.View>

@@ -2,13 +2,40 @@ import type { Request, Response, NextFunction } from 'express';
 import { sendFriendRequestSchema, friendshipActionSchema, paginationSchema } from '@unlockhub/validators';
 
 import type { AuthenticatedRequest } from '../middleware/authenticate';
+import { findUserByUsername } from '../repositories/user.repository';
+import { AppError } from '../middleware/errorHandler';
 import * as friendshipService from '../services/friendship.service';
 
 export async function sendRequest(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { receiverId } = sendFriendRequestSchema.parse(req.body);
+    const body = sendFriendRequestSchema.parse(req.body);
+    let receiverId: string;
+
+    if ('receiverId' in body) {
+      receiverId = body.receiverId;
+    } else {
+      const targetUser = await findUserByUsername(body.username);
+      if (!targetUser || targetUser.deletedAt) {
+        throw new AppError('Usuario no encontrado.', 'USER_NOT_FOUND', 404);
+      }
+      receiverId = targetUser.id;
+    }
+
     const friendship = await friendshipService.sendFriendRequest((req as AuthenticatedRequest).user.id, receiverId);
     res.status(201).json(friendship);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getFriendshipStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { username } = req.params as { username: string };
+    const result = await friendshipService.getFriendshipStatus(
+      (req as AuthenticatedRequest).user.id,
+      username,
+    );
+    res.json(result);
   } catch (err) {
     next(err);
   }

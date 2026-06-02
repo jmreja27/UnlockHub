@@ -64,78 +64,22 @@ function PrivacyGuide() {
   );
 }
 
-function PrivateProfileSteps() {
-  const { t } = useTranslation();
-  const [expanded, setExpanded] = useState(false);
-
-  return (
-    <View className="mb-4">
-      <Pressable
-        onPress={() => setExpanded((v) => !v)}
-        accessibilityRole="button"
-        accessibilityLabel={expanded ? t('link_platform.guide_collapse') : t('link_platform.psn.profile_private_cta')}
-        accessibilityState={{ expanded }}
-        className="flex-row items-center justify-between bg-yellow-900 rounded-t-xl px-4 py-3"
-        style={{ minHeight: 44, borderBottomLeftRadius: expanded ? 0 : 12, borderBottomRightRadius: expanded ? 0 : 12 }}
-        testID="psn-private-guide-toggle"
-      >
-        <View className="flex-row items-center">
-          <Ionicons name="help-circle-outline" size={18} color="#fbbf24" style={{ marginRight: 8 }} accessibilityElementsHidden />
-          <Text className="text-yellow-300 text-sm font-semibold">{t('link_platform.psn.profile_private_cta')}</Text>
-        </View>
-        <Ionicons
-          name={expanded ? 'chevron-up' : 'chevron-down'}
-          size={18}
-          color="#d97706"
-          accessibilityElementsHidden
-        />
-      </Pressable>
-
-      {expanded && (
-        <View className="bg-yellow-900 rounded-b-xl px-4 pt-4 pb-3">
-          {([1, 2, 3] as const).map((n) => (
-            <View key={n} className="flex-row mb-3" accessible accessibilityLabel={t(`link_platform.psn.profile_private_step${n}`)}>
-              <View
-                className="w-6 h-6 rounded-full bg-yellow-600 items-center justify-center mr-3 mt-0.5"
-                accessibilityElementsHidden
-              >
-                <Text className="text-white text-xs font-bold">{n}</Text>
-              </View>
-              <Text className="text-yellow-100 text-sm leading-5 flex-1">
-                {t(`link_platform.psn.profile_private_step${n}`)}
-              </Text>
-            </View>
-          ))}
-        </View>
-      )}
-    </View>
-  );
-}
-
 export default function LinkPsnScreen() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [username, setUsername] = useState('');
   const [fieldError, setFieldError] = useState<string | null>(null);
-  const [linkedPrivate, setLinkedPrivate] = useState(false);
 
   const linkMutation = useMutation({
     mutationFn: (psnUsername: string) =>
       api.post<PlatformAccount>('/api/v1/platforms/psn/link', { username: psnUsername }),
-    onSuccess: (account) => {
+    onSuccess: () => {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       void queryClient.invalidateQueries({ queryKey: ['linkedPlatforms'] });
       void queryClient.invalidateQueries({ queryKey: ['platforms'] });
       void queryClient.invalidateQueries({ queryKey: ['sync-summary'] });
       void queryClient.invalidateQueries({ queryKey: ['my-games'] });
-
-      if (account.psnProfilePrivate) {
-        // No navegar — mostrar el banner de perfil privado en la misma pantalla
-        setLinkedPrivate(true);
-      } else {
-        // Perfil público: navegar de vuelta
-        router.back();
-      }
+      router.back();
     },
     onError: (err) => {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -146,6 +90,10 @@ export default function LinkPsnScreen() {
         }
         if (err.statusCode === 409) {
           setFieldError(t('link_platform.psn.error_already_linked'));
+          return;
+        }
+        if (err.statusCode === 400 && err.apiError.code === 'PSN_PROFILE_PRIVATE') {
+          setFieldError(t('link_platform.psn.error_profile_private'));
           return;
         }
         if (err.statusCode === 400) {
@@ -171,74 +119,7 @@ export default function LinkPsnScreen() {
     linkMutation.mutate(trimmed);
   }
 
-  // ─── Vista de perfil privado tras vincular ────────────────────────────────────
-  if (linkedPrivate) {
-    return (
-      <SafeAreaView className="flex-1 bg-gray-950">
-        <ScrollView
-          className="flex-1"
-          contentContainerStyle={{ padding: 24 }}
-        >
-          <Pressable
-            onPress={() => router.back()}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.back')}
-            className="mb-6 self-start"
-            style={{ minWidth: 44, minHeight: 44, justifyContent: 'center' }}
-          >
-            <Text className="text-blue-400 text-base">{t('common.back')}</Text>
-          </Pressable>
-
-          {/* Confirmación de vinculación */}
-          <View className="flex-row items-center mb-4">
-            <View className="bg-[#003791] rounded-lg px-3 py-1 mr-2">
-              <Text className="text-white text-xs font-bold">PlayStation</Text>
-            </View>
-            <Ionicons name="checkmark-circle" size={20} color="#22c55e" accessibilityElementsHidden />
-            <Text className="text-green-400 text-sm ml-1">{t('link_platform.psn.success')}</Text>
-          </View>
-
-          {/* Banner ⚠️ perfil privado */}
-          <View
-            className="bg-yellow-900 border border-yellow-600 rounded-xl p-4 mb-5"
-            accessible
-            accessibilityRole="alert"
-            accessibilityLabel={`${t('link_platform.psn.profile_private_title')}: ${t('link_platform.psn.profile_private_body')}`}
-            testID="psn-private-banner"
-          >
-            <View className="flex-row items-center mb-2">
-              <Ionicons name="warning" size={20} color="#fbbf24" accessibilityElementsHidden />
-              <Text className="text-yellow-300 text-base font-bold ml-2">
-                {t('link_platform.psn.profile_private_title')}
-              </Text>
-            </View>
-            <Text className="text-yellow-100 text-sm leading-5">
-              {t('link_platform.psn.profile_private_body')}
-            </Text>
-          </View>
-
-          {/* Pasos para hacer el perfil público */}
-          <PrivateProfileSteps />
-
-          {/* CTA para ir a la biblioteca */}
-          <Pressable
-            onPress={() => router.replace('/(tabs)/')}
-            accessibilityRole="button"
-            accessibilityLabel={t('link_platform.psn.profile_private_go_library')}
-            className="rounded-xl py-4 items-center justify-center bg-blue-600 mt-2"
-            style={{ minHeight: 52 }}
-            testID="psn-private-go-library"
-          >
-            <Text className="text-white font-semibold text-base">
-              {t('link_platform.psn.profile_private_go_library')}
-            </Text>
-          </Pressable>
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
-
-  // ─── Vista normal de vinculación ─────────────────────────────────────────────
+  // ─── Vista de vinculación ─────────────────────────────────────────────────────
   return (
     <SafeAreaView
       className="flex-1 bg-gray-950"

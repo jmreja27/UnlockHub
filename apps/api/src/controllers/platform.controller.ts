@@ -10,6 +10,7 @@ import * as platformService from '../services/platform.service';
 import { triggerExpressSync, queueInitialSync } from '../services/sync.service';
 import { logger } from '../lib/logger';
 import type { AuthenticatedRequest } from '../middleware/authenticate';
+import { AppError } from '../middleware/errorHandler';
 import { getSystemPsnAuth, lookupPsnUser, checkPsnProfilePrivacy } from '../platforms/psn.adapter';
 import { resolveVanityUrl, checkSteamProfilePublic } from '../platforms/steam.adapter';
 import { lookupRaUser } from '../platforms/retroachievements.adapter';
@@ -124,8 +125,16 @@ export async function linkPsnHandler(
     const auth = await getSystemPsnAuth();
     const { accountId, onlineId } = await lookupPsnUser(auth, username);
 
-    // Detectar si el perfil tiene los trofeos privados antes de vincular
+    // Rechazar la vinculación si el perfil tiene los trofeos privados —
+    // el usuario debe hacer su perfil público antes de vincular
     const isPrivate = await checkPsnProfilePrivacy(auth, accountId);
+    if (isPrivate) {
+      throw new AppError(
+        'Tu perfil de PSN es privado. Hazlo público para poder vincular tu cuenta.',
+        'PSN_PROFILE_PRIVATE',
+        400,
+      );
+    }
 
     const account = await platformService.linkPlatform(
       userId,
@@ -133,19 +142,15 @@ export async function linkPsnHandler(
       accountId,
       onlineId,
       '',  // PSN no usa token de usuario — el sistema usa PSN_SYSTEM_NPSSO
-      { psnProfilePrivate: isPrivate },
     );
 
-    if (!isPrivate) {
-      // Solo sincronizar si el perfil es público — no tiene sentido si los trofeos son privados
-      await Promise.race([
-        triggerExpressSync(userId, 'PSN'),
-        new Promise<void>((resolve) => setTimeout(resolve, EXPRESS_SYNC_TIMEOUT_MS)),
-      ]);
-      queueInitialSync(userId, 'PSN').catch((err: unknown) => {
-        logger.error({ err: (err as Error).message, userId, platform: 'PSN' }, '[Platform] queueInitialSync fallido');
-      });
-    }
+    await Promise.race([
+      triggerExpressSync(userId, 'PSN'),
+      new Promise<void>((resolve) => setTimeout(resolve, EXPRESS_SYNC_TIMEOUT_MS)),
+    ]);
+    queueInitialSync(userId, 'PSN').catch((err: unknown) => {
+      logger.error({ err: (err as Error).message, userId, platform: 'PSN' }, '[Platform] queueInitialSync fallido');
+    });
 
     res.status(201).json(account);
   } catch (err) {

@@ -42,12 +42,20 @@ export function usePlatformRanking(platform: string, page: number = 1, limit: nu
   });
 }
 
-export function useMyRanking() {
+export function useMyRanking(platform?: string) {
   const { isAuthenticated } = useSessionStore();
 
+  // Incluir el filtro en la queryKey para que global y plataforma usen cachés separados
+  const queryKey = platform
+    ? ([...RANKING_KEYS.me, platform] as const)
+    : RANKING_KEYS.me;
+  const url = platform
+    ? `/api/v1/rankings/me?platform=${platform}`
+    : '/api/v1/rankings/me';
+
   return useQuery({
-    queryKey: RANKING_KEYS.me,
-    queryFn: () => api.get<MyRankingResponse>('/api/v1/rankings/me'),
+    queryKey,
+    queryFn: () => api.get<MyRankingResponse>(url),
     enabled: isAuthenticated,
     staleTime: RANKING_STALE,
     gcTime: RANKING_GC,

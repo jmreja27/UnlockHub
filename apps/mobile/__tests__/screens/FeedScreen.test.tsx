@@ -21,6 +21,13 @@ jest.mock('../../hooks/useSyncStatus', () => ({
   useSyncStatus: jest.fn().mockReturnValue({ anyPlatformLinked: false }),
 }));
 jest.mock('../../stores/sessionStore');
+jest.mock('../../stores/preferencesStore', () => ({
+  usePreferencesStore: jest.fn().mockReturnValue({
+    librarySortOrder: 'last_played',
+    setLibrarySortOrder: jest.fn(),
+    loadPreferences: jest.fn(),
+  }),
+}));
 jest.mock('../../components/AdBanner', () => ({ AdBanner: () => null }));
 jest.mock('../../components/LibraryGameCard', () => ({
   // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -65,6 +72,8 @@ jest.mock('../../components/NewGamesBanner', () => ({
 const mockUseMyGames = useMyGames as jest.Mock;
 const mockUseSyncAll = useSyncAll as jest.Mock;
 const mockUseSessionStore = useSessionStore as unknown as jest.Mock;
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const mockUsePreferencesStore = (require('../../stores/preferencesStore') as { usePreferencesStore: jest.Mock }).usePreferencesStore;
 
 function renderWithClient(ui: React.ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -80,7 +89,9 @@ const baseMyGamesResult = {
   isError: false,
   refetch: jest.fn(),
   isRefetching: false,
-  fetchNextPage: jest.fn(),
+  // mockResolvedValue en lugar de jest.fn() para que fetchAllRemainingPages no crashee
+  // cuando hasNextPage=true: result.hasNextPage arrojaría TypeError si fetchNextPage retorna undefined
+  fetchNextPage: jest.fn().mockResolvedValue({ hasNextPage: false }),
   hasNextPage: false,
   isFetchingNextPage: false,
   dataUpdatedAt: 0,
@@ -135,6 +146,12 @@ describe('LibraryScreen', () => {
     jest.clearAllMocks();
     mockUseSessionStore.mockReturnValue({ user: { id: 'u1', username: 'jugador1', isPremium: false } });
     mockUseSyncAll.mockReturnValue(baseSyncResult);
+    // Sort por defecto: last_played — las tests que necesitan otro valor lo sobreescriben
+    mockUsePreferencesStore.mockReturnValue({
+      librarySortOrder: 'last_played',
+      setLibrarySortOrder: jest.fn(),
+      loadPreferences: jest.fn(),
+    });
   });
 
   it('renderiza el título de la biblioteca', () => {
@@ -336,6 +353,159 @@ describe('LibraryScreen', () => {
     });
 
     expect(queryByTestId('new-games-banner')).toBeNull();
+  });
+
+  // ── BUG-3: carga completa al montar con sort persistido y datos en caché ────────
+  // isLoading=false desde el inicio (datos en caché) + hasNextPage=true
+  // Con useEffect([isLoading]) el efecto NO se re-dispara (isLoading nunca cambia).
+  // La solución con initialLoadDoneRef + deps más amplias captura ambos casos.
+
+  it('BUG-3: con datos en caché (isLoading=false desde el inicio), carga todas las páginas al montar con sort activo', async () => {
+    const mockFetchNextPage = jest.fn().mockResolvedValue({ hasNextPage: false });
+
+    // Simula caché disponible: isLoading=false desde el principio + allGames ya populado
+    mockUseMyGames.mockReturnValue({
+      ...baseMyGamesResult,
+      allGames: sampleGames,
+      isLoading: false,
+      hasNextPage: true,
+      fetchNextPage: mockFetchNextPage,
+    });
+
+    mockUsePreferencesStore.mockReturnValue({
+      librarySortOrder: 'alpha_asc',
+      setLibrarySortOrder: jest.fn(),
+      loadPreferences: jest.fn(),
+    });
+
+    renderWithClient(<LibraryScreen />);
+
+    // fetchAllRemainingPages debe dispararse incluso sin transición isLoading true→false
+    await waitFor(() => {
+      expect(mockFetchNextPage).toHaveBeenCalled();
+    });
+  });
+
+  it('BUG-1: carga todas las páginas al montar con sort last_played cuando hasNextPage=true', async () => {
+    const mockFetchNextPage = jest.fn().mockResolvedValue({ hasNextPage: false });
+
+    mockUseMyGames.mockReturnValue({
+      ...baseMyGamesResult,
+      allGames: sampleGames,
+      isLoading: false,
+      hasNextPage: true,
+      fetchNextPage: mockFetchNextPage,
+    });
+
+    // Sort por defecto: last_played (ya configurado en beforeEach)
+
+    renderWithClient(<LibraryScreen />);
+
+    // Con el fix, last_played también carga todas las páginas para que el sort sea correcto
+    await waitFor(() => {
+      expect(mockFetchNextPage).toHaveBeenCalled();
+    });
+  });
+
+  // ── BUG-1: carga completa al montar con sort persistido distinto de last_played ──
+
+  it('BUG-1: llama fetchAllRemainingPages al montar cuando sort != last_played e isLoading pasa a false con hasNextPage=true', async () => {
+    const mockFetchNextPage = jest.fn().mockResolvedValue({ hasNextPage: false });
+
+    // Simular que la carga inicial acaba de terminar: isLoading=false + hasNextPage=true
+    mockUseMyGames.mockReturnValue({
+      ...baseMyGamesResult,
+      allGames: sampleGames,
+      isLoading: false,
+      hasNextPage: true,
+      fetchNextPage: mockFetchNextPage,
+    });
+
+    // Sort alpha_asc persistido (distinto de last_played)
+    mockUsePreferencesStore.mockReturnValue({
+      librarySortOrder: 'alpha_asc',
+      setLibrarySortOrder: jest.fn(),
+      loadPreferences: jest.fn(),
+    });
+
+    renderWithClient(<LibraryScreen />);
+
+    // El useEffect de BUG-1 debe disparar fetchNextPage al terminar la carga inicial
+    await waitFor(() => {
+      expect(mockFetchNextPage).toHaveBeenCalled();
+    });
+  });
+
+  it('BUG-1: carga todas las páginas al montar con sort last_played cuando allGames.length > 0 y hasNextPage=true', async () => {
+    const mockFetchNextPage = jest.fn().mockResolvedValue({ hasNextPage: false });
+
+    mockUseMyGames.mockReturnValue({
+      ...baseMyGamesResult,
+      allGames: sampleGames,
+      isLoading: false,
+      hasNextPage: true,
+      fetchNextPage: mockFetchNextPage,
+    });
+
+    // Sort por defecto: last_played (ya configurado en beforeEach)
+
+    renderWithClient(<LibraryScreen />);
+
+    // Con el fix, ya no hay early return para last_played — fetchNextPage debe llamarse
+    await waitFor(() => {
+      expect(mockFetchNextPage).toHaveBeenCalled();
+    });
+  });
+
+  // ── BUG-2: pull-to-refresh carga todas las páginas cuando hay sort activo ────
+
+  it('BUG-2: handleRefresh llama fetchNextPage cuando sort != last_played', async () => {
+    const mockFetchNextPage = jest.fn().mockResolvedValue({ hasNextPage: false });
+
+    mockUseMyGames.mockReturnValue({
+      ...baseMyGamesResult,
+      allGames: sampleGames,
+      hasNextPage: true,
+      fetchNextPage: mockFetchNextPage,
+    });
+
+    mockUsePreferencesStore.mockReturnValue({
+      librarySortOrder: 'pct_desc',
+      setLibrarySortOrder: jest.fn(),
+      loadPreferences: jest.fn(),
+    });
+
+    const { UNSAFE_getByType } = renderWithClient(<LibraryScreen />);
+    const list = UNSAFE_getByType(FlatList);
+
+    await act(async () => {
+      list.props.refreshControl.props.onRefresh();
+    });
+
+    expect(mockFetchNextPage).toHaveBeenCalled();
+  });
+
+  it('BUG-1: handleRefresh llama fetchNextPage con sort last_played cuando hasNextPage=true', async () => {
+    const mockFetchNextPage = jest.fn().mockResolvedValue({ hasNextPage: false });
+
+    mockUseMyGames.mockReturnValue({
+      ...baseMyGamesResult,
+      allGames: sampleGames,
+      hasNextPage: true,
+      fetchNextPage: mockFetchNextPage,
+    });
+
+    // Sort por defecto: last_played (ya configurado en beforeEach)
+
+    const { UNSAFE_getByType } = renderWithClient(<LibraryScreen />);
+    const list = UNSAFE_getByType(FlatList);
+
+    await act(async () => {
+      list.props.refreshControl.props.onRefresh();
+    });
+
+    // Con el fix, handleRefresh siempre llama fetchAllRemainingPages, sin condición por sort
+    expect(mockFetchNextPage).toHaveBeenCalled();
   });
 
   // ── Tests de sort con carga completa de páginas ──────────────────────────────

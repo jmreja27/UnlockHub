@@ -239,6 +239,31 @@ describe('search — type=users', () => {
     expect(result.games).toHaveLength(0);
     expect(mockGameFindMany).not.toHaveBeenCalled();
   });
+
+  it('BUG-2: excluye al usuario autenticado de los resultados cuando se pasa userId', async () => {
+    mockUserFindMany.mockResolvedValue([makeUser({ id: 'u2', username: 'otro_gamer' })]);
+
+    await search('gamer', 'users', undefined, 'u1');
+
+    expect(mockUserFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          NOT: { id: 'u1' },
+        }),
+      }),
+    );
+  });
+
+  it('BUG-2: no añade filtro NOT cuando no hay userId (usuario no autenticado)', async () => {
+    mockUserFindMany.mockResolvedValue([makeUser()]);
+
+    await search('gamer', 'users');
+
+    const call = (mockUserFindMany as jest.Mock).mock.calls[0]?.[0] as {
+      where: { NOT?: unknown };
+    };
+    expect(call?.where).not.toHaveProperty('NOT');
+  });
 });
 
 // ─── getGameWithAchievements ──────────────────────────────────────────────────

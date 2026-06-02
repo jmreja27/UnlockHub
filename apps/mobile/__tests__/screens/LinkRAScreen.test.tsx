@@ -78,7 +78,7 @@ describe('LinkRAScreen', () => {
     });
   });
 
-  it('muestra error_not_found en respuesta 404', async () => {
+  it('muestra error_user_not_found en respuesta 404 RA_USER_NOT_FOUND', async () => {
     mockedApi.post.mockRejectedValue(new ApiRequestError({ error: 'Not found', code: 'RA_USER_NOT_FOUND' }, 404));
 
     const { getByTestId, getByText } = renderScreen();
@@ -86,7 +86,8 @@ describe('LinkRAScreen', () => {
     fireEvent.press(getByText('link_platform.ra.submit'));
 
     await waitFor(() => {
-      expect(getByText('link_platform.ra.error_not_found')).toBeTruthy();
+      // BUG-4: usa clave específica error_user_not_found con mensaje descriptivo
+      expect(getByText('link_platform.ra.error_user_not_found')).toBeTruthy();
     });
   });
 

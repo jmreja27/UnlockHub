@@ -2,76 +2,36 @@ import { View, Text, TextInput, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import { useTranslation } from 'react-i18next';
-import type { GameSearchResult, UserSearchResult, AchievementSearchResult } from '@unlockhub/types';
+import type { GameSearchResult, UserSearchResult } from '@unlockhub/types';
 import { useState } from 'react';
 
 import { useSearch, type SearchFilter } from '../../hooks/useSearch';
-import { useSearchAchievements, type AchievementPlatformFilter } from '../../hooks/useSearchAchievements';
 import { GameCard } from '../../components/GameCard';
 import { UserCard } from '../../components/UserCard';
-import { AchievementSearchCard } from '../../components/AchievementSearchCard';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { AdBanner } from '../../components/AdBanner';
 
-type FullSearchFilter = SearchFilter | 'achievements';
-
-type FilterOption = { key: FullSearchFilter; labelKey: string };
-type PlatformFilterOption = { key: AchievementPlatformFilter; labelKey: string };
+type FilterOption = { key: SearchFilter; labelKey: string };
 
 const FILTERS: FilterOption[] = [
   { key: 'all', labelKey: 'search.filter_all' },
   { key: 'games', labelKey: 'search.filter_games' },
-  { key: 'achievements', labelKey: 'search.filter_achievements' },
   { key: 'users', labelKey: 'search.filter_users' },
-];
-
-const PLATFORM_FILTERS: PlatformFilterOption[] = [
-  { key: 'all', labelKey: 'search.platform_filter_all' },
-  { key: 'STEAM', labelKey: 'search.platform_filter_steam' },
-  { key: 'RA', labelKey: 'search.platform_filter_ra' },
-  { key: 'PSN', labelKey: 'search.platform_filter_psn' },
 ];
 
 type ListItem =
   | { kind: 'game'; data: GameSearchResult }
   | { kind: 'user'; data: UserSearchResult }
-  | { kind: 'achievement'; data: AchievementSearchResult }
   | { kind: 'section'; title: string }
   | { kind: 'empty'; message: string };
 
 export default function SearchScreen() {
   const { t } = useTranslation();
-  const [filter, setFilter] = useState<FullSearchFilter>('all');
-  const [platformFilter, setPlatformFilter] = useState<AchievementPlatformFilter>('all');
+  const [filter, setFilter] = useState<SearchFilter>('all');
 
-  // Búsqueda de juegos/usuarios — solo activa cuando filter !== 'achievements'
-  const gameUserSearch = useSearch(
-    (filter === 'achievements' ? 'all' : filter) as SearchFilter,
-  );
+  const { query, setQuery, data, isFetching, enabled } = useSearch(filter);
 
-  // Búsqueda de logros — solo activa cuando filter === 'achievements'
-  const achievementSearch = useSearchAchievements(platformFilter);
-
-  // Sincronizar la query entre los dos hooks
-  const query = filter === 'achievements' ? achievementSearch.query : gameUserSearch.query;
-  const setQuery = (q: string) => {
-    gameUserSearch.setQuery(q);
-    achievementSearch.setQuery(q);
-  };
-
-  const isFetching =
-    filter === 'achievements' ? achievementSearch.isFetching : gameUserSearch.isFetching;
-  const enabled =
-    filter === 'achievements' ? achievementSearch.enabled : gameUserSearch.enabled;
-
-  const items: ListItem[] = buildItems(
-    filter,
-    gameUserSearch.data,
-    achievementSearch.achievements,
-    achievementSearch.debouncedQuery,
-    enabled,
-    t,
-  );
+  const items: ListItem[] = buildItems(filter, data, enabled, t);
 
   return (
     <SafeAreaView className="flex-1 bg-surface">
@@ -138,39 +98,6 @@ export default function SearchScreen() {
         </ScrollView>
 
         <AdBanner unitId="search" />
-
-        {/* Sub-filtro de plataforma — solo visible cuando filter=achievements */}
-        {filter === 'achievements' && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: 6, paddingBottom: 2 }}
-            style={{ flexGrow: 0 }}
-          >
-            {PLATFORM_FILTERS.map((pf) => (
-              <Pressable
-                key={pf.key}
-                onPress={() => setPlatformFilter(pf.key)}
-                className={`px-3 py-1 rounded-full border ${
-                  platformFilter === pf.key
-                    ? 'bg-primary/20 border-primary'
-                    : 'border-gray-700 bg-transparent'
-                }`}
-                accessibilityRole="radio"
-                accessibilityState={{ checked: platformFilter === pf.key }}
-                accessibilityLabel={t(pf.labelKey)}
-              >
-                <Text
-                  className={`text-xs ${
-                    platformFilter === pf.key ? 'text-primary-light' : 'text-gray-500'
-                  }`}
-                >
-                  {t(pf.labelKey)}
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        )}
       </View>
 
       {/* Resultados */}
@@ -186,7 +113,6 @@ export default function SearchScreen() {
           keyExtractor={(item, i) => {
             if (item.kind === 'game') return `g-${item.data.id}`;
             if (item.kind === 'user') return `u-${item.data.id}`;
-            if (item.kind === 'achievement') return `a-${item.data.id}`;
             return `s-${i}`;
           }}
           renderItem={({ item }) => {
@@ -200,12 +126,6 @@ export default function SearchScreen() {
               return (
                 <View className="px-4">
                   <UserCard user={item.data} />
-                </View>
-              );
-            if (item.kind === 'achievement')
-              return (
-                <View className="px-4">
-                  <AchievementSearchCard achievement={item.data} />
                 </View>
               );
             if (item.kind === 'section')
@@ -222,15 +142,6 @@ export default function SearchScreen() {
           }}
           estimatedItemSize={72}
           contentContainerStyle={{ paddingBottom: 24 }}
-          onEndReached={() => {
-            if (
-              filter === 'achievements' &&
-              achievementSearch.hasNextPage &&
-              !achievementSearch.isFetchingNextPage
-            ) {
-              void achievementSearch.fetchNextPage();
-            }
-          }}
           onEndReachedThreshold={0.3}
         />
       )}
@@ -239,10 +150,8 @@ export default function SearchScreen() {
 }
 
 function buildItems(
-  filter: FullSearchFilter,
+  filter: SearchFilter,
   gameUserData: { games: GameSearchResult[]; users: UserSearchResult[] } | undefined,
-  achievements: AchievementSearchResult[],
-  debouncedQuery: string,
   enabled: boolean,
   t: (k: string, opts?: Record<string, unknown>) => string,
 ): ListItem[] {
@@ -250,19 +159,6 @@ function buildItems(
 
   const items: ListItem[] = [];
 
-  if (filter === 'achievements') {
-    if (achievements.length > 0) {
-      achievements.forEach((a) => items.push({ kind: 'achievement', data: a }));
-    } else if (debouncedQuery.length >= 2) {
-      items.push({
-        kind: 'empty',
-        message: t('search.achievements_empty', { query: debouncedQuery }),
-      });
-    }
-    return items;
-  }
-
-  // Filtros games / users / all
   if (!gameUserData) return [];
 
   if (filter !== 'users' && gameUserData.games.length > 0) {

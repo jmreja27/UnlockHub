@@ -43,10 +43,15 @@ export function GameCard({ game }: Props) {
         <Text className="text-white font-semibold text-sm" numberOfLines={1}>
           {game.title}
         </Text>
-        <Text className="text-gray-400 text-xs mt-0.5">
-          {t('search.achievements_count', { count: game.totalAchievements })}
-          {game.console ? ` · ${game.console}` : ''}
-        </Text>
+        {(game.totalAchievements > 0 || game.console) && (
+          <Text className="text-gray-400 text-xs mt-0.5">
+            {game.totalAchievements > 0
+              ? t('search.achievements_count', { count: game.totalAchievements })
+              : null}
+            {game.totalAchievements > 0 && game.console ? ' · ' : null}
+            {game.console ?? null}
+          </Text>
+        )}
       </View>
       <View
         className="px-2 py-0.5 rounded-full ml-2"

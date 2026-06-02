@@ -164,6 +164,7 @@ export default function LibraryScreen() {
   // terminó mientras la app estaba en background y la lista muestra datos del caché stale.
   useEffect(() => {
     if (user?.id) {
+      initialLoadDoneRef.current = false;
       void queryClient.invalidateQueries({ queryKey: ['my-games'] });
     }
   }, [user?.id, queryClient]);
@@ -173,6 +174,9 @@ export default function LibraryScreen() {
   useEffect(() => {
     const handleAppStateChange = (nextState: AppStateStatus) => {
       if (nextState === 'active' && user?.id) {
+        // Resetear el ref para que fetchAllRemainingPages se llame si el refetch parcial
+        // (página 1 sola) deja hasNextPage=true con sort no-predeterminado activo.
+        initialLoadDoneRef.current = false;
         void queryClient.invalidateQueries({ queryKey: ['my-games'] });
       }
     };
@@ -249,44 +253,52 @@ export default function LibraryScreen() {
     }
   }, [fetchNextPage, hasNextPage]);
 
-  // Ref para disparar fetchAllRemainingPages tras un pull-to-refresh con sort activo
-  const pendingFetchAllAfterRefreshRef = useRef(false);
+  // Ref que marca si la carga inicial de todas las páginas ya fue completada
+  // para el sort activo en el momento del montaje. Se resetea al cambiar el sort o al refrescar.
+  const initialLoadDoneRef = useRef(false);
 
   const handleRefresh = useCallback(async () => {
+    initialLoadDoneRef.current = false;
     setIsManualRefreshing(true);
     setShowNewGamesBanner(false);
-    setSeenGamesCount(allGames.length);
-    // Si el sort no es el default, cargar todas las páginas tras la recarga
-    if ((librarySortOrder ?? 'last_played') !== 'last_played') {
-      pendingFetchAllAfterRefreshRef.current = true;
-    }
+    setSeenGamesCount(0);
     try {
-      // resetQueries elimina el caché y recarga solo la primera página (no todas las cargadas),
-      // lo que reduce el tiempo del spinner de N requests a 1 request. El scroll infinito
-      // recargará el resto de páginas conforme el usuario haga scroll hacia abajo.
-      // Invalidar sync-summary para refrescar anyPlatformLinked y el estado de cooldown.
+      // resetQueries elimina el caché y recarga solo la primera página.
+      // Cargar todas las páginas a continuación para que el sort sea correcto sobre el set completo,
+      // independientemente del sort activo (incluido last_played — BUG-1).
       await Promise.all([
         queryClient.resetQueries({ queryKey: ['my-games'] }),
         queryClient.invalidateQueries({ queryKey: ['sync-summary'] }),
       ]);
+      await fetchAllRemainingPages();
     } finally {
       setIsManualRefreshing(false);
     }
-  }, [queryClient, allGames.length, librarySortOrder]);
+  }, [queryClient, fetchAllRemainingPages]);
 
-  // Dispara fetchAllRemainingPages cuando el sort está activo y la primera página ya cargó
+  // Carga todas las páginas pendientes al montar para que el sort client-side sea correcto
+  // sobre el set completo de juegos, independientemente del sort activo (incluido last_played).
+  // BUG-1: el early return para 'last_played' dejaba solo la página 1 cargada, lo que hacía
+  // que la ordenación operara solo sobre un subset y mostrara resultados incorrectos.
   useEffect(() => {
-    if (!pendingFetchAllAfterRefreshRef.current) return;
-    if (isLoading || isFetchingNextPage) return;
-    pendingFetchAllAfterRefreshRef.current = false;
-    if (hasNextPage) {
+    if (initialLoadDoneRef.current) return;
+
+    if (!isLoading && !isFetchingNextPage && hasNextPage) {
+      initialLoadDoneRef.current = true;
+      void fetchAllRemainingPages();
+      return;
+    }
+
+    if (allGames.length > 0 && hasNextPage && !isFetchingNextPage) {
+      initialLoadDoneRef.current = true;
       void fetchAllRemainingPages();
     }
-  }, [isLoading, isFetchingNextPage, hasNextPage, fetchAllRemainingPages]);
+  }, [allGames.length, isLoading, isFetchingNextPage, hasNextPage, librarySortOrder, fetchAllRemainingPages]);
 
   // Al cambiar el sort, carga todas las páginas pendientes para que la ordenación sea completa
   const handleSortChange = useCallback(
     async (newSort: LibrarySortOrder) => {
+      initialLoadDoneRef.current = false;
       setLibrarySortOrder(newSort);
       if (hasNextPage) {
         await fetchAllRemainingPages();

@@ -71,6 +71,9 @@ describe('rankingService.getUserRank', () => {
 
     expect(result.rank).toBe(1);
     expect(result.xp).toBe(1500);
+    // BUG-3: sin filtro de plataforma debe leer del sorted set global
+    expect(mockRedis.zrevrank).toHaveBeenCalledWith('ranking:global', 'u1');
+    expect(mockRedis.zscore).toHaveBeenCalledWith('ranking:global', 'u1');
   });
 
   it('devuelve null si el usuario no está en el ranking', async () => {
@@ -81,6 +84,42 @@ describe('rankingService.getUserRank', () => {
 
     expect(result.rank).toBeNull();
     expect(result.xp).toBe(0);
+  });
+
+  // BUG-3: filtro de plataforma — debe leer del sorted set de plataforma, no del global
+  it('BUG-3: con platform=PSN lee del sorted set ranking:platform:psn', async () => {
+    mockRedis.zrevrank.mockResolvedValue(2);
+    mockRedis.zscore.mockResolvedValue('850');
+
+    const result = await rankingService.getUserRank('u1', 'PSN');
+
+    expect(mockRedis.zrevrank).toHaveBeenCalledWith('ranking:platform:psn', 'u1');
+    expect(mockRedis.zscore).toHaveBeenCalledWith('ranking:platform:psn', 'u1');
+    expect(result.rank).toBe(3);
+    expect(result.xp).toBe(850);
+  });
+
+  it('BUG-3: con platform=STEAM lee del sorted set ranking:platform:steam', async () => {
+    mockRedis.zrevrank.mockResolvedValue(0);
+    mockRedis.zscore.mockResolvedValue('2000');
+
+    const result = await rankingService.getUserRank('u1', 'STEAM');
+
+    expect(mockRedis.zrevrank).toHaveBeenCalledWith('ranking:platform:steam', 'u1');
+    expect(result.xp).toBe(2000);
+  });
+
+  it('BUG-3: XP de getUserRank(platform=PSN) es el XP del sorted set PSN, no user.xp global', async () => {
+    // El XP global del usuario es 5000, pero solo tiene 900 XP de PSN
+    mockRedis.zrevrank.mockResolvedValue(5);
+    mockRedis.zscore.mockResolvedValue('900'); // XP específico de PSN en el sorted set
+
+    const result = await rankingService.getUserRank('u1', 'PSN');
+
+    // El XP devuelto debe ser el de PSN (900), no el total (5000)
+    expect(result.xp).toBe(900);
+    // Debe leer del sorted set correcto
+    expect(mockRedis.zscore).toHaveBeenCalledWith('ranking:platform:psn', 'u1');
   });
 });
 

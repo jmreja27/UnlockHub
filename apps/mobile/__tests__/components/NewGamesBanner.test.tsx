@@ -36,11 +36,19 @@ describe('NewGamesBanner', () => {
     expect(onPress).toHaveBeenCalledTimes(1);
   });
 
-  it('muestra el texto del banner (clave i18n)', () => {
+  it('usa la clave plural correcta cuando count > 1', () => {
     const { getByText } = render(
       <NewGamesBanner count={5} onPress={jest.fn()} />,
     );
-    // i18next en tests devuelve la clave cuando no hay traducciones cargadas
-    expect(getByText('library.new_games_banner')).toBeTruthy();
+    // i18next en tests devuelve la clave — verificamos que se usa la clave explícita correcta,
+    // no el base key (que no existe y mostraría 'library.new_games_banner' como literal en producción)
+    expect(getByText('library.new_games_banner_other')).toBeTruthy();
+  });
+
+  it('usa la clave singular correcta cuando count === 1', () => {
+    const { getByText } = render(
+      <NewGamesBanner count={1} onPress={jest.fn()} />,
+    );
+    expect(getByText('library.new_games_banner_one')).toBeTruthy();
   });
 });

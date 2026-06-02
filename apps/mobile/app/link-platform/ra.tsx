@@ -61,7 +61,7 @@ export default function LinkRAScreen() {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       if (err instanceof ApiRequestError) {
         if (err.statusCode === 404) {
-          setFieldError(t('link_platform.ra.error_not_found'));
+          setFieldError(t('link_platform.ra.error_user_not_found'));
           return;
         }
         if (err.statusCode === 409) {

@@ -127,6 +127,8 @@ export default function ProfileScreen() {
       // Los logros y juegos de la plataforma se borraron en el backend — actualizar la biblioteca
       void queryClient.invalidateQueries({ queryKey: ['my-games'] });
       void queryClient.invalidateQueries({ queryKey: ['my-stats'] });
+      // anyPlatformLinked puede quedar true en el caché hasta staleTime (30s) — forzar refetch
+      void queryClient.invalidateQueries({ queryKey: ['sync-summary'] });
     },
   });
 

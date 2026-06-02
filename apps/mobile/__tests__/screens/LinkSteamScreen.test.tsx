@@ -114,6 +114,37 @@ describe('LinkSteamScreen', () => {
     });
   });
 
+  it('BUG-4: muestra error_profile_private cuando el servidor devuelve STEAM_PROFILE_PRIVATE (400)', async () => {
+    mockedApi.post.mockRejectedValue(
+      new ApiRequestError({ error: 'Private profile', code: 'STEAM_PROFILE_PRIVATE' }, 400),
+    );
+
+    const { getByTestId, getByText } = renderScreen();
+    fireEvent.changeText(getByTestId('steam-username-input'), 'privateuser');
+    fireEvent.press(getByText('link_platform.steam.submit'));
+
+    await waitFor(() => {
+      expect(getByText('link_platform.steam.error_profile_private')).toBeTruthy();
+    });
+  });
+
+  it('BUG-4: el input de username no se limpia tras el error STEAM_PROFILE_PRIVATE', async () => {
+    mockedApi.post.mockRejectedValue(
+      new ApiRequestError({ error: 'Private profile', code: 'STEAM_PROFILE_PRIVATE' }, 400),
+    );
+
+    const { getByTestId, getByText } = renderScreen();
+    fireEvent.changeText(getByTestId('steam-username-input'), 'privateuser');
+    fireEvent.press(getByText('link_platform.steam.submit'));
+
+    await waitFor(() => {
+      expect(getByText('link_platform.steam.error_profile_private')).toBeTruthy();
+    });
+
+    // El input conserva el valor — el usuario no pierde lo que escribió
+    expect(getByTestId('steam-username-input').props.value).toBe('privateuser');
+  });
+
   it('muestra el alert de éxito tras vincular correctamente', async () => {
     mockedApi.post.mockResolvedValue({
       id: 'acct-1',

@@ -1,6 +1,7 @@
-import type { Friendship, PaginatedResponse } from '@unlockhub/types';
+import type { Friendship, FriendshipStatusResult, PaginatedResponse } from '@unlockhub/types';
 
 import { friendshipRepository } from '../repositories/friendship.repository';
+import { findUserByUsername } from '../repositories/user.repository';
 import { AppError } from '../middleware/errorHandler';
 
 import { createEvent } from './activity.service';
@@ -97,11 +98,46 @@ export async function unfriend(friendshipId: string, userId: string): Promise<vo
   if (friendship.senderId !== userId && friendship.receiverId !== userId) {
     throw new AppError('No tienes permiso para eliminar esta amistad.', 'FORBIDDEN', 403);
   }
-  if (friendship.status !== 'ACCEPTED') {
+
+  if (friendship.status === 'PENDING') {
+    // Solo el emisor puede cancelar una solicitud pendiente
+    if (friendship.senderId !== userId) {
+      throw new AppError('No tienes permiso para cancelar esta solicitud.', 'FORBIDDEN', 403);
+    }
+  } else if (friendship.status !== 'ACCEPTED') {
     throw new AppError('No sois amigos.', 'NOT_FRIENDS', 409);
   }
 
   await friendshipRepository.delete(friendshipId);
+}
+
+export async function getFriendshipStatus(
+  currentUserId: string,
+  targetUsername: string,
+): Promise<FriendshipStatusResult> {
+  const targetUser = await findUserByUsername(targetUsername);
+  if (!targetUser || targetUser.deletedAt) {
+    throw new AppError('Usuario no encontrado.', 'USER_NOT_FOUND', 404);
+  }
+  if (currentUserId === targetUser.id) {
+    throw new AppError('No puedes consultar tu propio estado de amistad.', 'CANNOT_CHECK_SELF', 400);
+  }
+
+  const friendship = await friendshipRepository.findBetween(currentUserId, targetUser.id);
+  if (!friendship) {
+    return { status: 'none' };
+  }
+  if (friendship.status === 'BLOCKED') {
+    return { status: 'blocked' };
+  }
+  if (friendship.status === 'ACCEPTED') {
+    return { status: 'accepted', friendshipId: friendship.id };
+  }
+  // PENDING — determinar dirección
+  if (friendship.senderId === currentUserId) {
+    return { status: 'pending_sent', friendshipId: friendship.id };
+  }
+  return { status: 'pending_received', friendshipId: friendship.id };
 }
 
 export async function getFriends(

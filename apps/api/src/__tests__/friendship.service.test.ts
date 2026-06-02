@@ -1,15 +1,50 @@
-import { sendFriendRequest, acceptFriendRequest, rejectFriendRequest, unfriend, getFriends, getPendingRequests } from '../services/friendship.service';
+import {
+  sendFriendRequest,
+  acceptFriendRequest,
+  rejectFriendRequest,
+  unfriend,
+  getFriends,
+  getPendingRequests,
+  getFriendshipStatus,
+} from '../services/friendship.service';
 import { friendshipRepository } from '../repositories/friendship.repository';
+import { findUserByUsername } from '../repositories/user.repository';
 
 jest.mock('../repositories/friendship.repository');
+jest.mock('../repositories/user.repository');
 
 const mockRepo = friendshipRepository as jest.Mocked<typeof friendshipRepository>;
+const mockFindUser = findUserByUsername as jest.MockedFunction<typeof findUserByUsername>;
 
 const makeFriendship = (overrides = {}) => ({
   id: 'f1',
   senderId: 'userA',
   receiverId: 'userB',
   status: 'PENDING' as const,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  ...overrides,
+});
+
+const makeUser = (overrides: Partial<{ id: string; username: string; deletedAt: Date | null }> = {}) => ({
+  id: 'targetId',
+  username: 'targetUser',
+  email: 'target@test.com',
+  passwordHash: 'hash',
+  avatar: null,
+  banner: null,
+  bio: null,
+  level: 1,
+  xp: 0,
+  streakDays: 0,
+  streakShields: 0,
+  countryCode: null,
+  role: 'USER' as const,
+  isPremium: false,
+  premiumUntil: null,
+  lastSyncAt: null,
+  deletedAt: null,
+  birthDate: null,
   createdAt: new Date(),
   updatedAt: new Date(),
   ...overrides,
@@ -91,9 +126,16 @@ describe('unfriend', () => {
     await expect(unfriend('f1', 'userC')).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 
-  it('lanza error si no son amigos', async () => {
+  it('cancela la solicitud PENDING si el emisor la solicita', async () => {
     mockRepo.findById.mockResolvedValue(makeFriendship({ status: 'PENDING' }));
-    await expect(unfriend('f1', 'userA')).rejects.toMatchObject({ code: 'NOT_FRIENDS' });
+    mockRepo.delete.mockResolvedValue(makeFriendship());
+    await expect(unfriend('f1', 'userA')).resolves.toBeUndefined();
+    expect(mockRepo.delete).toHaveBeenCalledWith('f1');
+  });
+
+  it('lanza FORBIDDEN si el receptor intenta cancelar una solicitud pendiente', async () => {
+    mockRepo.findById.mockResolvedValue(makeFriendship({ status: 'PENDING' }));
+    await expect(unfriend('f1', 'userB')).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 });
 
@@ -114,5 +156,57 @@ describe('getPendingRequests', () => {
     const result = await getPendingRequests('userB', 1, 20);
     expect(result.total).toBe(1);
     expect(result.data[0]?.status).toBe('PENDING');
+  });
+});
+
+describe('getFriendshipStatus', () => {
+  it('lanza USER_NOT_FOUND si el username no existe', async () => {
+    mockFindUser.mockResolvedValue(null);
+    await expect(getFriendshipStatus('currentId', 'ghost')).rejects.toMatchObject({ code: 'USER_NOT_FOUND' });
+  });
+
+  it('lanza USER_NOT_FOUND si el usuario tiene soft delete', async () => {
+    mockFindUser.mockResolvedValue(makeUser({ deletedAt: new Date() }));
+    await expect(getFriendshipStatus('currentId', 'deleted')).rejects.toMatchObject({ code: 'USER_NOT_FOUND' });
+  });
+
+  it('lanza CANNOT_CHECK_SELF si se consulta el propio username', async () => {
+    mockFindUser.mockResolvedValue(makeUser({ id: 'currentId' }));
+    await expect(getFriendshipStatus('currentId', 'me')).rejects.toMatchObject({ code: 'CANNOT_CHECK_SELF' });
+  });
+
+  it('devuelve none cuando no hay relación', async () => {
+    mockFindUser.mockResolvedValue(makeUser({ id: 'targetId' }));
+    mockRepo.findBetween.mockResolvedValue(null);
+    const result = await getFriendshipStatus('currentId', 'targetUser');
+    expect(result).toEqual({ status: 'none' });
+  });
+
+  it('devuelve pending_sent cuando el current envió la solicitud', async () => {
+    mockFindUser.mockResolvedValue(makeUser({ id: 'targetId' }));
+    mockRepo.findBetween.mockResolvedValue(makeFriendship({ senderId: 'currentId', receiverId: 'targetId', status: 'PENDING' }));
+    const result = await getFriendshipStatus('currentId', 'targetUser');
+    expect(result).toEqual({ status: 'pending_sent', friendshipId: 'f1' });
+  });
+
+  it('devuelve pending_received cuando el target envió la solicitud', async () => {
+    mockFindUser.mockResolvedValue(makeUser({ id: 'targetId' }));
+    mockRepo.findBetween.mockResolvedValue(makeFriendship({ senderId: 'targetId', receiverId: 'currentId', status: 'PENDING' }));
+    const result = await getFriendshipStatus('currentId', 'targetUser');
+    expect(result).toEqual({ status: 'pending_received', friendshipId: 'f1' });
+  });
+
+  it('devuelve accepted cuando son amigos', async () => {
+    mockFindUser.mockResolvedValue(makeUser({ id: 'targetId' }));
+    mockRepo.findBetween.mockResolvedValue(makeFriendship({ status: 'ACCEPTED' }));
+    const result = await getFriendshipStatus('currentId', 'targetUser');
+    expect(result).toEqual({ status: 'accepted', friendshipId: 'f1' });
+  });
+
+  it('devuelve blocked cuando hay bloqueo', async () => {
+    mockFindUser.mockResolvedValue(makeUser({ id: 'targetId' }));
+    mockRepo.findBetween.mockResolvedValue(makeFriendship({ status: 'BLOCKED' }));
+    const result = await getFriendshipStatus('currentId', 'targetUser');
+    expect(result).toEqual({ status: 'blocked' });
   });
 });

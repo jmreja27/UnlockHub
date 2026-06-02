@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { View, Text, ScrollView, Pressable, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -6,11 +7,11 @@ import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 
 import { usePublicProfile } from '../../hooks/usePublicProfile';
-import { useFriends } from '../../hooks/useFriends';
 import { useSessionStore } from '../../stores/sessionStore';
 import { api } from '../../lib/api';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { AvatarPlaceholder } from '../../components/AvatarPlaceholder';
+import { FriendshipButton } from '../../components/FriendshipButton';
 
 interface CompareResult {
   targetUser: { username: string; level: number; xp: number; avatar: string | null };
@@ -39,8 +40,17 @@ export default function PublicProfileScreen() {
   const { t } = useTranslation();
 
   const { data: profile, isLoading, isError, refetch } = usePublicProfile(username ?? '');
-  const { sendRequest, isSending } = useFriends();
   const isAuthenticated = useSessionStore((s) => s.isAuthenticated);
+  const currentUser = useSessionStore((s) => s.user);
+
+  // Si el usuario visita su propio perfil (deep link, búsqueda con datos stale, etc.),
+  // redirigir a la pestaña de perfil propio en lugar de mostrar el perfil público.
+  // Se ejecuta solo cuando profile está cargado para no redirigir con datos indefinidos.
+  useEffect(() => {
+    if (currentUser && profile?.username === currentUser.username) {
+      router.replace('/(tabs)/profile');
+    }
+  }, [currentUser, profile?.username, router]);
 
   const { data: compareData } = useQuery({
     queryKey: ['compare', username],
@@ -48,10 +58,6 @@ export default function PublicProfileScreen() {
     enabled: !!username && isAuthenticated,
     staleTime: 1000 * 60 * 5,
   });
-
-  function handleAddFriend() {
-    if (profile) sendRequest(profile.id);
-  }
 
   return (
     <SafeAreaView className="flex-1 bg-surface">
@@ -126,18 +132,7 @@ export default function PublicProfileScreen() {
               <Text className="text-gray-300 text-sm mt-3">{profile.bio}</Text>
             ) : null}
 
-            <Pressable
-              onPress={handleAddFriend}
-              disabled={isSending}
-              className="mt-4 bg-indigo-600 rounded-xl py-3 items-center"
-              accessibilityLabel={t('friends.add_friend_hint', { username: profile.username })}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: isSending }}
-            >
-              <Text className="text-white font-semibold">
-                {isSending ? t('common.loading') : t('friends.add_friend')}
-              </Text>
-            </Pressable>
+            <FriendshipButton username={profile.username} />
 
             {profile.platformAccounts.length > 0 && (
               <View className="mt-6">

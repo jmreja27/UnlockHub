@@ -21,7 +21,7 @@ export async function search(
 
   const [games, users, achievements] = await Promise.all([
     type !== 'users' && type !== 'achievements' ? searchGames(q) : Promise.resolve([]),
-    type !== 'games' && type !== 'achievements' ? searchUsers(q) : Promise.resolve([]),
+    type !== 'games' && type !== 'achievements' ? searchUsers(q, userId) : Promise.resolve([]),
     type === 'achievements' ? searchAchievements(q, platform, userId, page) : Promise.resolve([]),
   ]);
 
@@ -163,9 +163,12 @@ async function upsertShellGames(
 
 // ─── Users ────────────────────────────────────────────────────────────────────
 
-async function searchUsers(q: string): Promise<UserSearchResult[]> {
+async function searchUsers(q: string, userId?: string): Promise<UserSearchResult[]> {
   const rows = await prisma.user.findMany({
-    where: { username: { contains: q, mode: 'insensitive' } },
+    where: {
+      username: { contains: q, mode: 'insensitive' },
+      ...(userId ? { NOT: { id: userId } } : {}),
+    },
     select: { id: true, username: true, avatar: true, level: true, xp: true },
     orderBy: { username: 'asc' },
     take: MAX_RESULTS,

@@ -126,6 +126,14 @@ export interface SyncCooldownConfig {
 
 export type FriendshipStatus = 'PENDING' | 'ACCEPTED' | 'BLOCKED';
 
+// Estado de la relación entre el usuario autenticado y otro usuario (vista desde el perfil público)
+export type FriendshipStatusResult =
+  | { status: 'none' }
+  | { status: 'pending_sent'; friendshipId: string }
+  | { status: 'pending_received'; friendshipId: string }
+  | { status: 'accepted'; friendshipId: string }
+  | { status: 'blocked' };
+
 export interface Friendship {
   id: string;
   senderId: string;
