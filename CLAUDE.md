@@ -1219,6 +1219,7 @@ Métricas disponibles:
 | `fetchAllRemainingPages` se llama para todos los sorts incluyendo `last_played` | El early return para `last_played` asumía que no necesitaba todas las páginas para ordenar por fecha, pero el sort opera sobre `allGames` completo — con solo página 1, los juegos más recientes de páginas posteriores quedaban excluidos. La consistencia entre entrar, pull-to-refresh y pulsar filtro requiere cargar siempre todas las páginas. | Fase 3 |
 | Selección explícita `_one/_other` en i18next en lugar de auto-pluralización | El proyecto usa `compatibilityJSON: 'v3'` que no resuelve automáticamente la base key al sufijo plural. Patrón establecido por `SyncStatusBar` — usar siempre `t(count === 1 ? 'key_one' : 'key_other', { count })` en lugar de `t('key', { count })`. | Fase 3 |
 | `parseFloat(String(rawRarity))` en lugar de cast directo para `rawValue`/`rarity` de Steam | La Steam API devuelve `percent` como string en runtime aunque el tipo TypeScript lo declare `number`. TypeScript no detecta mismatches de tipos en datos externos en runtime — siempre parsear explícitamente valores numéricos que vengan de APIs externas antes de pasarlos a Prisma. | Fase 3 |
+| BullMQ Workers siempre usan `createWorkerConnection()`, nunca la conexión Redis por defecto | BullMQ Workers requieren `maxRetriesPerRequest: null` — la conexión Redis por defecto tiene `maxRetriesPerRequest: 3` y causa crash inmediato al arrancar. `createWorkerConnection()` centraliza esta configuración. Patrón ya establecido en todos los demás workers del proyecto. | Fase 3 |
 
 ---
 
@@ -1342,6 +1343,7 @@ Métricas disponibles:
 | T35 | BUG-1: lista no ordenada al entrar ni en pull-to-refresh para sort last_played | ✅ Eliminado early return y condición en useEffect y handleRefresh — todos los sorts cargan todas las páginas — sesión 39 |
 | T36 | BUG-2: library.new_games_banner aparecía como texto literal | ✅ Selección explícita de clave _one/_other en NewGamesBanner.tsx — sesión 39 |
 | T37 | Steam sync falla con rawValue/rarity string en lugar de Float | ✅ `parseFloat(String(rawRarity))` + guard `isNaN` en ambos loops de logros · guard `startsWith('http')` en `iconUrl` — sesión 40 |
+| T38 | Deploy Railway fallaba: gdpr-cleanup.scheduler.ts usaba conexión Redis incompatible con BullMQ Worker | ✅ `createWorkerConnection()` en lugar de `redis` directo — sesión 41 |
 
 ### 🟢 Features
 
@@ -1369,6 +1371,8 @@ Métricas disponibles:
 ---
 
 ## Última revisión de código
+
+**Fecha**: 2026-06-30 (sesión 41) — Fix deploy Railway: `gdpr-cleanup.scheduler.ts` usaba conexión Redis por defecto (`maxRetriesPerRequest: 3`) para su BullMQ Worker — BullMQ Workers requieren `maxRetriesPerRequest: null`. Fix: import `createWorkerConnection` desde `../lib/redis` y sustituir `{ connection: redis }` por `{ connection: createWorkerConnection() }` en la creación del Worker (línea 52). Mock de `createWorkerConnection` añadido en `gdpr-cleanup.scheduler.test.ts`. Tests: 543/543. 0 errores TS/lint.
 
 **Fecha**: 2026-06-29 (sesión 40) — Fix Steam sync: `rawValue`/`rarity` como string en runtime. Bug raíz: la Steam API devuelve `percent` como string (`"54.6"`) en ciertos juegos aunque el interface TypeScript lo declara `number` — TypeScript no detecta el mismatch en runtime y Prisma rechaza pasar un string a `Float?`. Fix en `steam.adapter.ts`: en ambos loops de logros (`getUserAchievements` y `processGames`), `rawRarity` se convierte con `parseFloat(String(rawRarity))` + guard `isNaN`; `rawValue`/`rarity` reciben `null` si el valor no es numérico, `normalizePoints` recibe `100` como fallback. Fix adicional: guard `startsWith('http')` en `iconUrl` para evitar duplicar la URL base cuando Steam devuelve el campo `icon` ya como URL completa. Tests: 3 nuevos en `steam.adapter.test.ts` (`rawValue`/`rarity`/`iconUrl` en upsert). Tests: 543 API + 358 mobile. Cobertura 83.08% stmt. 0 errores TS/lint.
 
