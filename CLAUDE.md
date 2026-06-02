@@ -1270,7 +1270,7 @@ Métricas disponibles:
 20. ✅ Tests de carga k6
 21. ✅ Keystore Android guardado (N5 ✅) — EAS Build producción NO lanzar sin pedirlo explícitamente
 22. ⚙️ Smoke tests de producción
-23. ⚙️ Play Store submit — cuenta creada (B7 ✅) · pendiente listing completo
+23. ⚙️ Play Store submit — cuenta creada (B7 ✅) · AdMob producción configurado (B8 ✅) · assets generados (icono 512×512 + gráfico destacado 1024×500 ✅) · documento de listing con textos listo ✅ · validación release local OK ✅ · PENDIENTE: seleccionar 4-8 capturas, credenciales de prueba para revisores, formularios "Contenido de la app" (Data Safety SIN declarar PostHog que no está activo), generar AAB producción, subir primero a track de Pruebas internas
 
 ---
 
@@ -1382,11 +1382,17 @@ Métricas disponibles:
 | F18 | FriendshipButton consciente del estado de relación en perfil público | ✅ 5 estados (none/pending_sent/pending_received/accepted/blocked) · GET /api/v1/friends/status/:username · confirmación Alert en eliminar · sesión 35 |
 | F19 | Banner upload (Cloudinary) | ✅ POST /api/v1/users/me/banner · Pressable 120px en profile.tsx · aspect 3:1 · crop/fill 1500×500 · sesión 42 |
 
+### 🔶 Post-lanzamiento — Verificaciones pendientes
+
+| # | Tarea | Detalle |
+|---|---|---|
+| PL12 | Actualizar declaración Data Safety al activar PostHog | PostHog (N4) NO está activo en el lanzamiento inicial — NO declararlo en el formulario de Seguridad de los datos. Cuando se active en Fase 4, Google requiere actualizar la declaración para reflejar la nueva recogida de datos de analítica. |
+
 ---
 
 ## Última revisión de código
 
-**Fecha**: 2026-07-06 (sesión 47) — Limpieza pre-lanzamiento (sin cambios de código de producción). Eliminados `scripts/check-db-size.ts` y `scripts/verify-seed.ts` — scripts de diagnóstico puntual sin referencias en código ni en `package.json`. Añadido `*.keystore` explícitamente al `.gitignore` raíz (ya existían `*.jks`, `*.p12`, `*.pem`; `android/` cubría el keystore indirectamente). Auditoría de seguridad confirmó: historial Git limpio (sin NIF, secrets ni credenciales reales), 0 `console.log` en producción, 0 `.env` trackeados. Tests: 563 API (42 suites) · 352 mobile (28 suites). 0 errores TS/lint.
+**Fecha**: 2026-07-06 (sesión 47) — Preparación de lanzamiento: auditoría de seguridad + limpieza + assets. Auditoría de seguridad pre-lanzamiento del repo público: 0 secrets reales en working tree e historial Git, 0 datos personales en historial (limpieza `git filter-branch` de 2026-05-28 confirmada efectiva), solo `.env.example` con placeholders trackeados, credenciales sensibles correctamente gitignoreadas. Limpieza: eliminados `scripts/check-db-size.ts` y `scripts/verify-seed.ts` (scripts de diagnóstico obsoletos sin referencias); `*.keystore` añadido al `.gitignore` raíz. Assets de Play Console generados: icono 512×512 (monograma UH sobre degradado morado de marca) y gráfico destacado 1024×500. Documento de listing completo generado con textos (título, descripciones breve y completa con descargo de no afiliación a Valve/Sony/RA) y guía de formularios. Acción del desarrollador: cuenta Neon (infraestructura pre-Railway) cerrada. Tests: 563 API + 352 mobile. 0 errores TS/lint. Commit `898538f`.
 
 **Fecha**: 2026-07-05 (sesión 46) — Preparación AAB producción. `app.json`: App ID de AdMob para Android cambiado de test (`ca-app-pub-3940256099942544~3347511713`) a producción (`ca-app-pub-3506466357843399~6211856600`). Verificado: los 4 ad unit IDs (`unlockhub_home_banner` 3314230527, `unlockhub_search_banner` 7061903848, `unlockhub_interstitial` 9959529926, `unlockhub_rewarded` 7744430120) se leen de `EXPO_PUBLIC_ADMOB_*` con fallback a test IDs; EAS secrets configurados; perfil `production` de `eas.json` genera AAB y apunta a Railway prod. Sin cambios de tests.
 
