@@ -17,7 +17,7 @@ Esta sección lista todo lo que **el desarrollador debe hacer manualmente** ante
 | ~~B5~~ | ✅ **Backups Railway PostgreSQL verificados** | Railway dashboard → servicio PostgreSQL → Settings → Backups | Según plan | ✅ Completado |
 | ~~B6~~ | ✅ **Persistencia Railway Redis verificada** | Railway dashboard → servicio Redis → Settings | Según plan | ✅ Completado |
 | ~~B7~~ | ✅ **Cuenta Google Play Developer creada** | play.google.com/console | $25 pago único | ✅ Completado |
-| B8 | Crear cuenta de **AdMob** y vincularla a la app | admob.google.com | Gratis | Anuncios para usuarios free |
+| ~~B8~~ | ✅ **Cuenta AdMob creada + app vinculada + ad units producción** | admob.google.com | Gratis | ✅ Completado — App ID `~6211856600`, 4 ad units de producción creados |
 | ~~B9~~ | ✅ **Ad unit IDs configurados como EAS secrets** | `EXPO_PUBLIC_ADMOB_HOME_BANNER_ID`, `SEARCH_BANNER_ID`, `INTERSTITIAL_ID`, `REWARDED_ID` — todos configurados | Gratis | ✅ Completado — IDs de producción inyectados en builds EAS. |
 | ~~B10~~ | ✅ **UMP SDK integrado** | `hooks/useGdprConsent.ts` + `_layout.tsx` — UMP SDK activo, muestra formulario si `status === REQUIRED` | Gratis | ✅ Código integrado. UMP message ya publicado en AdMob dashboard. |
 | ~~B13~~ | ✅ **`APP_SCHEME=unlockhub` configurado en Railway** | Railway dashboard → service → Variables | Gratis | ✅ Completado |
@@ -1227,6 +1227,7 @@ Métricas disponibles:
 | `triggerExpressSync` adquiere `sync:user-lock:{userId}` con TTL 120s antes de llamar al adapter | El express sync corre inline en el proceso de la API, no por el BullMQ worker, así que el lock de sesión 44 no lo cubría. Si el lock no está disponible, omite el express sync — el `queueInitialSync` encolado después cubre la sincronización completa. TTL 120s = margen sobre los 25s del `Promise.race` del controller, inferior a los 600s del lock del worker BullMQ. El lock se libera siempre en `finally`. | Fase 3 |
 | Lock Redis por usuario (`sync:user-lock:{userId}`) en lugar de `concurrency: 1` global | Serializa los syncs del mismo usuario sin bloquear a usuarios distintos. `concurrency: 1` global serializaría TODOS los usuarios — cuello de botella grave en cuanto haya varios sincronizando. El lock con `SET NX EX` es atómico; el job que no adquiere el lock se reencola con `delay: 5000` en lugar de fallar. TTL 600s como fallback de seguridad si el proceso muere sin liberar. Liberación en `finally` garantizada. | Fase 3 |
 | `refetchQueries` en lugar de `invalidateQueries` para `sync-summary` tras desvincular | `invalidateQueries` solo marca stale — el refetch de `my-games` terminaba antes (`allGames=[]`) dejando `anyPlatformLinked` stale en `true`, causando el flash de "Tus juegos aparecerán pronto". `refetchQueries` fuerza el refetch inmediato. Adicionalmente, el `ListEmptyComponent` muestra skeleton mientras `isFetching && allGames.length === 0` para no enseñar ningún empty state durante la transición. | Fase 3 |
+| App ID de AdMob en `app.json`, no editado a mano en `AndroidManifest.xml` | Los builds locales debug editaban el manifest a mano tras prebuild, pero EAS hace su propio prebuild limpio e ignora ese cambio manual. El App ID de producción debe estar en `app.json` para que el AAB de EAS lo recoja. | Fase 3 |
 
 ---
 
@@ -1384,6 +1385,8 @@ Métricas disponibles:
 ---
 
 ## Última revisión de código
+
+**Fecha**: 2026-07-05 (sesión 46) — Preparación AAB producción. `app.json`: App ID de AdMob para Android cambiado de test (`ca-app-pub-3940256099942544~3347511713`) a producción (`ca-app-pub-3506466357843399~6211856600`). Verificado: los 4 ad unit IDs (`unlockhub_home_banner` 3314230527, `unlockhub_search_banner` 7061903848, `unlockhub_interstitial` 9959529926, `unlockhub_rewarded` 7744430120) se leen de `EXPO_PUBLIC_ADMOB_*` con fallback a test IDs; EAS secrets configurados; perfil `production` de `eas.json` genera AAB y apunta a Railway prod. Sin cambios de tests.
 
 **Fecha**: 2026-07-04 (sesión 45) — Fix lock de sync que no cubría `triggerExpressSync`. Diagnóstico: el lock de sync por usuario (sesión 44) estaba en el processor del BullMQ worker y cubría los caminos manual/initial/auto-repeat/background scheduler, pero `triggerExpressSync` en `sync.service.ts:257` llamaba `adapter.syncUserExpress()` directamente en el proceso de la API sin adquirir `sync:user-lock:{userId}`. Escenario del bug: durante el onboarding el usuario vincula Steam y PSN en rápida sucesión → ambos `triggerExpressSync` arrancaban simultáneamente sin bloqueo, escribiendo concurrentemente en `UserAchievement` → "No se pudo cargar la biblioteca". Fix: `triggerExpressSync` adquiere `sync:user-lock:{userId}` con `SET NX EX 120` antes de ejecutar el express sync; si el lock no está disponible, omite el express sync silenciosamente — el `queueInitialSync` encolado justo después en el controller cubre la sincronización completa cuando el lock queda libre; el lock se libera siempre en `finally`. Tests: nuevos en `sync.worker.test.ts` (express sync adquiere lock / omite si lock tomado / libera en finally). Tests: 563 API · 352 mobile. Cobertura 83.5% stmt. 0 errores TS/lint.
 
