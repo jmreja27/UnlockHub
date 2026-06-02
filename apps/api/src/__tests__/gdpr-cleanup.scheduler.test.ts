@@ -15,6 +15,7 @@ jest.mock('../lib/redis', () => ({
     set: jest.fn(),
     quit: jest.fn(),
   },
+  createWorkerConnection: jest.fn().mockReturnValue({}),
 }));
 
 jest.mock('../lib/logger', () => ({

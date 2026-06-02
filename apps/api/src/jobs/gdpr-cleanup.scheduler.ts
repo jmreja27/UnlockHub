@@ -1,7 +1,7 @@
 import { Queue, Worker } from 'bullmq';
 
 import { prisma } from '../lib/prisma';
-import { redis } from '../lib/redis';
+import { redis, createWorkerConnection } from '../lib/redis';
 import { logger } from '../lib/logger';
 
 // Busca usuarios con soft delete anterior a 30 días y los borra físicamente
@@ -49,5 +49,5 @@ export const gdprCleanupWorker = new Worker(
   async () => {
     await runGdprCleanup();
   },
-  { connection: redis },
+  { connection: createWorkerConnection() },
 );
