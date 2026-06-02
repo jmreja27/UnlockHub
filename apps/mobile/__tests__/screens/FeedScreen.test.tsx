@@ -56,18 +56,6 @@ jest.mock('../../components/SyncStatusBar', () => ({
     return <View testID="sync-status-bar" />;
   },
 }));
-jest.mock('../../components/NewGamesBanner', () => ({
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  NewGamesBanner: ({ onPress }: { count: number; onPress: () => void }) => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { Pressable, Text } = require('react-native');
-    return (
-      <Pressable testID="new-games-banner" onPress={onPress}>
-        <Text>new-games-banner</Text>
-      </Pressable>
-    );
-  },
-}));
 
 const mockUseMyGames = useMyGames as jest.Mock;
 const mockUseSyncAll = useSyncAll as jest.Mock;
@@ -257,102 +245,6 @@ describe('LibraryScreen', () => {
     mockUseMyGames.mockReturnValue({ ...baseMyGamesResult, totalGames: 0, totalCompletedGames: 0 });
     const { queryByText } = renderWithClient(<LibraryScreen />);
     expect(queryByText('library.games_short', { includeHiddenElements: true })).toBeNull();
-  });
-
-  // ── Tests del banner "X juegos nuevos" ───────────────────────────────────────
-
-  it('banner NO aparece cuando isRunning=false aunque cambien los juegos', () => {
-    const mockSyncProgress = jest.requireMock('../../hooks/useSyncProgress');
-    mockSyncProgress.useSyncProgress.mockReturnValue({ activeSyncs: new Map(), isRunning: false });
-    mockUseMyGames.mockReturnValue({ ...baseMyGamesResult, allGames: sampleGames });
-    const { queryByTestId } = renderWithClient(<LibraryScreen />);
-    expect(queryByTestId('new-games-banner')).toBeNull();
-  });
-
-  it('banner NO aparece en la carga inicial (seenGamesCount se inicializa al mismo count)', async () => {
-    const mockSyncProgress = jest.requireMock('../../hooks/useSyncProgress');
-    // Sync activo desde el inicio — seenGamesCount aún es 0, no debe mostrarse
-    mockSyncProgress.useSyncProgress.mockReturnValue({ activeSyncs: new Map(), isRunning: true });
-    mockUseMyGames.mockReturnValue({ ...baseMyGamesResult, allGames: sampleGames });
-    const { queryByTestId } = renderWithClient(<LibraryScreen />);
-    // Después de la inicialización (useEffect), seenGamesCount = sampleGames.length = allGames.length
-    // así que no hay juegos "nuevos" todavía
-    expect(queryByTestId('new-games-banner')).toBeNull();
-  });
-
-  it('banner SÍ aparece cuando isRunning=true y llegan juegos nuevos tras la inicialización', async () => {
-    const mockSyncProgress = jest.requireMock('../../hooks/useSyncProgress');
-
-    // Estado inicial: sin sync, 2 juegos — seenGamesCount se inicializa a 2
-    mockSyncProgress.useSyncProgress.mockReturnValue({ activeSyncs: new Map(), isRunning: false });
-    mockUseMyGames.mockReturnValue({ ...baseMyGamesResult, allGames: sampleGames });
-    const { rerender, queryByTestId } = renderWithClient(<LibraryScreen />);
-    expect(queryByTestId('new-games-banner')).toBeNull();
-
-    // Sync activo + 1 juego nuevo llegó (3 > 2 → banner)
-    const extraGame: LibraryGame = {
-      id: 'g3',
-      title: 'Elden Ring',
-      platform: 'STEAM',
-      iconUrl: null,
-      totalAchievements: 42,
-      earnedAchievements: 0,
-      completionPct: 0,
-      lastSyncedAt: null,
-      lastActivityAt: null,
-      hasPlatinum: false,
-      platinumEarned: false,
-      isCompleted: false,
-    };
-    mockSyncProgress.useSyncProgress.mockReturnValue({ activeSyncs: new Map(), isRunning: true });
-    mockUseMyGames.mockReturnValue({ ...baseMyGamesResult, allGames: [...sampleGames, extraGame] });
-
-    await act(async () => {
-      rerender(<LibraryScreen />);
-    });
-
-    expect(queryByTestId('new-games-banner')).not.toBeNull();
-  });
-
-  it('banner desaparece al hacer pull-to-refresh', async () => {
-    const mockSyncProgress = jest.requireMock('../../hooks/useSyncProgress');
-
-    // Estado con sync activo y juegos nuevos para que el banner esté visible
-    mockSyncProgress.useSyncProgress.mockReturnValue({ activeSyncs: new Map(), isRunning: false });
-    mockUseMyGames.mockReturnValue({ ...baseMyGamesResult, allGames: sampleGames });
-    const { rerender, queryByTestId, UNSAFE_getByType } = renderWithClient(<LibraryScreen />);
-
-    // Activar sync con juego nuevo
-    const extraGame: LibraryGame = {
-      id: 'g3',
-      title: 'Celeste',
-      platform: 'STEAM',
-      iconUrl: null,
-      totalAchievements: 30,
-      earnedAchievements: 0,
-      completionPct: 0,
-      lastSyncedAt: null,
-      lastActivityAt: null,
-      hasPlatinum: false,
-      platinumEarned: false,
-      isCompleted: false,
-    };
-    mockSyncProgress.useSyncProgress.mockReturnValue({ activeSyncs: new Map(), isRunning: true });
-    mockUseMyGames.mockReturnValue({ ...baseMyGamesResult, allGames: [...sampleGames, extraGame] });
-
-    await act(async () => {
-      rerender(<LibraryScreen />);
-    });
-
-    expect(queryByTestId('new-games-banner')).not.toBeNull();
-
-    // Pull-to-refresh oculta el banner
-    const list = UNSAFE_getByType(FlatList);
-    await act(async () => {
-      list.props.refreshControl.props.onRefresh();
-    });
-
-    expect(queryByTestId('new-games-banner')).toBeNull();
   });
 
   // ── BUG-3: carga completa al montar con sort persistido y datos en caché ────────

@@ -15,7 +15,6 @@ import type { LibrarySortOrder } from '../../stores/preferencesStore';
 import { useSyncProgress } from '../../hooks/useSyncProgress';
 import { useSyncStatus } from '../../hooks/useSyncStatus';
 import { LibraryGameCard } from '../../components/LibraryGameCard';
-import { NewGamesBanner } from '../../components/NewGamesBanner';
 import { SyncStatusBar } from '../../components/SyncStatusBar';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { EmptyState } from '../../components/EmptyState';
@@ -192,11 +191,6 @@ export default function LibraryScreen() {
 
   const { activeSyncs, isRunning } = useSyncProgress(handleSyncComplete);
 
-  // ── Banner "X juegos nuevos" — patrón Twitter/X ───────────────────────────
-  const flashListRef = useRef<FlashList<LibraryGame>>(null);
-  const [seenGamesCount, setSeenGamesCount] = useState<number>(0);
-  const [showNewGamesBanner, setShowNewGamesBanner] = useState(false);
-
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!toast) return;
@@ -223,24 +217,6 @@ export default function LibraryScreen() {
     dataUpdatedAt,
   } = useMyGames(platform);
 
-  // Inicializa el contador de juegos vistos en la primera carga (sin banner)
-  useEffect(() => {
-    if (allGames.length > 0 && seenGamesCount === 0) {
-      setSeenGamesCount(allGames.length);
-    }
-  }, [allGames.length, seenGamesCount]);
-
-  // Muestra el banner cuando llegan juegos nuevos durante un sync activo;
-  // lo oculta cuando el sync termina y resetea el contador base
-  useEffect(() => {
-    if (!isRunning) {
-      setShowNewGamesBanner(false);
-      setSeenGamesCount(allGames.length);
-    } else if (seenGamesCount > 0 && allGames.length > seenGamesCount) {
-      setShowNewGamesBanner(true);
-    }
-  }, [allGames.length, isRunning, seenGamesCount]);
-
   const [isManualRefreshing, setIsManualRefreshing] = useState(false);
 
   // Carga todas las páginas restantes — necesario para que el sort client-side sea completo
@@ -260,8 +236,6 @@ export default function LibraryScreen() {
   const handleRefresh = useCallback(async () => {
     initialLoadDoneRef.current = false;
     setIsManualRefreshing(true);
-    setShowNewGamesBanner(false);
-    setSeenGamesCount(0);
     try {
       // resetQueries elimina el caché y recarga solo la primera página.
       // Cargar todas las páginas a continuación para que el sort sea correcto sobre el set completo,
@@ -306,12 +280,6 @@ export default function LibraryScreen() {
     },
     [hasNextPage, setLibrarySortOrder, fetchAllRemainingPages],
   );
-
-  const handleNewGamesBanner = useCallback(() => {
-    flashListRef.current?.scrollToOffset({ offset: 0, animated: true });
-    setSeenGamesCount(allGames.length);
-    setShowNewGamesBanner(false);
-  }, [allGames.length]);
 
   // useSyncAll se consume en SyncStatusBar internamente
 
@@ -498,9 +466,8 @@ export default function LibraryScreen() {
 
       {/* Lista de juegos */}
       {!isLoading && !isError && (
-        <View style={{ flex: 1, position: 'relative' }}>
+        <View style={{ flex: 1 }}>
           <FlashList
-            ref={flashListRef}
             data={games}
             renderItem={renderItem}
             keyExtractor={(item) => item.id}
@@ -560,12 +527,6 @@ export default function LibraryScreen() {
               </>
             }
           />
-          {showNewGamesBanner && (
-            <NewGamesBanner
-              count={allGames.length - seenGamesCount}
-              onPress={handleNewGamesBanner}
-            />
-          )}
         </View>
       )}
 

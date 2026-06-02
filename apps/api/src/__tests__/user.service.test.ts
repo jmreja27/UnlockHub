@@ -700,6 +700,40 @@ describe('userService.getMyGames', () => {
     expect(result.totalGames).toBe(25);
     expect(result.totalCompletedGames).toBe(5);
   });
+
+  it('no devuelve juegos de una plataforma sin UserAchievements (plataforma desvinculada)', async () => {
+    // Solo hay UserAchievements de PSN — Steam no tiene ninguno (como si se hubiera desvinculado)
+    const psnGame = { id: 'psn-game-1', title: 'God of War', platform: 'PSN', iconUrl: null, totalAchievements: 36 };
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
+      makeUserAchievement('psn-game-1', psnGame, { platform: 'PSN', normalizedPoints: 15 }),
+    ]);
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([
+      { platform: 'PSN', lastSyncedAt: null },
+    ]);
+    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([]);
+
+    const result = await userService.getMyGames('user-1');
+
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0]?.platform).toBe('PSN');
+    // Steam no tiene UserAchievements → no aparece en la biblioteca
+    expect(result.data.some((g) => g.platform === 'STEAM')).toBe(false);
+  });
+
+  it('solo devuelve juegos para los que el usuario tiene al menos un UserAchievement', async () => {
+    // Sin UserAchievements → sin juegos, aunque haya PlatformAccounts vinculadas
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([]);
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([
+      { platform: 'STEAM', lastSyncedAt: null },
+      { platform: 'PSN', lastSyncedAt: null },
+    ]);
+    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([]);
+
+    const result = await userService.getMyGames('user-1');
+
+    expect(result.data).toHaveLength(0);
+    expect(result.totalGames).toBe(0);
+  });
 });
 
 // ─── getMyGameAchievements ────────────────────────────────────────────────────

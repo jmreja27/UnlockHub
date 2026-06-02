@@ -259,8 +259,8 @@ function setupTransactionMock() {
 describe('platformService.unlinkPlatform', () => {
   const baseUserWithXp = { xp: 500, countryCode: 'ES' };
   const steamAchievements = [
-    { achievement: { normalizedPoints: 100 } },
-    { achievement: { normalizedPoints: 50 } },
+    { id: 'ua-1', achievement: { normalizedPoints: 100 } },
+    { id: 'ua-2', achievement: { normalizedPoints: 50 } },
   ];
 
   beforeEach(() => {
@@ -278,8 +278,9 @@ describe('platformService.unlinkPlatform', () => {
 
     await platformService.unlinkPlatform('user-1', 'STEAM');
 
+    // El deleteMany usa IDs obtenidos del findMany previo — no relation filter
     expect(mockPrisma.userAchievement.deleteMany).toHaveBeenCalledWith({
-      where: { userId: 'user-1', achievement: { platform: 'STEAM' } },
+      where: { id: { in: ['ua-1', 'ua-2'] } },
     });
   });
 
@@ -319,7 +320,7 @@ describe('platformService.unlinkPlatform', () => {
   it('no deja XP negativo si los logros superan el XP actual', async () => {
     (mockPrisma.platformAccount.findFirst as jest.Mock).mockResolvedValue(basePlatformAccount);
     (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
-      { achievement: { normalizedPoints: 1000 } },
+      { id: 'ua-3', achievement: { normalizedPoints: 1000 } },
     ]);
     (mockPrisma.userAchievement.deleteMany as jest.Mock).mockResolvedValue({ count: 1 });
     (mockPrisma.platformAccount.delete as jest.Mock).mockResolvedValue(basePlatformAccount);
@@ -380,6 +381,24 @@ describe('platformService.unlinkPlatform', () => {
     await platformService.unlinkPlatform('user-1', 'STEAM');
 
     expect(mockUpsertUserScore).toHaveBeenCalledWith('user-1', 350, ['RA']);
+  });
+
+  it('deleteMany usa IDs del findMany previo, no relation filter (fix compatibilidad Prisma)', async () => {
+    (mockPrisma.platformAccount.findFirst as jest.Mock).mockResolvedValue(basePlatformAccount);
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue(steamAchievements);
+    (mockPrisma.userAchievement.deleteMany as jest.Mock).mockResolvedValue({ count: 2 });
+    (mockPrisma.platformAccount.delete as jest.Mock).mockResolvedValue(basePlatformAccount);
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(baseUserWithXp);
+    (mockPrisma.user.update as jest.Mock).mockResolvedValue({});
+
+    await platformService.unlinkPlatform('user-1', 'STEAM');
+
+    const deleteCall = (mockPrisma.userAchievement.deleteMany as jest.Mock).mock.calls[0]?.[0] as {
+      where: { id?: { in: string[] }; achievement?: unknown };
+    };
+    // Debe usar IDs — no debe tener relation filter achievement.platform
+    expect(deleteCall.where.id).toEqual({ in: ['ua-1', 'ua-2'] });
+    expect(deleteCall.where.achievement).toBeUndefined();
   });
 
   it('lanza PLATFORM_NOT_LINKED si la plataforma no está vinculada', async () => {

@@ -157,11 +157,13 @@ export async function unlinkPlatform(
       );
       const count = toDelete.length;
 
-      // 2. Borrar UserAchievements de esta plataforma
+      // 2. Borrar UserAchievements de esta plataforma usando los IDs ya obtenidos.
+      // Usar IDs en lugar de relation filter garantiza compatibilidad con todas las
+      // versiones de Prisma (el relation filter en deleteMany no es fiable en versiones
+      // anteriores a 4.7.0 y puede silenciosamente no borrar nada).
       await tx.userAchievement.deleteMany({
         where: {
-          userId,
-          achievement: { platform },
+          id: { in: toDelete.map((ua) => ua.id) },
         },
       });
 

@@ -919,7 +919,7 @@ Métricas disponibles:
 | Contadores logros earned/total (pre-paginación) | ✅ Activo | Ambos | `user.service.ts` · `getMyGames()` · calculados sobre `allGames` antes del `slice` |
 | Contadores juegos completados/total | ✅ Activo | Ambos | `user.service.ts` · `getMyGames()` · pre-paginación · `isCompleted` reutilizado |
 | Pull-to-refresh (resetQueries + fetchAllRemainingPages si sort activo) | ✅ Activo | Mobile | `index.tsx` · `isManualRefreshing` estado local · `initialLoadDoneRef.current = false` antes de invalidar · mismo comportamiento que cambiar filtro |
-| Banner "X juegos nuevos" durante sync | ✅ Activo | Mobile | `components/NewGamesBanner.tsx` · `Animated.spring` · `seenGamesCount` baseline |
+
 | SyncStatusBar (cooldown, syncs, countdown) | ✅ Activo | Mobile | `components/SyncStatusBar.tsx` · `useSyncStatus` · `setTimeout`-chain countdown |
 | Invalidación automática al montar | ✅ Activo | Mobile | `index.tsx` · `useEffect([user?.id])` · background refetch sin spinner |
 | AppState listener (sync nocturno en background) | ✅ Activo | Mobile | `index.tsx` · `AppState.addEventListener('change')` · invalida `my-games` al volver al frente |
@@ -1222,6 +1222,8 @@ Métricas disponibles:
 | Selección explícita `_one/_other` en i18next en lugar de auto-pluralización | El proyecto usa `compatibilityJSON: 'v3'` que no resuelve automáticamente la base key al sufijo plural. Patrón establecido por `SyncStatusBar` — usar siempre `t(count === 1 ? 'key_one' : 'key_other', { count })` en lugar de `t('key', { count })`. | Fase 3 |
 | `parseFloat(String(rawRarity))` en lugar de cast directo para `rawValue`/`rarity` de Steam | La Steam API devuelve `percent` como string en runtime aunque el tipo TypeScript lo declare `number`. TypeScript no detecta mismatches de tipos en datos externos en runtime — siempre parsear explícitamente valores numéricos que vengan de APIs externas antes de pasarlos a Prisma. | Fase 3 |
 | BullMQ Workers siempre usan `createWorkerConnection()`, nunca la conexión Redis por defecto | BullMQ Workers requieren `maxRetriesPerRequest: null` — la conexión Redis por defecto tiene `maxRetriesPerRequest: 3` y causa crash inmediato al arrancar. `createWorkerConnection()` centraliza esta configuración. Patrón ya establecido en todos los demás workers del proyecto. | Fase 3 |
+| NewGamesBanner eliminado | Intrusivo para el usuario y el mensaje "X juegos nuevos" es inexacto cuando el pull-to-refresh actualiza toda la lista, no solo los nuevos. El sync progresivo ya actualiza la lista en background sin necesidad de banner. | Fase 3 |
+| unlinkPlatform usa IDs explícitos en deleteMany en lugar de relation filter | El relation filter `achievement: { platform }` en Prisma no es fiable en todas las versiones y podía silenciosamente no borrar nada. Usar `{ id: { in: ids } }` con los IDs ya obtenidos del `findMany` previo es más explícito, predecible y garantiza que el borrado funciona correctamente. | Fase 3 |
 
 ---
 
@@ -1346,6 +1348,8 @@ Métricas disponibles:
 | T36 | BUG-2: library.new_games_banner aparecía como texto literal | ✅ Selección explícita de clave _one/_other en NewGamesBanner.tsx — sesión 39 |
 | T37 | Steam sync falla con rawValue/rarity string en lugar de Float | ✅ `parseFloat(String(rawRarity))` + guard `isNaN` en ambos loops de logros · guard `startsWith('http')` en `iconUrl` — sesión 40 |
 | T38 | Deploy Railway fallaba: gdpr-cleanup.scheduler.ts usaba conexión Redis incompatible con BullMQ Worker | ✅ `createWorkerConnection()` en lugar de `redis` directo — sesión 41 |
+| T39 | Bug: juegos de plataforma desvinculada seguían en biblioteca | ✅ unlinkPlatform usaba relation filter no fiable en Prisma — fix con IDs explícitos del findMany previo — sesión 43 |
+| T40 | Eliminar NewGamesBanner — intrusivo e inexacto en pull-to-refresh | ✅ Componente, tests, claves i18n y lógica eliminados completamente — sesión 43 |
 
 ### 🟢 Features
 
@@ -1374,6 +1378,8 @@ Métricas disponibles:
 ---
 
 ## Última revisión de código
+
+**Fecha**: 2026-07-02 (sesión 43) — NewGamesBanner eliminado + fix juegos plataforma desvinculada. PARTE 1: eliminado `NewGamesBanner` completamente — `index.tsx` sin `flashListRef`, estados `seenGamesCount`/`showNewGamesBanner`, 2 useEffects del banner, `handleNewGamesBanner`, wrapper `position: 'relative'` y JSX; archivos `NewGamesBanner.tsx` y `NewGamesBanner.test.tsx` eliminados; 4 claves i18n `library.new_games_banner_*` eliminadas de ES/EN; mock y 4 tests de `FeedScreen.test.tsx` eliminados. PARTE 2: bug — juegos de plataforma desvinculada seguían en biblioteca; diagnóstico confirmó que `getMyGames` usa `UserAchievement` como única fuente de verdad (correcto) pero `unlinkPlatform` en `platform.service.ts:161` usaba `deleteMany` con relation filter `achievement: { platform }` que no es fiable en todas las versiones de Prisma y podía silenciosamente no borrar nada; fix: `{ id: { in: toDelete.map(ua => ua.id) } }` usando los IDs ya obtenidos del `findMany` previo. Tests: 556 API · 348 mobile. Cobertura 83.46% stmt. 0 errores TS/lint.
 
 **Fecha**: 2026-07-01 (sesión 42) — Banner upload implementado. Backend: `uploadBanner` multer middleware en `upload.middleware.ts`; `uploadBanner()` en `user.service.ts` con guard `USER_NOT_FOUND`, Cloudinary `folder: 'unlockhub/banners'`, `public_id: '{userId}-banner'`, crop/fill 1500×500; `uploadBannerHandler` en `user.controller.ts` idéntico a avatar; `POST /api/v1/users/me/banner` con `authenticate` + middleware en `user.routes.ts`. Mobile: `Pressable` de 120px sobre el área del banner en `profile.tsx`; `bannerMutation` con `aspect: [3,1]` y FormData; badge cámara + spinner sobre el banner; 3 claves i18n ES/EN (`change_banner`, `banner_error_title`, `banner_error_message`). Tests: 15 nuevos (5 `user.service.test.ts` + 5 `user.routes.test.ts` + 5 mobile). Tests: 553 API + 358 mobile. Cobertura 83.45% stmt. 0 errores TS/lint.
 
