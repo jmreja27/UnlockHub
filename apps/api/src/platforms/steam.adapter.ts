@@ -193,7 +193,9 @@ export class SteamAdapter implements PlatformAdapter {
 
       for (const pa of playerAchievements) {
         const schemaDef = schemaMap.get(pa.apiname);
-        const rarityPercent = rarityMap.get(pa.apiname) ?? 100;
+        const rawRarity = rarityMap.get(pa.apiname) ?? 100;
+        const rarityValue = parseFloat(String(rawRarity));
+        const rarityPercent = isNaN(rarityValue) ? 100 : rarityValue;
         const normalized = normalizePoints(rarityPercent);
 
         allAchievements.push({
@@ -204,11 +206,13 @@ export class SteamAdapter implements PlatformAdapter {
           title: schemaDef?.displayName ?? pa.apiname,
           description: schemaDef?.description ?? null,
           iconUrl: schemaDef?.icon
-            ? `${STEAM_STORE_CDN}/${appId}/${schemaDef.icon}.jpg`
+            ? (schemaDef.icon.startsWith('http')
+                ? schemaDef.icon
+                : `${STEAM_STORE_CDN}/${appId}/${schemaDef.icon}.jpg`)
             : null,
-          rawValue: rarityPercent,
+          rawValue: isNaN(rarityValue) ? null : rarityValue,
           normalizedPoints: normalized,
-          rarity: rarityPercent,
+          rarity: isNaN(rarityValue) ? null : rarityValue,
           externalUrl: `https://store.steampowered.com/app/${appId}`,
         });
       }
@@ -362,7 +366,9 @@ export class SteamAdapter implements PlatformAdapter {
 
       for (const pa of playerAchievements) {
         const schemaDef = schemaMap.get(pa.apiname);
-        const rarityPercent = rarityMap.get(pa.apiname) ?? 100;
+        const rawRarity = rarityMap.get(pa.apiname) ?? 100;
+        const rarityValue = parseFloat(String(rawRarity));
+        const rarityPercent = isNaN(rarityValue) ? 100 : rarityValue;
         const normalized = normalizePoints(rarityPercent);
 
         const dbAchievement = await prisma.achievement.upsert({
@@ -374,19 +380,21 @@ export class SteamAdapter implements PlatformAdapter {
             title: schemaDef?.displayName ?? pa.apiname,
             description: schemaDef?.description ?? null,
             iconUrl: schemaDef?.icon
-              ? `${STEAM_STORE_CDN}/${appId}/${schemaDef.icon}.jpg`
+              ? (schemaDef.icon.startsWith('http')
+                  ? schemaDef.icon
+                  : `${STEAM_STORE_CDN}/${appId}/${schemaDef.icon}.jpg`)
               : null,
-            rawValue: rarityPercent,
+            rawValue: isNaN(rarityValue) ? null : rarityValue,
             normalizedPoints: normalized,
-            rarity: rarityPercent,
+            rarity: isNaN(rarityValue) ? null : rarityValue,
             externalUrl: `https://store.steampowered.com/app/${appId}`,
           },
           update: {
             title: schemaDef?.displayName ?? pa.apiname,
             description: schemaDef?.description ?? null,
-            rawValue: rarityPercent,
+            rawValue: isNaN(rarityValue) ? null : rarityValue,
             normalizedPoints: normalized,
-            rarity: rarityPercent,
+            rarity: isNaN(rarityValue) ? null : rarityValue,
           },
         });
 
