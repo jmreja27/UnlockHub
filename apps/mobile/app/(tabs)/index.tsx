@@ -209,6 +209,7 @@ export default function LibraryScreen() {
     totalGames,
     totalCompletedGames,
     isLoading,
+    isFetching,
     isError,
     refetch,
     fetchNextPage,
@@ -494,6 +495,11 @@ export default function LibraryScreen() {
                 <View className="items-center justify-center py-8" accessible accessibilityLiveRegion="polite">
                   <Text className="text-gray-400 text-base text-center">{t('library.no_results')}</Text>
                 </View>
+              ) : isFetching ? (
+                // Refetch en curso (por invalidación tras desvincular, pull-to-refresh, etc.)
+                // — no mostrar el empty state todavía para evitar el flash de "Tus juegos
+                // aparecerán pronto" cuando el refetch de my-games termina antes que el de sync-summary.
+                <LibrarySkeleton />
               ) : anyPlatformLinked ? (
                 // Usuario ya tiene plataformas vinculadas pero sin juegos (sync aún no corrió)
                 <EmptyState

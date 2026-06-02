@@ -474,6 +474,42 @@ describe('LibraryScreen', () => {
     expect(getByText('library.empty_linked_title')).toBeTruthy();
   });
 
+  // ── BUG-1 desvincular: empty state no se muestra durante isFetching ───────────
+  // Race condition: el refetch de my-games termina (allGames=[]) antes que el de sync-summary
+  // (anyPlatformLinked=true stale) → sin el guard se mostraría "Tus juegos aparecerán pronto"
+  // incorrecto. El guard isFetching muestra el skeleton en su lugar.
+
+  it('BUG-1 desvincular: muestra skeleton (no empty state) cuando isFetching=true y allGames=[]', () => {
+    const mockSyncStatus = jest.requireMock('../../hooks/useSyncStatus');
+    // anyPlatformLinked=true stale — simula la race condition tras desvincular
+    mockSyncStatus.useSyncStatus.mockReturnValue({ anyPlatformLinked: true });
+    // isFetching=true simula el refetch de my-games en curso
+    mockUseMyGames.mockReturnValue({ ...baseMyGamesResult, allGames: [], isFetching: true });
+    const { queryByText } = renderWithClient(<LibraryScreen />);
+    // El empty state no debe aparecer mientras isFetching=true
+    expect(queryByText('library.empty_linked_title')).toBeNull();
+    expect(queryByText('library.empty_title')).toBeNull();
+  });
+
+  it('BUG-1 desvincular: muestra empty_title (vincular plataformas) cuando isFetching=false, allGames=[] y anyPlatformLinked=false', () => {
+    const mockSyncStatus = jest.requireMock('../../hooks/useSyncStatus');
+    // sync-summary completó: anyPlatformLinked=false (última plataforma desvinculada)
+    mockSyncStatus.useSyncStatus.mockReturnValue({ anyPlatformLinked: false });
+    mockUseMyGames.mockReturnValue({ ...baseMyGamesResult, allGames: [], isFetching: false });
+    const { getByText } = renderWithClient(<LibraryScreen />);
+    expect(getByText('library.empty_title')).toBeTruthy();
+  });
+
+  it('BUG-1 desvincular: con plataformas restantes y juegos, NO muestra empty state ni skeleton', () => {
+    const mockSyncStatus = jest.requireMock('../../hooks/useSyncStatus');
+    mockSyncStatus.useSyncStatus.mockReturnValue({ anyPlatformLinked: true });
+    // Todavía hay juegos de otras plataformas tras desvincular una
+    mockUseMyGames.mockReturnValue({ ...baseMyGamesResult, allGames: sampleGames, isFetching: false });
+    const { queryByText } = renderWithClient(<LibraryScreen />);
+    expect(queryByText('library.empty_linked_title')).toBeNull();
+    expect(queryByText('library.empty_title')).toBeNull();
+  });
+
   // ── BUG 1: sort last_played con null durante sync activo ─────────────────────
 
   it('BUG-1: sort last_played no lanza con juegos null lastActivityAt durante sync activo', () => {

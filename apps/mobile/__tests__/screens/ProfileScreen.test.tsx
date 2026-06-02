@@ -305,6 +305,39 @@ describe('ProfileScreen', () => {
         expect(keys).toContain('my-stats');
       });
     });
+
+    it('BUG-1: tras desvincular exitosamente, llama refetchQueries para sync-summary (no solo invalidateQueries)', async () => {
+      // refetchQueries fuerza actualización inmediata de anyPlatformLinked,
+      // evitando la race condition donde my-games termina antes que sync-summary.
+      const apiGet = jest.fn(() => Promise.resolve([steamAccount]));
+      const apiDelete = jest.fn(() =>
+        Promise.resolve({ ok: true, deletedAchievements: 12 }),
+      );
+      const { client, getByRole } = renderProfile(apiGet, apiDelete);
+      const refetchSpy = jest.spyOn(client, 'refetchQueries');
+
+      jest.spyOn(Alert, 'alert').mockImplementationOnce(
+        (_title, _msg, buttons) => {
+          const confirmBtn = (
+            buttons as { style?: string; onPress?: () => void }[]
+          )?.find((b) => b.style === 'destructive');
+          confirmBtn?.onPress?.();
+        },
+      );
+
+      await waitFor(() =>
+        expect(getByRole('button', { name: 'link_platform.steam.unlink' })).toBeTruthy(),
+      );
+      fireEvent.press(getByRole('button', { name: 'link_platform.steam.unlink' }));
+
+      await waitFor(() => expect(apiDelete).toHaveBeenCalled());
+      await waitFor(() => {
+        const keys = refetchSpy.mock.calls.map(
+          (call) => (call[0] as { queryKey?: string[] })?.queryKey?.[0],
+        );
+        expect(keys).toContain('sync-summary');
+      });
+    });
   });
 });
 

@@ -17,6 +17,7 @@ import { addXp } from '../services/user.service';
 import { upsertUserScore } from '../services/ranking.service';
 
 import type { SyncJobData, SyncJobResult } from './sync.queue';
+import { syncQueue } from './sync.queue';
 
 const ADAPTERS: Record<string, PlatformAdapter> = {
   STEAM: steamAdapter,
@@ -54,6 +55,25 @@ export function startSyncWorker() {
     async (job) => {
       const { userId, platformAccountId, platform } = job.data;
 
+      // Lock por usuario — garantiza que solo un sync del mismo userId corra a la vez.
+      // Usuarios distintos siguen en paralelo (la concurrency global del worker no cambia).
+      // TTL de 10 min como failsafe si el proceso muere sin liberar el lock.
+      const lockKey = `sync:user-lock:${userId}`;
+      const LOCK_TTL_SECONDS = 600;
+      const acquired = await redis.set(lockKey, job.id ?? 'locked', 'EX', LOCK_TTL_SECONDS, 'NX');
+
+      if (!acquired) {
+        // Otro sync de este usuario está activo — reencolar con delay y terminar este job.
+        await syncQueue.add(
+          job.name,
+          job.data,
+          { delay: 5000, priority: job.opts.priority },
+        );
+        logger.info({ userId, platform }, '[SyncWorker] Sync reencolado — usuario con sync activo');
+        return { achievementsSynced: 0, gamesUpdated: 0, syncedAt: new Date().toISOString() };
+      }
+
+      try {
       const account = await prisma.platformAccount.findUnique({
         where: { id: platformAccountId },
       });
@@ -215,6 +235,11 @@ export function startSyncWorker() {
         gamesUpdated: result.gamesUpdated,
         syncedAt: result.syncedAt,
       };
+      } finally {
+        // Liberar el lock del usuario SIEMPRE — incluso si el sync falla.
+        // Sin este finally, un crash dejaría al usuario bloqueado hasta que el TTL expire.
+        await redis.del(lockKey);
+      }
     },
     {
       connection: createWorkerConnection(),

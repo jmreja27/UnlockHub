@@ -287,6 +287,122 @@ describe('syncService.getSyncStatus — campos de progreso desde Redis', () => {
   });
 });
 
+// ─── MEJORA-2: lock Redis por usuario — sync secuencial por usuario ──────────
+
+describe('startSyncWorker — lock Redis por usuario (MEJORA-2)', () => {
+  type JobLike = {
+    id?: string;
+    name: string;
+    opts: { priority?: number };
+    data: { userId: string; platformAccountId: string; platform: string; triggerType: string };
+  };
+  type ProcessFn = (job: JobLike) => Promise<unknown>;
+
+  it('adquiere el lock con SET NX EX atómico y lo libera en finally cuando el sync tiene éxito', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    // SET NX devuelve 'OK' → lock adquirido
+    mockRedis.set.mockResolvedValueOnce('OK');
+
+    mockPrisma.userAchievement.findMany
+      .mockResolvedValueOnce([]) // prevEarnedIds
+      .mockResolvedValueOnce([]); // newAchievements
+
+    (mockSteamAdapter.syncUser as jest.Mock).mockResolvedValueOnce({
+      gamesUpdated: 0, achievementsSynced: 0, syncedAt: new Date().toISOString(),
+    });
+
+    mockPrisma.user.findUnique.mockResolvedValueOnce({ xp: 0 });
+    mockPrisma.platformAccount.findMany.mockResolvedValueOnce([]);
+
+    await processFn({ id: 'job-test', name: 'manual-sync:user-1:STEAM', opts: {}, data: { userId: 'user-1', platformAccountId: 'acc-1', platform: 'STEAM', triggerType: 'manual' } });
+
+    // SET fue llamado con NX y EX para el lock del usuario
+    expect(mockRedis.set).toHaveBeenCalledWith(
+      'sync:user-lock:user-1',
+      expect.any(String),
+      'EX',
+      600,
+      'NX',
+    );
+    // DEL fue llamado para liberar el lock al final
+    expect(mockRedis.del).toHaveBeenCalledWith('sync:user-lock:user-1');
+  });
+
+  it('reencola el job con delay cuando el lock del usuario ya está tomado', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    // SET NX devuelve null → lock no adquirido (otro sync del mismo usuario activo)
+    mockRedis.set.mockResolvedValueOnce(null);
+
+    const result = await processFn({ id: 'job-2', name: 'manual-sync:user-1:STEAM', opts: { priority: 10 }, data: { userId: 'user-1', platformAccountId: 'acc-1', platform: 'STEAM', triggerType: 'manual' } });
+
+    // El job debe haberse reencolado con delay de 5s
+    expect((syncQueue.add as jest.Mock)).toHaveBeenCalledWith(
+      'manual-sync:user-1:STEAM',
+      expect.objectContaining({ userId: 'user-1', platform: 'STEAM' }),
+      expect.objectContaining({ delay: 5000 }),
+    );
+    // El job retorna resultado vacío — no procesó nada
+    expect((result as { achievementsSynced: number }).achievementsSynced).toBe(0);
+  });
+
+  it('libera el lock en finally aunque el sync falle', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    // Lock adquirido
+    mockRedis.set.mockResolvedValueOnce('OK');
+    // El adapter lanza un error
+    (mockSteamAdapter.syncUser as jest.Mock).mockRejectedValueOnce(new Error('Timeout'));
+
+    mockPrisma.userAchievement.findMany.mockResolvedValueOnce([]); // prevEarnedIds
+
+    await expect(
+      processFn({ id: 'job-3', name: 'manual-sync:user-1:STEAM', opts: {}, data: { userId: 'user-1', platformAccountId: 'acc-1', platform: 'STEAM', triggerType: 'manual' } }),
+    ).rejects.toThrow();
+
+    // El lock debe liberarse incluso aunque el sync haya fallado
+    expect(mockRedis.del).toHaveBeenCalledWith('sync:user-lock:user-1');
+  });
+
+  it('syncs de usuarios distintos no se bloquean entre sí (locks con keys distintas)', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    // user-2: SET NX devuelve 'OK' → lock adquirido independientemente de user-1
+    mockRedis.set.mockResolvedValueOnce('OK');
+
+    mockPrisma.userAchievement.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    (mockSteamAdapter.syncUser as jest.Mock).mockResolvedValueOnce({
+      gamesUpdated: 0, achievementsSynced: 0, syncedAt: new Date().toISOString(),
+    });
+
+    mockPrisma.user.findUnique.mockResolvedValueOnce({ xp: 0 });
+    mockPrisma.platformAccount.findMany.mockResolvedValueOnce([]);
+
+    await processFn({ id: 'job-4', name: 'manual-sync:user-2:STEAM', opts: {}, data: { userId: 'user-2', platformAccountId: 'acc-2', platform: 'STEAM', triggerType: 'manual' } });
+
+    // El lock se adquirió con la key del usuario correcto
+    expect(mockRedis.set).toHaveBeenCalledWith(
+      'sync:user-lock:user-2',
+      expect.any(String),
+      'EX', 600, 'NX',
+    );
+    // Y se liberó para user-2, no para user-1
+    expect(mockRedis.del).toHaveBeenCalledWith('sync:user-lock:user-2');
+  });
+});
+
 // ─── BUG-9: addXp llamado cuando hay logros nuevos ───────────────────────────
 
 describe('startSyncWorker — addXp persistido cuando hay logros nuevos (BUG-9)', () => {
