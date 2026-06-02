@@ -240,6 +240,41 @@ describe('syncService.triggerExpressSync', () => {
   });
 });
 
+describe('syncService.triggerExpressSync — lock por usuario', () => {
+  it('adquiere el lock antes de ejecutar el express sync y lo libera al completar', async () => {
+    mockRedis.set.mockResolvedValueOnce('OK');
+    (mockSteamAdapter.syncUserExpress as jest.Mock).mockResolvedValueOnce({
+      gamesUpdated: 5, achievementsSynced: 50, syncedAt: new Date().toISOString(),
+    });
+
+    await syncService.triggerExpressSync('user-1', 'STEAM');
+
+    expect(mockRedis.set).toHaveBeenCalledWith('sync:user-lock:user-1', 'express', 'EX', 120, 'NX');
+    expect(mockSteamAdapter.syncUserExpress).toHaveBeenCalledWith(account);
+    expect(mockRedis.del).toHaveBeenCalledWith('sync:user-lock:user-1');
+  });
+
+  it('omite el express sync si el lock ya está tomado (otro sync activo para el mismo usuario)', async () => {
+    mockRedis.set.mockResolvedValueOnce(null); // lock no disponible
+
+    await syncService.triggerExpressSync('user-1', 'STEAM');
+
+    expect(mockSteamAdapter.syncUserExpress).not.toHaveBeenCalled();
+    // No debe intentar liberar un lock que no adquirió
+    expect(mockRedis.del).not.toHaveBeenCalledWith('sync:user-lock:user-1');
+  });
+
+  it('libera el lock en finally aunque el express sync falle', async () => {
+    mockRedis.set.mockResolvedValueOnce('OK');
+    (mockSteamAdapter.syncUserExpress as jest.Mock).mockRejectedValueOnce(new Error('PSN timeout'));
+
+    // No debe lanzar — el catch interno lo absorbe
+    await expect(syncService.triggerExpressSync('user-1', 'STEAM')).resolves.toBeUndefined();
+
+    expect(mockRedis.del).toHaveBeenCalledWith('sync:user-lock:user-1');
+  });
+});
+
 describe('syncService.queueInitialSync', () => {
   it('encola el job con triggerType=initial y prioridad alta', async () => {
     const jobId = await syncService.queueInitialSync('user-1', 'STEAM');

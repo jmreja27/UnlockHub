@@ -253,6 +253,13 @@ export async function getAggregateSyncStatus(
  * Sync express: obtiene los N juegos/trofeos más recientes de forma síncrona (~30 s max).
  * Se llama al vincular una plataforma por primera vez para poblar la biblioteca antes
  * de responder al cliente. El full sync completo se encola en BullMQ aparte.
+ *
+ * Usa el mismo lock Redis que el BullMQ worker (sync:user-lock:{userId}) para evitar
+ * que dos express syncs del mismo usuario corran en paralelo (ej: Steam + PSN vinculados
+ * en rápida sucesión durante el onboarding) o que el express sync solape con un job
+ * de BullMQ que ya arrancó para el mismo usuario.
+ * Si el lock no está disponible, se omite el express sync: el queueInitialSync encolado
+ * justo después se encargará de la sincronización completa.
  */
 export async function triggerExpressSync(
   userId: string,
@@ -266,6 +273,16 @@ export async function triggerExpressSync(
   const adapter = ADAPTERS[platform as keyof typeof ADAPTERS];
   if (!adapter?.syncUserExpress) return;
 
+  const lockKey = `sync:user-lock:${userId}`;
+  // TTL de 120s: margen holgado sobre los 25s del Promise.race del controller,
+  // pero muy inferior al TTL de 600s del worker BullMQ (full sync).
+  const acquired = await redis.set(lockKey, 'express', 'EX', 120, 'NX');
+
+  if (!acquired) {
+    logger.info({ userId, platform }, '[SyncService] Express sync omitido — sync activo para este usuario');
+    return;
+  }
+
   try {
     await adapter.syncUserExpress(account);
     await prisma.platformAccount.update({
@@ -275,6 +292,8 @@ export async function triggerExpressSync(
     logger.info({ userId, platform }, '[SyncService] Express sync completado');
   } catch (err) {
     logger.warn({ userId, platform, err: (err as Error).message }, '[SyncService] Express sync fallido — continuando');
+  } finally {
+    await redis.del(lockKey);
   }
 }
 
