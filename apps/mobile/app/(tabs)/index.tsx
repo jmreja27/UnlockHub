@@ -311,7 +311,7 @@ export default function LibraryScreen() {
   const activeSortLabel = SORT_OPTIONS.find((o) => o.key === (librarySortOrder ?? 'last_played'))?.label ?? '';
 
   return (
-    <SafeAreaView className="flex-1 bg-surface">
+    <SafeAreaView className="flex-1 bg-surface" edges={['left', 'right']}>
       {/* Cabecera */}
       <View className="px-4 pt-1 pb-2 flex-row items-center justify-between">
         <View className="flex-1 mr-3">

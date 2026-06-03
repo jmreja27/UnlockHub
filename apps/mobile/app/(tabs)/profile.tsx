@@ -297,7 +297,7 @@ export default function ProfileScreen() {
   // Estado no autenticado
   if (!isAuthenticated || !user) {
     return (
-      <SafeAreaView className="flex-1 bg-surface">
+      <SafeAreaView className="flex-1 bg-surface" edges={['left', 'right']}>
         <View className="flex-1 items-center justify-center px-6">
           <Text
             className="text-white text-2xl font-bold mb-3 text-center"
@@ -326,7 +326,7 @@ export default function ProfileScreen() {
   // Estado de carga inicial
   if (isLoadingPlatforms && !platforms) {
     return (
-      <SafeAreaView className="flex-1 bg-surface">
+      <SafeAreaView className="flex-1 bg-surface" edges={['left', 'right']}>
         <ProfileSkeleton />
       </SafeAreaView>
     );

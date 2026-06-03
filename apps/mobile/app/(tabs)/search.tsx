@@ -34,7 +34,7 @@ export default function SearchScreen() {
   const items: ListItem[] = buildItems(filter, data, enabled, t);
 
   return (
-    <SafeAreaView className="flex-1 bg-surface">
+    <SafeAreaView className="flex-1 bg-surface" edges={['left', 'right']}>
       {/* Barra de búsqueda */}
       <View className="px-4 pt-1 pb-3">
         <Text className="text-white text-2xl font-bold mb-2" accessibilityRole="header">

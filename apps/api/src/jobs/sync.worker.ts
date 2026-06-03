@@ -239,6 +239,9 @@ export function startSyncWorker() {
         // Liberar el lock del usuario SIEMPRE — incluso si el sync falla.
         // Sin este finally, un crash dejaría al usuario bloqueado hasta que el TTL expire.
         await redis.del(lockKey);
+        // Safety net: si el proceso murió antes de que el path normal o el catch borrara
+        // la clave de progreso, la eliminamos aquí para no dejarla 2 horas en Redis.
+        await redis.del(syncProgressKey(userId, platform as Platform)).catch(() => undefined);
       }
     },
     {

@@ -49,7 +49,7 @@
 | T5 | Tests de carga k6 | ✅ |
 | T6 | Tests unitarios nuevos servicios | ✅ |
 | T7 | Reescribir FeedScreen.test.tsx | ✅ Reescrito correctamente — mockea `useMyGames`; 9 tests pasando |
-| T8 | Subir Expo a v55 para vulnerabilidades node-tar | 🔲 17 high mobile (build-time vía Expo) + 2 high API (bcrypt build-time) — ninguna runtime; PR dedicado post-lanzamiento |
+| T8 | Subir Expo a v55 para vulnerabilidades node-tar | 🟠 Media — Fase 4. 17 high mobile (build-time vía Expo) + 2 high API (bcrypt build-time) — ninguna runtime; PR dedicado en rama `feat/expo-55`. |
 | T9 | Resolver 145 warnings import/order en API | ✅ Resuelto — `eslint --fix` + override en `.eslintrc.js` para ficheros de test |
 | T10 | Flows Maestro E2E | ✅ 5 flows en `apps/mobile/.maestro/` — todos pasando contra emulador Android con APK preview |
 | T11 | Search de logros + endpoint logros de juego | ✅ Backend `GET /api/v1/games/:id/achievements` + `GET /api/v1/search?type=achievements` — JWT opcional, Xbox excluido, paginado 20/pág |
@@ -93,10 +93,12 @@
 | T49 | **VERIFICAR**: `background-sync.scheduler.ts` condición `gte` vs `lte` en `lastSyncAt` | El scheduler usa `lastSyncAt: { gte: oneDayAgo }` — sincroniza usuarios que SÍ han sincronizado en las últimas 24h. Verificar si debería ser `lte` (usuarios que NO han sincronizado recientemente). La lógica actual podría ser intencionada. Sesión 52 |
 | T50 | **COBERTURA TESTS**: Auth — no hay test para refresh token de usuario con soft delete | `findValidRefreshToken` no verifica `deletedAt: null` en el usuario incluido — un usuario borrado podría refrescar sesión si tiene refresh tokens activos. Añadir test unitario. Sesión 52 |
 | T51 | **COBERTURA TESTS**: Points — no hay test para race condition en `claimRewardedAdPoints` | Corregido con SET NX pero falta test de concurrencia (dos llamadas simultáneas, una debe fallar con REWARDED_AD_COOLDOWN). Sesión 52 |
-| T52 | Desnormalizar datos de juegos para acelerar carga | 🔲 Post-lanzamiento — Cachear/persistir metadatos de juegos (título, iconUrl, totalAchievements) de forma más agresiva para reducir llamadas a APIs externas en cada sync. Investigar si conviene un modelo GameCache en Redis con TTL más largo o desnormalización en PostgreSQL. |
-| T53 | Investigar crash por sync largo | 🔲 Post-lanzamiento — La app crashea cuando lleva sincronizando mucho tiempo (posiblemente memoria, socket timeout o BullMQ lock expirado). Reproducir con cuenta PSN de 300+ juegos, capturar stack trace en Sentry, correlacionar con logs Railway. |
-| T54 | Refactor general post-lanzamiento | 🔲 Fase 4 — Refactor de deuda técnica acumulada: QueryKeys centralizadas (T45), deduplicar middleware de upload (T44), debounce unificado (T46), limpieza de code smells T44-T51. Hacer en rama dedicada refactor/fase4. |
-| T55 | Fix edge-to-edge Android 15 — contenido desplazado hacia arriba | 🔲 PL14 — Con targetSdkVersion: 35, Android 15 fuerza edge-to-edge y el contenido aparece desplazado hacia arriba en algunas pantallas. Revisar SafeAreaView en todas las pantallas (tabs, auth, game detail, profile) y ajustar padding/insets. Verificar en dispositivo físico con Android 15 antes de promover a Producción. |
+| T52 | Cachear datos de juegos para acelerar carga de biblioteca | 🔴 Inmediato — v4. Cachear en Redis los campos necesarios para renderizar `LibraryGameCard` sin llamadas extra: `title`, `iconUrl`, `totalAchievements`, `console`. Clave `game:meta:{gameId}` con TTL 24h. Reducir llamadas a APIs externas en cada sync. Solo estos 4 campos — no más. |
+| T53 | Investigar y corregir crash por sync largo | 🔴 Inmediato — v4. La app crashea durante syncs largos (posiblemente memory leak, timeout no manejado en psn.adapter/ra.adapter, acumulación de promesas o BullMQ lock expirado). Revisar `sync.worker.ts`, `psn.adapter.ts`, `retroachievements.adapter.ts` — aplicar fixes seguros sin cambiar comportamiento externo. |
+| T54 | Refactor general post-lanzamiento | 🔵 Cuando el volumen lo justifique — Fase 4. Deuda técnica acumulada: QueryKeys centralizadas (T46), deduplicar middleware upload (T44/T45), debounce unificado (T47), IDs AdMob centralizados (T48), code smells T44-T51. Rama dedicada `refactor/fase4`. |
+| T55 | Fix edge-to-edge Android 15 — contenido desplazado hacia arriba | 🔴 Inmediato — v4. Con `targetSdkVersion: 35`, Android 15 fuerza edge-to-edge. Revisar `SafeAreaView` en tabs, auth, game detail, profile, notifications, wrapped — ajustar `useSafeAreaInsets` donde sea necesario. |
+| T56 | ✅ Fixes de seguridad sesión 53 | ✅ En develop — `xbox.adapter.ts`: doble cifrado AES-256-GCM eliminado · `search.service.ts`: filtro `deletedAt: null` añadido en `searchUsers` · `user.service.ts`: revocación `RefreshToken`s añadida a transacción de borrado de cuenta |
+| T57 | Modo claro UI | 🔵 Cuando el volumen lo justifique — Fase 4. Todos los componentes usan `text-white` hardcoded — requiere auditar y añadir variantes de color claras en NativeWind. Rama `feat/light-mode`. |
 
 ### 🟢 Features
 
@@ -111,18 +113,24 @@
 | F7 | Guías UGC de logros | ✅ |
 | F8 | Avatar upload | ✅ Backend Cloudinary + mobile expo-image-picker — activo en prod (`CLOUDINARY_URL` configurada en Railway ✅) |
 | F9 | Dashboard admin | ✅ |
-| F10 | OG profiles | 🔲 Fase 4 |
+| F10 | OG profiles | 🟢 Largo plazo — Fase 4 |
 | F11 | Búsqueda de logros con filtro de plataforma | 🔲 Eliminado del Search tab en sesión 37 — hook `useSearchAchievements` y endpoint `GET /api/v1/search?type=achievements` intactos para uso futuro (T27) |
 | F12 | SyncStatusBar — feedback de sync en biblioteca | ✅ Botón sync, syncs restantes (free), cooldown countdown, última sync, próximo auto sync |
-| F13 | Google Play Billing — pantalla premium + RevenueCat | ✅ `react-native-purchases` v10, `usePremiumPlans`, `useSubscription`, `useRevenueCat`, `premium.tsx` reescrito, webhook backend. 🚩 `FEATURES.premium = false` — activar en Fase 4 tras B18/B19/B20. |
+| F13 | Activar premium + RevenueCat | 🟡 Alta — Fase 4. Código 100% intacto. Pasos: (1) completar B18/B19/B20 · (2) `FEATURES.premium = true` en `featureFlags.ts` · (3) `FEATURES.pointsRedeem = true` · (4) `FEATURES.advancedStats = true`. `react-native-purchases` v10, `usePremiumPlans`, `useSubscription`, `useRevenueCat`, `premium.tsx`, webhook backend — todo listo. |
 | F14 | PSN sync paralelo — `Promise.allSettled` con concurrencia 5 | ✅ `processSingleTitle()` extraído; `processTitles()` procesa chunks de 5 en paralelo con aislamiento de fallos por título |
 | F15 | RA sync paralelo — `Promise.allSettled` con concurrencia 3 | ✅ `syncUser()` y `syncUserBatched()` procesan chunks de 3 juegos en paralelo con `Promise.allSettled` |
 | F16 | SyncStatusBar — countdown local + aviso sync largo | ✅ Countdown `setTimeout`-chain independiente del `refetchInterval` 60s; aviso ámbar tras 30s de sync activo |
 | F17 | Onboarding paso 4 — CTAs de vinculación de plataformas | ✅ Paso 4 con botones Steam/PSN/RA → `router.replace('/link-platform/[x]')`, CTA secundario "Hacer esto más tarde" |
 | F18 | FriendshipButton consciente del estado de relación en perfil público | ✅ 5 estados (none/pending_sent/pending_received/accepted/blocked) · GET /api/v1/friends/status/:username · confirmación Alert en eliminar · sesión 35 |
 | F19 | Banner upload (Cloudinary) | ✅ POST /api/v1/users/me/banner · Pressable 120px en profile.tsx · aspect 3:1 · crop/fill 1500×500 · sesión 42 |
-| F20 | Ampliar placements de AdMob | 🔲 Fase 4 — Placements actuales: Home banner, Search banner, Interstitial, Rewarded. Añadir: Banner en Rankings, Banner en Friends, Interstitial al ver Wrapped, Interstitial al completar juego 100%. Arquitectura ya preparada — AdBanner acepta unitId como prop. Requiere: crear nuevos ad units en AdMob, añadir EAS secrets correspondientes, integrar en pantallas. |
-| F21 | Ver logros de otros usuarios | 🔲 Fase 4 — Desde el perfil público de un usuario, mostrar su biblioteca de juegos y logros desbloqueados. Endpoint GET /api/v1/users/:username/games ya tiene base — ampliar para exponer logros públicos con isUnlocked del usuario visitado. |
+| F20 | Ampliar placements de AdMob | 🟡 Alta — Fase 4. Actuales: Home banner, Search banner, Interstitial, Rewarded. Añadir: Banner en Rankings, Banner en Friends, Interstitial al ver Wrapped, Interstitial al completar juego 100%. Arquitectura lista — `AdBanner` acepta `unitId` como prop. Requiere: nuevos ad units en AdMob + EAS secrets + integrar en pantallas. |
+| F21 | Ver logros de otros usuarios | 🟡 Alta — Fase 4. Desde el perfil público mostrar biblioteca de juegos y logros desbloqueados. `GET /api/v1/users/:username/games` ya tiene base — ampliar para exponer logros con `isUnlocked` del usuario visitado. |
+| F22 | Activar retos semanales (`FEATURES.challenges = true`) | 🟠 Media — Fase 4. Backend `WeeklyChallenge` + `UserChallenge` + scheduler + workers implementados. Solo requiere cambiar el flag y crear retos iniciales en BD. |
+| F23 | Activar canje de puntos (`FEATURES.pointsRedeem = true`) | 🟠 Media — Fase 4. Endpoint `POST /api/v1/subscriptions/redeem-points` implementado. Activar junto a `FEATURES.premium`. |
+| F24 | Activar estadísticas avanzadas (`FEATURES.advancedStats = true`) | 🟠 Media — Fase 4. Pantalla y datos implementados. Activar junto a `FEATURES.premium`. |
+| F25 | Xbox — vinculación y sync | 🔵 Cuando el volumen lo justifique — Fase 4. `xbox.adapter.ts` implementado y gateado. Requiere OAuth2 Microsoft Identity Platform + verificación de empresa + `XBOX_CLIENT_ID`/`XBOX_CLIENT_SECRET` en Railway. |
+| F26 | App Store iOS | 🟢 Largo plazo — Fase 4. Apple Developer Program $99/año (V4). Requiere cuenta + certificados + TestFlight + listing App Store. |
+| F27 | Torneos internos | 🟢 Largo plazo — Fase 4. Consultar abogado antes de implementar (Ley 13/2011 — juegos de azar España). Solo recompensas en puntos/días premium. |
 
 ### 🔶 Post-lanzamiento — Verificaciones pendientes
 

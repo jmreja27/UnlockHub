@@ -8,6 +8,7 @@ import { AppError } from '../middleware/errorHandler';
 import { logger } from '../lib/logger';
 
 import type { PlatformAdapter, SyncBatchCallback } from './platform.interface';
+import { getCachedGameMeta, setCachedGameMeta } from './game-cache';
 
 // URL base de la API de RetroAchievements
 const RA_API_BASE = 'https://retroachievements.org/API';
@@ -104,14 +105,18 @@ async function getStaleCache<T>(key: string): Promise<T | null> {
   return JSON.parse(stale) as T;
 }
 
+// TTL de la copia stale: 7 días. Suficiente para recuperarse de interrupciones prolongadas de la API
+// sin acumular claves permanentes en Redis (especialmente para usuarios con 1000+ juegos RA).
+const STALE_CACHE_TTL = 7 * 24 * 60 * 60; // 604800 s
+
 /**
- * Guarda el valor en caché con TTL Y una copia stale sin TTL para resiliencia.
+ * Guarda el valor en caché con TTL Y una copia stale de larga duración para resiliencia.
  */
 async function setResilientCache<T>(key: string, value: T, ttl: number): Promise<void> {
   const serialized = JSON.stringify(value);
   await Promise.all([
     redis.setex(key, ttl, serialized),
-    redis.set(`${key}:stale`, serialized), // sin TTL: persiste aunque expire la clave principal
+    redis.setex(`${key}:stale`, STALE_CACHE_TTL, serialized),
   ]);
 }
 
@@ -221,28 +226,45 @@ async function processRaGame(
     return { gamesUpdated: 0, achievementsSynced: 0 };
   }
 
-  const dbGame = await prisma.game.upsert({
-    where: { platform_externalId: { platform: 'RA', externalId: gameId } },
-    create: {
-      platform: 'RA',
-      externalId: gameId,
-      title: gameProgress.Title ?? gameEntry.Title ?? 'Juego sin título',
-      console: gameProgress.ConsoleName ?? null,
-      iconUrl: gameProgress.ImageIcon
-        ? `https://media.retroachievements.org${gameProgress.ImageIcon}`
-        : null,
-      headerUrl: null,
-      totalAchievements: gameProgress.NumAchievements ?? gameEntry.NumAchievements ?? 0,
-    },
-    update: {
-      title: gameProgress.Title ?? gameEntry.Title ?? 'Juego sin título',
-      console: gameProgress.ConsoleName ?? null,
-      iconUrl: gameProgress.ImageIcon
-        ? `https://media.retroachievements.org${gameProgress.ImageIcon}`
-        : null,
-      totalAchievements: gameProgress.NumAchievements ?? gameEntry.NumAchievements ?? 0,
-    },
-  });
+  const gameTitle = gameProgress.Title ?? gameEntry.Title ?? 'Juego sin título';
+  const gameIconUrl = gameProgress.ImageIcon
+    ? `https://media.retroachievements.org${gameProgress.ImageIcon}`
+    : null;
+  const gameTotalAchievements = gameProgress.NumAchievements ?? gameEntry.NumAchievements ?? 0;
+  const gameConsole = gameProgress.ConsoleName ?? null;
+
+  // Caché de metadatos de juego (24h) — evita un game.upsert por juego en cada sync
+  let dbGame: { id: string };
+  const cachedMeta = await getCachedGameMeta('RA', gameId);
+  if (cachedMeta) {
+    dbGame = { id: cachedMeta.id };
+  } else {
+    dbGame = await prisma.game.upsert({
+      where: { platform_externalId: { platform: 'RA', externalId: gameId } },
+      create: {
+        platform: 'RA',
+        externalId: gameId,
+        title: gameTitle,
+        console: gameConsole,
+        iconUrl: gameIconUrl,
+        headerUrl: null,
+        totalAchievements: gameTotalAchievements,
+      },
+      update: {
+        title: gameTitle,
+        console: gameConsole,
+        iconUrl: gameIconUrl,
+        totalAchievements: gameTotalAchievements,
+      },
+    });
+    await setCachedGameMeta('RA', gameId, {
+      id: dbGame.id,
+      title: gameTitle,
+      iconUrl: gameIconUrl,
+      totalAchievements: gameTotalAchievements,
+      console: gameConsole,
+    });
+  }
 
   let achievementsSynced = 0;
 

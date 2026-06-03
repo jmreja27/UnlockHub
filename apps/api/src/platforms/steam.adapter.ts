@@ -7,6 +7,7 @@ import { redis } from '../lib/redis';
 import { AppError } from '../middleware/errorHandler';
 
 import type { PlatformAdapter, SyncBatchCallback } from './platform.interface';
+import { getCachedGameMeta, setCachedGameMeta } from './game-cache';
 
 // Clave del sistema — todas las llamadas a Steam usan esta key del servidor
 const STEAM_SYSTEM_API_KEY = process.env['STEAM_API_KEY'] ?? '';
@@ -344,23 +345,39 @@ export class SteamAdapter implements PlatformAdapter {
 
       const schemaMap = new Map(schema.map((s) => [s.name, s]));
 
-      const dbGame = await prisma.game.upsert({
-        where: { platform_externalId: { platform: 'STEAM', externalId: appId } },
-        create: {
-          platform: 'STEAM',
-          externalId: appId,
+      const steamIconUrl = steamGame.img_icon_url
+        ? `${STEAM_STORE_CDN}/${appId}/${steamGame.img_icon_url}.jpg`
+        : null;
+
+      // Caché de metadatos de juego (24h) — evita un game.upsert por app en cada sync
+      let dbGame: { id: string };
+      const cachedMeta = await getCachedGameMeta('STEAM', appId);
+      if (cachedMeta) {
+        dbGame = { id: cachedMeta.id };
+      } else {
+        dbGame = await prisma.game.upsert({
+          where: { platform_externalId: { platform: 'STEAM', externalId: appId } },
+          create: {
+            platform: 'STEAM',
+            externalId: appId,
+            title: steamGame.name,
+            iconUrl: steamIconUrl,
+            headerUrl: `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/header.jpg`,
+            totalAchievements: schema.length,
+          },
+          update: {
+            title: steamGame.name,
+            totalAchievements: schema.length,
+          },
+        });
+        await setCachedGameMeta('STEAM', appId, {
+          id: dbGame.id,
           title: steamGame.name,
-          iconUrl: steamGame.img_icon_url
-            ? `${STEAM_STORE_CDN}/${appId}/${steamGame.img_icon_url}.jpg`
-            : null,
-          headerUrl: `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/header.jpg`,
+          iconUrl: steamIconUrl,
           totalAchievements: schema.length,
-        },
-        update: {
-          title: steamGame.name,
-          totalAchievements: schema.length,
-        },
-      });
+          console: null,
+        });
+      }
 
       gamesUpdated++;
 

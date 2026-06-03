@@ -23,6 +23,7 @@ import { redis } from '../lib/redis';
 import { AppError } from '../middleware/errorHandler';
 
 import type { PlatformAdapter, SyncBatchCallback } from './platform.interface';
+import { getCachedGameMeta, setCachedGameMeta } from './game-cache';
 
 // ─── Constantes ────────────────────────────────────────────────────────────────
 
@@ -373,30 +374,44 @@ export class PsnAdapter implements PlatformAdapter {
     const trophies = await this.fetchMergedTrophies(auth, title, account.externalId);
     if (trophies.length === 0) return { achievementsSynced: 0, gamesUpdated: 0 };
 
-    const dbGame = await prisma.game.upsert({
-      where: { platform_externalId: { platform: 'PSN', externalId: title.npCommunicationId } },
-      create: {
-        platform: 'PSN',
-        externalId: title.npCommunicationId,
+    const totalAchievements =
+      title.definedTrophies.bronze +
+      title.definedTrophies.silver +
+      title.definedTrophies.gold +
+      (title.definedTrophies.platinum ?? 0);
+
+    // Caché de metadatos de juego (24h) — evita un game.upsert por título en cada sync
+    let dbGame: { id: string };
+    const cachedMeta = await getCachedGameMeta('PSN', title.npCommunicationId);
+    if (cachedMeta) {
+      dbGame = { id: cachedMeta.id };
+    } else {
+      dbGame = await prisma.game.upsert({
+        where: { platform_externalId: { platform: 'PSN', externalId: title.npCommunicationId } },
+        create: {
+          platform: 'PSN',
+          externalId: title.npCommunicationId,
+          title: title.trophyTitleName,
+          console: title.trophyTitlePlatform ?? null,
+          iconUrl: title.trophyTitleIconUrl ?? null,
+          headerUrl: null,
+          totalAchievements,
+        },
+        update: {
+          title: title.trophyTitleName,
+          console: title.trophyTitlePlatform ?? null,
+          iconUrl: title.trophyTitleIconUrl ?? null,
+          totalAchievements,
+        },
+      });
+      await setCachedGameMeta('PSN', title.npCommunicationId, {
+        id: dbGame.id,
         title: title.trophyTitleName,
-        console: title.trophyTitlePlatform ?? null,
         iconUrl: title.trophyTitleIconUrl ?? null,
-        headerUrl: null,
-        totalAchievements: title.definedTrophies.bronze +
-          title.definedTrophies.silver +
-          title.definedTrophies.gold +
-          (title.definedTrophies.platinum ?? 0),
-      },
-      update: {
-        title: title.trophyTitleName,
+        totalAchievements,
         console: title.trophyTitlePlatform ?? null,
-        iconUrl: title.trophyTitleIconUrl ?? null,
-        totalAchievements: title.definedTrophies.bronze +
-          title.definedTrophies.silver +
-          title.definedTrophies.gold +
-          (title.definedTrophies.platinum ?? 0),
-      },
-    });
+      });
+    }
 
     let achievementsSynced = 0;
 
@@ -490,12 +505,16 @@ export class PsnAdapter implements PlatformAdapter {
         let offset = 0;
         const limit = 800;
 
+        // Límite de páginas como failsafe — PSN reporta hasta ~800 títulos; 10 páginas × 800 = amplio margen.
+        const MAX_PAGES = 10;
+        let pages = 0;
         try {
           // eslint-disable-next-line no-constant-condition
           while (true) {
             const response = await getUserTitles(auth, accountId, { limit, offset });
             allTitles.push(...response.trophyTitles);
-            if (allTitles.length >= response.totalItemCount || !response.nextOffset) break;
+            pages++;
+            if (allTitles.length >= response.totalItemCount || !response.nextOffset || pages >= MAX_PAGES) break;
             offset = response.nextOffset;
           }
         } catch {

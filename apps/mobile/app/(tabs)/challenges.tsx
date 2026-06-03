@@ -65,7 +65,7 @@ export default function ChallengesScreen() {
   const isCompleted = !!status?.completedAt;
 
   return (
-    <SafeAreaView className="flex-1 bg-surface">
+    <SafeAreaView className="flex-1 bg-surface" edges={['left', 'right']}>
       <ScrollView
         refreshControl={
           <RefreshControl

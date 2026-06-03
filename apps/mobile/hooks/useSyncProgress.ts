@@ -140,7 +140,13 @@ export function useSyncProgress(onComplete?: SyncCompleteCallback): UseSyncProgr
         });
         return next;
       });
-      void queryClient.invalidateQueries({ queryKey: ['my-games'] });
+      // Throttle igual al path de polling: evita 30+ invalidaciones en un sync PSN grande.
+      // La lista se refresca como máximo cada LIST_INVALIDATE_THROTTLE_MS.
+      const now = Date.now();
+      if (now - lastInvalidateRef.current >= LIST_INVALIDATE_THROTTLE_MS) {
+        lastInvalidateRef.current = now;
+        void queryClient.invalidateQueries({ queryKey: ['my-games'] });
+      }
     };
 
     const onSyncComplete = (event: SyncCompleteEvent) => {
