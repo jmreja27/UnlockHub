@@ -24,6 +24,10 @@ interface AuthResponse {
   user: User;
 }
 
+/**
+ * Convierte un error de autenticación en un mensaje legible para el usuario.
+ * Clasifica errores de red, HTTP y errores de la API.
+ */
 function humanizeAuthError(error: unknown): string {
   if (error instanceof ApiRequestError) {
     const { statusCode, apiError } = error;
@@ -44,6 +48,11 @@ function humanizeAuthError(error: unknown): string {
   return 'Ocurrió un error inesperado. Por favor, inténtalo de nuevo.';
 }
 
+/**
+ * Hook central de autenticación: login, registro y logout.
+ * En logout, elimina el refresh token de SecureStore, limpia la sesión en Zustand y
+ * vacía el caché de TanStack Query antes de navegar a login.
+ */
 export function useAuth() {
   const { setSession, clearSession } = useSessionStore();
   const queryClient = useQueryClient();

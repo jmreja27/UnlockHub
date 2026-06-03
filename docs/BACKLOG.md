@@ -85,6 +85,14 @@
 | T41 | Sync secuencial por usuario — evita "No se pudo cargar la biblioteca" durante syncs simultáneos | ✅ Lock Redis `sync:user-lock:{userId}` con reencolado · concurrencia global intacta · sesión 44 |
 | T42 | Empty state "Tus juegos aparecerán pronto" incorrecto al desvincular con varias plataformas | ✅ `refetchQueries` forzado + skeleton durante `isFetching` — sesión 44 |
 | T43 | Lock de sync no cubría `triggerExpressSync` — Steam+PSN express simultáneos al onboarding | ✅ `triggerExpressSync` adquiere `sync:user-lock:{userId}` con TTL 120s; omite si lock tomado — sesión 45 |
+| T44 | **CODE SMELL**: Duplicación `uploadAvatar`/`uploadBanner` en `user.controller.ts` | Handlers idénticos en lógica — extraer a función `handleUploadMedia(field, transform)`. Sesión 52 |
+| T45 | **CODE SMELL**: Duplicación `uploadAvatar`/`uploadBanner` en `upload.middleware.ts` | `multer()` configurado dos veces con parámetros iguales — usar factory `createUploadMiddleware()`. Sesión 52 |
+| T46 | **CODE SMELL**: QueryKeys dispersas en múltiples hooks (no centralizadas) | `useFriends.ts`, `useRankings.ts`, `useSyncStatus.ts` etc. cada uno define sus propias keys. Centralizar en `lib/queryKeys.ts`. Sesión 52 |
+| T47 | **CODE SMELL**: Debounce duplicado en `useSearch.ts` y `useSearchAchievements.ts` | Exactamente el mismo patrón de debounce en 2 hooks — extraer a `useDebounce(value, delay)`. Sesión 52 |
+| T48 | **CODE SMELL**: IDs de test de AdMob hardcodeados en 3 ficheros | `useInterstitialAd.ts`, `useRewardedAd.ts`, `AdBanner.tsx` tienen la misma constante — centralizar en `lib/constants.ts`. Sesión 52 |
+| T49 | **VERIFICAR**: `background-sync.scheduler.ts` condición `gte` vs `lte` en `lastSyncAt` | El scheduler usa `lastSyncAt: { gte: oneDayAgo }` — sincroniza usuarios que SÍ han sincronizado en las últimas 24h. Verificar si debería ser `lte` (usuarios que NO han sincronizado recientemente). La lógica actual podría ser intencionada. Sesión 52 |
+| T50 | **COBERTURA TESTS**: Auth — no hay test para refresh token de usuario con soft delete | `findValidRefreshToken` no verifica `deletedAt: null` en el usuario incluido — un usuario borrado podría refrescar sesión si tiene refresh tokens activos. Añadir test unitario. Sesión 52 |
+| T51 | **COBERTURA TESTS**: Points — no hay test para race condition en `claimRewardedAdPoints` | Corregido con SET NX pero falta test de concurrencia (dos llamadas simultáneas, una debe fallar con REWARDED_AD_COOLDOWN). Sesión 52 |
 
 ### 🟢 Features
 

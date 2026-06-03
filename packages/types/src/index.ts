@@ -7,9 +7,11 @@ export type Platform = 'STEAM' | 'RA' | 'XBOX' | 'PSN';
 
 export type PointReason = 'CHALLENGE' | 'STREAK' | 'ACHIEVEMENT' | 'REDEEM' | 'REWARDED_AD';
 
-export type SubscriptionPlan = 'MONTHLY' | 'ANNUAL' | 'LIFETIME';
+/** POINTS_REDEEM es el plan creado por canje de puntos — no es una compra en tienda. */
+export type SubscriptionPlan = 'MONTHLY' | 'ANNUAL' | 'LIFETIME' | 'POINTS_REDEEM';
 
-export type StoreProvider = 'GOOGLE_PLAY' | 'APP_STORE';
+/** INTERNAL es el proveedor para canjes de puntos (300 pts = 7 días premium). */
+export type StoreProvider = 'GOOGLE_PLAY' | 'APP_STORE' | 'INTERNAL';
 
 export type SyncTier = 'free' | 'premium';
 

@@ -254,25 +254,27 @@ describe('useSyncProgress', () => {
     mockApiGet.mockResolvedValueOnce([]);
 
     jest.useFakeTimers();
-    const { result } = renderHook(() => useSyncProgress());
+    try {
+      const { result } = renderHook(() => useSyncProgress());
 
-    // Esperar hidratación inicial
-    await waitFor(() => expect(result.current.activeSyncs.size).toBe(1));
+      // Esperar hidratación inicial
+      await waitFor(() => expect(result.current.activeSyncs.size).toBe(1));
 
-    // Simular que el socket está silencioso por SOCKET_GRACE_MS y el polling detecta que terminó
-    // Avanzar el timer de gracia (5s) + el tiempo suficiente para que se ejecute la comprobación
-    await act(async () => { jest.advanceTimersByTime(6000); });
-    await waitFor(() => {
-      expect(result.current.activeSyncs.size).toBe(0);
-    });
+      // Simular que el socket está silencioso por SOCKET_GRACE_MS y el polling detecta que terminó
+      // Avanzar el timer de gracia (5s) + el tiempo suficiente para que se ejecute la comprobación
+      await act(async () => { jest.advanceTimersByTime(6000); });
+      await waitFor(() => {
+        expect(result.current.activeSyncs.size).toBe(0);
+      });
 
-    // Debe haber llamado invalidateQueries al detectar que el sync terminó
-    const calls = mockInvalidateQueries.mock.calls.filter(
-      (call) => JSON.stringify(call[0]) === JSON.stringify({ queryKey: ['my-games'] })
-    );
-    expect(calls.length).toBeGreaterThanOrEqual(1);
-
-    jest.useRealTimers();
+      // Debe haber llamado invalidateQueries al detectar que el sync terminó
+      const calls = mockInvalidateQueries.mock.calls.filter(
+        (call) => JSON.stringify(call[0]) === JSON.stringify({ queryKey: ['my-games'] })
+      );
+      expect(calls.length).toBeGreaterThanOrEqual(1);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('BUG-8: evento Socket.io no sobreescribe entrada ya presente en el Map desde API', async () => {

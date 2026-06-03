@@ -2,6 +2,11 @@ import crypto from 'crypto';
 
 import type { Request, Response, NextFunction } from 'express';
 
+/**
+ * Middleware de autenticación del dashboard de administración.
+ * Compara el header `Authorization: Bearer <ADMIN_SECRET>` en tiempo constante
+ * para evitar timing attacks. Devuelve 503 si ADMIN_SECRET no está configurado.
+ */
 export function adminAuth(req: Request, res: Response, next: NextFunction): void {
   const secret = process.env['ADMIN_SECRET'];
   if (!secret) {

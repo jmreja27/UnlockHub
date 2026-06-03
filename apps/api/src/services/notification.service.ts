@@ -17,26 +17,42 @@ interface ExpoPushTicket {
   message?: string;
 }
 
+const EXPO_TIMEOUT_MS = 10_000;
+
 /**
  * Envía mensajes push a la Expo Push API en un solo request.
  * La Expo Push API acepta hasta 100 mensajes por request — ver sendAll/sendBulk para batching.
+ * Timeout de 10s para evitar colgar indefinidamente si Expo no responde.
  * @throws {AppError} PUSH_API_ERROR (502) si la API de Expo devuelve un error HTTP.
  */
 async function sendToExpo(messages: ExpoPushMessage[]): Promise<void> {
   if (messages.length === 0) return;
-  const res = await fetch(EXPO_PUSH_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify(messages),
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new AppError(`Expo Push API error: ${text}`, 'PUSH_API_ERROR', 502);
-  }
-  const json = (await res.json()) as { data: ExpoPushTicket[] };
-  const failed = json.data.filter((t) => t.status === 'error');
-  if (failed.length > 0) {
-    logger.warn({ errors: failed.map((t) => t.message) }, '[notification] Tokens con error');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), EXPO_TIMEOUT_MS);
+
+  try {
+    const res = await fetch(EXPO_PUSH_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(messages),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new AppError(`Expo Push API error: ${text}`, 'PUSH_API_ERROR', 502);
+    }
+    const json = (await res.json()) as { data?: ExpoPushTicket[] };
+    const tickets = json.data;
+    if (!Array.isArray(tickets)) {
+      logger.warn({ json }, '[notification] Respuesta inesperada de Expo Push API');
+      return;
+    }
+    const failed = tickets.filter((t) => t.status === 'error');
+    if (failed.length > 0) {
+      logger.warn({ errors: failed.map((t) => t.message) }, '[notification] Tokens con error');
+    }
+  } finally {
+    clearTimeout(timer);
   }
 }
 

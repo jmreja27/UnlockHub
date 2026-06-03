@@ -20,7 +20,10 @@ export async function processStreaks(): Promise<void> {
   // eslint-disable-next-line no-constant-condition
   while (true) {
     const users = await prisma.user.findMany({
-      where: cursor ? { id: { gt: cursor } } : {},
+      where: {
+        deletedAt: null,
+        ...(cursor ? { id: { gt: cursor } } : {}),
+      },
       select: { id: true, streakDays: true, streakShields: true, countryCode: true, lastSyncAt: true },
       orderBy: { id: 'asc' },
       take: BATCH,

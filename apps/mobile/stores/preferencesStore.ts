@@ -16,6 +16,19 @@ interface PreferencesState {
 
 const STORAGE_KEY = '@unlockhub_preferences';
 
+/** Persiste el snapshot actual del store en AsyncStorage. Usa getState() sincrónico para evitar race conditions. */
+function persistCurrent(): void {
+  const s = usePreferencesStore.getState();
+  void AsyncStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({
+      theme: s.theme,
+      onboardingCompleted: s.onboardingCompleted,
+      librarySortOrder: s.librarySortOrder,
+    }),
+  );
+}
+
 export const usePreferencesStore = create<PreferencesState>((set) => ({
   theme: 'dark',
   onboardingCompleted: false,
@@ -23,26 +36,17 @@ export const usePreferencesStore = create<PreferencesState>((set) => ({
 
   setTheme: (theme) => {
     set({ theme });
-    void AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
-      const current = raw ? (JSON.parse(raw) as object) : {};
-      void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ ...current, theme }));
-    });
+    persistCurrent();
   },
 
   completeOnboarding: () => {
     set({ onboardingCompleted: true });
-    void AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
-      const current = raw ? (JSON.parse(raw) as object) : {};
-      void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ ...current, onboardingCompleted: true }));
-    });
+    persistCurrent();
   },
 
   setLibrarySortOrder: (librarySortOrder) => {
     set({ librarySortOrder });
-    void AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
-      const current = raw ? (JSON.parse(raw) as object) : {};
-      void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ ...current, librarySortOrder }));
-    });
+    persistCurrent();
   },
 
   loadPreferences: async () => {

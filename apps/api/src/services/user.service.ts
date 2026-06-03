@@ -12,10 +12,10 @@ export const MAX_LEVEL = 100;
 
 /**
  * Calcula el nivel del usuario en función de su XP acumulado.
- * Fórmula: floor(xp / 1000) + 1, máximo nivel 100.
+ * Fórmula: floor(xp / 1000) + 1, mínimo nivel 1, máximo nivel 100.
  */
 export function calculateLevel(xp: number): number {
-  return Math.min(Math.floor(xp / XP_PER_LEVEL) + 1, MAX_LEVEL);
+  return Math.min(Math.max(1, Math.floor(Math.max(0, xp) / XP_PER_LEVEL) + 1), MAX_LEVEL);
 }
 
 /**

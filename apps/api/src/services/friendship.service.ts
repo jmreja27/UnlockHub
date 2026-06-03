@@ -3,6 +3,7 @@ import type { Friendship, FriendshipStatusResult, PaginatedResponse } from '@unl
 import { friendshipRepository } from '../repositories/friendship.repository';
 import { findUserByUsername } from '../repositories/user.repository';
 import { AppError } from '../middleware/errorHandler';
+import { logger } from '../lib/logger';
 
 import { createEvent } from './activity.service';
 
@@ -79,11 +80,11 @@ export async function acceptFriendRequest(friendshipId: string, userId: string):
 
   const updated = await friendshipRepository.updateStatus(friendshipId, 'ACCEPTED');
 
-  // Emitir evento de actividad para ambos usuarios (fire-and-forget)
+  // Emitir evento de actividad para ambos usuarios (fire-and-forget — no bloquea la respuesta)
   void Promise.all([
     createEvent(userId, 'FRIEND_ADDED', { friendId: friendship.senderId }),
     createEvent(friendship.senderId, 'FRIEND_ADDED', { friendId: userId }),
-  ]);
+  ]).catch((err: unknown) => logger.error({ err }, '[friendship] Error creando eventos FRIEND_ADDED'));
 
   return toFriendshipDto(updated);
 }

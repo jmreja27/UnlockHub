@@ -30,7 +30,7 @@ export interface SyncStatusResult {
   syncsRemaining: number | null; // null = ilimitado
 }
 
-// Formatea una diferencia de tiempo en segundos a "Xh Ymin" o "Zmin"
+/** Formatea una diferencia de tiempo en segundos a strings localizados como "2h 30min" o "15min". */
 function formatDuration(seconds: number, t: (k: string, opts?: Record<string, unknown>) => string): string {
   const totalMinutes = Math.ceil(seconds / 60);
   if (totalMinutes <= 0) return t('library.sync_now');
@@ -41,7 +41,7 @@ function formatDuration(seconds: number, t: (k: string, opts?: Record<string, un
   return t('library.sync_duration_hm', { h: hours, min: mins });
 }
 
-// Formatea tiempo relativo pasado para "hace X min", "hace X h", etc.
+/** Formatea una fecha pasada como string relativo localizado: "hace X min", "hace X h", etc. */
 function formatRelative(date: Date, t: (k: string, opts?: Record<string, unknown>) => string): string {
   const diffMs = Date.now() - date.getTime();
   const diffMin = Math.floor(diffMs / 60_000);
@@ -53,6 +53,11 @@ function formatRelative(date: Date, t: (k: string, opts?: Record<string, unknown
   return t('library.sync_ago_d', { d: diffD });
 }
 
+/**
+ * Devuelve el estado agregado de sync del usuario (cooldown, límites diarios, próximo auto-sync).
+ * Refresca automáticamente cada 60s. Comparte caché `['sync-summary', userId]` con SyncStatusBar.
+ * @param userId - ID del usuario autenticado. La query está deshabilitada si es undefined.
+ */
 export function useSyncStatus(userId: string | undefined): SyncStatusResult {
   const { t } = useTranslation();
 

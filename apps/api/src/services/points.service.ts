@@ -71,12 +71,17 @@ export async function getPointsTotal(userId: string): Promise<number> {
 const REWARDED_AD_POINTS = 10;
 const REWARDED_AD_COOLDOWN_SECONDS = 3 * 60 * 60; // 3 horas
 
-// Otorga 10 puntos por ver un anuncio recompensado. Cooldown 3h por usuario en Redis.
+/**
+ * Otorga 10 puntos por ver un anuncio recompensado. Cooldown 3h por usuario en Redis.
+ * Usa SET NX EX atómico para evitar race condition entre check y set.
+ */
 export async function claimRewardedAdPoints(userId: string): Promise<{ pointsEarned: number }> {
   const cooldownKey = `rewarded-ad:${userId}`;
-  const existing = await redis.get(cooldownKey);
 
-  if (existing !== null) {
+  // SET NX EX es atómico: solo tiene éxito si la clave no existía, evitando la race condition TOCTOU
+  const acquired = await redis.set(cooldownKey, '1', 'EX', REWARDED_AD_COOLDOWN_SECONDS, 'NX');
+
+  if (acquired === null) {
     throw new AppError(
       'Ya recibiste puntos por un anuncio recientemente. Vuelve en 3 horas.',
       'REWARDED_AD_COOLDOWN',
@@ -84,10 +89,13 @@ export async function claimRewardedAdPoints(userId: string): Promise<{ pointsEar
     );
   }
 
-  await Promise.all([
-    prisma.userPoint.create({ data: { userId, amount: REWARDED_AD_POINTS, reason: 'REWARDED_AD' } }),
-    redis.set(cooldownKey, '1', 'EX', REWARDED_AD_COOLDOWN_SECONDS),
-  ]);
+  try {
+    await prisma.userPoint.create({ data: { userId, amount: REWARDED_AD_POINTS, reason: 'REWARDED_AD' } });
+  } catch (err) {
+    // Si falla el guardado en BD, liberar el lock para que el usuario pueda reintentar
+    await redis.del(cooldownKey);
+    throw err;
+  }
 
   return { pointsEarned: REWARDED_AD_POINTS };
 }

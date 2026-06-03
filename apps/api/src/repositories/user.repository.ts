@@ -1,16 +1,18 @@
 import { prisma } from '../lib/prisma';
 
+/** Busca usuario por email. Excluye soft-deleted (GDPR). Usado en login y forgot-password. */
 export async function findUserByEmail(email: string) {
-  // deletedAt: null garantiza que usuarios con soft delete GDPR no pueden volver a autenticarse
   return prisma.user.findUnique({ where: { email, deletedAt: null } });
 }
 
+/** Busca usuario por ID. Excluye soft-deleted (GDPR). */
 export async function findUserById(id: string) {
-  return prisma.user.findUnique({ where: { id } });
+  return prisma.user.findUnique({ where: { id, deletedAt: null } });
 }
 
+/** Busca usuario por username. Excluye soft-deleted (GDPR). */
 export async function findUserByUsername(username: string) {
-  return prisma.user.findUnique({ where: { username } });
+  return prisma.user.findUnique({ where: { username, deletedAt: null } });
 }
 
 export async function createUser(data: {

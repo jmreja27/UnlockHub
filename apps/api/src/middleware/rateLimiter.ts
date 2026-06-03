@@ -1,10 +1,12 @@
 import rateLimit from 'express-rate-limit';
 import type { ApiError } from '@unlockhub/types';
 
+/** Construye la respuesta de error estándar para rate limit. */
 function rateLimitMessage(message: string, code: string): ApiError {
   return { error: message, code };
 }
 
+/** Rate limiter global: 500 req / 15 min por IP. No aplica a /health (se monta antes). */
 export const globalRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 500,

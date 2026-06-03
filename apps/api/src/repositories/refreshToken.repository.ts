@@ -11,6 +11,7 @@ export async function createRefreshToken(userId: string, rawToken: string) {
   });
 }
 
+/** Busca un refresh token válido y devuelve solo los campos del usuario necesarios para emitir nuevos tokens. */
 export async function findValidRefreshToken(rawToken: string) {
   return prisma.refreshToken.findFirst({
     where: {
@@ -18,7 +19,13 @@ export async function findValidRefreshToken(rawToken: string) {
       revokedAt: null,
       expiresAt: { gt: new Date() },
     },
-    include: { user: true },
+    select: {
+      id: true,
+      userId: true,
+      user: {
+        select: { id: true, email: true, isPremium: true },
+      },
+    },
   });
 }
 

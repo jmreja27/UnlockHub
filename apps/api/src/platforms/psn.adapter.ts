@@ -65,9 +65,12 @@ function extractAccountIdFromIdToken(idToken: string): string {
   if (parts.length !== 3 || !parts[1]) {
     throw new AppError('idToken PSN inválido', 'PSN_AUTH_ERROR', 502);
   }
-  const payload = JSON.parse(
-    Buffer.from(parts[1], 'base64url').toString('utf8'),
-  ) as { sub?: string };
+  let payload: { sub?: string };
+  try {
+    payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as { sub?: string };
+  } catch {
+    throw new AppError('idToken PSN malformado (payload no es JSON válido)', 'PSN_AUTH_ERROR', 502);
+  }
 
   if (!payload.sub) {
     throw new AppError('No se encontró accountId en el idToken PSN', 'PSN_AUTH_ERROR', 502);
@@ -92,7 +95,14 @@ function normalizePoints(trophyType: string, earnedRate?: string): number {
  */
 async function cachedFetch<T>(key: string, ttl: number, fetcher: () => Promise<T>): Promise<T> {
   const cached = await redis.get(key);
-  if (cached !== null) return JSON.parse(cached) as T;
+  if (cached !== null) {
+    try {
+      return JSON.parse(cached) as T;
+    } catch {
+      // Caché corrupto — borrar y volver a fetchear
+      await redis.del(key);
+    }
+  }
   const value = await fetcher();
   await redis.setex(key, ttl, JSON.stringify(value));
   return value;
