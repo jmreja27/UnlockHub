@@ -1270,7 +1270,7 @@ Métricas disponibles:
 20. ✅ Tests de carga k6
 21. ✅ Keystore Android guardado (N5 ✅) — EAS Build producción NO lanzar sin pedirlo explícitamente
 22. ⚙️ Smoke tests de producción
-23. ⚙️ Play Store submit — cuenta creada (B7 ✅) · AdMob producción configurado (B8 ✅) · assets generados (icono 512×512 + gráfico destacado 1024×500 ✅) · documento de listing con textos listo ✅ · validación release local OK ✅ · PENDIENTE: seleccionar 4-8 capturas, credenciales de prueba para revisores, formularios "Contenido de la app" (Data Safety SIN declarar PostHog que no está activo), generar AAB producción, subir primero a track de Pruebas internas
+23. ⚙️ Play Store submit — cuenta creada (B7 ✅) · AdMob producción (B8 ✅) · assets generados ✅ · listing con textos ✅ · validación release local OK ✅ · AAB producción #1 generado (versionCode 1, SDK 51, commit f5060c4) ✅ · PENDIENTE: subir a Pruebas internas, completar formularios "Contenido de la app", validar, limpiar BD (PL13), promover a Producción
 
 ---
 
@@ -1387,10 +1387,13 @@ Métricas disponibles:
 | # | Tarea | Detalle |
 |---|---|---|
 | PL12 | Actualizar declaración Data Safety al activar PostHog | PostHog (N4) NO está activo en el lanzamiento inicial — NO declararlo en el formulario de Seguridad de los datos. Cuando se active en Fase 4, Google requiere actualizar la declaración para reflejar la nueva recogida de datos de analítica. |
+| PL13 | Limpieza de usuarios de prueba antes de abrir a Producción pública | CUÁNDO: justo antes de promover de Pruebas internas a Producción pública, NO antes (las pruebas internas necesitan usuarios). QUÉ BORRAR (datos por usuario): User, PlatformAccount, UserAchievement, UserPoint, UserChallenge, ActivityEvent, Friendship, Notification, Subscription, y los sorted sets de rankings en Redis (ranking:global, ranking:platform:*). QUÉ CONSERVAR (catálogo compartido — NO TOCAR): Game y Achievement (1.400+ juegos, 72.000+ logros seedeados). CUENTA DE REVISIÓN: TestUser99 es la cuenta entregada a los revisores de Google — o se conserva en la limpieza (borrar todos menos ese) o se crea una cuenta de revisión dedicada nueva con datos de ejemplo. Si se borra sin sustituto, las futuras revisiones de actualizaciones fallarán por falta de acceso. Crear script idempotente en scripts/ con transacción Prisma; ejecutar con DATABASE_URL="${DIRECT_URL}" desde apps/api/. Confirmar conteos antes y después. |
 
 ---
 
 ## Última revisión de código
+
+**Fecha**: 2026-07-06 (sesión 48) — AAB de producción #1 generado con EAS. Build de producción completado sin errores en EAS (la validación release local previa evitó quemar intentos). Detalles del build: perfil `production`, environment `production`, Expo SDK 51.0.0, `versionName` 1.0.0, `versionCode` 1, commit `f5060c4`, creado por juanjomrv. El AAB está firmado con el keystore de producción gestionado por EAS (backup del desarrollador en PC + Drive). Próximos pasos: subir a track de Pruebas internas en Play Console, completar listing y formularios "Contenido de la app", validar, limpiar BD de usuarios de prueba (PL13) y promover a Producción.
 
 **Fecha**: 2026-07-06 (sesión 47) — Preparación de lanzamiento: auditoría de seguridad + limpieza + assets. Auditoría de seguridad pre-lanzamiento del repo público: 0 secrets reales en working tree e historial Git, 0 datos personales en historial (limpieza `git filter-branch` de 2026-05-28 confirmada efectiva), solo `.env.example` con placeholders trackeados, credenciales sensibles correctamente gitignoreadas. Limpieza: eliminados `scripts/check-db-size.ts` y `scripts/verify-seed.ts` (scripts de diagnóstico obsoletos sin referencias); `*.keystore` añadido al `.gitignore` raíz. Assets de Play Console generados: icono 512×512 (monograma UH sobre degradado morado de marca) y gráfico destacado 1024×500. Documento de listing completo generado con textos (título, descripciones breve y completa con descargo de no afiliación a Valve/Sony/RA) y guía de formularios. Acción del desarrollador: cuenta Neon (infraestructura pre-Railway) cerrada. Tests: 563 API + 352 mobile. 0 errores TS/lint. Commit `898538f`.
 
