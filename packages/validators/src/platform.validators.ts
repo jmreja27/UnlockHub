@@ -2,6 +2,10 @@ import { z } from 'zod';
 
 export const platformSchema = z.enum(['STEAM', 'RA', 'XBOX', 'PSN']);
 
+/**
+ * Vinculación Steam: acepta vanityURL o SteamID64 directo (17 dígitos).
+ * El backend resuelve vanityURL → SteamID64 vía ISteamUser/ResolveVanityURL.
+ */
 export const linkSteamAccountSchema = z.object({
   // Acepta vanityURL (ej. "gaben") o SteamID64 directo (17 dígitos)
   username: z
@@ -11,6 +15,10 @@ export const linkSteamAccountSchema = z.object({
     .regex(/^\S+$/, 'El username de Steam no puede contener espacios'),
 });
 
+/**
+ * Vinculación RetroAchievements: solo username.
+ * El backend verifica la existencia vía API_GetUserSummary con credenciales del sistema.
+ */
 export const linkRetroAchievementsSchema = z.object({
   username: z
     .string()
@@ -18,6 +26,11 @@ export const linkRetroAchievementsSchema = z.object({
     .max(32, 'El username de RetroAchievements no puede superar los 32 caracteres'),
 });
 
+/**
+ * Vinculación PSN: solo username público.
+ * El backend usa PSN_SYSTEM_NPSSO (sin token de usuario) — igual que PSNProfiles/Exophase.
+ * checkPsnProfilePrivacy() se llama antes de crear la PlatformAccount.
+ */
 export const linkPsnAccountSchema = z.object({
   username: z
     .string()
@@ -26,6 +39,11 @@ export const linkPsnAccountSchema = z.object({
     .regex(/^[A-Za-z0-9_\-]+$/, 'El username de PSN solo puede contener letras, números, guiones y guiones bajos'),
 });
 
+/**
+ * Vinculación Xbox — gateado hasta Fase 4.
+ * Requiere flujo OAuth2 PKCE con Microsoft Identity Platform.
+ * El schema valida el code, codeVerifier y redirectUri del callback OAuth2.
+ */
 export const linkXboxAccountSchema = z.object({
   code: z.string().min(1, 'El código de autorización OAuth2 es obligatorio'),
   codeVerifier: z

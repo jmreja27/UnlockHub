@@ -32,6 +32,17 @@ interface LibraryPage {
 
 const LIMIT = 20;
 
+/**
+ * Hook de infinite scroll para la biblioteca de juegos del usuario autenticado.
+ *
+ * - Carga páginas de 20 juegos con useInfiniteQuery.
+ * - Los aggregate stats (totales de logros, juegos completados) vienen de la primera página
+ *   y cubren toda la colección — no solo la página cargada.
+ * - Deduplica juegos via Set<id> para evitar duplicados durante invalidaciones de caché.
+ * - staleTime: 3 min, gcTime: 15 min.
+ *
+ * @param platform - Filtro opcional de plataforma ('STEAM' | 'RA' | 'PSN').
+ */
 export function useMyGames(platform?: string) {
   const { isAuthenticated } = useSessionStore();
 

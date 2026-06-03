@@ -1,4 +1,8 @@
-// Plataformas soportadas — extensible: añadir XBOX/PSN aquí y en el enum de Prisma
+/**
+ * Plataformas de videojuegos soportadas.
+ * Extensible: añadir el valor aquí y en el enum Platform de Prisma + crear el adapter.
+ * XBOX está gateado hasta Fase 4 (requiere verificación OAuth2 de Microsoft).
+ */
 export type Platform = 'STEAM' | 'RA' | 'XBOX' | 'PSN';
 
 export type PointReason = 'CHALLENGE' | 'STREAK' | 'ACHIEVEMENT' | 'REDEEM' | 'REWARDED_AD';
@@ -9,7 +13,11 @@ export type StoreProvider = 'GOOGLE_PLAY' | 'APP_STORE';
 
 export type SyncTier = 'free' | 'premium';
 
-// Usuario público (sin campos sensibles como passwordHash)
+/**
+ * Perfil del usuario autenticado (para uso interno con sesión activa).
+ * Incluye email — nunca exponer en respuestas públicas.
+ * Para perfiles públicos usar PublicUser.
+ */
 export interface User {
   id: string;
   username: string;
@@ -27,7 +35,11 @@ export interface User {
   createdAt: string;
 }
 
-// Perfil público: excluye email, isPremium, premiumUntil y lastSyncAt (campos privados)
+/**
+ * Perfil público del usuario — seguro para respuestas no autenticadas.
+ * Excluye email, isPremium, premiumUntil y lastSyncAt.
+ * El campo email nunca debe aparecer en perfiles accesibles sin autenticación (GDPR).
+ */
 export interface PublicUser {
   id: string;
   username: string;
@@ -41,7 +53,11 @@ export interface PublicUser {
   createdAt: string;
 }
 
-// Cuenta de plataforma externa (sin token cifrado)
+/**
+ * Cuenta de plataforma externa del usuario — omite el campo encryptedToken (AES-256).
+ * requiresReauth=true indica que el token ha expirado y el usuario debe re-vincular (PSN).
+ * psnProfilePrivate=true indica que el perfil PSN tiene los trofeos privados.
+ */
 export interface PlatformAccount {
   id: string;
   userId: string;
@@ -101,7 +117,10 @@ export interface RankingEntry {
   countryCode: string | null;
 }
 
-// Estructura de respuesta paginada usada en todos los endpoints de lista
+/**
+ * Estructura de respuesta paginada estándar usada en todos los endpoints de lista.
+ * Los endpoints de biblioteca extienden esto con campos adicionales de aggregate stats.
+ */
 export interface PaginatedResponse<T> {
   data: T[];
   total: number;
@@ -109,7 +128,7 @@ export interface PaginatedResponse<T> {
   limit: number;
 }
 
-// Estructura de error HTTP consistente en toda la API
+/** Estructura de error HTTP consistente en toda la API. Formato: { error, code, details? } */
 export interface ApiError {
   error: string;
   code: string;
@@ -126,7 +145,11 @@ export interface SyncCooldownConfig {
 
 export type FriendshipStatus = 'PENDING' | 'ACCEPTED' | 'BLOCKED';
 
-// Estado de la relación entre el usuario autenticado y otro usuario (vista desde el perfil público)
+/**
+ * Estado de la relación de amistad entre el usuario autenticado y otro usuario.
+ * Tipo discriminado por 'status' — incluye friendshipId cuando hay relación activa.
+ * Usado por FriendshipButton para mostrar el botón correcto en el perfil público.
+ */
 export type FriendshipStatusResult =
   | { status: 'none' }
   | { status: 'pending_sent'; friendshipId: string }
@@ -277,6 +300,7 @@ export interface SearchResponse {
 
 // ─── Sync progresivo ──────────────────────────────────────────────────────────
 
+/** Evento emitido por Socket.io en cada lote procesado durante un sync. */
 export interface SyncProgressEvent {
   platform: Platform;
   processed: number;
@@ -286,6 +310,7 @@ export interface SyncProgressEvent {
   percentComplete: number;
 }
 
+/** Evento emitido por Socket.io cuando un sync completa. Incluye el XP ganado en el sync. */
 export interface SyncCompleteEvent {
   platform: Platform;
   totalGames: number;
@@ -299,6 +324,11 @@ export interface SyncErrorEvent {
   processedBeforeError: number;
 }
 
+/**
+ * Respuesta del endpoint GET /api/v1/sync/status.
+ * El campo isRunning se lee de la clave Redis sync:progress:{userId}:{platform} (TTL 2h).
+ * Usado como fallback cuando Socket.io no está disponible (useSyncProgress).
+ */
 export interface SyncStatusResponse {
   platform: Platform;
   lastSyncedAt: string | null;

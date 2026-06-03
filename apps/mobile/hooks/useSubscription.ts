@@ -31,6 +31,18 @@ interface UseSubscriptionResult {
   isCancelling: boolean;
 }
 
+/**
+ * Hook que gestiona el ciclo de vida completo de una suscripción premium vía RevenueCat.
+ *
+ * - subscriptionStatus.isPremium: RC es la fuente primaria; user.isPremium del JWT es fallback.
+ * - purchase: llama Purchases.purchasePackage y fuerza refreshAccessToken para que el JWT
+ *   refleje isPremium=true sin requerir logout/login.
+ * - rcApiKey se lee en el cuerpo del hook (no a nivel de módulo) para que los tests puedan
+ *   controlar el env var por test sin jest.resetModules().
+ *
+ * Cuando EXPO_PUBLIC_REVENUECAT_API_KEY no está configurada, subscriptionStatus.isPremium
+ * cae back al valor del JWT — sin errores, permitiendo desarrollo sin RC configurado.
+ */
 export function useSubscription(): UseSubscriptionResult {
   const queryClient = useQueryClient();
   const { user } = useSessionStore();

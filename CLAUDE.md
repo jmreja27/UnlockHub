@@ -46,15 +46,17 @@ Esta sección lista todo lo que **el desarrollador debe hacer manualmente** ante
 > - B6 (Persistencia Redis): ✅ Verificado en Railway dashboard
 > - B7 (Google Play Developer): ✅ Cuenta creada — $25 pagados
 > - B14 (Email soporte): ✅ `soporte@unlockhub.app` creado con dominio Cloudflare
+> - N2 (Logtail/Better Stack): ✅ Cuenta creada, fuente "UnlockHub API" con JavaScript/HTTP, `LOGTAIL_SOURCE_TOKEN` configurado en Railway Variables
+> - N4 (PostHog): ✅ Cuenta creada, plan Free, `POSTHOG_API_KEY` configurado en Railway Variables — analytics activo en producción
 > - N5 (Keystore Android): ✅ Guardado desde expo.dev → proyecto → Credentials
 
 ### 🟡 Necesarios antes del lanzamiento
 
 | # | Acción | Dónde | Coste | Para qué se usa |
 |---|---|---|---|---|
-| N2 | Conectar **Logtail** a Railway | logtail.com → Create Source → Railway → configurar `LOGTAIL_SOURCE_TOKEN` en variables | Gratis (7 días retención) | Logs estructurados y persistentes — pino ya genera JSON |
+| ~~N2~~ | ✅ **Logtail (Better Stack) conectado a Railway** | Better Stack → fuente "UnlockHub API" (JavaScript/HTTP) → `LOGTAIL_SOURCE_TOKEN` configurado en Railway Variables | Gratis (7 días retención) | ✅ Completado — logs estructurados JSON de pino enviados a Better Stack |
 | N3 | Escalar Railway a **mínimo 2 réplicas** en producción | Railway dashboard → service → Settings → Replicas → 2 | ~5€/mes adicional | Alta disponibilidad — redis-adapter ya configurado |
-| N4 | Crear cuenta en **PostHog** y obtener Project API Key | posthog.com → Create Project → copia API Key | Gratis hasta 1M eventos/mes | Analíticas — `lib/analytics.ts` ya preparado, solo necesita la key |
+| ~~N4~~ | ✅ **PostHog — cuenta + Project API Key configurada** | posthog.com → Create Project → `POSTHOG_API_KEY` configurado en Railway Variables | Gratis hasta 1M eventos/mes | ✅ Completado — analytics activo en producción. Plan Free |
 | ~~N5~~ | ✅ **Keystore Android guardado desde Expo credentials** | expo.dev → proyecto → Credentials | Gratis | ✅ Completado |
 
 ### 🟢 Cuando el volumen lo justifique
@@ -98,6 +100,9 @@ Aplicación móvil (iOS + Android) para tracking unificado de logros de videojue
 | expo-notifications | Push notifications iOS y Android |
 | expo-network | Detección de conectividad (OfflineBanner global) |
 | Intl.NumberFormat / Intl.DateTimeFormat | Formateo localizado — usar siempre, nunca hardcodear formatos |
+| socket.io-client | Conexión Socket.io para sync progress en tiempo real |
+| react-native-reanimated | Animaciones nativas (usado en OfflineBanner, transiciones) |
+| posthog-react-native | SDK de PostHog para analytics — usar siempre via `lib/analytics.ts` |
 | react-native-purchases (RevenueCat) v10 | Google Play Billing — compra, restauración, offerings desde RevenueCat |
 
 ### Backend — `apps/api`
@@ -112,6 +117,10 @@ Aplicación móvil (iOS + Android) para tracking unificado de logros de videojue
 | BullMQ + Redis | Cola de tareas: sync, rankings, notificaciones batch |
 | Helmet.js | Headers de seguridad HTTP |
 | express-rate-limit | Rate limiting en todos los endpoints |
+| cookie-parser | Parseo de cookies httpOnly para JWT |
+| compression | Compresión gzip/brotli de respuestas HTTP |
+| multer | Upload de archivos (avatares y banners) — en memoria antes de Cloudinary |
+| axios | Cliente HTTP para llamadas a APIs externas (Steam, PSN, RA) |
 | Resend | Email transaccional — requiere `RESEND_API_KEY` (acción B3) |
 | pino | Logger estructurado en JSON — nunca console.log en producción |
 
@@ -127,8 +136,8 @@ Aplicación móvil (iOS + Android) para tracking unificado de logros de videojue
 | GitHub Actions | CI/CD | ✅ Configurado |
 | Sentry | Crash reporting móvil + API | ✅ DSNs configurados — código integrado |
 | UptimeRobot | Alertas de disponibilidad | ✅ Activo |
-| Logtail | Logs estructurados persistentes | ⚙️ Pendiente (N2) — pino ya activo |
-| PostHog | Analíticas de producto | ⚙️ Pendiente (N4) — analytics.ts ya preparado |
+| Logtail (Better Stack) | Logs estructurados persistentes | ✅ Activo — integración vía log drain de Railway (no vía SDK en código) · `LOGTAIL_SOURCE_TOKEN` configurado en Railway |
+| PostHog | Analíticas de producto | ✅ Activo — `POSTHOG_API_KEY` configurado en Railway |
 
 ---
 
@@ -315,9 +324,17 @@ model PlatformAccount {
   platform          Platform
   externalId        String
   username          String
-  encryptedToken    String    // AES-256, nunca texto plano
+  encryptedToken    String    // AES-256, nunca texto plano. Vacío ("") para cuentas PSN (sistema NPSSO)
   lastSyncedAt      DateTime?
   syncCooldownUntil DateTime?
+  requiresReauth    Boolean   @default(false) // PSN: refresh token expirado → usuario debe re-vincular
+  psnProfilePrivate Boolean   @default(false) // PSN: perfil privado detectado en sync
+  tokenExpiresAt    DateTime? // reservado para uso futuro
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([userId, platform])
+  @@unique([platform, externalId])
 }
 
 enum Platform { STEAM RA XBOX PSN }
@@ -352,33 +369,51 @@ model Achievement {
 }
 
 model Friendship {
-  id        String           @id @default(cuid())
-  userId    String
-  friendId  String
-  status    FriendshipStatus
-  createdAt DateTime         @default(now())
+  id         String           @id @default(cuid())
+  senderId   String           // usuario que envía la solicitud
+  receiverId String           // usuario que la recibe
+  status     FriendshipStatus @default(PENDING)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  @@unique([senderId, receiverId])
 }
 
 enum FriendshipStatus { PENDING ACCEPTED BLOCKED }
 
+enum ActivityEventType {
+  ACHIEVEMENT_UNLOCKED
+  FRIEND_ADDED
+  LEVEL_UP
+  CHALLENGE_COMPLETED
+  STREAK_MILESTONE
+  GAME_COMPLETED
+}
+
 model ActivityEvent {
-  id        String   @id @default(cuid())
+  id        String            @id @default(cuid())
   userId    String
-  type      String
-  payload   Json
-  createdAt DateTime @default(now())
+  type      ActivityEventType  // enum tipado, no String genérico
+  payload   Json              @default("{}")
+  createdAt DateTime          @default(now())
+}
+
+enum ChallengeMetric {
+  ACHIEVEMENTS_UNLOCKED
+  XP_GAINED
+  GAMES_PLAYED
+  STREAK_MAINTAINED
 }
 
 model WeeklyChallenge {
-  id           String    @id @default(cuid())
-  title        String
-  description  String
-  targetValue  Int
-  metric       String
-  pointsReward Int
-  startAt      DateTime
-  endAt        DateTime
-  platform     Platform?
+  id          String          @id @default(cuid())
+  title       String
+  description String
+  metric      ChallengeMetric  // enum tipado
+  targetValue Int
+  xpReward    Int             @default(500)  // da XP, no puntos canjeables
+  startAt     DateTime
+  endAt       DateTime
 }
 
 model UserChallenge {
@@ -411,10 +446,9 @@ model Subscription {
   storeTransactionId String
 }
 
-enum SubscriptionPlan { MONTHLY ANNUAL POINTS_REDEEM }
+enum SubscriptionPlan { MONTHLY ANNUAL LIFETIME POINTS_REDEEM }
 enum StoreProvider { GOOGLE_PLAY APP_STORE INTERNAL }
 
-// ✅ En schema — migración pendiente en producción (B17)
 model Notification {
   id        String   @id @default(cuid())
   userId    String
@@ -425,7 +459,6 @@ model Notification {
   createdAt DateTime @default(now())
 }
 
-// ✅ En schema — migración pendiente en producción (B17)
 model AchievementGuide {
   id            String   @id @default(cuid())
   achievementId String
@@ -437,14 +470,33 @@ model AchievementGuide {
   updatedAt     DateTime @updatedAt
 }
 
-// ✅ En schema — migración pendiente en producción (B17)
 model PasswordResetToken {
   id        String    @id @default(cuid())
   userId    String
-  token     String    @unique
+  tokenHash String    @unique  // hash SHA-256 del token — nunca el token en texto plano
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime  @default(now())
+}
+
+// Tokens de refresco de sesión — gestionados por el backend, nunca expuestos al cliente
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+}
+
+// Tokens Expo Push para notificaciones push en iOS y Android
+model DeviceToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  platform  String   // "ios" | "android"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 ```
 
@@ -569,7 +621,7 @@ export interface PlatformAdapter {
 
 ## Variables de entorno
 
-El servidor valida todas al arrancar mediante schema Zod. Ver `.env.example` en el repo.
+El servidor valida un subconjunto al arrancar mediante schema Zod (`apps/api/src/config/env.ts`): `DATABASE_URL`, `REDIS_URL`, `JWT_*`, `ENCRYPTION_KEY`, `STEAM_API_KEY`, `PSN_SYSTEM_NPSSO`, `RA_SYSTEM_USER`, `RA_SYSTEM_KEY`, `CLOUDINARY_URL`, `REVENUECAT_WEBHOOK_SECRET`. Las demás variables (`SENTRY_DSN`, `ADMIN_SECRET`, `RESEND_*`, `POSTHOG_API_KEY`, `LOGTAIL_SOURCE_TOKEN`, `MAINTENANCE_MODE`) se leen directamente con `process.env` sin validación Zod. Ver `.env.example` en el repo.
 
 | Variable | Usado en | Entornos | Estado |
 |---|---|---|---|
@@ -590,9 +642,14 @@ El servidor valida todas al arrancar mediante schema Zod. Ver `.env.example` en 
 | `EXPO_PUBLIC_ADMOB_SEARCH_BANNER_ID` | Banner Search (EAS secret) | prod | ✅ Configurado como EAS secret (B9) |
 | `EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID` | Interstitial (EAS secret) | prod | ✅ Configurado como EAS secret (B9) |
 | `EXPO_PUBLIC_ADMOB_REWARDED_ID` | Rewarded (EAS secret) | prod | ✅ Configurado como EAS secret (B9) |
-| `POSTHOG_API_KEY` | Analíticas | staging, prod | ⚙️ Pendiente acción N4 |
+| `POSTHOG_API_KEY` | Analíticas | staging, prod | ✅ Configurada en Railway (N4 ✅) |
 | `ADMIN_SECRET` | Acceso al dashboard admin (bearer) | prod | ✅ Configurada en Railway |
 | `PSN_SYSTEM_NPSSO` | Sync PSN de usuarios (credencial del sistema) | prod | ⚙️ Obtener en my.playstation.com → F12 → Application → Cookies → `npsso`. Caduca ~60 días. **El valor puede parecer idéntico en el navegador y estar expirado — comparar strings no es diagnóstico fiable.** Síntoma: `Sync fallido err="Expired token"` en logs Railway (RA sigue funcionando). Fix: logout + login → nuevo `npsso` → Railway Variables. Configurar en Railway dashboard → Variables. **Nunca en código ni `.env` commiteado.** |
+| `RA_SYSTEM_USER` | Usuario del sistema para RetroAchievements | local, staging, prod | ⚙️ Registrar cuenta en retroachievements.org → Settings → Keys. Usado por `lookupRaUser` y el adaptador RA para sync. Sin esta var, la vinculación RA devuelve `RA_SYSTEM_NOT_CONFIGURED` (503). |
+| `RA_SYSTEM_KEY` | API key del sistema para RetroAchievements | local, staging, prod | ⚙️ Ver `RA_SYSTEM_USER`. Par de credenciales validadas en `env.ts` (Zod). |
+| `MAINTENANCE_MODE` | Activa modo mantenimiento en `/health` | prod | Opcional. Si `MAINTENANCE_MODE=true`, `/health` devuelve 503 y `maintenance: true`. Usado por el hook `useMaintenanceCheck` en mobile para mostrar pantalla de mantenimiento. |
+| `XBOX_CLIENT_ID` | OAuth2 Microsoft para Xbox Live | prod | 🚩 Gateado hasta Fase 4. Requerido cuando Xbox se active — OAuth2 Microsoft Identity Platform → Xbox Live Token → XSTS Token. |
+| `XBOX_CLIENT_SECRET` | OAuth2 Microsoft para Xbox Live | prod | 🚩 Gateado hasta Fase 4. Ver `XBOX_CLIENT_ID`. |
 | `EXPO_PUBLIC_REVENUECAT_API_KEY` | RevenueCat SDK key (EAS secret) | prod | ⚙️ Pendiente acción B19 — sin esta key `usePremiumPlans` devuelve precios hardcoded, no se pueden procesar compras reales |
 | `REVENUECAT_WEBHOOK_SECRET` | Webhook RevenueCat bearer token | prod | ⚙️ Pendiente acción B20 — sin esta key el webhook no verifica la firma (acepta cualquier petición, riesgo de abuso) |
 
@@ -1031,6 +1088,7 @@ Métricas disponibles:
 | Background sync scheduler (03:00 UTC) | ✅ Activo | Backend | `jobs/background-sync.scheduler.ts` · usuarios activos últimos 7 días · respeta límite Steam |
 | GDPR cleanup job (04:00 UTC, físico 30d) | ✅ Activo | Backend | `jobs/gdpr-cleanup.scheduler.ts` · `deletedAt <= now() - 30 días` · registrado en `index.ts` |
 | Streak scheduler (00:00 UTC) | ✅ Activo | Backend | `jobs/streak.scheduler.ts` |
+| Streak shields recharge (01:00 UTC día 1/mes) | ✅ Activo | Backend | `jobs/streak-shields.scheduler.ts` · recarga escudos según tier (Free: 1, Premium: 3) el día 1 de cada mes |
 | Challenge scheduler | 🚩 Gateado | Backend | `jobs/challenge.scheduler.ts` · activa cuando `FEATURES.challenges = true` |
 | Seed catálogo (admin BullMQ job) | ✅ Activo | Backend | `admin/` · `seed-catalog` queue |
 | Socket.io multi-instancia (redis-adapter) | ✅ Activo | Backend | `sockets/` · `@socket.io/redis-adapter` · listo para 2 réplicas Railway (N3) |
@@ -1040,7 +1098,7 @@ Métricas disponibles:
 | Rate limiting auth (10 req/15min) | ✅ Activo | Backend | `middleware/rateLimiter.ts` · aplicado a `/auth/*` |
 | Rate limiting search (60 req/min) | ✅ Activo | Backend | `middleware/rateLimiter.ts` · aplicado a `/search` |
 | Sentry crash reporting (mobile + API) | ✅ Activo | Ambos | DSNs configurados en Railway y EAS secrets · integrado en `ErrorBoundary` |
-| Analytics PostHog (stub) | ⚙️ Parcial | Mobile | `lib/analytics.ts` · modo silencioso sin `POSTHOG_API_KEY` · Pendiente N4 |
+| Analytics PostHog | ✅ Activo | Mobile | `lib/analytics.ts` · `POSTHOG_API_KEY` configurada en Railway · N4 ✅ |
 | OfflineBanner global | ✅ Activo | Mobile | `components/OfflineBanner.tsx` · `expo-network` |
 | ErrorBoundary global | ✅ Activo | Mobile | `components/ErrorBoundary.tsx` · integrado con Sentry |
 | Modo mantenimiento | ✅ Activo | Mobile | `hooks/useMaintenanceCheck.ts` · sondeo `/health` cada 30s |
@@ -1252,7 +1310,7 @@ Métricas disponibles:
 
 1. ✅ Redis AOF + Socket.io redis-adapter
 2. ✅ Sentry — SDKs instalados y DSNs configurados
-3. ✅ Pino — logger JSON activo. ⚙️ Conectar Logtail (N2)
+3. ✅ Pino — logger JSON activo. ✅ Logtail (Better Stack) conectado — `LOGTAIL_SOURCE_TOKEN` en Railway (N2 ✅)
 4. ✅ UptimeRobot — monitor activo
 5. ✅ Health check endpoint completo
 6. ✅ Dashboard de administración
@@ -1261,9 +1319,9 @@ Métricas disponibles:
 9. ✅ Privacy policy en app. ✅ Privacy Policy + ToS publicados en GitHub Pages. ✅ Datos del desarrollador rellenados. ✅ Texto legal con enlaces en pantalla de registro.
 10. ✅ Escudo de racha
 11. ✅ Centro de notificaciones in-app
-12. ✅ Variables Railway configuradas: `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `APP_SCHEME`, `CLOUDINARY_URL`, `ADMIN_SECRET`. ⚙️ Pendiente: `POSTHOG_API_KEY` (N4)
+12. ✅ Variables Railway configuradas: `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `APP_SCHEME`, `CLOUDINARY_URL`, `ADMIN_SECRET`, `LOGTAIL_SOURCE_TOKEN` (N2 ✅), `POSTHOG_API_KEY` (N4 ✅).
 13. 🚩 Google Play Billing vía RevenueCat — diferido a Fase 4. Código intacto. Activar con `FEATURES.premium = true` + completar B18/B19/B20.
-14. ✅ Analíticas — analytics.ts preparado. ⚙️ POSTHOG_API_KEY pendiente (N4)
+14. ✅ Analíticas — analytics.ts activo en producción. `POSTHOG_API_KEY` configurada en Railway (N4 ✅)
 15. ✅ Ayuda contextual en vinculación de plataformas
 16. ✅ Wrapped mensual + anual
 17. ✅ Canje de puntos por premium
@@ -1272,7 +1330,7 @@ Métricas disponibles:
 20. ✅ Tests de carga k6
 21. ✅ Keystore Android guardado (N5 ✅) — EAS Build producción NO lanzar sin pedirlo explícitamente
 22. ⚙️ Smoke tests de producción
-23. ⚙️ Play Store submit — cuenta creada (B7 ✅) · AdMob producción (B8 ✅) · assets generados ✅ · listing con textos ✅ · validación release local OK ✅ · AAB producción #1 generado (versionCode 1, SDK 51, commit f5060c4) ✅ · PENDIENTE: subir a Pruebas internas, completar formularios "Contenido de la app", validar, limpiar BD (PL13), promover a Producción
+23. ⚙️ Play Store submit — cuenta creada (B7 ✅) · AdMob producción (B8 ✅) · assets generados ✅ · listing con textos ✅ · validación release local OK ✅ · AAB producción versionCode 3 subido ✅ · Prueba interna publicada y enviada a testers ✅ · Listing completo (título, descripciones, contacto, categoría) ✅ · Clasificación de contenido completada ✅ · Seguridad de los datos completada ✅ · PENDIENTE: feedback de testers, limpiar BD (PL13), verificar edge-to-edge Android 15 (PL14), promover a Producción
 
 ---
 
@@ -1285,7 +1343,7 @@ Métricas disponibles:
 | # | Tarea | Detalle |
 |---|---|---|
 | P1 | ✅ Migración Prisma en prod | Automática en cada deploy — `npx prisma migrate deploy` en `startCommand` de `railway.json` |
-| ~~P2~~ | ✅ Variables Railway configuradas | `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `APP_SCHEME=unlockhub`, `CLOUDINARY_URL`, `ADMIN_SECRET` — todas en Railway. ⚙️ Pendiente solo: `POSTHOG_API_KEY` (N4) |
+| ~~P2~~ | ✅ Variables Railway configuradas | `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `APP_SCHEME=unlockhub`, `CLOUDINARY_URL`, `ADMIN_SECRET`, `LOGTAIL_SOURCE_TOKEN`, `POSTHOG_API_KEY` — todas en Railway. ✅ Completado |
 | ~~P3~~ | ✅ Resend — cuenta + dominio + API key | Configurado — `RESEND_API_KEY` y `RESEND_FROM_EMAIL` en Railway |
 | ~~P4~~ | ✅ UMP SDK AdMob | Código integrado — `useGdprConsent.ts` activo, GDPR message ya publicado en AdMob. |
 | ~~P4b~~ | ✅ EAS secrets AdMob configurados | Los 4 IDs de producción están en EAS secrets — `HOME_BANNER_ID`, `SEARCH_BANNER_ID`, `INTERSTITIAL_ID`, `REWARDED_ID`. |
@@ -1388,13 +1446,18 @@ Métricas disponibles:
 
 | # | Tarea | Detalle |
 |---|---|---|
-| PL12 | Actualizar declaración Data Safety al activar PostHog | PostHog (N4) NO está activo en el lanzamiento inicial — NO declararlo en el formulario de Seguridad de los datos. Cuando se active en Fase 4, Google requiere actualizar la declaración para reflejar la nueva recogida de datos de analítica. |
+| PL12 | ✅ Declaración Data Safety actualizada para PostHog | PostHog (N4) está activo desde el lanzamiento — se ha declarado en el formulario de Seguridad de los datos. Si se cambia el proveedor de analítica en Fase 4, actualizar la declaración para reflejar el cambio. |
 | PL13 | Limpieza de usuarios de prueba antes de abrir a Producción pública | CUÁNDO: justo antes de promover de Pruebas internas a Producción pública, NO antes (las pruebas internas necesitan usuarios). QUÉ BORRAR (datos por usuario): User, PlatformAccount, UserAchievement, UserPoint, UserChallenge, ActivityEvent, Friendship, Notification, Subscription, y los sorted sets de rankings en Redis (ranking:global, ranking:platform:*). QUÉ CONSERVAR (catálogo compartido — NO TOCAR): Game y Achievement (1.400+ juegos, 72.000+ logros seedeados). CUENTA DE REVISIÓN: TestUser99 es la cuenta entregada a los revisores de Google — o se conserva en la limpieza (borrar todos menos ese) o se crea una cuenta de revisión dedicada nueva con datos de ejemplo. Si se borra sin sustituto, las futuras revisiones de actualizaciones fallarán por falta de acceso. Crear script idempotente en scripts/ con transacción Prisma; ejecutar con DATABASE_URL="${DIRECT_URL}" desde apps/api/. Confirmar conteos antes y después. |
 | PL14 | Verificar edge-to-edge de Android 15 en dispositivo | `targetSdkVersion: 35` hace que Android 15 fuerce edge-to-edge (la app dibuja bajo las barras de estado y navegación del sistema). Verificar que `SafeAreaView` cubre correctamente el contenido en todas las pantallas (header/footer de tabs, pantallas de auth, game detail, profile) en dispositivo/emulador con Android 15 antes de promover a Producción. |
+| PL15 | Merge develop → main antes de promover a Producción | Justo antes de promover el track de Pruebas internas a Producción en Play Console: (1) `git checkout main`, (2) `git merge --no-ff develop`, (3) `git tag v1.0.0`, (4) `git push origin main --tags`. Garantiza que main refleja exactamente el código que está en producción — requisito del GitHub flow establecido en el proyecto. |
 
 ---
 
 ## Última revisión de código
+
+**Fecha**: 2026-07-07 (sesión 51) — Auditoría exhaustiva CLAUDE.md vs código real + documentación JSDoc. **Divergencias corregidas en CLAUDE.md**: (1) Variables de entorno faltantes añadidas: `RA_SYSTEM_USER`, `RA_SYSTEM_KEY` (validadas en Zod), `MAINTENANCE_MODE`, `XBOX_CLIENT_ID`, `XBOX_CLIENT_SECRET` (Fase 4). (2) Clarificación validación Zod: solo ciertas variables pasan por el schema al arranque. (3) Modelos de BD corregidos: `Friendship` usa `senderId`/`receiverId` (no `userId`/`friendId`); `PasswordResetToken` usa `tokenHash` (no `token` en texto plano); `ActivityEvent.type` es enum `ActivityEventType` tipado; `WeeklyChallenge` usa `xpReward` y `ChallengeMetric` enum (no `pointsReward` y `String`); `SubscriptionPlan` incluye `LIFETIME`; `PlatformAccount` documentado con campos reales (`requiresReauth`, `psnProfilePrivate`, `tokenExpiresAt`). (4) Modelos no documentados añadidos: `RefreshToken`, `DeviceToken`. (5) Stack técnico: añadidos `cookie-parser`, `compression`, `multer`, `axios` en backend; `socket.io-client`, `react-native-reanimated`, `posthog-react-native` en mobile. (6) Inventario: añadido scheduler `streak-shields.scheduler.ts` (01:00 UTC día 1/mes). (7) Logtail: clarificado que la integración es vía log drain Railway, no SDK en código. (8) Comentario obsoleto de `app.ts`: "Fly.io" → "Railway". **JSDoc añadido** a: `services/user.service.ts`, `services/sync.service.ts`, `services/ranking.service.ts`, `services/friendship.service.ts`, `services/notification.service.ts`, `services/points.service.ts`, hooks de mobile (`useSyncProgress`, `useSyncAll`, `useMyGames`, `useFriendshipActions`, `useRevenueCat`, `useSubscription`), `packages/types/src/index.ts`, `packages/validators`. Sin cambios de lógica. Tests: 563 API + 352 mobile. 0 errores TS/lint.
+
+**Fecha**: 2026-07-06 (sesión 50) — Configuración Better Stack (Logtail) y PostHog completada. `LOGTAIL_SOURCE_TOKEN` configurado en Railway Variables — logs JSON de pino enviados a fuente "UnlockHub API" en Better Stack. `POSTHOG_API_KEY` (Project token) configurado en Railway Variables — analytics activo en producción, plan Free. CLAUDE.md actualizado: N2 y N4 marcados ✅, tabla de infraestructura actualizada, inventario de funcionalidades actualizado. Play Store: AAB producción versionCode 3 subido a track de Pruebas internas, prueba interna publicada y enviada a testers, listing completo (título, descripciones, contacto, categoría), clasificación de contenido completada, Seguridad de los datos completada. Sin cambios de código. Tests: 563 API + 352 mobile. 0 errores TS/lint.
 
 **Fecha**: 2026-07-06 (sesión 49) — Fix bloqueante target API 35 + validación bundleRelease. El AAB #1 (target API 34) fue rechazado por Play Console: Google exige API 35 (Android 15) mínimo desde el 31 de agosto de 2025. Fix quirúrgico en `app.json` (`expo-build-properties`): `targetSdkVersion: 35`, `compileSdkVersion` se mantiene en 34 (con compile 35, `expo-modules-core` de Expo SDK 51 falla por null-safety en `PermissionsService.kt`). Google solo exige el target; el compile puede ir por detrás. Validación local: `assembleRelease` Y `bundleRelease` BUILD SUCCESSFUL con target 35 / compile 34 — garantiza que el `eas build` no quemará intento. NO se actualizó Expo SDK 51 → 55. Pendiente verificar edge-to-edge de Android 15 en dispositivo (PL14). Tests: 563 API + 352 mobile. 0 errores TS/lint.
 
@@ -2105,7 +2168,7 @@ d257bfd docs: CLAUDE.md PSN sistema credenciales + estado BD 2026-05-29
 1. ✅ **`PSN_SYSTEM_NPSSO` renovado** en Railway Variables (2026-05-29 sesión 4).
 2. ✅ **Backfill console kikecorrales10 completado** — 882 juegos actualizados: PS4(417) + PS5(409) + PS3(23) + PSVITA(6) + cross-gen(27).
 3. ✅ **Backfill console Adramm completado** — 509 juegos PSN actualizados con `console` (PS5/PS4/PS3/PSVITA).
-4. ✅ **Railway variables configuradas**: `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `APP_SCHEME=unlockhub`, `CLOUDINARY_URL`, `ADMIN_SECRET`. ⚙️ Pendiente solo: `POSTHOG_API_KEY` (N4)
+4. ✅ **Railway variables configuradas**: `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `APP_SCHEME=unlockhub`, `CLOUDINARY_URL`, `ADMIN_SECRET`, `LOGTAIL_SOURCE_TOKEN` (N2 ✅), `POSTHOG_API_KEY` (N4 ✅) — todas configuradas.
 5. **EAS Build producción** (N5) — NO lanzar sin pedirlo explícitamente en ese mensaje.
 6. **T8**: upgrade Expo SDK 51→55 + vulnerabilidades build-time. PR dedicado post-lanzamiento.
 

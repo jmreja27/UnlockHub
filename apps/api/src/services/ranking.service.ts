@@ -13,7 +13,10 @@ const KEYS = {
 
 // ─── Helpers internos ─────────────────────────────────────────────────────────
 
-// Calcula el XP total acumulado por un usuario en una plataforma específica
+/**
+ * Calcula el XP total acumulado por un usuario en una plataforma específica.
+ * Suma normalizedPoints de todos los UserAchievement del usuario para esa plataforma.
+ */
 async function getPlatformXp(userId: string, platform: string): Promise<number> {
   const achievements = await prisma.userAchievement.findMany({
     where: {
@@ -29,6 +32,12 @@ async function getPlatformXp(userId: string, platform: string): Promise<number> 
 
 // ─── Escritura ────────────────────────────────────────────────────────────────
 
+/**
+ * Actualiza la puntuación del usuario en todos los sorted sets de Redis.
+ * - ranking:global → totalXp del usuario
+ * - ranking:platform:{p} → XP acumulado SOLO en esa plataforma (calculado con getPlatformXp)
+ * Las queries de XP por plataforma se ejecutan en paralelo para minimizar latencia.
+ */
 export async function upsertUserScore(
   userId: string,
   totalXp: number,
@@ -46,6 +55,11 @@ export async function upsertUserScore(
   }
 }
 
+/**
+ * Elimina al usuario de todos los sorted sets de ranking en Redis.
+ * Se llama al desvincular una plataforma o al borrar la cuenta (GDPR).
+ * Usa pipeline para ejecutar todos los ZREM en una sola round-trip a Redis.
+ */
 export async function removeUserFromRankings(userId: string, platforms: string[]) {
   const pipeline = redis.pipeline();
   pipeline.zrem(KEYS.global, userId);
@@ -55,6 +69,7 @@ export async function removeUserFromRankings(userId: string, platforms: string[]
 
 // ─── Lectura ──────────────────────────────────────────────────────────────────
 
+/** Devuelve la página solicitada del ranking global desde Redis. */
 export async function getGlobalRanking(
   page: number,
   limit: number,
@@ -62,6 +77,7 @@ export async function getGlobalRanking(
   return getRankingFromKey(KEYS.global, page, limit);
 }
 
+/** Devuelve la página solicitada del ranking de una plataforma desde Redis. */
 export async function getPlatformRanking(
   platform: string,
   page: number,
@@ -70,6 +86,12 @@ export async function getPlatformRanking(
   return getRankingFromKey(KEYS.platform(platform), page, limit);
 }
 
+/**
+ * Devuelve el rango y XP de un usuario en el ranking global o de plataforma.
+ * @param userId - ID del usuario en Redis (cuid de Prisma)
+ * @param platform - Si se proporciona, consulta el sorted set de plataforma; si no, el global.
+ * @returns rank (posición 1-based) o null si el usuario no está en el ranking; xp en puntos.
+ */
 export async function getUserRank(
   userId: string,
   platform?: string,
@@ -93,6 +115,11 @@ export async function getUserRank(
 
 // ─── Snapshot diario a PostgreSQL ─────────────────────────────────────────────
 
+/**
+ * Guarda un snapshot del ranking global actual en PostgreSQL para histórico.
+ * Se ejecuta diariamente desde el ranking scheduler.
+ * Procesa los usuarios en lotes de 500 para no sobrecargar Prisma.
+ */
 export async function takeRankingSnapshot() {
   const total = await redis.zcard(KEYS.global);
   if (total === 0) return;
@@ -119,7 +146,11 @@ export async function takeRankingSnapshot() {
 
 // ─── Inicialización desde PostgreSQL ──────────────────────────────────────────
 
-// Reconstruye Redis desde la BD en caso de pérdida de datos (reinicio, flush)
+/**
+ * Reconstruye los sorted sets de Redis desde la BD en caso de pérdida de datos
+ * (reinicio de Redis, flush accidental, pérdida de persistencia AOF).
+ * Ejecutar manualmente si Redis queda vacío y los rankings no se muestran.
+ */
 export async function seedRankingsFromDb() {
   const users = await prisma.user.findMany({
     select: { id: true, xp: true, platformAccounts: { select: { platform: true } } },
@@ -135,6 +166,10 @@ export async function seedRankingsFromDb() {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+/**
+ * Lee un ranking paginado desde un sorted set de Redis y enriquece con datos de usuario de BD.
+ * Usa ZREVRANGE (mayor XP primero). O(log n + k) en Redis.
+ */
 async function getRankingFromKey(
   key: string,
   page: number,

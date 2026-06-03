@@ -6,6 +6,7 @@ import { connectSocket, getSocket } from '../lib/socket';
 import { useSessionStore } from '../stores/sessionStore';
 import { api } from '../lib/api';
 
+/** Estado de progreso de un sync activo para una plataforma concreta. */
 export interface SyncProgressState {
   platform: string;
   processed: number;
@@ -28,6 +29,18 @@ const SOCKET_GRACE_MS = 5000;
 // Throttle de refresco de lista desde el path de polling (el socket no tiene throttle — emite por lote)
 const LIST_INVALIDATE_THROTTLE_MS = 15_000;
 
+/**
+ * Hook que rastrea el progreso de syncs de plataforma en tiempo real.
+ *
+ * Estrategia dual:
+ * - Primario: eventos Socket.io (sync:progress, sync:complete, sync:error).
+ * - Fallback: polling de la API Redis cada 2s si el socket lleva > 5s silencioso.
+ *
+ * Invalida la caché 'my-games' en cada lote (Socket.io) o con throttle de 15s (fallback).
+ * Soporta syncs concurrentes de múltiples plataformas mediante un Map keyed por plataforma.
+ *
+ * @param onComplete - Callback opcional llamado cuando un sync completa vía Socket.io.
+ */
 export function useSyncProgress(onComplete?: SyncCompleteCallback): UseSyncProgressResult {
   const { accessToken, isAuthenticated } = useSessionStore();
   const queryClient = useQueryClient();

@@ -17,6 +17,11 @@ interface ExpoPushTicket {
   message?: string;
 }
 
+/**
+ * Envía mensajes push a la Expo Push API en un solo request.
+ * La Expo Push API acepta hasta 100 mensajes por request — ver sendAll/sendBulk para batching.
+ * @throws {AppError} PUSH_API_ERROR (502) si la API de Expo devuelve un error HTTP.
+ */
 async function sendToExpo(messages: ExpoPushMessage[]): Promise<void> {
   if (messages.length === 0) return;
   const res = await fetch(EXPO_PUSH_URL, {
@@ -35,6 +40,10 @@ async function sendToExpo(messages: ExpoPushMessage[]): Promise<void> {
   }
 }
 
+/**
+ * Registra o actualiza el token de dispositivo para push notifications.
+ * Hace upsert por token (clave única) — si el token cambia de usuario, se reasigna.
+ */
 export async function saveDeviceToken(userId: string, token: string, platform: string): Promise<void> {
   await prisma.deviceToken.upsert({
     where: { token },
@@ -43,10 +52,15 @@ export async function saveDeviceToken(userId: string, token: string, platform: s
   });
 }
 
+/** Elimina un token de dispositivo específico del usuario (ej: logout). */
 export async function removeDeviceToken(userId: string, token: string): Promise<void> {
   await prisma.deviceToken.deleteMany({ where: { token, userId } });
 }
 
+/**
+ * Envía una push notification a todos los dispositivos registrados de un usuario.
+ * Si el usuario no tiene tokens registrados, la función retorna sin error.
+ */
 export async function sendPush(
   userId: string,
   title: string,
@@ -61,6 +75,11 @@ export async function sendPush(
   await sendToExpo(messages);
 }
 
+/**
+ * Envía una push notification broadcast a TODOS los dispositivos registrados.
+ * Procesa en lotes de 100 (límite de la Expo Push API).
+ * Usar con cuidado — puede generar muchas llamadas HTTP si hay muchos usuarios.
+ */
 export async function sendAll(
   title: string,
   body: string,
@@ -76,6 +95,11 @@ export async function sendAll(
   }
 }
 
+/**
+ * Envía una push notification a un subconjunto de usuarios por ID.
+ * Procesa en lotes de 100 (límite de la Expo Push API).
+ * Retorna inmediatamente si userIds está vacío.
+ */
 export async function sendBulk(
   userIds: string[],
   title: string,

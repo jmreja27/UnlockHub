@@ -22,19 +22,29 @@ const ADAPTERS: Record<string, PlatformAdapter> = {
 
 const ALL_PLATFORMS: Platform[] = ['STEAM', 'RA', 'PSN', 'XBOX'];
 
+/** Clave Redis del cooldown de sync manual por usuario y plataforma. */
 function cooldownKey(userId: string, platform: Platform) {
   return `sync:cooldown:${userId}:${platform}`;
 }
 
+/** Clave Redis del contador diario de syncs manuales por usuario, plataforma y día. */
 function dailyCountKey(userId: string, platform: Platform) {
   const date = new Date().toISOString().slice(0, 10);
   return `sync:daily:${userId}:${platform}:${date}`;
 }
 
+/** Clave Redis del progreso del sync activo (TTL 2h, fallback para clientes sin Socket.io). */
 function syncProgressKey(userId: string, platform: Platform) {
   return `sync:progress:${userId}:${platform}`;
 }
 
+/**
+ * Inicia un sync manual para una plataforma, respetando cooldowns y límites diarios.
+ * Utiliza SET NX en Redis para adquirir el cooldown de forma atómica y evitar race conditions.
+ * @throws {AppError} SYNC_COOLDOWN (429) si el cooldown no ha expirado.
+ * @throws {AppError} DAILY_SYNC_LIMIT_EXCEEDED (429) si el usuario free alcanzó el límite diario.
+ * @throws {AppError} PLATFORM_NOT_LINKED (404) si el usuario no tiene esa plataforma vinculada.
+ */
 export async function triggerManualSync(
   userId: string,
   platform: Platform,
@@ -98,6 +108,10 @@ export async function triggerManualSync(
   return { jobId: job.id, platform, message: 'Sync iniciado correctamente.' };
 }
 
+/**
+ * Devuelve el estado de sync de una plataforma concreta para un usuario.
+ * Lee cooldown y progreso desde Redis; lastSyncedAt desde la BD.
+ */
 export async function getSyncStatus(userId: string, platform: Platform) {
   const account = await prisma.platformAccount.findUnique({
     where: { userId_platform: { userId, platform } },
@@ -150,6 +164,10 @@ export async function getSyncStatus(userId: string, platform: Platform) {
   };
 }
 
+/**
+ * Devuelve el estado de sync de todas las plataformas vinculadas del usuario.
+ * Filtra solo las plataformas que tienen una PlatformAccount en BD.
+ */
 export async function getActiveSyncStatus(userId: string) {
   const statuses = await Promise.all(
     ALL_PLATFORMS.map((platform) => getSyncStatus(userId, platform)),
@@ -299,6 +317,8 @@ export async function triggerExpressSync(
 
 /**
  * Encola el sync completo (batched) en BullMQ para procesamiento en background.
+ * Se llama justo después de triggerExpressSync al vincular una plataforma.
+ * @returns jobId de BullMQ, o undefined si no existe la PlatformAccount.
  */
 export async function queueInitialSync(
   userId: string,

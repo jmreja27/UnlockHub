@@ -10,11 +10,19 @@ import { upsertUserScore, removeUserFromRankings } from './ranking.service';
 export const XP_PER_LEVEL = 1000;
 export const MAX_LEVEL = 100;
 
+/**
+ * Calcula el nivel del usuario en función de su XP acumulado.
+ * Fórmula: floor(xp / 1000) + 1, máximo nivel 100.
+ */
 export function calculateLevel(xp: number): number {
   return Math.min(Math.floor(xp / XP_PER_LEVEL) + 1, MAX_LEVEL);
 }
 
-// Transforma el usuario de Prisma al tipo público (sin email, passwordHash ni campos privados)
+/**
+ * Transforma el usuario de Prisma al tipo PublicUser compartido.
+ * Excluye email, isPremium, premiumUntil y lastSyncAt — campos privados que no
+ * deben exponerse en perfiles públicos no autenticados.
+ */
 function mapPublicUser(dbUser: {
   id: string;
   username: string;
@@ -41,7 +49,10 @@ function mapPublicUser(dbUser: {
   };
 }
 
-// Transforma el usuario de Prisma al tipo compartido User (sin passwordHash)
+/**
+ * Transforma el usuario de Prisma al tipo User compartido (incluye email).
+ * Solo usar para el perfil propio autenticado — nunca para perfiles públicos.
+ */
 function mapUser(dbUser: {
   id: string;
   username: string;
@@ -76,7 +87,10 @@ function mapUser(dbUser: {
   };
 }
 
-// Transforma una cuenta de plataforma de Prisma al tipo compartido (sin token cifrado)
+/**
+ * Transforma una cuenta de plataforma de Prisma al tipo PlatformAccount compartido.
+ * Omite el campo encryptedToken para no exponer tokens AES-256 en respuestas de la API.
+ */
 function mapPlatformAccount(dbAccount: {
   id: string;
   userId: string;
@@ -99,7 +113,11 @@ function mapPlatformAccount(dbAccount: {
   };
 }
 
-// Obtiene el perfil completo del usuario autenticado, incluyendo sus cuentas de plataforma
+/**
+ * Obtiene el perfil completo del usuario autenticado, incluyendo sus cuentas de plataforma.
+ * Usa mapUser (con email) — solo para uso interno con sesión activa.
+ * @throws {AppError} USER_NOT_FOUND (404) si el userId no existe.
+ */
 export async function getProfile(
   userId: string,
 ): Promise<User & { platformAccounts: PlatformAccount[] }> {
@@ -131,9 +149,12 @@ export async function getProfile(
   };
 }
 
-// Obtiene el perfil público de un usuario por su username.
-// Usa mapPublicUser para excluir email y otros campos privados.
-// Filtra usuarios con deletedAt !== null (GDPR soft delete — BUG-MEDIO-4).
+/**
+ * Obtiene el perfil público de un usuario por su username.
+ * Usa mapPublicUser para excluir email y campos privados — seguro para respuestas no autenticadas.
+ * Filtra usuarios con soft delete (deletedAt !== null) para cumplir GDPR.
+ * @throws {AppError} USER_NOT_FOUND (404) si el username no existe o el usuario está eliminado.
+ */
 export async function getPublicProfile(
   username: string,
 ): Promise<PublicUser & { platformAccounts: PlatformAccount[] }> {
@@ -165,7 +186,10 @@ export async function getPublicProfile(
   };
 }
 
-// Actualiza campos editables del perfil del usuario
+/**
+ * Actualiza campos editables del perfil del usuario (bio, avatar, banner, countryCode).
+ * El countryCode afecta la entrada del usuario en los sorted sets de ranking por país en Redis.
+ */
 export async function updateProfile(
   userId: string,
   data: { bio?: string; avatar?: string; banner?: string; countryCode?: string },
@@ -178,7 +202,15 @@ export async function updateProfile(
   return mapUser(dbUser);
 }
 
-// Añade XP al usuario, recalcula su nivel y actualiza el ranking en Redis
+/**
+ * Añade XP al usuario, recalcula su nivel y actualiza los sorted sets de ranking en Redis.
+ * Crea un registro en UserPoint (historial auditable de puntos).
+ * La actualización de usuario y UserPoint se hace en una sola transacción Prisma.
+ * @param userId - ID del usuario en Prisma
+ * @param amount - Cantidad de XP a añadir (positivo)
+ * @param reason - Motivo del XP (para auditoría — PointReason)
+ * @throws {AppError} USER_NOT_FOUND (404) si el userId no existe.
+ */
 export async function addXp(
   userId: string,
   amount: number,
@@ -415,8 +447,12 @@ export async function getMyGames(
   };
 }
 
-// Devuelve los achievementIds ganados por el usuario en un juego específico.
-// Usado para mostrar el estado Desbloqueado/Pendiente en la pantalla de logros.
+/**
+ * Devuelve los logros ganados por el usuario en un juego específico.
+ * Usado para mostrar el estado Desbloqueado/Pendiente en la pantalla de detalle de juego.
+ * @param userId - ID del usuario autenticado
+ * @param gameId - ID interno del juego en Prisma (no el externalId de la plataforma)
+ */
 export async function getMyGameAchievements(
   userId: string,
   gameId: string,
@@ -431,7 +467,11 @@ export async function getMyGameAchievements(
   }));
 }
 
-// Compara el perfil del usuario autenticado con otro usuario por username.
+/**
+ * Compara el perfil del usuario autenticado con el de otro usuario.
+ * Calcula logros y juegos compartidos, y la diferencia de XP.
+ * @throws {AppError} USER_NOT_FOUND (404) si el targetUsername no existe o está eliminado.
+ */
 export async function compareProfiles(
   myUserId: string,
   targetUsername: string,
@@ -525,7 +565,11 @@ export async function deleteAccount(userId: string): Promise<void> {
   await removeUserFromRankings(userId, platforms);
 }
 
-// Sube un avatar a Cloudinary y actualiza el campo avatar del usuario
+/**
+ * Sube un avatar a Cloudinary y actualiza el campo avatar del usuario en BD.
+ * La imagen se redimensiona a 256×256 con crop/fill y detección de cara (gravity: face).
+ * Requiere CLOUDINARY_URL en el entorno — el SDK lee la variable automáticamente.
+ */
 export async function uploadAvatar(userId: string, fileBuffer: Buffer, mimetype: string): Promise<User> {
   const dataUri = `data:${mimetype};base64,${fileBuffer.toString('base64')}`;
 
@@ -544,7 +588,11 @@ export async function uploadAvatar(userId: string, fileBuffer: Buffer, mimetype:
   return mapUser(updated);
 }
 
-// Sube un banner a Cloudinary y actualiza el campo banner del usuario
+/**
+ * Sube un banner a Cloudinary y actualiza el campo banner del usuario en BD.
+ * La imagen se redimensiona a 1500×500 (aspect ratio 3:1) con crop/fill.
+ * @throws {AppError} USER_NOT_FOUND (404) si el userId no existe.
+ */
 export async function uploadBanner(userId: string, fileBuffer: Buffer, mimetype: string): Promise<User> {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
   if (!user) throw new AppError('Usuario no encontrado', 'USER_NOT_FOUND', 404);

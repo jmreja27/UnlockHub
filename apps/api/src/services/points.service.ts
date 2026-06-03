@@ -11,6 +11,11 @@ export interface PointEntry {
   createdAt: string;
 }
 
+/**
+ * Registra un movimiento de puntos en el historial auditable del usuario (UserPoint).
+ * El saldo se calcula siempre sumando todos los registros — no hay campo de saldo desnormalizado.
+ * @throws {AppError} USER_NOT_FOUND (404) si el userId no existe.
+ */
 export async function awardPoints(
   userId: string,
   amount: number,
@@ -22,6 +27,9 @@ export async function awardPoints(
   await prisma.userPoint.create({ data: { userId, amount, reason } });
 }
 
+/**
+ * Devuelve el historial paginado de movimientos de puntos del usuario, ordenado por fecha descendente.
+ */
 export async function getPointsHistory(
   userId: string,
   page: number,
@@ -48,6 +56,10 @@ export async function getPointsHistory(
   };
 }
 
+/**
+ * Calcula el saldo actual de puntos del usuario sumando todos los movimientos de UserPoint.
+ * Valores negativos (REDEEM) ya están incluidos en la suma.
+ */
 export async function getPointsTotal(userId: string): Promise<number> {
   const result = await prisma.userPoint.aggregate({
     where: { userId },

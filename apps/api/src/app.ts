@@ -23,7 +23,7 @@ import router from './routes';
 
 const app = express();
 
-// Necesario para que express-rate-limit funcione correctamente detrás de Fly.io / proxies
+// Necesario para que express-rate-limit funcione correctamente detrás de Railway / proxies
 app.set('trust proxy', 1);
 
 app.use(helmet());

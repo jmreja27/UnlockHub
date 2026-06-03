@@ -1,7 +1,9 @@
 import { z } from 'zod';
 
+/** Edad mínima para registrarse — requisito GDPR en España. */
 const MIN_AGE_YEARS = 16;
 
+/** Verifica que el usuario tiene al menos MIN_AGE_YEARS en la fecha actual. */
 function isOldEnough(birthDate: Date): boolean {
   const today = new Date();
   const cutoff = new Date(
@@ -12,6 +14,10 @@ function isOldEnough(birthDate: Date): boolean {
   return birthDate <= cutoff;
 }
 
+/**
+ * Schema de registro — valida username, email, password y edad mínima de 16 años (GDPR).
+ * birthDate se transforma de string 'YYYY-MM-DD' a Date.
+ */
 export const registerSchema = z.object({
   username: z
     .string()

@@ -3,6 +3,17 @@ import type { FriendshipStatusResult } from '@unlockhub/types';
 
 import { api } from '../lib/api';
 
+/**
+ * Hook que expone las acciones de relación de amistad para un usuario concreto.
+ *
+ * Implementa optimistic updates en sendRequest, cancelOrRemove y accept:
+ * el estado local cambia inmediatamente y se revierte si la API falla.
+ *
+ * Las acciones invalidan tanto ['friendship-status', username] como ['friends']
+ * para mantener sincronizadas la lista de amigos y el estado del botón de perfil.
+ *
+ * @param username - Username del otro usuario (no el autenticado).
+ */
 export function useFriendshipActions(username: string) {
   const queryClient = useQueryClient();
   const statusKey = ['friendship-status', username] as const;
