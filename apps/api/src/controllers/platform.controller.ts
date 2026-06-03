@@ -183,7 +183,7 @@ export async function linkXboxHandler(
     const userId = (req as AuthenticatedRequest).user.id;
     const { code, codeVerifier, redirectUri } = linkXboxAccountSchema.parse(req.body);
 
-    const { encryptedTokenJson, xuid, gamertag } = await exchangeXboxCodeForTokens(
+    const { tokenJson, xuid, gamertag } = await exchangeXboxCodeForTokens(
       code,
       codeVerifier,
       redirectUri,
@@ -194,7 +194,7 @@ export async function linkXboxHandler(
       'XBOX',
       xuid,
       gamertag,
-      encryptedTokenJson,
+      tokenJson, // linkPlatform aplica encrypt() — no pre-cifrar en el adapter
     );
     res.status(201).json(account);
   } catch (err) {

@@ -558,6 +558,11 @@ export async function deleteAccount(userId: string): Promise<void> {
     // 3. Eliminar cuentas de plataforma y tokens de reset de contraseña
     await tx.platformAccount.deleteMany({ where: { userId } });
     await tx.passwordResetToken.deleteMany({ where: { userId } });
+    // 4. Revocar todos los refresh tokens — el usuario no debe poder obtener nuevos access tokens
+    await tx.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
     // UserPoint y UserChallenge se mantienen para integridad de auditoría
   });
 

@@ -167,6 +167,7 @@ async function searchUsers(q: string, userId?: string): Promise<UserSearchResult
   const rows = await prisma.user.findMany({
     where: {
       username: { contains: q, mode: 'insensitive' },
+      deletedAt: null,
       ...(userId ? { NOT: { id: userId } } : {}),
     },
     select: { id: true, username: true, avatar: true, level: true, xp: true },

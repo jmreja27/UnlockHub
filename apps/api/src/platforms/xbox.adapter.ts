@@ -110,7 +110,7 @@ export async function exchangeXboxCodeForTokens(
   codeVerifier: string,
   redirectUri: string,
 ): Promise<{
-  encryptedTokenJson: string;
+  tokenJson: string;
   xuid: string;
   gamertag: string;
 }> {
@@ -148,7 +148,7 @@ export async function exchangeXboxCodeForTokens(
   };
 
   return {
-    encryptedTokenJson: encrypt(JSON.stringify(stored)),
+    tokenJson: JSON.stringify(stored), // sin cifrar — linkPlatform aplica encrypt() una sola vez
     xuid,
     gamertag,
   };
