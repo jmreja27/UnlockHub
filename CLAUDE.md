@@ -919,6 +919,7 @@ Métricas disponibles:
 
 ---
 
+
 ## Inventario de funcionalidades
 
 > Generado el 2026-06-22 leyendo el código real. Actualizar en cada sesión que añada o cambie una funcionalidad.
@@ -926,368 +927,187 @@ Métricas disponibles:
 
 ### Autenticación y cuenta
 
-| Funcionalidad | Estado | Plataformas | Detalle |
-|---|---|---|---|
-| Login con email/contraseña | ✅ Activo | Ambos | `app/(auth)/login.tsx` · `POST /api/v1/auth/login` |
-| Registro con validación GDPR (edad ≥16) | ✅ Activo | Ambos | `app/(auth)/register.tsx` · `POST /api/v1/auth/register` · Texto legal con enlaces a ToS/PP |
-| Recuperación de contraseña | ✅ Activo | Ambos | `app/(auth)/forgot-password.tsx` · `POST /api/v1/auth/forgot-password` · Requiere `RESEND_API_KEY` |
-| Reset de contraseña via token | ✅ Activo | Ambos | `app/reset-password.tsx` · `POST /api/v1/auth/reset-password` · Deep link `unlockhub://reset-password?token=…` |
-| Refresh automático de sesión | ✅ Activo | Ambos | `lib/api.ts` interceptor · `POST /api/v1/auth/refresh` · `{ skipRefresh: true }` en login/register |
-| Logout individual | ✅ Activo | Ambos | `profile.tsx` · `POST /api/v1/auth/logout` |
-| Logout de todos los dispositivos | ✅ Activo | Ambos | `profile.tsx` · `POST /api/v1/auth/logout-all` |
-| Onboarding post-registro (4 pasos) | ✅ Activo | Mobile | `app/onboarding.tsx` · CTAs de vinculación Steam/PSN/RA en paso 4 |
-| Actualizar perfil (bio, banner, país) | ✅ Activo | Ambos | `profile.tsx` · `PATCH /api/v1/users/me` |
-| Upload de avatar (Cloudinary) | ✅ Activo | Ambos | `profile.tsx` · `POST /api/v1/users/me/avatar` · `CLOUDINARY_URL` configurada en Railway |
-| Borrado de cuenta GDPR (soft delete + físico 30d) | ✅ Activo | Ambos | `profile.tsx` · `DELETE /api/v1/users/me` · `gdpr-cleanup.scheduler.ts` · Transacción Prisma atómica |
-| Toggle idioma ES/EN en login | ✅ Activo | Mobile | `login.tsx` · `useLanguage` hook · fuera del KeyboardAvoidingView |
-| Privacy Policy in-app | ✅ Activo | Mobile | `app/privacy.tsx` · URL GitHub Pages activa |
-| Consentimiento GDPR / ATT (iOS) | ⚙️ Parcial | Mobile | `hooks/useGdprConsent.ts` · UMP SDK activo · Requiere B8 (cuenta AdMob real) para formulario GDPR en EEA |
+| Funcionalidad | Estado |
+|---|---|
+| Login con email/contraseña | ✅ Activo |
+| Registro con validación GDPR (edad ≥16) | ✅ Activo |
+| Recuperación de contraseña | ✅ Activo |
+| Reset de contraseña via token | ✅ Activo |
+| Refresh automático de sesión | ✅ Activo |
+| Logout individual | ✅ Activo |
+| Logout de todos los dispositivos | ✅ Activo |
+| Onboarding post-registro (4 pasos) | ✅ Activo |
+| Actualizar perfil (bio, banner, país) | ✅ Activo |
+| Upload de avatar (Cloudinary) | ✅ Activo |
+| Borrado de cuenta GDPR (soft delete + físico 30d) | ✅ Activo |
+| Toggle idioma ES/EN en login | ✅ Activo |
+| Privacy Policy in-app | ✅ Activo |
+| Consentimiento GDPR / ATT (iOS) | ⚙️ Parcial |
 
 ### Plataformas vinculadas
 
-| Funcionalidad | Estado | Plataformas | Detalle |
-|---|---|---|---|
-| Vinculación Steam (username o SteamID64) | ✅ Activo | Ambos | `app/link-platform/steam.tsx` · `POST /api/v1/platforms/steam/link` · `resolveVanityUrl` |
-| Verificación perfil Steam público | ✅ Activo | Backend | `steam.adapter.ts` · `checkSteamProfilePublic()` · Error `STEAM_PROFILE_PRIVATE` (400) |
-| Sync Steam (full + batched + express) | ✅ Activo | Backend | `steam.adapter.ts` · `POST /api/v1/sync/STEAM` · batch 20 juegos |
-| Vinculación RetroAchievements (username) | ✅ Activo | Ambos | `app/link-platform/ra.tsx` · `POST /api/v1/platforms/ra/link` · `lookupRaUser` |
-| Sync RA (full + batched + express) | ✅ Activo | Backend | `retroachievements.adapter.ts` · `POST /api/v1/sync/RA` · batch 15 · concurrencia 3 |
-| Vinculación PSN (username, NPSSO del sistema) | ✅ Activo | Ambos | `app/link-platform/psn.tsx` · `POST /api/v1/platforms/psn/link` · `getSystemPsnAuth()` |
-| Sync PSN (full + batched + express) | ✅ Activo | Backend | `psn.adapter.ts` · `POST /api/v1/sync/PSN` · batch 10 · concurrencia 5 |
-| Detección perfil privado en vinculación (PSN/Steam/RA) | ✅ Activo | Ambos | PSN: `checkPsnProfilePrivacy()` → 400 `PSN_PROFILE_PRIVATE` antes de vincular · Steam: `checkSteamProfilePublic()` → 400 `STEAM_PROFILE_PRIVATE` · RA: `RA_USER_NOT_FOUND` 404 con mensaje específico · Todos muestran error inline con instrucciones |
-| Vinculación Xbox | 🚩 Gateado | Mobile | `app/link-platform/xbox.tsx` · Banner "Próximamente" hasta Fase 4 |
-| Sync Xbox | 🚩 Gateado | Backend | `xbox.adapter.ts` · Código presente, no registrado en router hasta Fase 4 |
-| Desvinculación (cascade UserAchievement + XP) | ✅ Activo | Ambos | `profile.tsx` · `DELETE /api/v1/platforms/:platform` · Transacción Prisma atómica |
-| Sync manual con cooldown por tier | ✅ Activo | Ambos | `POST /api/v1/sync/:platform` · Free: 30min / 5 por día · Premium: 5min / ilimitados |
-| Sync automático scheduler (03:00 UTC) | ✅ Activo | Backend | `jobs/background-sync.scheduler.ts` · Free 60min · Premium 15min · Respeta límite Steam API |
-| Sync express al vincular (top N juegos) | ✅ Activo | Backend | `platform.service.ts` · `syncUserExpress()` · Steam top 20, PSN top 10, RA top 15 · `Promise.race` 25s |
-| Sync progresivo por lotes (Socket.io) | ✅ Activo | Ambos | `sync.worker.ts` · `syncUserBatched()` · emit `sync:progress` · Redis TTL 2h fallback |
-| Resumen estado sync (cooldown, límites diarios) | ✅ Activo | Ambos | `GET /api/v1/sync/my-summary` · `getAggregateSyncStatus()` |
-| Cooldown Steam API (80% alert, 90% pausa) | ✅ Activo | Backend | `steam.adapter.ts` · `steam:api:calls:<date>` Redis counter |
+| Funcionalidad | Estado |
+|---|---|
+| Vinculación Steam (username o SteamID64) | ✅ Activo |
+| Verificación perfil Steam público | ✅ Activo |
+| Sync Steam (full + batched + express) | ✅ Activo |
+| Vinculación RetroAchievements (username) | ✅ Activo |
+| Sync RA (full + batched + express) | ✅ Activo |
+| Vinculación PSN (username, NPSSO del sistema) | ✅ Activo |
+| Sync PSN (full + batched + express) | ✅ Activo |
+| Detección perfil privado en vinculación (PSN/Steam/RA) | ✅ Activo |
+| Vinculación Xbox | 🚩 Gateado |
+| Sync Xbox | 🚩 Gateado |
+| Desvinculación (cascade UserAchievement + XP) | ✅ Activo |
+| Sync manual con cooldown por tier | ✅ Activo |
+| Sync automático scheduler (03:00 UTC) | ✅ Activo |
+| Sync express al vincular (top N juegos) | ✅ Activo |
+| Sync progresivo por lotes (Socket.io) | ✅ Activo |
+| Resumen estado sync (cooldown, límites diarios) | ✅ Activo |
+| Cooldown Steam API (80% alert, 90% pausa) | ✅ Activo |
 
 ### Biblioteca de juegos
 
-| Funcionalidad | Estado | Plataformas | Detalle |
-|---|---|---|---|
-| Listado paginado (infinite scroll, 20/pág) | ✅ Activo | Ambos | `app/(tabs)/index.tsx` · `GET /api/v1/users/me/games` · `useMyGames` hook |
-| Filtros por plataforma (All/Steam/RA/PSN) | ✅ Activo | Ambos | `index.tsx` · query param `platform` · Xbox excluido hasta Fase 4 |
-| Ordenación en 5 modos (client-side) | ✅ Activo | Mobile | `index.tsx` · `sortGames()` · `last_played/alpha_asc/alpha_desc/pct_desc/pct_asc` · persistido en `preferencesStore` |
-| Sort con carga completa de páginas | ✅ Activo | Mobile | `index.tsx` · `fetchAllRemainingPages()` antes de ordenar · spinner + botón deshabilitado |
-| Contadores logros earned/total (pre-paginación) | ✅ Activo | Ambos | `user.service.ts` · `getMyGames()` · calculados sobre `allGames` antes del `slice` |
-| Contadores juegos completados/total | ✅ Activo | Ambos | `user.service.ts` · `getMyGames()` · pre-paginación · `isCompleted` reutilizado |
-| Pull-to-refresh (resetQueries + fetchAllRemainingPages si sort activo) | ✅ Activo | Mobile | `index.tsx` · `isManualRefreshing` estado local · `initialLoadDoneRef.current = false` antes de invalidar · mismo comportamiento que cambiar filtro |
-
-| SyncStatusBar (cooldown, syncs, countdown) | ✅ Activo | Mobile | `components/SyncStatusBar.tsx` · `useSyncStatus` · `setTimeout`-chain countdown |
-| Invalidación automática al montar | ✅ Activo | Mobile | `index.tsx` · `useEffect([user?.id])` · background refetch sin spinner |
-| AppState listener (sync nocturno en background) | ✅ Activo | Mobile | `index.tsx` · `AppState.addEventListener('change')` · invalida `my-games` al volver al frente |
+| Funcionalidad | Estado |
+|---|---|
+| Listado paginado (infinite scroll, 20/pág) | ✅ Activo |
+| Filtros por plataforma (All/Steam/RA/PSN) | ✅ Activo |
+| Ordenación en 5 modos (client-side) | ✅ Activo |
+| Sort con carga completa de páginas | ✅ Activo |
+| Contadores logros earned/total (pre-paginación) | ✅ Activo |
+| Contadores juegos completados/total | ✅ Activo |
+| Pull-to-refresh (resetQueries + fetchAllRemainingPages si sort activo) | ✅ Activo |
+| SyncStatusBar (cooldown, syncs, countdown) | ✅ Activo |
+| Invalidación automática al montar | ✅ Activo |
+| AppState listener (sync nocturno en background) | ✅ Activo |
 
 ### Logros
 
-| Funcionalidad | Estado | Plataformas | Detalle |
-|---|---|---|---|
-| Búsqueda global de logros | ⚙️ Parcial | Ambos | Endpoint `GET /api/v1/search?type=achievements` activo · hook `useSearchAchievements` activo · UI eliminada del Search tab (T27) — accesible desde detalle de juego en el futuro |
-| Filtro logros por plataforma (Steam/RA/PSN) | 🔲 Eliminado del Search UI | — | Sub-filtro eliminado junto con el chip "Achievements" en sesión 37 |
-| Estado locked/unlocked en búsqueda | 🔲 Eliminado del Search UI | — | `AchievementSearchCard.tsx` sigue existiendo — no se usa en Search |
-| XP y rareza en logros | ✅ Activo | Ambos | `Achievement.normalizedPoints` · `Achievement.rarity` · fórmulas por plataforma |
-| Detalle de juego con progreso (X/Y · Z%) | ✅ Activo | Ambos | `app/game/[id].tsx` · `GET /api/v1/games/:id/achievements` · header cuando autenticado |
-| Filtros en detalle (All/Unlocked/Pending) | ✅ Activo | Mobile | `game/[id].tsx` · estados con jerarquía visual (borde earned vs no-earned) |
-| Guías UGC de logros (crear + ver) | ✅ Activo | Ambos | `game/[id].tsx` · `GET/POST /api/v1/achievements/:id/guides` · `FEATURES.ugcGuides = true` |
-| Retar amigo en logro | ⚙️ Parcial | Ambos | `game/[id].tsx` UI presente · `POST /api/v1/achievements/:id/challenge` · notificación `ACHIEVEMENT_CHALLENGE` backend |
-| Compartir logro | ✅ Activo | Mobile | `game/[id].tsx` · `Share.share()` con URL · sin imagen (viola ToS de plataformas) |
+| Funcionalidad | Estado |
+|---|---|
+| Búsqueda global de logros | ⚙️ Parcial |
+| Filtro logros por plataforma (Steam/RA/PSN) | 🔲 Eliminado del Search UI |
+| Estado locked/unlocked en búsqueda | 🔲 Eliminado del Search UI |
+| XP y rareza en logros | ✅ Activo |
+| Detalle de juego con progreso (X/Y · Z%) | ✅ Activo |
+| Filtros en detalle (All/Unlocked/Pending) | ✅ Activo |
+| Guías UGC de logros (crear + ver) | ✅ Activo |
+| Retar amigo en logro | ⚙️ Parcial |
+| Compartir logro | ✅ Activo |
 
 ### Rankings
 
-| Funcionalidad | Estado | Plataformas | Detalle |
-|---|---|---|---|
-| Ranking global (XP total) | ✅ Activo | Ambos | `app/(tabs)/rankings.tsx` · `GET /api/v1/rankings/global` · Redis Sorted Set `ranking:global` |
-| Ranking por plataforma (Steam/RA/PSN) | ✅ Activo | Ambos | `rankings.tsx` · `GET /api/v1/rankings/platform/:platform` · XP específico de plataforma |
-| Mi posición en ranking | ✅ Activo | Ambos | `rankings.tsx` · `GET /api/v1/rankings/me?platform=PSN` · `getUserRank` lee `ZSCORE` del sorted set correcto según filtro · `queryKey` incluye platform para caché independiente por filtro |
-| Snapshot diario a PostgreSQL | ✅ Activo | Backend | `ranking.service.ts` · `takeRankingSnapshot()` |
-| Ranking nacional | 🔲 Eliminado | - | Eliminado en sesión 28 — XP no es comparable entre países · `countryCode` en `User` intacto |
+| Funcionalidad | Estado |
+|---|---|
+| Ranking global (XP total) | ✅ Activo |
+| Ranking por plataforma (Steam/RA/PSN) | ✅ Activo |
+| Mi posición en ranking | ✅ Activo |
+| Snapshot diario a PostgreSQL | ✅ Activo |
+| Ranking nacional | 🔲 Eliminado |
 
 ### Social
 
-| Funcionalidad | Estado | Plataformas | Detalle |
-|---|---|---|---|
-| Enviar solicitud de amistad | ✅ Activo | Ambos | `friends.tsx` · `POST /api/v1/friends` · acepta `{ username }` o `{ receiverId }` |
-| Búsqueda de usuarios (excluye usuario autenticado) | ✅ Activo | Ambos | `search.tsx` · `GET /api/v1/search?type=users` · `searchUsers` filtra `NOT: { id: currentUserId }` cuando hay sesión activa |
-| Estado de relación en perfil público (5 estados) | ✅ Activo | Ambos | `profile/[username].tsx` · `FriendshipButton` · `GET /api/v1/friends/status/:username` · none/pending_sent/pending_received/accepted/blocked · Alert confirmación en eliminar |
-| Listar amigos | ✅ Activo | Ambos | `app/(tabs)/friends.tsx` · `GET /api/v1/friends` |
-| Solicitudes pendientes (badge contador) | ✅ Activo | Ambos | `friends.tsx` · `GET /api/v1/friends/pending` · badge en tab bar |
-| Aceptar solicitud de amistad | ✅ Activo | Ambos | `friends.tsx` · `POST /api/v1/friends/:id/accept` |
-| Rechazar solicitud de amistad | ✅ Activo | Ambos | `friends.tsx` · `DELETE /api/v1/friends/:id/reject` |
-| Eliminar amigo | ✅ Activo | Ambos | `friends.tsx` · `DELETE /api/v1/friends/:id` |
-| Bloquear usuario | ✅ Activo | Backend | `friendship.service.ts` · `FriendshipStatus.BLOCKED` |
-| Feed de actividad | ✅ Activo | Ambos | `app/(tabs)/index.tsx` (feed section) · `GET /api/v1/feed` · `ActivityEvent` |
-| Perfil público (sin email) | ✅ Activo | Ambos | `app/profile/[username].tsx` · `GET /api/v1/users/:username` · `mapPublicUser()` excluye email/passwordHash · Redirige a `/(tabs)/profile` si el username es el propio usuario |
-| Comparación de perfiles ("vs tú") | ✅ Activo | Ambos | `profile/[username].tsx` · `GET /api/v1/users/:username/compare` |
+| Funcionalidad | Estado |
+|---|---|
+| Enviar solicitud de amistad | ✅ Activo |
+| Búsqueda de usuarios (excluye usuario autenticado) | ✅ Activo |
+| Estado de relación en perfil público (5 estados) | ✅ Activo |
+| Listar amigos | ✅ Activo |
+| Solicitudes pendientes (badge contador) | ✅ Activo |
+| Aceptar solicitud de amistad | ✅ Activo |
+| Rechazar solicitud de amistad | ✅ Activo |
+| Eliminar amigo | ✅ Activo |
+| Bloquear usuario | ✅ Activo |
+| Feed de actividad | ✅ Activo |
+| Perfil público (sin email) | ✅ Activo |
+| Comparación de perfiles ("vs tú") | ✅ Activo |
 
 ### Notificaciones
 
-| Funcionalidad | Estado | Plataformas | Detalle |
-|---|---|---|---|
-| Centro in-app (listar, leer, contador) | ✅ Activo | Ambos | `app/notifications.tsx` · `GET/PATCH /api/v1/notifications/me` |
-| Campana con badge en header | ✅ Activo | Mobile | `components/NotificationBell.tsx` · `GET /api/v1/notifications/me/unread-count` |
-| Push notifications (Expo Notifications) | ✅ Activo | Ambos | `hooks/usePushNotifications.ts` · `POST /api/v1/notifications/device-token` |
-| Notificación: FRIEND_REQUEST | ✅ Activo | Backend | `notification.service.ts` |
-| Notificación: ACHIEVEMENT_CHALLENGE | ✅ Activo | Backend | `notification.service.ts` |
-| Notificación: RANKING_UP | ✅ Activo | Backend | `notification.service.ts` |
-| Notificación: CHALLENGE_COMPLETED | ✅ Activo | Backend | `notification.service.ts` |
-| Notificación: STREAK_RISK | ✅ Activo | Backend | `notification.service.ts` |
-| Notificación: PSN reauth requerido | ✅ Activo | Backend | `sync.worker.ts` · `PSN_REFRESH_TOKEN_EXPIRED` → `requiresReauth=true` + notificación in-app |
+| Funcionalidad | Estado |
+|---|---|
+| Centro in-app (listar, leer, contador) | ✅ Activo |
+| Campana con badge en header | ✅ Activo |
+| Push notifications (Expo Notifications) | ✅ Activo |
+| Notificación: FRIEND_REQUEST | ✅ Activo |
+| Notificación: ACHIEVEMENT_CHALLENGE | ✅ Activo |
+| Notificación: RANKING_UP | ✅ Activo |
+| Notificación: CHALLENGE_COMPLETED | ✅ Activo |
+| Notificación: STREAK_RISK | ✅ Activo |
+| Notificación: PSN reauth requerido | ✅ Activo |
 
 ### Gamificación
 
-| Funcionalidad | Estado | Plataformas | Detalle |
-|---|---|---|---|
-| Sistema de XP normalizado por plataforma | ✅ Activo | Backend | `sync.worker.ts` · `addXp()` · Steam/RA/PSN/Xbox con fórmulas distintas |
-| Niveles basados en XP | ✅ Activo | Backend | `user.service.ts` · `calculateLevel()` · visible en perfil y rankings |
-| Racha diaria (streak) | ✅ Activo | Backend | `jobs/streak.scheduler.ts` · 00:00 UTC · incrementa o resetea |
-| Escudo de racha (Free: 1/mes · Premium: 3/mes) | ✅ Activo | Backend | `streak.scheduler.ts` · `User.streakShields` · consume shield antes de resetear |
-| Sistema de puntos (historial auditable) | ✅ Activo | Ambos | `GET /api/v1/users/me/points` · saldo = suma del historial (`UserPoint`) |
-| Puntos por anuncio rewarded (10 pts, cooldown 3h) | ✅ Activo | Ambos | `points.service.ts` · `claimRewardedAdPoints()` · `rewarded-ad:{userId}` Redis TTL 3h |
-| Canje de puntos por premium (300 pts = 7 días) | 🚩 Gateado | Ambos | `POST /api/v1/subscriptions/redeem-points` · `FEATURES.pointsRedeem = false` |
-| Retos semanales (progreso + completación) | 🚩 Gateado | Ambos | `app/(tabs)/challenges.tsx` · `GET /api/v1/challenges/active` · `FEATURES.challenges = false` |
-| Wrapped anual (básico + extendido) | ✅ Activo | Ambos | `app/wrapped/[year].tsx` · `GET /api/v1/wrapped/:period` · `FEATURES.wrapped = true` |
-| Wrapped mensual | ✅ Activo | Ambos | `wrapped/[year].tsx` · param `"2025-01"` · `computeStats` + `computeExtendedStats` |
-| Compartir Wrapped | ✅ Activo | Mobile | `wrapped/[year].tsx` · `Share.share()` con texto + #UnlockHub |
+| Funcionalidad | Estado |
+|---|---|
+| Sistema de XP normalizado por plataforma | ✅ Activo |
+| Niveles basados en XP | ✅ Activo |
+| Racha diaria (streak) | ✅ Activo |
+| Escudo de racha (Free: 1/mes · Premium: 3/mes) | ✅ Activo |
+| Sistema de puntos (historial auditable) | ✅ Activo |
+| Puntos por anuncio rewarded (10 pts, cooldown 3h) | ✅ Activo |
+| Canje de puntos por premium (300 pts = 7 días) | 🚩 Gateado |
+| Retos semanales (progreso + completación) | 🚩 Gateado |
+| Wrapped anual (básico + extendido) | ✅ Activo |
+| Wrapped mensual | ✅ Activo |
+| Compartir Wrapped | ✅ Activo |
 
 ### Monetización
 
-| Funcionalidad | Estado | Plataformas | Detalle |
-|---|---|---|---|
-| AdMob banner Home | ✅ Activo | Mobile | `components/AdBanner.tsx` · `unitId='home'` · Test IDs en código, prod IDs en EAS secrets |
-| AdMob banner Search | ✅ Activo | Mobile | `components/AdBanner.tsx` · `unitId='search'` |
-| AdMob interstitial | ✅ Activo | Mobile | `hooks/useInterstitialAd.ts` · pre-carga al montar · solo usuarios free |
-| AdMob rewarded (10 pts por visualización) | ✅ Activo | Ambos | `hooks/useRewardedAd.ts` · `POST /api/v1/points/rewarded-ad` · solo paga si `EARNED_REWARD` antes de `CLOSED` |
-| Pantalla premium (RevenueCat) | 🚩 Gateado | Mobile | `app/premium.tsx` · `FEATURES.premium = false` → muestra `ComingSoon` |
-| Compra de suscripción (RevenueCat) | 🚩 Gateado | Mobile | `hooks/useSubscription.ts` · `react-native-purchases` v10 · Pendiente B18/B19/B20 |
-| Webhook RevenueCat (backend) | ⚙️ Parcial | Backend | `POST /api/v1/webhooks/revenuecat` · código completo · Pendiente `REVENUECAT_WEBHOOK_SECRET` (B20) y B18 |
-| Restauración de compras | 🚩 Gateado | Mobile | `premium.tsx` · `FEATURES.premium = false` |
-| PremiumBanner (paywall inline) | 🚩 Gateado | Mobile | `components/PremiumBanner.tsx` · `FEATURES.premium = false` → devuelve null |
+| Funcionalidad | Estado |
+|---|---|
+| AdMob banner Home | ✅ Activo |
+| AdMob banner Search | ✅ Activo |
+| AdMob interstitial | ✅ Activo |
+| AdMob rewarded (10 pts por visualización) | ✅ Activo |
+| Pantalla premium (RevenueCat) | 🚩 Gateado |
+| Compra de suscripción (RevenueCat) | 🚩 Gateado |
+| Webhook RevenueCat (backend) | ⚙️ Parcial |
+| Restauración de compras | 🚩 Gateado |
+| PremiumBanner (paywall inline) | 🚩 Gateado |
 
 ### Perfil y personalización
 
-| Funcionalidad | Estado | Plataformas | Detalle |
-|---|---|---|---|
-| Avatar placeholder con iniciales | ✅ Activo | Mobile | `components/AvatarPlaceholder.tsx` · color determinista por username (paleta 8 colores) |
-| Upload de avatar (Cloudinary) | ✅ Activo | Ambos | `profile.tsx` · `POST /api/v1/users/me/avatar` · Cloudinary 256×256 crop/fill gravity face · expo-image-picker · badge cámara + spinner |
-| Bio y banner de perfil | ✅ Activo | Ambos | `profile.tsx` · `PATCH /api/v1/users/me` (bio/país) · `POST /api/v1/users/me/banner` (upload Cloudinary, crop 1500×500, aspect 3:1) |
-| Upload de banner (Cloudinary) | ✅ Activo | Ambos | `profile.tsx` · Pressable 120px sobre área de banner · `bannerMutation` aspect 3:1 · `folder: 'unlockhub/banners'` · mismo patrón que avatar |
-| País (countryCode) | ✅ Activo | Ambos | `profile.tsx` · afecta entrada en `ranking:global:{countryCode}` Redis set |
-| Idioma ES/EN persistente | ✅ Activo | Mobile | `stores/preferencesStore.ts` · `useLanguage` hook · AsyncStorage |
-| Tema (solo oscuro activo) | ⚙️ Parcial | Mobile | `profile.tsx` · selector oculto (`{/* TODO Fase 4 */}`) · modo claro no implementado |
-| Estadísticas avanzadas premium | 🚩 Gateado | Ambos | `profile.tsx` · `FEATURES.advancedStats = false` → `PaywallOverlay` |
+| Funcionalidad | Estado |
+|---|---|
+| Avatar placeholder con iniciales | ✅ Activo |
+| Upload de avatar (Cloudinary) | ✅ Activo |
+| Bio y banner de perfil | ✅ Activo |
+| Upload de banner (Cloudinary) | ✅ Activo |
+| País (countryCode) | ✅ Activo |
+| Idioma ES/EN persistente | ✅ Activo |
+| Tema (solo oscuro activo) | ⚙️ Parcial |
+| Estadísticas avanzadas premium | 🚩 Gateado |
 
 ### Infraestructura y operaciones
 
-| Funcionalidad | Estado | Plataformas | Detalle |
-|---|---|---|---|
-| Dashboard admin (HTML + JSON métricas) | ✅ Activo | Backend | `admin/` · `GET /admin/` · Bearer `ADMIN_SECRET` · usuarios/syncs/rankings/colas/errores/Steam API% |
-| Health check endpoint | ✅ Activo | Backend | `GET /health` · declarado antes del rate limiter · Railway healthcheck + UptimeRobot |
-| Background sync scheduler (03:00 UTC) | ✅ Activo | Backend | `jobs/background-sync.scheduler.ts` · usuarios activos últimos 7 días · respeta límite Steam |
-| GDPR cleanup job (04:00 UTC, físico 30d) | ✅ Activo | Backend | `jobs/gdpr-cleanup.scheduler.ts` · `deletedAt <= now() - 30 días` · registrado en `index.ts` |
-| Streak scheduler (00:00 UTC) | ✅ Activo | Backend | `jobs/streak.scheduler.ts` |
-| Streak shields recharge (01:00 UTC día 1/mes) | ✅ Activo | Backend | `jobs/streak-shields.scheduler.ts` · recarga escudos según tier (Free: 1, Premium: 3) el día 1 de cada mes |
-| Challenge scheduler | 🚩 Gateado | Backend | `jobs/challenge.scheduler.ts` · activa cuando `FEATURES.challenges = true` |
-| Seed catálogo (admin BullMQ job) | ✅ Activo | Backend | `admin/` · `seed-catalog` queue |
-| Socket.io multi-instancia (redis-adapter) | ✅ Activo | Backend | `sockets/` · `@socket.io/redis-adapter` · listo para 2 réplicas Railway (N3) |
-| Sync progress Socket.io | ✅ Activo | Backend | `sockets/sync.handler.ts` · rooms `user:{userId}` · `sync:progress/complete/error` |
-| Activity feed Socket.io | ✅ Activo | Backend | `sockets/activity.handler.ts` · `activity:new` |
-| Rate limiting global (500 req/15min) | ✅ Activo | Backend | `middleware/rateLimiter.ts` · `/health` excluido |
-| Rate limiting auth (10 req/15min) | ✅ Activo | Backend | `middleware/rateLimiter.ts` · aplicado a `/auth/*` |
-| Rate limiting search (60 req/min) | ✅ Activo | Backend | `middleware/rateLimiter.ts` · aplicado a `/search` |
-| Sentry crash reporting (mobile + API) | ✅ Activo | Ambos | DSNs configurados en Railway y EAS secrets · integrado en `ErrorBoundary` |
-| Analytics PostHog | ✅ Activo | Mobile | `lib/analytics.ts` · `POSTHOG_API_KEY` configurada en Railway · N4 ✅ |
-| OfflineBanner global | ✅ Activo | Mobile | `components/OfflineBanner.tsx` · `expo-network` |
-| ErrorBoundary global | ✅ Activo | Mobile | `components/ErrorBoundary.tsx` · integrado con Sentry |
-| Modo mantenimiento | ✅ Activo | Mobile | `hooks/useMaintenanceCheck.ts` · sondeo `/health` cada 30s |
+| Funcionalidad | Estado |
+|---|---|
+| Dashboard admin (HTML + JSON métricas) | ✅ Activo |
+| Health check endpoint | ✅ Activo |
+| Background sync scheduler (03:00 UTC) | ✅ Activo |
+| GDPR cleanup job (04:00 UTC, físico 30d) | ✅ Activo |
+| Streak scheduler (00:00 UTC) | ✅ Activo |
+| Streak shields recharge (01:00 UTC día 1/mes) | ✅ Activo |
+| Challenge scheduler | 🚩 Gateado |
+| Seed catálogo (admin BullMQ job) | ✅ Activo |
+| Socket.io multi-instancia (redis-adapter) | ✅ Activo |
+| Sync progress Socket.io | ✅ Activo |
+| Activity feed Socket.io | ✅ Activo |
+| Rate limiting global (500 req/15min) | ✅ Activo |
+| Rate limiting auth (10 req/15min) | ✅ Activo |
+| Rate limiting search (60 req/min) | ✅ Activo |
+| Sentry crash reporting (mobile + API) | ✅ Activo |
+| Analytics PostHog | ✅ Activo |
+| OfflineBanner global | ✅ Activo |
+| ErrorBoundary global | ✅ Activo |
+| Modo mantenimiento | ✅ Activo |
 
 ---
 
-## Decisiones tomadas — no revertir sin consultar
+## Decisiones de arquitectura
 
-| Decisión | Motivo | Fase |
-|---|---|---|
-| Railway en lugar de Fly.io | Integración nativa PostgreSQL + Redis, sin hibernación, deploy más simple | Fase 3 |
-| Railway PostgreSQL en lugar de Neon | Migración desde Neon — Railway integra BD+Redis+deploy en el mismo panel | Fase 3 |
-| Xbox gateado hasta Fase 4 | OAuth2 Microsoft requiere verificación de empresa | Fase 3 |
-| Modo claro eliminado temporalmente | Componentes con `text-white` hardcoded — activar a medias sería peor | Fase 3 |
-| `expo-build-properties` para `usesCleartextTraffic` | Config directa en `app.json > android` no funciona en SDK 51 | Fase 3 |
-| `psn-api` (npm) para PSN | No existe API oficial de Sony | Fase 3 |
-| Saldo de puntos como suma del historial | Auditoría completa de puntos | Fase 2 |
-| Compartir logro → `Share.share()` con URL | Imagen generada viola ToS de Steam/RA | Fase 3 |
-| Canje de puntos → días premium (no cosméticos) | Cosméticos contradicen el modelo de avatares libres | Fase 3 |
-| Sync lazy + scheduler nocturno | Cron masivo en horario pico agota rate limit de Steam | Fase 3 |
-| Torneos solo internos en fase inicial | Evita problemas legales Ley 13/2011 | Fase 4 |
-| Wrapped mensual + anual | Wrapped solo anual = 11 meses sin verlo para usuarios nuevos | Fase 3 |
-| PostHog en lugar de Mixpanel | Open source, self-hosteable, mejor privacidad | Fase 3 |
-| `wrapped/[year].tsx` no renombrado a `[period].tsx` | Expo Router no permite dos archivos de ruta dinámica en el mismo directorio — el param se llama `year` pero acepta strings como `"2025-01"` | Fase 3 |
-| `requirePremium` solo comprueba `isPremium` del JWT | El payload JWT contiene `{sub, email, isPremium}` sin `role` — añadirlo requeriría rotar todas las sesiones | Fase 3 |
-| Rutas `/admin/*` protegidas por `ADMIN_SECRET` bearer (no por role JWT) | `role` no está en el JWT payload — ver decisión anterior | Fase 3 |
-| `rotate-encryption-key.ts` debe ejecutarse desde `apps/api/` | `@prisma/client` solo está en `apps/api/node_modules` | Fase 3 |
-| `while(true)` con eslint-disable en cursor pagination | Patrón cursor batch necesita bucle infinito con break interno — regla `no-constant-condition` se desactiva línea por línea | Fase 3 |
-| `useSessionStore as unknown as jest.Mock` en tests móvil | TypeScript no acepta la conversión directa porque los tipos no se solapan — doble aserción vía `unknown` es el patrón estándar | Fase 3 |
-| Soft delete GDPR con `deletedAt` + job de borrado físico a 30 días | `deleteAccount` hace soft delete atómico (update + anonimizar ActivityEvent + borrar PlatformAccount/PasswordResetToken), sin borrar UserPoint/UserChallenge (auditoría). `gdpr-cleanup.scheduler.ts` borra físicamente a los 30 días (cron 04:00 UTC). | Fase 3 |
-| `authenticate.ts` verifica `deletedAt: null` en BD tras JWT — fail-open ante error de BD | La verificación añade ~1-5ms por request autenticada. Si la BD falla transitoriamente (timeout), la request continúa sin bloquear (fail-open). Trade-off aceptado: JWTs de usuarios soft-deleted válidos por hasta 15 min (la ventana de expiración) es riesgo mínimo. Sin la verificación, usuarios eliminados podrían acceder a endpoints distintos de login/perfil durante la ventana de 15 min. | Fase 3 |
-| `rcApiKey` leído en el cuerpo del hook `useSubscription` (no a nivel de módulo) | Leer `process.env['EXPO_PUBLIC_REVENUECAT_API_KEY']` a nivel de módulo crea una constante fija al cargar el módulo — imposible controlar en tests sin `jest.resetModules()`. Leerlo en el cuerpo de la función permite controlar el env var por test. | Fase 3 |
-| `PublicUser` interface en `packages/types` omite `email`, `isPremium`, `premiumUntil`, `lastSyncAt` | `User` incluye `email` para uso interno (perfil propio autenticado). `PublicUser` es el subset seguro para perfiles públicos. `getPublicProfile` usa `mapPublicUser` → garantiza que el email nunca se filtra en respuestas no autenticadas. `getProfile` (perfil propio) sigue usando `mapUser` con todos los campos. | Fase 3 |
-| `apps/mobile` lint script usa `../../.gitignore` | El script usaba `--ignore-path .gitignore` pero `apps/mobile/.gitignore` no existe; la raíz del monorepo tiene el `.gitignore` correcto | Fase 3 |
-| `no-var-requires` en `require()` de tests Jest | Patrón legítimo para acceder a módulos mockeados tras `jest.mock()` — se suprime con eslint-disable-next-line | Fase 3 |
-| Cloudinary auto-lee `CLOUDINARY_URL` de `process.env` | SDK de Cloudinary v2 no necesita configuración explícita si `CLOUDINARY_URL` está en el entorno — basta con `import { v2 as cloudinary }` | Fase 3 |
-| Upgrade Expo SDK 51 → 55 diferido post-lanzamiento | 17 high vulnerabilidades en `node-tar` son build-time (no runtime); `expo@55.0.24` es breaking change; riesgo/beneficio favorable a diferirlo hasta después del primer deploy a Play Store | Fase 3 |
-| `jest.mock('../../lib/featureFlags')` en tests que necesitan features gateadas | Algunos tests de pantallas prueban UI que `FEATURES.premium = false` oculta en producción — necesario mockear la flag en el test para ejercitar el código | Fase 3 |
-| `import/order` override en `.eslintrc.js` para ficheros de test | El patrón `jest.mock()` hoisted (antes de imports) es intencional; la regla `import/order` genera falsos positivos — se desactiva solo en `**/__tests__/**` y `*.test.ts` | Fase 3 |
-| Maestro flows usan `runFlow/when` condicional en lugar de login fijo | APK preview conecta a API producción (`eas.json` profile `preview` → `https://unlockhub-production.up.railway.app`); `demo@unlockhub.test` solo existe en mock — los flows deben adaptarse a sesión activa o sin sesión | Fase 3 |
-| Regex `~.*(A\|B).*` con alternación evitada en flows Maestro | Maestro 2.5.1 no evalúa correctamente el operador `\|` dentro de grupos regex — sustituir siempre por texto exacto o regex simple sin alternación | Fase 3 |
-| `testID="login-email/password"` añadido a login.tsx | `inputText: {label}` en Maestro encuentra el `Text` label component antes que el `TextInput` cuando ambos tienen el mismo texto accesible — `testID` como selector unívoco (activo en próximo build) | Fase 3 |
-| `authenticateOptional` en lugar de `authenticate` en endpoints públicos con contexto de usuario | Endpoints de logros y búsqueda deben funcionar sin sesión (isUnlocked=false) — devolver 401 sin token sería incorrecto y rompería la UX de discovery | Fase 3 |
-| `{ skipRefresh: true }` en `api.post()` de login y register | Sin esta opción, cuando `/auth/login` devuelve 401 (contraseña incorrecta), `apiRequest` intercepta el 401 e intenta llamar a `refreshAccessToken()`. Si no hay refresh token en SecureStore (sesión cerrada correctamente), lanza un `Error` plano que `humanizeAuthError` no clasifica como 401 → mensaje genérico en lugar de "Email o contraseña incorrectos" | Fase 3 |
-| `Guide` interface usa `user` no `author` en `game/[id].tsx` | La API de guías devuelve `user: { id, username, avatar }` (relación Prisma `userId`) — el campo nunca fue `author`. La interfaz local en el cliente debe coincidir con la respuesta real del servidor para evitar crash al leer `guide.author.username` | Fase 3 |
-| Search de logros excluye Xbox con `NOT: { platform: 'XBOX' }` en Prisma | Xbox gateado hasta Fase 4 — no exponer logros Xbox aunque estuvieran en BD | Fase 3 |
-| `getGameAchievementsWithStatus` usa dos queries separadas (achievements + userAchievements) | Evita un JOIN complejo; Map<achievementId, unlockedAt> para lookup O(1) es más claro y suficientemente rápido a escala de logros por juego | Fase 3 |
-| i18n key `search.achievement_in_game` en tests devuelve la clave sin interpolar | En entorno de test, i18next devuelve la clave (no el texto interpolado) — tests usan `getByText('search.achievement_in_game')` en lugar de buscar el nombre del juego | Fase 3 |
-| Search de logros paginado con `page` param (no cursor) | La UX de búsqueda es exploratoria, no un feed continuo — paginación offset simple suficiente; `useInfiniteQuery` gestiona la acumulación de páginas en el cliente | Fase 3 |
-| `getTitleTrophies` PSN puede devolver `trophies` undefined | Algunos títulos (DLC, juegos sin soporte de trofeos) devuelven respuesta vacía — el script `seed-games.ts` necesita guard `trophies?.length ?? 0` antes de iterar | Fase 3 |
-| Token de acceso PSN expira ~60 min en seed con muchos títulos | El NPSSO se intercambia por un access token de corta duración; procesar 372 títulos secuencialmente lo agota — en futuras ejecuciones hay que refrescar el token entre usuarios | Fase 3 |
-| Constraints únicos en `Game(platform, externalId)` y `Achievement(platform, gameId, externalId)` — la BD rechaza duplicados a nivel de constraint | El constraint anterior en Achievement era `(platform, externalId)`, incorrecto para Steam donde el `apiname` (ej. `"ACH_WIN"`) no es globalmente único — el mismo nombre puede repetirse en múltiples juegos. El nuevo constraint `(platform, gameId, externalId)` es la semántica correcta | Fase 3 |
-| DLCs de PSN se tratan como juegos independientes en el seed | La API de Sony devuelve cada DLC/expansión como un `npCommunicationId` separado con su propio trophy set — es el estándar del sector y lo que la API impone; no vale la pena intentar agruparlos | Fase 3 |
-| Token PSN se refresca cada 5 usuarios en `seed-games.ts` | El access token derivado del NPSSO expira en ~60 min; procesar 372 títulos por usuario agota el token. `refreshPsnAuth()` se llama cada 5 usuarios (índice % 5 === 0) para mantener el token fresco sin requerir un nuevo NPSSO | Fase 3 |
-| `steam.adapter.ts` `syncUser()` omite juegos sin logros antes del upsert | Sin el guard `if (schema.length === 0) continue` antes del `game.upsert`, se insertaban filas de juegos vacías (0 logros) para todos los juegos del usuario sin `has_community_visible_stats`. Esto causó 30.066 juegos vacíos en la BD. El guard evita la inserción | Fase 3 |
-| `Game.console` almacena la consola/plataforma de origen | PSN devuelve `trophyTitlePlatform` ("PS3"/"PS4"/"PS5"/"PSVITA", o compuesto "PS3,PS4" en cross-gen), RA devuelve `ConsoleName` por API y el seed usa el mapa `RA_CONSOLE_NAMES`; Steam y Xbox guardan `null` (plataforma única) | Fase 3 |
-| `console` se muestra en GameCard (subtítulo) y game/[id].tsx (header) | Los usuarios con librerías mixtas de PSN necesitan ver si un juego es de PS3/PS4/PS5; RA muestra NES/SNES/etc. Steam y Xbox no muestran nada (null) | Fase 3 |
-| Backfill RA via `API_GetGameList.php` (1 llamada/consola, no 1/juego) | Actualizar 1.001 juegos RA con 1.001 llamadas habría agotado el rate limit y tardado 17 min; con 8 consolas son 8 llamadas y ~5 seg. | Fase 3 |
-| `backfill-psn-console.ts` usa solo `getUserTitles()`, no `getTitleTrophies()` | Objetivo era solo rellenar `Game.console` — no hace falta re-descargar logros (horas) cuando con los títulos (1 llamada paginada por usuario) se obtiene `trophyTitlePlatform` en segundos | Fase 3 |
-| `Game.console` en PSN puede ser valor compuesto como `"PS3,PS4"` | Sony devuelve `trophyTitlePlatform` como string concatenado para juegos cross-gen (ej. "PS3,PS4", "PS3,PSVITA,PS4") — se almacena y muestra tal cual, sin normalizar | Fase 3 |
-| `PsnStoredTokens` almacena Access Token + Refresh Token + `expiresAt` + `refreshTokenExpiresAt` cifrado en AES-256 en `PlatformAccount.encryptedToken` | Ambos tokens necesarios para renovar automáticamente sin pedir al usuario — el campo es un JSON cifrado, no un token simple | Fase 3 |
-| `buildAuthWithRefresh()` en PSN adapter renueva el Access Token en cada sync | Si `expiresAt < now`: usa Refresh Token → guarda nuevo JSON cifrado en BD. Si `refreshTokenExpiresAt < now`: lanza `PSN_REFRESH_TOKEN_EXPIRED` | Fase 3 |
-| `PSN_REFRESH_TOKEN_EXPIRED` en sync worker → `requiresReauth=true` + notificación in-app | En lugar de silenciar el error, se marca la cuenta y se notifica al usuario para que re-vincule su PSN | Fase 3 |
-| `PlatformAccount.requiresReauth` reseteado a `false` en sync exitoso y al re-vincular | Un sync exitoso o una nueva vinculación limpia el flag — no necesita acción manual del dev | Fase 3 |
-| Guard `trophies.length === 0` en PSN `syncUser()` antes del game upsert | Títulos sin trofeos (DLC sin soporte, demos) no deben insertarse — el `definedTrophies` puede ser 0 aunque el título aparezca en la lista | Fase 3 |
-| Guard de achievements movido ANTES del game upsert en RA `syncUser()` | Antes: `prisma.game.upsert` en línea 336, check `if (!gameProgress.Achievements)` en línea 361 — juego sin logros se insertaba. Ahora: comprobación antes del upsert | Fase 3 |
-| Guard `playerAchievements.length === 0` añadido en Steam `syncUser()` | `GetPlayerAchievements` puede devolver `success: false` (perfil privado, juego sin stats para el usuario) dejando el schema como referencia — sin este guard se insertaban juegos sin Achievement records. Causó 3.333 juegos vacíos en prod (eliminados 2026-05-22) | Fase 3 |
-| Sync progresivo por lotes: STEAM=20, RA=15, PSN=10 juegos/batch | Adapters implementan `syncUserBatched(account, onBatch)` opcional — worker llama `onBatch` tras cada lote, emite `sync:progress` a Socket.io y actualiza Redis TTL 2h. Fallback a `syncUser()` si el adapter no implementa batching | Fase 3 |
-| `syncUserExpress` al vincular plataforma: Steam sort by playtime_forever desc (top 20), PSN first 10 (ya ordenado por actividad), RA sort by NumAwarded desc (top 15) | La biblioteca aparece poblada antes de que responda el 201 — full sync se encola en background. Timeout 25s con `Promise.race` para no bloquear indefinidamente | Fase 3 |
-| Socket.io namespace raíz `/` con JWT middleware en `sync.handler.ts` | El mismo namespace que `activity.handler.ts` — los usuarios se unen a `user:{userId}` rooms. `getIOSafe()` en el worker devuelve null en tests (getIO lanza si no está inicializado) | Fase 3 |
-| Redis `sync:progress:{userId}:{platform}` TTL 2h como fallback de Socket.io | `getSyncStatus` lee esta clave para exponer `isRunning/processed/total/percentComplete/startedAt` — útil si el cliente pierde la conexión Socket.io durante el sync | Fase 3 |
-| `useSyncProgress` hook en mobile: invalida `my-games` en cada batch | La lista se actualiza progresivamente conforme llegan los lotes — sin esperar al `sync:complete`. El toast de completado muestra `+N logros · +X XP` y se auto-descarta a los 4s | Fase 3 |
-| `useSyncAll` es fire-and-forget: invalidación de `my-games` delegada a `useSyncProgress` | Antes: `queryClient.invalidateQueries` en `onSuccess` (solo invalidaba al terminar el request HTTP ~instant). Ahora: la invalidación ocurre en cada batch vía Socket.io — la UI se actualiza progresivamente | Fase 3 |
-| GitHub Pages para docs legales en repo público | Cloudflare Pages rechazado (ran npm ci sobre el monorepo root). GitHub Pages free solo funciona en repos públicos — repo UnlockHub hecho público. Auto-deploy desde branch `develop`, carpeta `/docs`. URLs: https://jmreja27.github.io/UnlockHub/privacy-policy.html y /terms-of-service.html | Fase 3 |
-| Texto legal ToS + Privacy Policy en pantalla de registro | `app/(auth)/register.tsx`: bloque con `Linking.openURL` a las URLs de GitHub Pages antes del botón de submit. Claves i18n `auth.register.legal_prefix/connector/terms_label/privacy_label` en ES/EN. | Fase 3 |
-| `AdBanner` con prop `unitId: 'home' | 'search'` — IDs de ad unit separados por placement | Permite optimización futura de eCPM por placement sin cambiar la API del componente | Fase 3 |
-| IDs de producción AdMob como EAS secrets (`EXPO_PUBLIC_ADMOB_*`) — no en `app.json` ni código | Repo público — hardcodear IDs de producción en el código fuente expondría las unidades de anuncio. Test IDs de Google integrados como fallback en el código | Fase 3 |
-| `useRewardedAd` solo llama al backend si recibe `EARNED_REWARD` antes de `CLOSED` | Garantiza que el usuario no saltó el anuncio antes de reclamar puntos — el evento `EARNED_REWARD` solo se dispara cuando el anuncio se completa | Fase 3 |
-| Cooldown rewarded ad en Redis (`rewarded-ad:{userId}`, TTL 3h) en lugar de BD | Evitar abuso es un caso de rate limiting — Redis es el lugar correcto; no necesita historial persistente | Fase 3 |
-| `react-native-google-mobile-ads` downgraded de v16 a v13.6.1 | `play-services-ads:25.0.0` (v16+) usa metadata Kotlin 2.2.0; el compilador de React Native (1.9.0) no puede leerlo. Subir `kotlinVersion` en `expo-build-properties` solo afecta al stdlib, no al compilador (controlado por el gradle plugin de RN), causando conflicto inverso en `expo-modules-core`. V13.6.1 usa `play-services-ads:23.1.0` (Kotlin 1.x). Los imports son `require()` dinámicos — sin rotura de tipos. | Fase 3 |
-| PSN usa credenciales del sistema (`PSN_SYSTEM_NPSSO`) en lugar de tokens de usuario | Mismo modelo que PSNProfiles/TrueTrophies/Exophase. El usuario solo proporciona su username público; el backend autentica con su propio NPSSO. Elimina el flujo NPSSO del usuario, el cifrado AES de token y el refresco automático para PSN. | Fase 3 |
-| `PlatformAccount.encryptedToken` queda `''` para cuentas PSN nuevas | El campo es `String @default("")` — no se almacena ningún token de usuario PSN. `buildAuthWithRefresh()` sigue activo para `seed-games.ts`. Sin migración necesaria: Steam y RA siguen usando el campo. | Fase 3 |
-| `getSystemPsnAuth()` en Redis clave `psn:system:access_token` TTL 55 min | Los access tokens PSN expiran en 60 min; caché 55 min garantiza margen. Si el NPSSO expira (~60 días), la función lanza `PSN_SYSTEM_NPSSO_EXPIRED` (503) — el desarrollador debe renovar el NPSSO en Railway Variables. | Fase 3 |
-| `PlatformAccount.psnProfilePrivate Boolean @default(false)` — perfil PSN privado | `getProfileFromUserName` tiene éxito incluso para perfiles privados (devuelve accountId/onlineId). La privacidad solo se manifiesta en `getUserTitles`. `checkPsnProfilePrivacy()` hace una llamada probe `limit:1` al vincular — si lanza, el perfil es privado (conservador: cualquier error = privado, el siguiente sync corrige si fue transitorio). Migración: `20260530000000_psn_profile_private`. | Fase 3 |
-| `PSN_PROFILE_PRIVATE` (AppError 403) en `fetchUserTitles` | `fetchUserTitles()` envuelve el bucle de paginación en try/catch; si `getUserTitles` lanza → `AppError('PSN_PROFILE_PRIVATE', 403)`. El sync worker captura el error, marca `psnProfilePrivate: true` en BD y lo registra como `warn`. El camino de éxito siempre resetea `psnProfilePrivate: false`. | Fase 3 |
-| Sin sync al vincular PSN con perfil privado | Si `checkPsnProfilePrivacy` devuelve `true` al vincular, `linkPsnHandler` omite `triggerExpressSync` y `queueInitialSync`. El scheduler nocturno puede intentar el sync y manejará el error `PSN_PROFILE_PRIVATE` sin crash. | Fase 3 |
-| Banner ⚠️ en `link-platform/psn.tsx` para perfil privado — no bloquea la app | Si `account.psnProfilePrivate === true` en la respuesta del link, se muestra una vista inline con el banner + pasos para hacer el perfil público + CTA "Ir a biblioteca". El usuario puede seguir usando la app. No navega de vuelta (perfil público navega con `router.back()`). El flag se resetea automáticamente en el siguiente sync exitoso. | Fase 3 |
-| Borrado en cascada de `UserAchievement` al desvincular plataforma — transacción Prisma atómica | `unlinkPlatform()` en `platform.service.ts`: (1) `findMany` UserAchievements de la plataforma para calcular XP a restar, (2) `deleteMany` UserAchievements, (3) `delete` PlatformAccount, (4) `update` user.xp/level — todo en `prisma.$transaction`. `user.xp` nunca queda negativo (`Math.max(0, ...)`). Fuera de la transacción: `cancelAutoSync` + `removeUserFromRankings` (plataforma) + `upsertUserScore` (global con XP actualizado). `calculateLevel` exportada de `user.service.ts`. Respuesta del endpoint incluye `deletedAchievements: number`. Mobile invalida `my-games` y `my-stats` en `onSuccess` de `unlinkMutation`. | Fase 3 |
-| Sort biblioteca: carga completa de páginas antes de ordenar — `fetchAllRemainingPages` | `handleSortChange(newSort)` en `index.tsx`: persiste el sort y si `hasNextPage=true` llama `fetchAllRemainingPages()`. Esta función itera `await fetchNextPage()` usando `result.hasNextPage` del resultado (no el closure stale) hasta que no haya más páginas. Botón de sort deshabilitado + `ActivityIndicator` (testID `sort-loading-indicator`) mientras `isFetchingNextPage=true`. Pull-to-refresh con sort activo (`!== 'last_played'`): `pendingFetchAllAfterRefreshRef.current = true` → `useEffect` dispara `fetchAllRemainingPages()` cuando `!isLoading && !isFetchingNextPage && hasNextPage`. | Fase 3 |
-| Badge ⚠️ en `profile.tsx` junto a la cuenta PSN privada | `psnProfilePrivate: true` muestra un `Ionicons name="warning"` (testID `psn-private-badge`) que navega a `link-platform/psn`. Se oculta `lastSyncedAt` cuando el perfil es privado. | Fase 3 |
-| Steam vinculación por username — `resolveVanityUrl` | El usuario solo proporciona su username de Steam (o SteamID64 de 17 dígitos directamente). El backend usa `STEAM_API_KEY` del sistema para llamar a `ISteamUser/ResolveVanityURL/v1/` y resolver username → SteamID64. `linkSteamAccountSchema` acepta `{ username }` sin API key de usuario. `STEAM_USER_NOT_FOUND` (404) si no existe, `STEAM_SYSTEM_NOT_CONFIGURED` (503) si la key del sistema no está. `resolveVanityUrl` lee `process.env['STEAM_API_KEY']` en call-time para facilitar tests sin recargar módulo. | Fase 3 |
-| RA vinculación por username — `lookupRaUser` | El usuario solo proporciona su username de RetroAchievements. El backend usa `RA_SYSTEM_USER`/`RA_SYSTEM_KEY` del sistema para verificar existencia vía `API_GetUserSummary.php`. `linkRetroAchievementsSchema` acepta `{ username }` sin API key de usuario. `RA_USER_NOT_FOUND` (404) si no existe, `RA_SYSTEM_NOT_CONFIGURED` (503) si las credenciales del sistema no están. `lookupRaUser` lee `process.env['RA_SYSTEM_KEY']` en call-time (igual que `resolveVanityUrl`). | Fase 3 |
-| `resolveVanityUrl` y `lookupRaUser` leen env vars en call-time, no en module-load | Las constantes de módulo `STEAM_SYSTEM_API_KEY` y `RA_SYSTEM_KEY` se siguen usando en los métodos de sync (no bloqueantes de vinculación). Las funciones de vinculación leen `process.env` en cada llamada para que los tests puedan controlarlo sin `jest.resetModules()`. | Fase 3 |
-| `@typescript-eslint/consistent-type-imports: 'off'` en tests `.tsx` | Los test files de pantallas usan `jest.requireActual<typeof import(...)>` para preservar `ApiRequestError` real en mocks. La regla `consistent-type-imports` genera falso positivo en este patrón de factory Jest — igual que `import/order` ya estaba desactivado en tests. | Fase 3 |
-| `@@unique([platform, externalId])` en `PlatformAccount` ya existía desde el init | El constraint único `(platform, externalId)` fue añadido en la migración inicial `20260507000000_init` — no era una omisión. La protección se hace vía consulta previa en `linkPlatform()` antes del upsert para dar un error descriptivo. Error 409 `PLATFORM_ACCOUNT_ALREADY_LINKED` (antes `PLATFORM_ACCOUNT_TAKEN` — renombrado en sesión 9). | Fase 3 |
-| `LinkPsnScreen.test.tsx` refactorizado a patrón factory `jest.requireActual` | El test original usaba auto-mock (`jest.mock('../../lib/api')`) que no preserva `ApiRequestError` como clase real — `instanceof` fallaba. Refactorizado al mismo patrón que Steam/RA para consistencia y poder testear errores 404/409/503. | Fase 3 |
-| `useSyncProgress` retorna `{ activeSyncs: Map<string, SyncProgressState>, isRunning: boolean }` — API anterior (`platform`, `processed`, `total`, `percentComplete` planos) eliminada (BUG-7) | Con un solo estado plano, el segundo evento de `sync:progress` sobreescribía el primero — imposible trackear dos plataformas simultáneas. El Map keyed por platform es la única forma correcta de modelar syncs concurrentes. | Fase 3 |
-| `hydrateFromApi()` en `useSyncProgress` — polling de fallback Redis al montar y si Socket.io silencioso >5s (BUG-8) | Socket.io es async — si el worker emite `sync:progress` antes de que el cliente haya conectado el socket, el evento se pierde y la barra queda stuckeada. La hidratación desde `/api/v1/sync/status` (que lee Redis TTL 2h) resuelve el race condition. El polling continuo se activa solo si el socket sigue silencioso. | Fase 3 |
-| `addXp()` llamado en `sync.worker.ts` tras calcular `xpEarned` (BUG-9) | El worker calculaba `xpEarned = suma normalizedPoints` pero nunca lo persistía — `user.xp` nunca subía. La llamada `await addXp(userId, xpEarned, 'ACHIEVEMENT')` persiste el XP y actualiza los rankings Redis. Solo se llama si `xpEarned > 0`. | Fase 3 |
-| `totalEarnedAchievements`/`totalAvailableAchievements` calculados antes de paginar en `getMyGames` (BUG-10) | Si se calculaban del subset paginado, el header mostraba "120/1200 logros" en la primera página y cambiaba al cargar más páginas. Los agregados se calculan ahora sobre `allGames` (lista completa antes del `slice`), se devuelven en la respuesta de cada página y el cliente usa siempre los de `pages[0]`. | Fase 3 |
-| XBOX eliminado del filtro de biblioteca (BUG-11) | Xbox está gateado hasta Fase 4 — nunca hay datos Xbox en BD — el filtro mostraba lista vacía confundiendo al usuario. `PlatformFilter` type ahora es `'ALL' \| 'STEAM' \| 'RA' \| 'PSN'`. | Fase 3 |
-| `sort_last_played` usa `lastSyncedAt` como aproximación, no `lastPlayedAt` | Steam expone `rtime_last_played` vía `GetOwnedGames`, pero PSN y RA no tienen campo equivalente. Añadir `lastPlayedAt` requeriría nuevo modelo `UserGame` o campo en `Game`, migración Prisma y actualizaciones en 3 adapters. `lastSyncedAt` es suficientemente buena aproximación para la UX de ordenación. | Fase 3 |
-| `hydrateFromApi` también llama `invalidateQueries({ queryKey: ['my-games'] })` con throttle 15s | `hydrateFromApi` actualizaba el banner de sync pero nunca invalidaba la lista — la lista solo se actualizaba al hacer pull-to-refresh manual. El path de Socket.io (`onSyncProgress`) tiene su propio `invalidateQueries` por lote sin throttle. El path de fallback usa throttle de 15s para no saturar la API en syncs largos (PSN ~30 min = 900 polls a 2s). Cuando el sync termina en modo fallback (socketSilent=true, running→0), se llama sin throttle para el estado final. `queryClient` añadido a deps de `hydrateFromApi`. | Fase 3 |
-| `hydrateFromApi(socketSilent=false)` en mount vs `hydrateFromApi(true)` en timer de polling (BUG-12) | Al montar solo se añaden plataformas nuevas (preserva estado del socket si ya había eventos). Al hacer polling (socket silencioso >5s), se reconstruye el Map desde cero para no mostrar plataformas que ya terminaron pero no llegaron por socket. | Fase 3 |
-| `fallbackLng: 'en'` en i18n — inglés como idioma de fallback universal | `fallbackLng: 'es'` anterior causaba que usuarios con dispositivos en francés/alemán/etc. vieran la app en español en lugar de inglés. El español es solo uno de los dos idiomas soportados, no debe ser fallback universal. | Fase 3 |
-| `PSN: #1e90ff` (DodgerBlue) en lugar de `#003087` para badges de plataforma | `#003087` sobre fondo oscuro tenía ratio de contraste ~2.8:1 (no supera WCAG 2.1 AA mínimo 4.5:1). `#1e90ff` da ~6.5:1 — supera AA y casi llega a AAA. | Fase 3 |
-| `LibrarySortOrder` definido en `preferencesStore.ts`, no en `app/(tabs)/index.tsx` | Si `preferencesStore` importara desde `app/(tabs)/index` se creaba una dependencia circular (index → preferencesStore → index). Al mover el tipo a donde semánticamente pertenece (es una preferencia), el `index.tsx` re-exporta vía `export type { LibrarySortOrder }` para compatibilidad. | Fase 3 |
-| Sort de biblioteca es client-side sobre la página cargada, no server-side | Server-side sort requeriría 5 endpoints distintos o un parámetro de sort en la API que paginaría incorrectamente con datos acumulados por `useInfiniteQuery`. Client-side sobre los datos ya cargados es correcto para la escala de juegos por usuario y evita complejidad en la API. Pendiente de sync progresivo: la lista se re-ordena con cada batch. | Fase 3 |
-| `@react-native-async-storage/async-storage` mockeado globalmente en `jest.setup.ts` | Es un módulo nativo que no puede cargarse en Jest sin mock. Al añadir `librarySortOrder` a `preferencesStore`, este módulo se convierte en una dependencia transitiva de cualquier test que importe componentes que usen el store. Mock global previene fallos futuros. | Fase 3 |
-| Sync optimization (parallel RA batches, skip completed) documentada pero no implementada | Parallel processing dentro de batches RA: riesgo de rate limiting sin SLA conocido. Skip completed games: riesgo de perder achievements de DLC añadidos post-sync. Decisión: documentar como pending T13, no implementar en Fase 3. | Fase 3 |
-| `totalGames`/`totalCompletedGames` calculados pre-paginación en `getMyGames` | Misma lógica que BUG-10 para `totalEarned`/`totalAvailable` — los contadores de cabecera deben reflejar la colección completa del usuario, no solo la página cargada. `isCompleted` ya existía en el map; se reutiliza vía `.filter`. | Fase 3 |
-| `getByText` con `{ includeHiddenElements: true }` en tests del contador de juegos | Los `Text` del bloque de stats tienen `accessibilityElementsHidden={true}` para que el screen reader lea solo el `accessibilityLabel` combinado del `View` padre. `@testing-library/react-native` excluye estos nodos del árbol de accesibilidad por defecto — la opción `includeHiddenElements` los hace encontrables. | Fase 3 |
-| `globalRateLimiter` a 300 req/15min (antes 100) y `/health` excluido | 100 req/15min se agotaba en uso normal: TanStack Query + infinite scroll + múltiples tabs hacen decenas de peticiones en ráfaga al abrir la app. `/health` puesto antes de `app.use(globalRateLimiter)` para que UptimeRobot y Railway healthcheck nunca sean bloqueados — estaba declarado después y heredaba el límite. | Fase 3 |
-| `lib/platformColors.ts` con `PLATFORM_COLORS` y `getPlatformColor()` — fuente única de verdad para colores de badge | `GameCard` y `AchievementSearchCard` tenían PSN `#003087` (contraste ~2.8:1 insuficiente). `LibraryGameCard` ya tenía `#1e90ff`. Centralizar elimina la divergencia y garantiza WCAG AA en los 3 componentes. `profile.tsx` conserva su propia paleta (colores oscuros de marca para círculos indicadores — caso de uso diferente). | Fase 3 |
-| `sort_last_played` desempata por `completionPct desc` cuando `lastSyncedAt` coincide | `lastSyncedAt` en `LibraryGame` viene de `syncMap.get(g.platform)` — misma fecha para todos los juegos de la misma plataforma. Sin desempate, el orden dentro de una plataforma es el de llegada del backend (no determinista en UI). `pct_desc` como criterio secundario da un orden estable y con sentido visual. | Fase 3 |
-| Badges PSN `platinumEarned` e `isCompleted` son independientes | Un juego PSN puede tener el platino ganado sin `isCompleted=true` si hay DLC con trofeos adicionales posteriores al platino. Renderizar ambos badges simultáneamente es semánticamente correcto y da más información al usuario. | Fase 3 |
-| `lockDuration: 300_000` en sync worker — 5 min en lugar de 30s por defecto | 300 juegos PSN / 10 por lote = 30 lotes; cada lote incluye llamadas API lentas. El default de BullMQ (30s) se agotaba → job marcado como stalled → re-ejecutado → duplicados. `stalledInterval: 30_000` para detección rápida. No afecta syncs cortos. | Fase 3 |
-| `PSN_SYSTEM_NPSSO` puede aparecer idéntico en el navegador y estar expirado en Railway | Sony invalida la sesión subyacente periódicamente sin cambiar el valor visible de la cookie `npsso`. Comparar strings no es un diagnóstico fiable. Síntoma en logs: `Sync fallido err="Expired token"` en cada intento PSN (RA sigue funcionando). Fix: logout + login en my.playstation.com → nuevo NPSSO → Railway Variables. Frecuencia: ~60 días. | Fase 3 |
-| `authRateLimiter` (10 req/15 min) comparte IP entre emulador Android y host en la misma red | El emulador Android usa NAT del router del host — misma IP externa que comandos curl ejecutados desde la terminal. Peticiones de diagnóstico a `/auth/*` consumen el cupo del rate limiter del emulador. En smoke tests, evitar curl masivo a endpoints de auth si hay emulador activo. Fix: esperar ~15 min para reseteo de ventana. | Fase 3 |
-| Toggle ES\|EN en login — `useLanguage` reutilizado, sin estado nuevo | El hook `useLanguage` ya existía para `profile.tsx`. Reutilizarlo en login evita duplicar lógica de `i18n.changeLanguage`. El toggle se coloca fuera del `KeyboardAvoidingView` para que no suba con el teclado. `testID="language-toggle"` para Maestro. | Fase 3 |
-| Badge PSN simplificado: solo tick verde ✓ cuando `isCompleted`, sin texto ni badge de platino | El badge de platino (🏆 Platino) junto al badge 100% creaba ruido visual en la tarjeta. El platino ganado sin `isCompleted` (juego con DLC posterior al platino) no es información relevante para el usuario en la lista — solo que está 100% completado. Tick circular verde minimalista (`w-5 h-5 bg-green-500 rounded-full`) es suficientemente legible sin texto. i18n keys `library.psn_platinum` y `library.psn_100` eliminadas. | Fase 3 |
-| `globalRateLimiter` 300→500 req/15min. **Express rate limiter ≠ Railway plan limits.** | 300 req/15 min seguía siendo insuficiente para uso normal: múltiples tabs activas + TanStack Query con refetch + sync progress polling ≈ 20-30 req en ráfagas al abrir la app. **Distinción crítica**: el rate limiter es código Express (`express-rate-limit`, controla abusos), completamente independiente de los límites del plan Railway (RAM, horas de ejecución, réplicas). Cambiar uno no afecta al otro. `authRateLimiter` (10 req/15 min en `/auth/*`) sin cambios — correcto por seguridad. | Fase 3 |
-| Sync PSN lento es estructural, no rate limiting — sin código de throttling añadido | `getUserTrophiesEarnedForTitle` se llama una vez por juego en el bucle `processTitles` (secuencial) y no está cacheado (el earned status cambia). Para 300 juegos = 300 llamadas HTTP secuenciales (~300-900s). Los logs de Railway no muestran ningún 429 de PSN. El `lockDuration: 300_000` ya resuelve el stalled job. No se añaden delays sin evidencia de rate limiting real. | Fase 3 |
-| Contadores de biblioteca (`totalGames`, `earnedAchievements`) no desnormalizados — calculados en JS | `getMyGames` carga todos los `UserAchievement` del usuario en memoria y calcula agregados en JS. Eficiente a escala actual (<10k achievements por usuario típico). `UserAchievement.userId` tiene `@@index` — query eficiente. Si un usuario supera ~100k achievements (e.g., PSN con 2000 juegos × 50 trofeos), esta carga podría ser lenta. Documentado como T14. No implementar desnormalización sin confirmación del desarrollador (requeriría migración Prisma + lógica de actualización en todos los adapters). | Fase 3 |
-| `lastActivityAt` = MAX(unlockedAt) por juego — campo real de BD, no estimación | `UserAchievement.unlockedAt DateTime` confirmado en schema Prisma (migración `20260507000000_init`). Se calcula en `getMyGames` iterando los `userAchievements` seleccionados (`unlockedAt: true`). El sort "último jugado" en el cliente usa `lastActivityAt` con desempate por `completionPct desc`. Más preciso que `lastSyncedAt` (que era por plataforma, no por juego). | Fase 3 |
-| `FeedScreen.test.tsx` envuelto en `QueryClientProvider` — necesario desde P3 | Añadir `useQueryClient()` en `index.tsx` (P3, pull-to-refresh) rompe los tests que renderizaban sin QueryClientProvider. La función `renderWithClient` crea un `QueryClient` con `retry: false` para tests. El test de pull-to-refresh cambió de `expect(refetch).toHaveBeenCalled()` a `expect(() => onRefresh()).not.toThrow()` — `queryClient.invalidateQueries` no es mockeable sin infraestructura adicional; verificar que no lanza es suficiente. | Fase 3 |
-| Tab Challenges gateado con `FEATURES.challenges = false` — pantalla intacta | `href: null` en `Tabs.Screen` oculta el tab del nav bar sin eliminar la ruta. La pantalla `challenges.tsx` sigue siendo accesible via deep link. El código no se toca — solo `_layout.tsx` condiciona `href` en función del flag. Activar cambiando `challenges: false → true` en `featureFlags.ts`. | Fase 3 |
-| Badge PSN en `LibraryGameCard` cambiado: tick verde `isCompleted` → badge amarillo "Platino" `platinumEarned` | El tick verde era ambiguo (el usuario no sabe si significa 100% o platino). El badge "Platino" con fondo amarillo (`bg-yellow-400 text-black`) comunica exactamente qué se logró. Un juego puede tener el platino sin `isCompleted` (DLC añadidos tras el platino). | Fase 3 |
-| Selector de tema eliminado de Profile settings — oculto con TODO comentario | Modo oscuro es el único implementado — mostrar un "selector" con una sola opción confundía. Oculto con `{/* TODO Fase 4 */}` para recordar que debe implementarse con el modo claro. | Fase 3 |
-| `isManualRefreshing` local en lugar de `isRefetching` del hook en el `RefreshControl` de Biblioteca | En TanStack Query, `isRefetching = isFetching && !isLoading`. Cuando `fetchNextPage()` se ejecuta, `isFetching = true` y `isLoading = false` → `isRefetching = true` → el spinner de pull-to-refresh aparecía al llegar al final de la lista. `isManualRefreshing` (estado local) solo se activa al tirar desde arriba, completamente independiente del infinite scroll. `handleRefresh` es async con try/finally para garantizar el reset. | Fase 3 |
-| `AvatarPlaceholder` con iniciales y color determinista por username — `getAvatarColor` usa hash del username sobre paleta de 8 colores | Un usuario sin avatar veía el placeholder genérico de la app (icono). El color determinista garantiza que el mismo usuario siempre tiene el mismo color en todos los dispositivos y sesiones — sin estado adicional. Componente reutilizable en `UserCard`, `profile.tsx` y `profile/[username].tsx`. `accessibilityLabel` via `t('profile.avatar_placeholder', { username })`. `testID="avatar-placeholder-container"` para tests. | Fase 3 |
-| Auto-refresco lista durante sync ya funcionaba — `invalidateQueries({ queryKey: ['my-games'] })` con prefix matching cubre `['my-games', platform]` | TanStack Query usa prefix matching en `invalidateQueries`: `['my-games']` invalida todas las queries cuya key empiece con ese prefijo, incluidas `['my-games', 'all']`, `['my-games', 'STEAM']`, etc. No había bug, solo confirmación de funcionamiento. | Fase 3 |
-| Banner "X juegos nuevos" en Biblioteca durante sync activo — patrón Twitter/X | `seenGamesCount` se inicializa a `allGames.length` en la primera carga (sin banner). Durante un sync activo (`isRunning = true`), si `allGames.length > seenGamesCount && seenGamesCount > 0` se muestra el banner. Al pulsar: scroll al top (`flashListRef.scrollToOffset`) + `seenGamesCount = allGames.length` + ocultar. Al hacer pull-to-refresh: mismo reset. Cuando `isRunning` pasa a `false`: ocultar + reset. Sin scroll automático (intrusivo si el usuario está revisando un juego). `NewGamesBanner` usa `Animated.spring` para entrada desde arriba, patrón de `OfflineBanner`. | Fase 3 |
-| `GET /api/v1/sync/my-summary` declarado ANTES de `/:platform` en sync.routes.ts | Express interpreta literales como parámetros dinámicos si la ruta dinámica va primero — `"my-summary"` sería tratado como valor del param `platform`. Declarar rutas estáticas antes que las dinámicas es un requisito de Express, no una convención. | Fase 3 |
-| `getAggregateSyncStatus` usa `Math.max(...perPlatform.map(p => p.dailySyncsUsed))` como `manualSyncsUsedToday` | `useSyncAll` sincroniza todas las plataformas simultáneamente → todos los contadores Redis incrementan juntos. El máximo es lo que el usuario percibe como "syncs realizados hoy". Suma sería incorrecto (multiplicaría por número de plataformas). | Fase 3 |
-| `SyncStatusBar` no muestra contador cuando `dailySyncsLimit === null` (premium) | Mostrar "ilimitados" añade texto sin valor en la barra ya densa. El usuario premium sabe que no tiene límite (es la ventaja que pagó). La barra muestra `canSyncNow` y `timeUntilNextAutoSync` — suficiente contexto. La key i18n `sync_unlimited` queda sin usar (puede eliminarse en limpieza futura). | Fase 3 |
-| `SyncStatusBar` integrado en `index.tsx` reemplazando el `Pressable ⟳` antiguo + elimina `useSyncAll` de `index.tsx` | El botón antiguo no mostraba estado de cooldown ni syncs restantes. `SyncStatusBar` encapsula toda la lógica de sync (llama `useSyncAll`, `useSyncProgress`, `useSyncStatus` internamente). Eliminar `useSyncAll` de `index.tsx` evita duplicación de responsabilidades. | Fase 3 |
-| `FeedScreen.test.tsx` mockea `SyncStatusBar` como `<View testID="sync-status-bar" />` | `SyncStatusBar` llama `useSyncStatus` → `useQuery` → necesita `QueryClientProvider` + `api.get` mock. En lugar de añadir toda esa infraestructura al test de pantalla, se mockea el componente completo. El test de `SyncStatusBar` cubre el componente individualmente. | Fase 3 |
-| RevenueCat (`react-native-purchases` v10) en lugar de `react-native-iap` | RevenueCat gestiona la complejidad de Google Play Billing (recibos, renovaciones, reembolsos, expiración) en el servidor. `react-native-iap` requiere implementar toda esa lógica manualmente. El webhook de RC es la fuente de verdad — el cliente solo confirma el estado post-compra. | Fase 3 |
-| `Promise.allSettled` con chunks para PSN/RA paralelo — `PSN_PROCESS_CONCURRENCY=5`, `RA_PROCESS_CONCURRENCY=3` | `Promise.all` cancelaría todo el lote si un título falla. `Promise.allSettled` aísla cada fallo: un juego PSN con error de red no cancela los 4 que van en el mismo chunk. Constantes declaradas junto a `BATCH_SIZE` para que sean ajustables si aparecen 429s en producción. | Fase 3 |
-| `processSingleTitle()` extraído de `processTitles()` en PSN adapter | La función encapsula la lógica de un título individual (fetch trophies + upsert game + upsert achievements) y devuelve `{ achievementsSynced, gamesUpdated }`. El caller `processTitles()` acumula los totales de todos los resultados fulfilled. Patrón testeable: se puede mockear un título específico para fallar sin afectar al resto. | Fase 3 |
-| Steam `TTL_SCHEMA = 86400` ya era 24h — no se cambia | El plan de sesión 24 preveía cambiar el TTL de esquema de 6h a 24h. La lectura de `steam.adapter.ts` línea 22 reveló `const TTL_SCHEMA = 86400; // 24 horas` — ya estaba a 24h. Sin cambio de código. La optimización "skip juegos sin actividad reciente" (via `rtime_last_played`) documentada como T15. | Fase 3 |
-| `SyncStatusBar` countdown usa `setTimeout` chain, no `setInterval` | `setInterval` con estado React no actualiza la referencia al closure en cada tick — después de 2s el valor sería stale. El chain de `setTimeout` dentro de `useEffect([countdownSecs])` recrea el timeout solo cuando el valor cambia, garantizando que siempre lee el estado actual. | Fase 3 |
-| `SyncStatusBar` early return `if (!anyPlatformLinked)` movido después de todos los hooks | React Rules of Hooks: los hooks deben llamarse siempre, incondicionalmente. El retorno temprano original estaba antes de los `useState`/`useEffect` de countdown y elapsed — violación de las reglas. El componente tiene todos los hooks al inicio y el retorno al final. | Fase 3 |
-| `SyncStatusBar` tests migrados a `renderWithClient` con `QueryClientProvider` | El componente llama `useQueryClient()` para invalidar `['sync-summary']` cuando el countdown llega a 0. Sin `QueryClientProvider` el test crashea. Patrón consistente con `FeedScreen.test.tsx`. | Fase 3 |
-| Onboarding paso 4: `completeOnboarding()` antes de `router.replace('/link-platform/x')` | El usuario puede volver de link-platform via el botón de back — si no se marca el onboarding como completado antes, al hacer back volvería al onboarding en lugar de a los tabs. `completeOnboarding()` primero garantiza que el back navega a `/(tabs)`. | Fase 3 |
-| `PlatformRoute` tipo literal union en onboarding — no `string` genérico | `router.replace` en Expo Router acepta `Href` que en proyecto con TypeScript strict requiere tipos compatibles. Declarar `type PlatformRoute = '/link-platform/steam' \| '/link-platform/psn' \| '/link-platform/ra'` permite que `linkPlatform(route: PlatformRoute)` llame `router.replace(route)` sin cast. | Fase 3 |
-| `sortGames` acepta `isRunning: boolean` — null como FAR_FUTURE durante sync | Durante sync activo, los juegos recién llegados tienen `lastActivityAt=null` porque aún no tienen logros desbloqueados. Tratarlos como fecha muy antigua los enviaba al fondo de la lista y eran invisibles. Con `isRunning=true`, null = `Date.now()+1_000_000_000`, aparecen primero. `useMemo` de `games` incluye `isRunning` en sus deps. | Fase 3 |
-| `ListEmptyComponent` usa `anyPlatformLinked` de `useSyncStatus` para distinguir vacío real de sync pendiente | Si `anyPlatformLinked=true` y `games=[]`, el sync aún no corrió — "Tus juegos aparecerán pronto". Si `anyPlatformLinked=false`, el usuario genuinamente no ha vinculado nada — "Vincula tus plataformas". `useSyncStatus` comparte caché con `SyncStatusBar` (misma queryKey `['sync-summary', userId]`), sin query extra. | Fase 3 |
-| `linkPlatform` llama `upsertUserScore` tras crear el PlatformAccount | Sin esta llamada, el usuario no aparecía en `ranking:platform:ra` ni `ranking:platform:psn` hasta que el primer sync completara con `xpEarned > 0`. Ahora se añade inmediatamente con `user.xp` actual (puede ser 0 si es cuenta nueva). El `select` de `prisma.user.findUnique` en `linkPlatform` se amplió con `xp` y `countryCode`. | Fase 3 |
-| `handleRefresh` usa `queryClient.resetQueries` — carga solo página 1 | `invalidateQueries` con `useInfiniteQuery` refetcheaba TODAS las páginas cargadas secuencialmente (5 páginas = 5 requests, spinner activo todo ese tiempo). `resetQueries` descarta el caché y carga solo la primera página; el scroll infinito recarga el resto bajo demanda. Sin flash de vacío porque el skeleton muestra durante `isLoading=true`. | Fase 3 |
-| `computeExtendedStats` en `wrapped.service.ts` — 2 queries paralelas + cálculo JS | `loadUserAchievements()` extraída para reutilizar el array en `computeStats` (con `preloaded`) y `computeExtendedStats`. Extended stats: `platinumsEarned` y el resto calculados en un solo bucle JS sobre `userAchievements`. Solo `completedGamesByPlatform` requiere 2 queries extra paralelas: `game.findMany` (totalAchievements) + `userAchievement.findMany` (earned all-time). Early return con valores vacíos si `gameIdsInYear.size === 0`. | Fase 3 |
-| Webhook RevenueCat siempre devuelve 200 — incluso con userId desconocido | RevenueCat reintenta indefinidamente si recibe un código != 2xx. Si el usuario borra su cuenta y RC sigue enviando eventos, devolver 200 evita bucles infinitos. La idempotencia se garantiza con `storeTransactionId` en el upsert. | Fase 3 |
-| `refreshAccessToken()` exportada de `lib/api.ts` y llamada tras compra exitosa | El JWT contiene `isPremium` — tras una compra, el token quedaría stale hasta el siguiente refresh automático (15 min). Forzar el refresh inmediatamente actualiza `isPremium: true` en el token sin pedir logout al usuario. | Fase 3 |
-| `usePremiumPlans` con fallback a precios hardcoded cuando no hay API key de RC | Sin `EXPO_PUBLIC_REVENUECAT_API_KEY`, los offerings de RC no están disponibles — la pantalla premium muestra precios hardcoded de `PLAN_PRICES` pero no puede procesar compras reales. Comportamiento seguro en development/preview sin key configurada. | Fase 3 |
-| `react-native-purchases` mockeado globalmente en `jest.setup.ts` | Es un módulo nativo que Jest no puede cargar sin mock. Al ser una dependencia transitiva de `useSubscription`, que a su vez es importado por `PremiumBanner.tsx`, cualquier test que renderice `PremiumBanner` fallaba con "cannot parse file". Mock global en `jest.setup.ts` previene la cascada de fallos. | Fase 3 |
-| `accessibilityState={{ busy: isPurchasing }}` en el botón de suscripción | WCAG recomienda `busy` para operaciones asíncronas en curso — es más semántico que solo `disabled`. El test verifica `busy: true` para validar el estado de carga accesible. | Fase 3 |
-| `invalidateQueries(['my-games'])` en `useEffect([user?.id])` al montar `LibraryScreen` | TanStack Query en React Native no tiene `refetchOnWindowFocus` ni `AppState` listener. Con `staleTime: 3 min`, si la app vuelve del background con caché < 3 min y el sync nocturno ya terminó, la lista muestra datos stale indefinidamente. El `useEffect` fuerza un background refetch al montar (sin spinner — los datos del caché se mantienen visibles mientras el refetch ocurre en segundo plano). Dep `[user?.id]` garantiza que se ejecuta solo cuando la sesión está disponible. | Fase 3 |
-| `justify-center` en Pressable de acción primaria — no solo `items-center` | `items-center` = `alignItems: center` = centra horizontalmente en flex-column. Sin `justify-center` = `justifyContent: flex-start` → contenido se acumula en la parte superior del espacio vertical. Con `minHeight: 52` y `py-4`, en Android el texto puede aparecer desplazado arriba si el `minHeight` supera el contenido + padding. La combinación correcta es `items-center justify-center` para centrado bidireccional. | Fase 3 |
-| `Redirect href="/(auth)/login"` en `(tabs)/_layout.tsx` cuando `!isAuthenticated` — guard después de todos los hooks | Sin este guard, el botón "atrás" de Android podía navegar de vuelta a los tabs tras hacer logout (el stack de navegación los mantiene en memoria). El `Redirect` de Expo Router fuerza la redirección a nivel declarativo, independientemente del estado del stack. La query `['friends', 'pending']` se mueve ANTES del early return para respetar React Rules of Hooks — nunca puede haber un return condicional entre llamadas a hooks. | Fase 3 |
-| `upsertUserScore` en `sync.worker` cuando `xpEarned=0` — 2 queries extra por sync sin XP | Si un usuario vinculó RA/PSN antes de que `linkPlatform` llamara a `upsertUserScore` (sesión 25) y sus syncs posteriores no generan XP nuevo (todos los logros ya estaban sincronizados), nunca entra en `ranking:platform:ra`/`ranking:platform:psn`. El else branch en el worker garantiza que el usuario siempre esté en sus sorted sets de plataforma. Coste: 2 queries ligeras (1 `user.findUnique` + 1 `platformAccount.findMany`) por sync sin XP nuevo. | Fase 3 |
-| `handleRefresh` invalida `sync-summary` en paralelo con `resetQueries` | El `staleTime: 30s` de `useSyncStatus` causaba que `anyPlatformLinked` y el estado de cooldown quedaran stale tras pull-to-refresh — la barra de sync mostraba datos obsoletos. `Promise.all` permite que ambas operaciones ocurran en paralelo sin aumentar el tiempo del spinner. | Fase 3 |
-| link-platform `onSuccess` invalida `sync-summary` y `my-games` | Sin estas invalidaciones, el usuario navegaba a la biblioteca y veía el empty state incorrecto ("Vincula tus plataformas" en lugar de "Tus juegos aparecerán pronto") durante hasta 30s (staleTime de sync-summary). La invalidación inmediata al vincular actualiza `anyPlatformLinked` sin esperar al timer. | Fase 3 |
-| `queueInitialSync` cambiado de `void` a `.catch(logger.error)` en platform.controller | El patrón `void` tragaba silenciosamente errores de BullMQ/Redis (conexión caída, Redis reiniciando). El usuario obtenía un 201 pero sus juegos nunca aparecían y no había trazas en logs Railway para diagnosticarlo. El `.catch` loguea el error con contexto (`userId`, `platform`) sin cambiar el comportamiento externo (el 201 ya fue enviado). | Fase 3 |
-| BUG-4 (plataformas no cargan al login) y BUG-7 (409 no muestra mensaje) no tienen código a cambiar | `loginMutation.onSuccess` ya llama `queryClient.removeQueries()` que vacía el caché, forzando refetch fresco. Steam/RA/PSN ya manejan `err.statusCode === 409` con `setFieldError(t('...error_already_linked'))` y las claves i18n existen. El smoke test probablemente usaba un APK anterior. | Fase 3 |
-| `mapPublicUser()` separada de `mapUser()` — perfil público nunca expone `email`, `passwordHash` ni `birthDate` | `getPublicProfile` no requiere autenticación — exponer el email permitía obtener el email de cualquier usuario sin cuenta. `PublicUser` type en `packages/types` garantiza que TypeScript detecte futuros leaks en tiempo de compilación | Fase 3 |
-| `deleteAccount` implementa soft delete GDPR en transacción atómica + job de borrado físico a 30 días | El borrado físico inmediato destruía `UserPoint`/`UserChallenge` con cascade, violando la especificación GDPR del CLAUDE.md. El soft delete permite el período de gracia legal. `authenticate.ts` verifica `deletedAt: null` en cada request para que el token no sirva tras el soft delete | Fase 3 |
-| Lanzamiento sin premium — `FEATURES.premium = false`, `pointsRedeem = false`, `advancedStats = false` | Simplificar lanzamiento inicial — RevenueCat (B18/B19/B20) pendiente de configuración; toda la lógica de backend (webhook, subscription service, endpoints) queda intacta para activar en Fase 4 cambiando `FEATURES.premium = true`. `PremiumBanner` devuelve null. `premium.tsx` muestra `ComingSoon`. `profile.tsx` ya gateaba con `FEATURES.premium`. Tests de premium UI se ejecutan con `jest.mock` que fuerza `premium: true` (mismo patrón que `ProfileScreen.test.tsx`). | Fase 3 |
-| Lanzamiento inicial sin premium (`FEATURES.premium = false`) | Elimina dependencia de B18/B19/B20 (RevenueCat) no resueltos antes del lanzamiento. Con todos los usuarios en tier free, el inventario AdMob es máximo desde el día 1. Toda la lógica de backend (webhook, subscription service, RevenueCat hooks) queda intacta — reactivar en Fase 4 cambiando `premium: true`, `pointsRedeem: true`, `advancedStats: true` en `featureFlags.ts` | Fase 3 |
-| Vinculación PSN con perfil privado rechaza con 400 en lugar de vincular con flag psnProfilePrivate | El flujo anterior vinculaba la cuenta y mostraba un banner post-vinculación, lo que confundía al usuario (la cuenta aparecía vinculada pero sin datos). Rechazar antes de crear el PlatformAccount es más correcto semánticamente y elimina el estado inconsistente. El flag psnProfilePrivate en BD sigue existente para el caso donde el perfil se vuelve privado después de vincular (el sync lo detecta) | Fase 3 |
-| `sendFriendRequestSchema` acepta `{ username }` además de `{ receiverId }` | El perfil público solo conoce el username, no el ID interno del usuario. Resolver username→ID en el backend evita exponer IDs internos en la UI y mantiene la API consistente con el patrón de otros endpoints (vinculación de plataformas, status). | Fase 3 |
-| initialLoadDoneRef con deps completas en lugar de useEffect([isLoading]) para carga inicial de biblioteca | useEffect([isLoading]) solo se dispara cuando isLoading cambia true→false. Con caché, isLoading=false desde el inicio y el efecto nunca se ejecuta. El ref con deps [allGames.length, isLoading, isFetchingNextPage, hasNextPage, librarySortOrder] captura ambos casos: datos inmediatos desde caché y datos que llegan tras la primera fetch. El ref evita re-ejecuciones y se resetea en handleSortChange y handleRefresh. | Fase 3 |
-| mockImplementation((selector) => selector(state)) en tests Zustand con selectores | Patrón para controlar s.user y s.isAuthenticated independientemente en el mismo test. El mock estándar de Zustand no permite selectores diferentes devolver valores distintos del mismo store. | Fase 3 |
-| Búsqueda de logros eliminada del Search — hook y endpoint backend intactos | El Search es solo para usuarios y juegos. Los logros como entidad de búsqueda directa no aportan valor sin contexto de juego. `useSearchAchievements` y `GET /api/v1/search?type=achievements` se conservan para T27 (fetch on-demand desde detalle de juego) | Fase 3 |
-| Optimistic update en `useFriendshipActions` — rollback en `onError` | La latencia de red Railway (~300-800ms) hacía que el botón tardara en cambiar estado, dando sensación de que no respondía. El optimistic update con rollback es el patrón estándar para acciones sociales reversibles | Fase 3 |
-| `initialLoadDoneRef.current = false` en mount y AppState antes de `invalidateQueries` | Sin el reset, cuando la app vuelve del background y TanStack Query refetcha página 1, el ref `true` de la carga anterior provocaba early-return en el useEffect → páginas 2+ nunca se recuperaban. El reset garantiza que cada invalidación forzada dispare `fetchAllRemainingPages` | Fase 3 |
-| `queryKey: ['rankings', 'me', platform ?? 'global']` en `useMyRanking` — platform como parte de la clave | Sin platform en la queryKey, TanStack Query considera todas las variantes del endpoint /me como la misma query y sirve el caché del global para PSN/RA/Steam. Cada combinación de filtro debe tener su propia entrada de caché. | Fase 3 |
-| `fetchAllRemainingPages` se llama para todos los sorts incluyendo `last_played` | El early return para `last_played` asumía que no necesitaba todas las páginas para ordenar por fecha, pero el sort opera sobre `allGames` completo — con solo página 1, los juegos más recientes de páginas posteriores quedaban excluidos. La consistencia entre entrar, pull-to-refresh y pulsar filtro requiere cargar siempre todas las páginas. | Fase 3 |
-| Selección explícita `_one/_other` en i18next en lugar de auto-pluralización | El proyecto usa `compatibilityJSON: 'v3'` que no resuelve automáticamente la base key al sufijo plural. Patrón establecido por `SyncStatusBar` — usar siempre `t(count === 1 ? 'key_one' : 'key_other', { count })` en lugar de `t('key', { count })`. | Fase 3 |
-| `parseFloat(String(rawRarity))` en lugar de cast directo para `rawValue`/`rarity` de Steam | La Steam API devuelve `percent` como string en runtime aunque el tipo TypeScript lo declare `number`. TypeScript no detecta mismatches de tipos en datos externos en runtime — siempre parsear explícitamente valores numéricos que vengan de APIs externas antes de pasarlos a Prisma. | Fase 3 |
-| BullMQ Workers siempre usan `createWorkerConnection()`, nunca la conexión Redis por defecto | BullMQ Workers requieren `maxRetriesPerRequest: null` — la conexión Redis por defecto tiene `maxRetriesPerRequest: 3` y causa crash inmediato al arrancar. `createWorkerConnection()` centraliza esta configuración. Patrón ya establecido en todos los demás workers del proyecto. | Fase 3 |
-| NewGamesBanner eliminado | Intrusivo para el usuario y el mensaje "X juegos nuevos" es inexacto cuando el pull-to-refresh actualiza toda la lista, no solo los nuevos. El sync progresivo ya actualiza la lista en background sin necesidad de banner. | Fase 3 |
-| unlinkPlatform usa IDs explícitos en deleteMany en lugar de relation filter | El relation filter `achievement: { platform }` en Prisma no es fiable en todas las versiones y podía silenciosamente no borrar nada. Usar `{ id: { in: ids } }` con los IDs ya obtenidos del `findMany` previo es más explícito, predecible y garantiza que el borrado funciona correctamente. | Fase 3 |
-| `triggerExpressSync` adquiere `sync:user-lock:{userId}` con TTL 120s antes de llamar al adapter | El express sync corre inline en el proceso de la API, no por el BullMQ worker, así que el lock de sesión 44 no lo cubría. Si el lock no está disponible, omite el express sync — el `queueInitialSync` encolado después cubre la sincronización completa. TTL 120s = margen sobre los 25s del `Promise.race` del controller, inferior a los 600s del lock del worker BullMQ. El lock se libera siempre en `finally`. | Fase 3 |
-| Lock Redis por usuario (`sync:user-lock:{userId}`) en lugar de `concurrency: 1` global | Serializa los syncs del mismo usuario sin bloquear a usuarios distintos. `concurrency: 1` global serializaría TODOS los usuarios — cuello de botella grave en cuanto haya varios sincronizando. El lock con `SET NX EX` es atómico; el job que no adquiere el lock se reencola con `delay: 5000` en lugar de fallar. TTL 600s como fallback de seguridad si el proceso muere sin liberar. Liberación en `finally` garantizada. | Fase 3 |
-| `refetchQueries` en lugar de `invalidateQueries` para `sync-summary` tras desvincular | `invalidateQueries` solo marca stale — el refetch de `my-games` terminaba antes (`allGames=[]`) dejando `anyPlatformLinked` stale en `true`, causando el flash de "Tus juegos aparecerán pronto". `refetchQueries` fuerza el refetch inmediato. Adicionalmente, el `ListEmptyComponent` muestra skeleton mientras `isFetching && allGames.length === 0` para no enseñar ningún empty state durante la transición. | Fase 3 |
-| App ID de AdMob en `app.json`, no editado a mano en `AndroidManifest.xml` | Los builds locales debug editaban el manifest a mano tras prebuild, pero EAS hace su propio prebuild limpio e ignora ese cambio manual. El App ID de producción debe estar en `app.json` para que el AAB de EAS lo recoja. | Fase 3 |
-| `targetSdkVersion: 35` con `compileSdkVersion: 34` en `expo-build-properties` | Play Store exige target 35 (Android 15) desde 31-ago-2025. Con compile 35, `expo-modules-core` de Expo SDK 51 falla (null-safety en `PermissionsService.kt`). Google solo exige el target; el compile puede ir por detrás hasta el upgrade completo de Expo SDK (PL6). | Fase 3 |
-| Validar `bundleRelease`/`assembleRelease` local antes de cada `eas build` de producción | Reproduce localmente la compilación de EAS (mismo Gradle/R8/ProGuard). Con solo 15 builds de EAS disponibles, validar local primero evita quemar intentos en fallos de compilación. | Fase 3 |
+Ver [docs/DECISIONS.md](docs/DECISIONS.md)
 
 ---
 
@@ -1334,122 +1154,9 @@ Métricas disponibles:
 
 ---
 
-## Backlog priorizado
+## Backlog
 
-> Actualizar al final de cada sesión marcando ítems completados con ✅.
-
-### 🔴 Bloqueantes — requieren acción del desarrollador
-
-| # | Tarea | Detalle |
-|---|---|---|
-| P1 | ✅ Migración Prisma en prod | Automática en cada deploy — `npx prisma migrate deploy` en `startCommand` de `railway.json` |
-| ~~P2~~ | ✅ Variables Railway configuradas | `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `APP_SCHEME=unlockhub`, `CLOUDINARY_URL`, `ADMIN_SECRET`, `LOGTAIL_SOURCE_TOKEN`, `POSTHOG_API_KEY` — todas en Railway. ✅ Completado |
-| ~~P3~~ | ✅ Resend — cuenta + dominio + API key | Configurado — `RESEND_API_KEY` y `RESEND_FROM_EMAIL` en Railway |
-| ~~P4~~ | ✅ UMP SDK AdMob | Código integrado — `useGdprConsent.ts` activo, GDPR message ya publicado en AdMob. |
-| ~~P4b~~ | ✅ EAS secrets AdMob configurados | Los 4 IDs de producción están en EAS secrets — `HOME_BANNER_ID`, `SEARCH_BANNER_ID`, `INTERSTITIAL_ID`, `REWARDED_ID`. |
-| P5 | ✅ Privacy Policy + ToS en URL pública | `docs/privacy-policy.html` + `docs/terms-of-service.html` — GitHub Pages activo, URLs en vivo, datos del desarrollador rellenados. |
-| ~~P6~~ | ✅ Google Play Console | Cuenta creada (B7 ✅) — pendiente listing completo antes del submit |
-| P7 | ✅ Smoke tests producción — APK #3 completo | APK debug local (build 2026-05-21, 165.7 MB). BUG-3/4/5 re-confirmados ✅. AdMob banners Home+Search ✅. Registro+onboarding ✅. Game detail+Wrapped+perfil público ✅. **BUG-6**: PSN screen muestra flujo NPSSO antiguo (Metro cache stale) — fix: rebuild con `--clean`. Pendiente: vinculación plataformas reales, sync progresivo E2E, Forgot Password (requiere RESEND_API_KEY). |
-| B18 | ~~Cuenta RevenueCat + productos + webhook~~ | 🚩 **Diferido a Fase 4** — `FEATURES.premium = false`. El backend está intacto; activar cambiando el flag cuando RC esté configurado. |
-| B19 | ~~`EXPO_PUBLIC_REVENUECAT_API_KEY` como EAS secret~~ | 🚩 **Diferido a Fase 4** — no necesario hasta activar `FEATURES.premium = true`. |
-| B20 | ~~`REVENUECAT_WEBHOOK_SECRET` en Railway~~ | 🚩 **Diferido a Fase 4** — no necesario hasta activar `FEATURES.premium = true`. |
-| T17 | Verificar que migración gdpr_soft_delete se aplica en Railway | Railway dashboard → Logs del deploy → buscar `migrate deploy` sin errores. Sin esto `deleteAccount` fallará en producción si `deletedAt` no existe en el esquema |
-
-### 🟡 UX — todas implementadas ✅
-
-| # | Tarea | Estado |
-|---|---|---|
-| U1 | Ayuda contextual vinculación | ✅ |
-| U2 | Centro notificaciones in-app | ✅ |
-| U3 | Escudo de racha | ✅ |
-| U4 | Filtros en `game/[id].tsx` | ✅ |
-| U5 | Wrapped mensual | ✅ |
-| U6 | Feedback rate limit 429 | ✅ |
-| U7 | Error state en feed | ✅ |
-| U8 | Badge solicitudes pendientes | ✅ |
-| U9 | Timestamp "última actualización" | ✅ |
-| U10 | Sync progresivo: banner + toast en Biblioteca | ✅ |
-
-### 🔵 Técnica
-
-| # | Tarea | Estado |
-|---|---|---|
-| T1 | Paginación biblioteca | ✅ |
-| T2 | Reconexión Socket.io | ✅ |
-| T3 | Background sync scheduler | ✅ |
-| T4 | Paginación cursor en feed | 🔲 Cuando el volumen lo justifique |
-| T5 | Tests de carga k6 | ✅ |
-| T6 | Tests unitarios nuevos servicios | ✅ |
-| T7 | Reescribir FeedScreen.test.tsx | ✅ Reescrito correctamente — mockea `useMyGames`; 9 tests pasando |
-| T8 | Subir Expo a v55 para vulnerabilidades node-tar | 🔲 17 high mobile (build-time vía Expo) + 2 high API (bcrypt build-time) — ninguna runtime; PR dedicado post-lanzamiento |
-| T9 | Resolver 145 warnings import/order en API | ✅ Resuelto — `eslint --fix` + override en `.eslintrc.js` para ficheros de test |
-| T10 | Flows Maestro E2E | ✅ 5 flows en `apps/mobile/.maestro/` — todos pasando contra emulador Android con APK preview |
-| T11 | Search de logros + endpoint logros de juego | ✅ Backend `GET /api/v1/games/:id/achievements` + `GET /api/v1/search?type=achievements` — JWT opcional, Xbox excluido, paginado 20/pág |
-| T12 | Job "seed de logros populares" | ✅ Completo — BD post-limpieza: 1.406 juegos (78 Steam + 1.001 RA + 327 PSN) + 72.264 logros. Bugs PSN corregidos: guard `trophies ?? []` + refresco token cada 5 usuarios. Campo `console` backfilled: RA (1.001 juegos) + PSN (584 juegos). Flag `--only-steam --usernames="X"` implementado en `scripts/seed-games.ts`. **Seithek Steam**: 0 juegos obtenidos — perfil de Steam privado (`GetOwnedGames` devuelve lista vacía). Hacer público en Configuración de Steam para seedear. |
-| T13 | Sync optimization: parallel RA batches + skip completed | 🔲 Documentado como pendiente — no implementado por riesgo de rate limiting RA y pérdida de logros DLC. Ver decisiones sesión 10. |
-| T14 | Desnormalizar contadores de biblioteca (`earnedAchievements`, `totalGames`) | 🔲 Pendiente confirmación del desarrollador — no implementar sin acuerdo. Ver decisiones sesión 16. |
-| T15 | Steam skip-completed optimization via `rtime_last_played` | 🔲 `GetOwnedGames` devuelve `rtime_last_played` (Unix timestamp) por juego. Usarlo para saltar juegos sin actividad reciente reduciría llamadas a Steam. No implementado: requiere añadir `lastPlayedAt` al modelo de caché Redis + interfaz `GameCacheEntry`, con riesgo de saltar achievements de DLC. Documentar como pendiente post-lanzamiento. |
-| T16 | Backfill RA XP con fórmula correcta | 🔲 Script `scripts/backfill-ra-xp.ts` creado e idempotente. Ejecutar desde `apps/api/` con `DATABASE_URL="${DIRECT_URL}"` tras hacer deploy de la nueva fórmula. Nota: el XP de usuarios en BD/Redis NO se actualiza automáticamente — los usuarios verán el XP corregido en su próximo sync. |
-| T17 | BUG-CRÍTICO-1/2 + BUG-MEDIO-3/4 corregidos | ✅ Sesión 31: soft delete GDPR, email eliminado de perfil público, RA syncUserExpress con Promise.allSettled, deletedAt:null filters, gdpr-cleanup scheduler, authenticate con DB check, rankings RefreshControl fix, upsertUserScore paralelo, useSubscription RC CustomerInfo |
-| T18 | Migración Prisma gdpr_soft_delete en producción | ⚙️ Aplicar `npx prisma migrate deploy` en Railway tras el próximo deploy — la migración añade el campo `deletedAt` a `User` si no existía ya |
-| T19 | BUG-1: biblioteca no carga sort completo al abrir | ✅ useEffect([isLoading]) en index.tsx — sesión 34 |
-| T20 | BUG-2: pull-to-refresh pierde páginas con sort activo | ✅ handleRefresh llama fetchAllRemainingPages cuando sort activo — sesión 34 |
-| T21 | BUG-3: rankings PSN XP desincronizado entre "mi posición" y lista | ✅ getUserRank lee sorted set correcto por plataforma — sesión 34 |
-| T22 | BUG-4: vinculación plataformas no bloqueaba perfil privado | ✅ PSN/RA/Steam devuelven 400 con código descriptivo antes de vincular — sesión 34 |
-| T23 | BUG-1: FriendshipButton no aparecía en perfil público | ✅ Fallback a "Añadir amigo" en error de red; spinner durante hidratación de sesión — sesión 36 |
-| T24 | BUG-2: búsqueda mostraba propio usuario + redirect incorrecto al propio perfil | ✅ searchUsers excluye userId autenticado; profile/[username] redirige a tab Profile si username coincide — sesión 36 |
-| T25 | BUG-3: biblioteca no cargaba páginas completas al abrir con caché | ✅ initialLoadDoneRef con deps completas — cubre caso con y sin caché — sesión 36 |
-| T26 | BUG-4: rankings plataforma mostraban XP total en "Mi posición" | ✅ Fix completo sesión 38 — 4 puntos rotos: `getUserRank` sin platform, controller sin `?platform`, `useMyRanking` sin platform, `rankings.tsx` sin argumento. `ranking.controller.test.ts` (8 tests) + 3 tests RankingsScreen banner PSN/RA |
-| T27 | Fetch achievements on-demand al pulsar juego con 0 logros en Search | 🔲 Requiere `POST /api/v1/games/:id/fetch-achievements`, dispatch al adapter correcto según `game.platform`, guard para no re-fetchear si `updatedAt < 24h` |
-| T28 | FIX-1: biblioteca carga páginas completas al volver del background | ✅ `initialLoadDoneRef.current = false` en mount + AppState handler — sesión 37 |
-| T29 | FIX-2: deduplicación juegos en useMyGames | ✅ `Set<string>` filtra solapamientos entre páginas — sesión 37 |
-| T30 | FIX-3: optimistic update FriendshipButton | ✅ `onMutate` en `sendRequest`/`cancelOrRemove`/`accept` — cambio instantáneo con rollback en error — sesión 37 |
-| T31 | FIX-4: empty state "Tus juegos aparecerán pronto" incorrecto tras desvincular | ✅ `unlinkMutation.onSuccess` invalida `['sync-summary']` — sesión 37 |
-| T32 | FIX-5: búsqueda de logros eliminada del Search | ✅ `search.tsx` solo busca juegos y usuarios — hook y endpoint backend intactos para T27 — sesión 37 |
-| T33 | FIX-6: contador "0 logros" ocultado en GameCard | ✅ Omitido cuando `totalAchievements === 0` — sesión 37 |
-| T34 | Rankings: banner "Tu posición" mostraba XP total en filtros de plataforma | ✅ Triple fix: getUserRank lee sorted set correcto, queryKey incluye platform, URL incluye ?platform — sesión 38 |
-| T35 | BUG-1: lista no ordenada al entrar ni en pull-to-refresh para sort last_played | ✅ Eliminado early return y condición en useEffect y handleRefresh — todos los sorts cargan todas las páginas — sesión 39 |
-| T36 | BUG-2: library.new_games_banner aparecía como texto literal | ✅ Selección explícita de clave _one/_other en NewGamesBanner.tsx — sesión 39 |
-| T37 | Steam sync falla con rawValue/rarity string en lugar de Float | ✅ `parseFloat(String(rawRarity))` + guard `isNaN` en ambos loops de logros · guard `startsWith('http')` en `iconUrl` — sesión 40 |
-| T38 | Deploy Railway fallaba: gdpr-cleanup.scheduler.ts usaba conexión Redis incompatible con BullMQ Worker | ✅ `createWorkerConnection()` en lugar de `redis` directo — sesión 41 |
-| T39 | Bug: juegos de plataforma desvinculada seguían en biblioteca | ✅ unlinkPlatform usaba relation filter no fiable en Prisma — fix con IDs explícitos del findMany previo — sesión 43 |
-| T40 | Eliminar NewGamesBanner — intrusivo e inexacto en pull-to-refresh | ✅ Componente, tests, claves i18n y lógica eliminados completamente — sesión 43 |
-| T41 | Sync secuencial por usuario — evita "No se pudo cargar la biblioteca" durante syncs simultáneos | ✅ Lock Redis `sync:user-lock:{userId}` con reencolado · concurrencia global intacta · sesión 44 |
-| T42 | Empty state "Tus juegos aparecerán pronto" incorrecto al desvincular con varias plataformas | ✅ `refetchQueries` forzado + skeleton durante `isFetching` — sesión 44 |
-| T43 | Lock de sync no cubría `triggerExpressSync` — Steam+PSN express simultáneos al onboarding | ✅ `triggerExpressSync` adquiere `sync:user-lock:{userId}` con TTL 120s; omite si lock tomado — sesión 45 |
-
-### 🟢 Features
-
-| # | Tarea | Estado |
-|---|---|---|
-| F1 | Estadísticas avanzadas (premium) | ✅ |
-| F2 | Canje de puntos por premium | ✅ |
-| F3 | Compartir logro | ✅ |
-| F4 | Comparación de perfiles | ✅ |
-| F5 | Push al desbloquear logro | ✅ |
-| F6 | Retar a un amigo en logro | ✅ |
-| F7 | Guías UGC de logros | ✅ |
-| F8 | Avatar upload | ✅ Backend Cloudinary + mobile expo-image-picker — activo en prod (`CLOUDINARY_URL` configurada en Railway ✅) |
-| F9 | Dashboard admin | ✅ |
-| F10 | OG profiles | 🔲 Fase 4 |
-| F11 | Búsqueda de logros con filtro de plataforma | 🔲 Eliminado del Search tab en sesión 37 — hook `useSearchAchievements` y endpoint `GET /api/v1/search?type=achievements` intactos para uso futuro (T27) |
-| F12 | SyncStatusBar — feedback de sync en biblioteca | ✅ Botón sync, syncs restantes (free), cooldown countdown, última sync, próximo auto sync |
-| F13 | Google Play Billing — pantalla premium + RevenueCat | ✅ `react-native-purchases` v10, `usePremiumPlans`, `useSubscription`, `useRevenueCat`, `premium.tsx` reescrito, webhook backend. 🚩 `FEATURES.premium = false` — activar en Fase 4 tras B18/B19/B20. |
-| F14 | PSN sync paralelo — `Promise.allSettled` con concurrencia 5 | ✅ `processSingleTitle()` extraído; `processTitles()` procesa chunks de 5 en paralelo con aislamiento de fallos por título |
-| F15 | RA sync paralelo — `Promise.allSettled` con concurrencia 3 | ✅ `syncUser()` y `syncUserBatched()` procesan chunks de 3 juegos en paralelo con `Promise.allSettled` |
-| F16 | SyncStatusBar — countdown local + aviso sync largo | ✅ Countdown `setTimeout`-chain independiente del `refetchInterval` 60s; aviso ámbar tras 30s de sync activo |
-| F17 | Onboarding paso 4 — CTAs de vinculación de plataformas | ✅ Paso 4 con botones Steam/PSN/RA → `router.replace('/link-platform/[x]')`, CTA secundario "Hacer esto más tarde" |
-| F18 | FriendshipButton consciente del estado de relación en perfil público | ✅ 5 estados (none/pending_sent/pending_received/accepted/blocked) · GET /api/v1/friends/status/:username · confirmación Alert en eliminar · sesión 35 |
-| F19 | Banner upload (Cloudinary) | ✅ POST /api/v1/users/me/banner · Pressable 120px en profile.tsx · aspect 3:1 · crop/fill 1500×500 · sesión 42 |
-
-### 🔶 Post-lanzamiento — Verificaciones pendientes
-
-| # | Tarea | Detalle |
-|---|---|---|
-| PL12 | ✅ Declaración Data Safety actualizada para PostHog | PostHog (N4) está activo desde el lanzamiento — se ha declarado en el formulario de Seguridad de los datos. Si se cambia el proveedor de analítica en Fase 4, actualizar la declaración para reflejar el cambio. |
-| PL13 | Limpieza de usuarios de prueba antes de abrir a Producción pública | CUÁNDO: justo antes de promover de Pruebas internas a Producción pública, NO antes (las pruebas internas necesitan usuarios). QUÉ BORRAR (datos por usuario): User, PlatformAccount, UserAchievement, UserPoint, UserChallenge, ActivityEvent, Friendship, Notification, Subscription, y los sorted sets de rankings en Redis (ranking:global, ranking:platform:*). QUÉ CONSERVAR (catálogo compartido — NO TOCAR): Game y Achievement (1.400+ juegos, 72.000+ logros seedeados). CUENTA DE REVISIÓN: TestUser99 es la cuenta entregada a los revisores de Google — o se conserva en la limpieza (borrar todos menos ese) o se crea una cuenta de revisión dedicada nueva con datos de ejemplo. Si se borra sin sustituto, las futuras revisiones de actualizaciones fallarán por falta de acceso. Crear script idempotente en scripts/ con transacción Prisma; ejecutar con DATABASE_URL="${DIRECT_URL}" desde apps/api/. Confirmar conteos antes y después. |
-| PL14 | Verificar edge-to-edge de Android 15 en dispositivo | `targetSdkVersion: 35` hace que Android 15 fuerce edge-to-edge (la app dibuja bajo las barras de estado y navegación del sistema). Verificar que `SafeAreaView` cubre correctamente el contenido en todas las pantallas (header/footer de tabs, pantallas de auth, game detail, profile) en dispositivo/emulador con Android 15 antes de promover a Producción. |
-| PL15 | Merge develop → main antes de promover a Producción | Justo antes de promover el track de Pruebas internas a Producción en Play Console: (1) `git checkout main`, (2) `git merge --no-ff develop`, (3) `git tag v1.0.0`, (4) `git push origin main --tags`. Garantiza que main refleja exactamente el código que está en producción — requisito del GitHub flow establecido en el proyecto. |
+Ver [docs/BACKLOG.md](docs/BACKLOG.md)
 
 ---
 
@@ -1457,1015 +1164,4 @@ Métricas disponibles:
 
 **Fecha**: 2026-07-07 (sesión 51) — Auditoría exhaustiva CLAUDE.md vs código real + documentación JSDoc. **Divergencias corregidas en CLAUDE.md**: (1) Variables de entorno faltantes añadidas: `RA_SYSTEM_USER`, `RA_SYSTEM_KEY` (validadas en Zod), `MAINTENANCE_MODE`, `XBOX_CLIENT_ID`, `XBOX_CLIENT_SECRET` (Fase 4). (2) Clarificación validación Zod: solo ciertas variables pasan por el schema al arranque. (3) Modelos de BD corregidos: `Friendship` usa `senderId`/`receiverId` (no `userId`/`friendId`); `PasswordResetToken` usa `tokenHash` (no `token` en texto plano); `ActivityEvent.type` es enum `ActivityEventType` tipado; `WeeklyChallenge` usa `xpReward` y `ChallengeMetric` enum (no `pointsReward` y `String`); `SubscriptionPlan` incluye `LIFETIME`; `PlatformAccount` documentado con campos reales (`requiresReauth`, `psnProfilePrivate`, `tokenExpiresAt`). (4) Modelos no documentados añadidos: `RefreshToken`, `DeviceToken`. (5) Stack técnico: añadidos `cookie-parser`, `compression`, `multer`, `axios` en backend; `socket.io-client`, `react-native-reanimated`, `posthog-react-native` en mobile. (6) Inventario: añadido scheduler `streak-shields.scheduler.ts` (01:00 UTC día 1/mes). (7) Logtail: clarificado que la integración es vía log drain Railway, no SDK en código. (8) Comentario obsoleto de `app.ts`: "Fly.io" → "Railway". **JSDoc añadido** a: `services/user.service.ts`, `services/sync.service.ts`, `services/ranking.service.ts`, `services/friendship.service.ts`, `services/notification.service.ts`, `services/points.service.ts`, hooks de mobile (`useSyncProgress`, `useSyncAll`, `useMyGames`, `useFriendshipActions`, `useRevenueCat`, `useSubscription`), `packages/types/src/index.ts`, `packages/validators`. Sin cambios de lógica. Tests: 563 API + 352 mobile. 0 errores TS/lint.
 
-**Fecha**: 2026-07-06 (sesión 50) — Configuración Better Stack (Logtail) y PostHog completada. `LOGTAIL_SOURCE_TOKEN` configurado en Railway Variables — logs JSON de pino enviados a fuente "UnlockHub API" en Better Stack. `POSTHOG_API_KEY` (Project token) configurado en Railway Variables — analytics activo en producción, plan Free. CLAUDE.md actualizado: N2 y N4 marcados ✅, tabla de infraestructura actualizada, inventario de funcionalidades actualizado. Play Store: AAB producción versionCode 3 subido a track de Pruebas internas, prueba interna publicada y enviada a testers, listing completo (título, descripciones, contacto, categoría), clasificación de contenido completada, Seguridad de los datos completada. Sin cambios de código. Tests: 563 API + 352 mobile. 0 errores TS/lint.
-
-**Fecha**: 2026-07-06 (sesión 49) — Fix bloqueante target API 35 + validación bundleRelease. El AAB #1 (target API 34) fue rechazado por Play Console: Google exige API 35 (Android 15) mínimo desde el 31 de agosto de 2025. Fix quirúrgico en `app.json` (`expo-build-properties`): `targetSdkVersion: 35`, `compileSdkVersion` se mantiene en 34 (con compile 35, `expo-modules-core` de Expo SDK 51 falla por null-safety en `PermissionsService.kt`). Google solo exige el target; el compile puede ir por detrás. Validación local: `assembleRelease` Y `bundleRelease` BUILD SUCCESSFUL con target 35 / compile 34 — garantiza que el `eas build` no quemará intento. NO se actualizó Expo SDK 51 → 55. Pendiente verificar edge-to-edge de Android 15 en dispositivo (PL14). Tests: 563 API + 352 mobile. 0 errores TS/lint.
-
-**Fecha**: 2026-07-06 (sesión 48) — AAB de producción #1 generado con EAS. Build de producción completado sin errores en EAS (la validación release local previa evitó quemar intentos). Detalles del build: perfil `production`, environment `production`, Expo SDK 51.0.0, `versionName` 1.0.0, `versionCode` 1, commit `f5060c4`, creado por juanjomrv. El AAB está firmado con el keystore de producción gestionado por EAS (backup del desarrollador en PC + Drive). Próximos pasos: subir a track de Pruebas internas en Play Console, completar listing y formularios "Contenido de la app", validar, limpiar BD de usuarios de prueba (PL13) y promover a Producción.
-
-**Fecha**: 2026-07-06 (sesión 47) — Preparación de lanzamiento: auditoría de seguridad + limpieza + assets. Auditoría de seguridad pre-lanzamiento del repo público: 0 secrets reales en working tree e historial Git, 0 datos personales en historial (limpieza `git filter-branch` de 2026-05-28 confirmada efectiva), solo `.env.example` con placeholders trackeados, credenciales sensibles correctamente gitignoreadas. Limpieza: eliminados `scripts/check-db-size.ts` y `scripts/verify-seed.ts` (scripts de diagnóstico obsoletos sin referencias); `*.keystore` añadido al `.gitignore` raíz. Assets de Play Console generados: icono 512×512 (monograma UH sobre degradado morado de marca) y gráfico destacado 1024×500. Documento de listing completo generado con textos (título, descripciones breve y completa con descargo de no afiliación a Valve/Sony/RA) y guía de formularios. Acción del desarrollador: cuenta Neon (infraestructura pre-Railway) cerrada. Tests: 563 API + 352 mobile. 0 errores TS/lint. Commit `898538f`.
-
-**Fecha**: 2026-07-05 (sesión 46) — Preparación AAB producción. `app.json`: App ID de AdMob para Android cambiado de test (`ca-app-pub-3940256099942544~3347511713`) a producción (`ca-app-pub-3506466357843399~6211856600`). Verificado: los 4 ad unit IDs (`unlockhub_home_banner` 3314230527, `unlockhub_search_banner` 7061903848, `unlockhub_interstitial` 9959529926, `unlockhub_rewarded` 7744430120) se leen de `EXPO_PUBLIC_ADMOB_*` con fallback a test IDs; EAS secrets configurados; perfil `production` de `eas.json` genera AAB y apunta a Railway prod. Sin cambios de tests.
-
-**Fecha**: 2026-07-04 (sesión 45) — Fix lock de sync que no cubría `triggerExpressSync`. Diagnóstico: el lock de sync por usuario (sesión 44) estaba en el processor del BullMQ worker y cubría los caminos manual/initial/auto-repeat/background scheduler, pero `triggerExpressSync` en `sync.service.ts:257` llamaba `adapter.syncUserExpress()` directamente en el proceso de la API sin adquirir `sync:user-lock:{userId}`. Escenario del bug: durante el onboarding el usuario vincula Steam y PSN en rápida sucesión → ambos `triggerExpressSync` arrancaban simultáneamente sin bloqueo, escribiendo concurrentemente en `UserAchievement` → "No se pudo cargar la biblioteca". Fix: `triggerExpressSync` adquiere `sync:user-lock:{userId}` con `SET NX EX 120` antes de ejecutar el express sync; si el lock no está disponible, omite el express sync silenciosamente — el `queueInitialSync` encolado justo después en el controller cubre la sincronización completa cuando el lock queda libre; el lock se libera siempre en `finally`. Tests: nuevos en `sync.worker.test.ts` (express sync adquiere lock / omite si lock tomado / libera en finally). Tests: 563 API · 352 mobile. Cobertura 83.5% stmt. 0 errores TS/lint.
-
-**Fecha**: 2026-07-03 (sesión 44) — Fix empty state al desvincular + sync secuencial por usuario. BUG-1 (empty state incorrecto al desvincular con varias plataformas): causa raíz — el refetch de `['my-games']` termina (`allGames=[]`) antes que el de `['sync-summary']`, dejando `anyPlatformLinked` stale en `true` + `allGames=[]` → flash de "Tus juegos aparecerán pronto" incorrecto. Doble fix: `profile.tsx` usa `refetchQueries(['sync-summary'])` en lugar de `invalidateQueries` (refetch forzado inmediato); `index.tsx` añade `isFetching` del hook + guard en `ListEmptyComponent` que muestra `<LibrarySkeleton />` cuando `isFetching && allGames.length === 0` en lugar del empty state. MEJORA-2 (sync secuencial por usuario): lock Redis en `sync.worker.ts` — `SET sync:user-lock:{userId} {jobId} EX 600 NX` al inicio de cada job; si no adquiere el lock, reencola con `{ delay: 5000 }` y retorna; `finally` libera el lock siempre, incluso si el sync falla; `concurrency: 5` global sin cambios — usuarios distintos siguen en paralelo, solo se serializan los syncs del mismo usuario. Tests: +4 API (lock adquiere/reencola/finally/usuarios distintos) +4 mobile (skeleton durante isFetching + refetchQueries). Tests: 560 API · 352 mobile. Cobertura 83.46% stmt. 0 errores TS/lint.
-
-**Fecha**: 2026-07-02 (sesión 43) — NewGamesBanner eliminado + fix juegos plataforma desvinculada. PARTE 1: eliminado `NewGamesBanner` completamente — `index.tsx` sin `flashListRef`, estados `seenGamesCount`/`showNewGamesBanner`, 2 useEffects del banner, `handleNewGamesBanner`, wrapper `position: 'relative'` y JSX; archivos `NewGamesBanner.tsx` y `NewGamesBanner.test.tsx` eliminados; 4 claves i18n `library.new_games_banner_*` eliminadas de ES/EN; mock y 4 tests de `FeedScreen.test.tsx` eliminados. PARTE 2: bug — juegos de plataforma desvinculada seguían en biblioteca; diagnóstico confirmó que `getMyGames` usa `UserAchievement` como única fuente de verdad (correcto) pero `unlinkPlatform` en `platform.service.ts:161` usaba `deleteMany` con relation filter `achievement: { platform }` que no es fiable en todas las versiones de Prisma y podía silenciosamente no borrar nada; fix: `{ id: { in: toDelete.map(ua => ua.id) } }` usando los IDs ya obtenidos del `findMany` previo. Tests: 556 API · 348 mobile. Cobertura 83.46% stmt. 0 errores TS/lint.
-
-**Fecha**: 2026-07-01 (sesión 42) — Banner upload implementado. Backend: `uploadBanner` multer middleware en `upload.middleware.ts`; `uploadBanner()` en `user.service.ts` con guard `USER_NOT_FOUND`, Cloudinary `folder: 'unlockhub/banners'`, `public_id: '{userId}-banner'`, crop/fill 1500×500; `uploadBannerHandler` en `user.controller.ts` idéntico a avatar; `POST /api/v1/users/me/banner` con `authenticate` + middleware en `user.routes.ts`. Mobile: `Pressable` de 120px sobre el área del banner en `profile.tsx`; `bannerMutation` con `aspect: [3,1]` y FormData; badge cámara + spinner sobre el banner; 3 claves i18n ES/EN (`change_banner`, `banner_error_title`, `banner_error_message`). Tests: 15 nuevos (5 `user.service.test.ts` + 5 `user.routes.test.ts` + 5 mobile). Tests: 553 API + 358 mobile. Cobertura 83.45% stmt. 0 errores TS/lint.
-
-**Fecha**: 2026-06-30 (sesión 41) — Fix deploy Railway: `gdpr-cleanup.scheduler.ts` usaba conexión Redis por defecto (`maxRetriesPerRequest: 3`) para su BullMQ Worker — BullMQ Workers requieren `maxRetriesPerRequest: null`. Fix: import `createWorkerConnection` desde `../lib/redis` y sustituir `{ connection: redis }` por `{ connection: createWorkerConnection() }` en la creación del Worker (línea 52). Mock de `createWorkerConnection` añadido en `gdpr-cleanup.scheduler.test.ts`. Tests: 543/543. 0 errores TS/lint.
-
-**Fecha**: 2026-06-29 (sesión 40) — Fix Steam sync: `rawValue`/`rarity` como string en runtime. Bug raíz: la Steam API devuelve `percent` como string (`"54.6"`) en ciertos juegos aunque el interface TypeScript lo declara `number` — TypeScript no detecta el mismatch en runtime y Prisma rechaza pasar un string a `Float?`. Fix en `steam.adapter.ts`: en ambos loops de logros (`getUserAchievements` y `processGames`), `rawRarity` se convierte con `parseFloat(String(rawRarity))` + guard `isNaN`; `rawValue`/`rarity` reciben `null` si el valor no es numérico, `normalizePoints` recibe `100` como fallback. Fix adicional: guard `startsWith('http')` en `iconUrl` para evitar duplicar la URL base cuando Steam devuelve el campo `icon` ya como URL completa. Tests: 3 nuevos en `steam.adapter.test.ts` (`rawValue`/`rarity`/`iconUrl` en upsert). Tests: 543 API + 358 mobile. Cobertura 83.08% stmt. 0 errores TS/lint.
-
-**Fecha**: 2026-06-28 (sesión 39) — 2 bugs confirmados por capturas de pantalla. BUG-1 (lista no ordenada al entrar ni en pull-to-refresh): causa raíz — el `useEffect` de carga inicial tenía un early return para `last_played` que marcaba `initialLoadDoneRef.current = true` sin llamar `fetchAllRemainingPages()`, dejando solo la página 1 cargada; `handleRefresh` también saltaba `fetchAllRemainingPages` para `last_played`. Cuando el usuario pulsaba el filtro activo, `handleSortChange` sí llamaba `fetchAllRemainingPages()` → todas las páginas → `useMemo` re-ordenaba sobre el set completo. Fix: eliminado el early return y la condición — todos los sorts cargan todas las páginas. BUG-2 (`library.new_games_banner` aparecía como texto literal): causa raíz — `compatibilityJSON: 'v3'` en i18next con `t('library.new_games_banner', { count })` (base key) no resuelve automáticamente al sufijo `_one/_other`; el proyecto usa selección explícita de clave. Fix en `NewGamesBanner.tsx`: selección explícita `t(count === 1 ? 'library.new_games_banner_one' : 'library.new_games_banner_other', { count })`. Las claves ya existían en ES y EN. Tests: 540 API · 358 mobile. 0 errores TS/lint.
-
-**Fecha**: 2026-06-27 (sesión 38) — Fix rankings XP plataforma en banner "Tu posición". Diagnóstico confirmó 3 problemas encadenados: (1) `getUserRank` en `ranking.service.ts` leía siempre `ZSCORE('ranking:global', userId)` ignorando el parámetro `platform` — corregido para usar el sorted set correcto según plataforma. (2) `useMyRanking` tenía `queryKey: ['rankings', 'me']` hardcodeado para todos los filtros — TanStack Query servía caché del global para PSN/RA/Steam — corregido añadiendo `platform` a la queryKey: `['rankings', 'me', 'PSN']`. (3) La URL del request siempre era `/api/v1/rankings/me` sin `?platform` — corregido añadiendo el query param cuando hay filtro activo. (4) `ranking.controller.ts` no leía `req.query['platform']` — corregido. `rankings.tsx` pasa `activeFilter !== 'global' ? activeFilter : undefined`. Resultado: banner "Tu posición" muestra 372.900 XP en PSN y 1.520 XP en RA en lugar de 367.155 XP total. Tests: 540 API (42 suites) · 357 mobile (29 suites). Cobertura 83.08% stmt. 0 errores TS/lint.
-
-**Fecha**: 2026-06-26 (sesión 37) — 6 fixes + diagnóstico. FIX-1/2 (biblioteca sort + deduplicación): `initialLoadDoneRef.current = false` añadido en mount effect y AppState handler antes de `invalidateQueries` — cuando TanStack Query refetcha página 1, el useEffect de carga inicial ve el ref reseteado y llama `fetchAllRemainingPages`; deduplicación por `Set<string>` en `useMyGames.ts` elimina solapamientos cuando `invalidateQueries` refetcha página 1 mientras página 2 ya está en el array. FIX-3 (optimistic update FriendshipButton): `sendRequest`, `cancelOrRemove` y `accept` en `useFriendshipActions.ts` usan `onMutate` para actualizar el caché síncronamente → cambio de estado instantáneo; `onError` revierte si la API falla. FIX-4 (empty state incorrecto): `unlinkMutation.onSuccess` en `profile.tsx` no invalidaba `['sync-summary']` — tras desvincular todas las plataformas, `anyPlatformLinked` quedaba `true` en caché 30s mostrando "Tus juegos aparecerán pronto" incorrectamente; añadida la invalidación. FIX-5 (búsqueda de logros eliminada del Search): `search.tsx` simplificado — solo busca juegos y usuarios; hook `useSearchAchievements` y endpoint backend intactos para T27. FIX-6 (contador "0 logros" ocultado): `GameCard` omite el contador cuando `totalAchievements === 0`; campo `console` se sigue mostrando si disponible. Tests: 532 API + 354 mobile. Cobertura 82.84% stmt. 0 errores TS/lint.
-
-**Fecha**: 2026-06-25 (sesión 36) — 4 bugs corregidos. BUG-1 (FriendshipButton no aparecía): causa — `if (!status || status.status === 'blocked') return null` devolvía null cuando la query fallaba (`isError=true, status=undefined`) o cuando `user` era null por timing del session store. Fix en `FriendshipButton.tsx`: `user = useSessionStore((s) => s.user)`; spinner cuando `isLoading || !user`; `!status && isError` → muestra "Añadir amigo" como fallback; `!status && !isError` → null (perfil propio o query desactivada). BUG-2 (búsqueda muestra propio usuario + redirect incorrecto): `searchUsers(q, userId)` en `search.service.ts` añade `NOT: { id: userId }` para excluir al usuario autenticado; `profile/[username].tsx` redirige a `/(tabs)/profile` via `useEffect` cuando `profile?.username === currentUser.username`. BUG-3 (biblioteca no carga páginas con caché): causa — `useEffect([isLoading])` no se dispara cuando `isLoading=false` desde el inicio (datos en caché). Fix: `initialLoadDoneRef = useRef(false)` con deps completas `[allGames.length, isLoading, isFetchingNextPage, hasNextPage, librarySortOrder, fetchAllRemainingPages]`; ref reseteado en `handleSortChange` y `handleRefresh`. BUG-4 (rankings XP total en "Mi posición"): diagnóstico confirmó que la cadena backend era correcta; solo se añadieron tests de cobertura en `RankingsScreen.test.tsx` verificando que `useMyRanking` recibe `undefined`/`'PSN'`/`'STEAM'` según el filtro activo. Tests: 532 API + 350 mobile. 0 errores TS/lint.
-
-**Fecha**: 2026-06-24 (sesión 35) — FriendshipButton consciente del estado de relación. Backend: `FriendshipStatusResult` type (5 variantes discriminadas: none/pending_sent/pending_received/accepted/blocked) en `packages/types`; `sendFriendRequestSchema` ampliado a union `{ receiverId } | { username }` en validators; `getFriendshipStatus()` nuevo en `friendship.service.ts`; `unfriend()` ampliado para permitir cancelar solicitudes PENDING además de ACCEPTED; handler `getFriendshipStatusHandler` en controller; ruta `GET /api/v1/friends/status/:username` declarada antes de `/:friendshipId` en `friendship.routes.ts`. Mobile: `useFriendshipStatus` hook con `enabled: !!user && user.username !== username`; `useFriendshipActions` hook con `sendRequest/cancelOrRemove/accept/reject`; `FriendshipButton` componente nuevo — máquina de 5 estados (none/pending_sent/pending_received/accepted/blocked), `Alert.alert` de confirmación en eliminar amigo, todos los botones deshabilitados con `busy: true` durante mutaciones; `profile/[username].tsx` sustituye botón inline por `<FriendshipButton username={profile.username} />`. Tests: 530/530 API (41 suites) · 333/333 mobile (27 suites). Cobertura API 82.84% stmt. 0 errores TS/lint.
-
-**Fecha**: 2026-06-23 (sesión 34) — 4 bugs de producción corregidos. BUG-1 (biblioteca sort al abrir): `useEffect([isLoading])` nuevo en `index.tsx` que dispara `fetchAllRemainingPages()` cuando `isLoading` pasa a `false` en la carga inicial y el sort persistido no es `last_played` — dep array mínima para evitar re-ejecuciones. BUG-2 (pull-to-refresh pierde páginas): `handleRefresh` llama `await fetchAllRemainingPages()` tras `resetQueries` cuando `librarySortOrder !== 'last_played'`; spinner activo hasta que todas las páginas cargan; eliminado `pendingFetchAllAfterRefreshRef` (innecesario). BUG-3 (rankings XP desincronizado): `getUserRank(userId, platform?)` en `ranking.service.ts` lee `ranking:platform:psn` cuando se pasa plataforma; `ranking.controller.ts` lee `?platform` de query params; `useMyRanking(platform?)` con queryKey y URL distintas por filtro; `rankings.tsx` pasa `activeFilter !== 'global' ? activeFilter : undefined`. BUG-4 (vinculación plataforma privada no bloqueaba): `platform.controller.ts` lanza `AppError('PSN_PROFILE_PRIVATE', 400)` antes de `linkPlatform` si el perfil es privado; `psn.tsx` maneja `PSN_PROFILE_PRIVATE` con error inline eliminando el flujo post-vinculación privado; `ra.tsx` usa mensaje específico `error_user_not_found` en 404; `steam.tsx` ya manejaba `STEAM_PROFILE_PRIVATE` correctamente; 3 claves i18n nuevas por idioma en ES/EN. Tests: +6 API (ranking.service + platform.controller) + 5 mobile (FeedScreen BUG-1/2, LinkSteam, LinkRA, LinkPsn). Tests: 513/513 API (39 suites) · 319/319 mobile (26 suites). Cobertura API 82.35% stmt. 0 errores TS/lint.
-
-**Fecha**: 2026-06-22 (sesión 33) — Inventario completo de funcionalidades generado leyendo código real. Nueva sección "Inventario de funcionalidades" añadida al CLAUDE.md con 119 funcionalidades catalogadas (103 activas, 10 gateadas, 5 parciales, 1 eliminada). Checks B5, B6, B7, B14, N5 marcados como completados con información confirmada por el desarrollador.
-
-**Fecha**: 2026-06-21 (sesión 32) — `FEATURES.premium = false` para lanzamiento inicial. Tests: 507 API (39 suites) + 314 mobile (26 suites). 0 errores TS/lint. Cobertura API 81.72% stmt / 82.4% branch.
-**PREMIUM DESACTIVADO**: `featureFlags.ts` — `premium: false`, `pointsRedeem: false`, `advancedStats: false`. `PremiumBanner` devuelve null. `premium.tsx` muestra `ComingSoon` (nuevo componente). i18n: `common.coming_soon_title/body` añadidas. Tests de premium UI con `jest.mock('../../lib/featureFlags', ...)` que fuerza `premium: true` — mismo patrón que `ProfileScreen.test.tsx`. Backend (webhook, subscription service, endpoints) intacto para Fase 4. CLAUDE.md: featureFlags actualizado, B18/B19/B20 diferidos a Fase 4, decisión documentada.
-
-**Fecha**: 2026-06-21 (sesión 31) — 6 fixes aplicados. Tests: 507 API (39 suites) + 314 mobile (26 suites). 0 errores TS/lint. Cobertura API 81.72% stmt / 82.4% branch.
-**FIX1 — BUG-CRÍTICO-1 (seguridad/GDPR)**: `PublicUser` añadido a `packages/types/src/index.ts` (omite `email`, `isPremium`, `premiumUntil`, `lastSyncAt`). `mapPublicUser()` creado en `user.service.ts`. `getPublicProfile` cambiado a retornar `PublicUser` (sin email) + filtro `deletedAt: null`. Tests: 4 tests nuevos en `user.service.test.ts` (no expone email, no expone passwordHash, NOT_FOUND para usuarios eliminados, where incluye deletedAt:null).
-**FIX2 — BUG-CRÍTICO-2 (GDPR)**: `deleteAccount` reescrito con flujo completo: soft delete (`deletedAt = now()`), anonimizar `ActivityEvent.payload → {}`, borrar `PlatformAccount` y `PasswordResetToken`, mantener `UserPoint`/`UserChallenge` (auditoría). `prisma.$transaction(async tx => {...})` atómica. `compareProfiles` añade `deletedAt: null` al targetUser lookup. `findUserByEmail` en `user.repository.ts` añade `deletedAt: null`. `authenticate.ts` verifica `deletedAt: null` en BD tras verificar el JWT (fail-open ante error de BD transitorio). `gdpr-cleanup.scheduler.ts` creado: `runGdprCleanup()` borra físicamente usuarios con `deletedAt <= now() - 30 días`; cron `0 4 * * * UTC`; registrado en `index.ts`. Tests: 6 tests nuevos en `user.service.test.ts`, 3 tests nuevos en `middleware.test.ts`, 4 tests nuevos en `gdpr-cleanup.scheduler.test.ts`. Actualizado `repositories.test.ts` para el nuevo where con `deletedAt: null`.
-**FIX3 — BUG-MEDIO-3**: `syncUserExpress` en `retroachievements.adapter.ts` cambiado de `for...of` secuencial a `Promise.allSettled` con chunks de `RA_PROCESS_CONCURRENCY=3` — igual que `syncUser`/`syncUserBatched`. `logger.warn` por cada juego que falla individualmente. Tests: `retroachievements.adapter.test.ts` creado (3 tests: no aborta cuando DB upsert falla, loguea warn, procesa correctamente cuando todo OK).
-**FIX4**: `rankings.tsx` `RankingList` — `isRefetching` eliminado del destructuring. `isManualRefreshing = useState(false)`. `handleRefresh` async: `setIsManualRefreshing(true)` → `queryClient.invalidateQueries` → `finally(false)`. `RefreshControl` usa `refreshing={isManualRefreshing}`. `useQueryClient` añadido. Tests: `RankingsScreen.test.tsx` migrado a `renderWithClient` + `QueryClientProvider`, 1 test nuevo (refreshing=false aunque isRefetching=true).
-**FIX5**: `upsertUserScore` en `ranking.service.ts` paraleliza las queries de `getPlatformXp`: `Promise.all(platforms.map(p => getPlatformXp(userId, p)))` + `Promise.all(platforms.map(...zadd))`. Antes: bucle `for...of` secuencial. Tests existentes verificados.
-**FIX6**: `useSubscription.ts` — `rcApiKey` leído en el cuerpo del hook (no a nivel de módulo) para testabilidad. `customerInfo = useState<CustomerInfo | null>(null)`. `useEffect` llama `Purchases.getCustomerInfo()` si RC configurado → `setCustomerInfo`. `subscriptionStatus.isPremium` deriva de RC (fuente primaria) con fallback a `user.isPremium` del JWT. `isLoadingStatus` verdadero mientras RC carga. `syncPremiumState` actualiza `customerInfo` tras compra. `getCustomerInfo: jest.fn()` añadido al mock global en `jest.setup.ts`. Tests: 5 tests nuevos en `useSubscription.test.ts`.
-**Decisión soft delete GDPR**: `deleteAccount` implementa soft delete completo según spec de CLAUDE.md. `authenticate.ts` añade DB check (fail-open ante errores transitorios para no bloquear requests). La verificación en middleware añade ~1-5ms de latencia por request autenticada — trade-off aceptado por requisito de seguridad GDPR.
-
-**Fecha**: 2026-06-20 (sesión 30) — Revisión exhaustiva sin cambios de código. 4 bugs confirmados:
-**BUG-CRITICO-1** (seguridad/GDPR): `getPublicProfile` en `user.service.ts` llama a `mapUser` que incluye `email: string`, y la ruta `GET /api/v1/users/:username` no tiene `authenticate` — cualquier llamada no autenticada obtiene el email del usuario. Fix: crear `mapPublicUser` que excluye `email` y usarlo en `getPublicProfile`.
-**BUG-CRITICO-2** (GDPR): `deleteAccount` hace `prisma.user.delete` (hard delete inmediato) en lugar del flujo especificado: soft delete `deletedAt = now()` → anonimizar `ActivityEvent.payload` → borrar `PlatformAccount`/`PasswordResetToken` → mantener `UserPoint`/`UserChallenge` → job físico a los 30 días. Los registros de auditoría de puntos se destruyen inmediatamente con el cascade.
-**BUG-MEDIO-3**: `retroachievements.adapter.ts` `syncUserExpress` usa `for...of` secuencial sin `Promise.allSettled` — un error en un juego aborta el express sync completo (sync llamado al vincular RA). `syncUser`/`syncUserBatched` ya usan `Promise.allSettled` correctamente.
-**BUG-MEDIO-4**: `getPublicProfile` y `compareProfiles` no filtran `deletedAt: null` — si BUG-CRITICO-2 se corrige a soft delete, los usuarios borrados seguirían siendo accesibles via perfil público. Code smells: `isRefetching` en `rankings.tsx` RefreshControl (patrón incorrecto vs sesión 18), `subscriptionStatus` hardcoded en `useSubscription.ts`, `getPlatformXp` secuencial en `upsertUserScore` (paralelizable). Tests: 491 API (37 suites) + 308 mobile (25 suites). 0 errores TS/lint. Cobertura API 81.57% stmt / 82.47% branch.
-
-**Fecha**: 2026-06-19 (sesión 29) — Flag `--only-steam` en seed-games.ts. `seedSteamUsers(prisma, usernamesOverride)` añadida en `scripts/seed-games.ts`: resuelve vanity URL → SteamID64 vía `ISteamUser/ResolveVanityURL/v1/`, obtiene `GetOwnedGames`, filtra por `has_community_visible_stats`, hace upsert de juegos y logros igual que `seedSteam` con `normalizeSteamPoints` y `l: 'spanish'`. Guard temprano: `process.exit(1)` si `STEAM_API_KEY` no está en el entorno. `const key: string = apiKey` evita el problema de narrowing de tipo en el closure (mismo patrón que `seedPSN`). `main()` actualizado: `onlySteam` flag, `skipCatalog = onlyPsn || onlySteam`, cuarto resultado `steamUsersResult`, summary condicional por modo. Interfaz `SteamOwnedGameEntry` añadida a la sección de tipos. **Ejecución Seithek**: SteamID64 resuelto correctamente a `76561198088669581`, pero `GetOwnedGames` devolvió 0 juegos — perfil de Steam privado. Comando: `cd apps/api && railway run -- npx tsx ../../scripts/seed-games.ts --only-steam --usernames="Seithek"`. API TS: 0 errores. Mobile TS: 0 errores.
-
-**Fecha**: 2026-05-31 (sesión 30) — Premium desactivado para lanzamiento inicial. `featureFlags.ts`: `premium: false`, `pointsRedeem: false`, `advancedStats: false`. `ComingSoon.tsx` creado (icono rocket, i18n `common.coming_soon_title/body`, botón Volver). `PremiumBanner.tsx`: guard `if (!FEATURES.premium) return null` antes de cualquier lógica. `premium.tsx`: guard `if (!FEATURES.premium) return <ComingSoon />` tras todos los hooks. `es.json` + `en.json`: claves `common.coming_soon_title/body` añadidas. Tests mockeados con `premium: true` en `PremiumBanner.test.tsx` y `PremiumScreen.test.tsx` para preservar cobertura del código de compra. Para reactivar en Fase 4: `premium: true`, `pointsRedeem: true`, `advancedStats: true` en `featureFlags.ts` — todo el backend (webhook RevenueCat, subscription service, hooks) intacto. TypeScript 0 errores · Lint 0 errores · 314/314 mobile tests pasando.
-
-**Fecha**: 2026-05-30 (sesión 29) — Revisión exhaustiva + 6 fixes. BUG-CRÍTICO-1 (email en perfil público): `mapPublicUser()` creada en `user.service.ts` excluyendo `email`/`passwordHash`/`birthDate`; `getPublicProfile` y `compareProfiles` usan `mapPublicUser`; tipo `PublicUser` nuevo en `packages/types`. BUG-CRÍTICO-2 (GDPR hard delete): `deleteAccount` reescrito con transacción Prisma atómica (soft delete → anonimizar ActivityEvent → eliminar PlatformAccount/PasswordResetToken → mantener UserPoint/UserChallenge); `authenticate.ts` verifica `deletedAt: null` en cada request; `gdpr-cleanup.scheduler.ts` nuevo — cron diario que borra físicamente usuarios con `deletedAt > 30 días`. BUG-MEDIO-3 (RA syncUserExpress con Promise.all): sustituido por `Promise.allSettled` con chunks de 3 — un juego fallido no aborta los demás. FIX-4 (rankings.tsx RefreshControl): `isManualRefreshing` local, elimina `isRefetching` del RefreshControl — mismo patrón que `index.tsx` sesión 18. FIX-5 (upsertUserScore secuencial): `getPlatformXp` lanzado en paralelo con `Promise.all` por plataforma. FIX-6 (useSubscription hardcoded): `CustomerInfo` de RevenueCat leído al montar; `subscriptionStatus.isPremium` deriva de RC con fallback a `user.isPremium` del JWT cuando RC no está configurado. Tests: 507 API (39 suites) + 314 mobile (26 suites). Cobertura API 81.72% stmt. 0 errores TS/lint.
-
-**Fecha**: 2026-06-18 (sesión 28) — 8 bugs + mejoras. BUG-1 (Steam privado): `checkSteamProfilePublic(steamId)` añadido en `steam.adapter.ts`; `linkSteamHandler` lo llama tras `resolveVanityUrl` — lanza `STEAM_PROFILE_PRIVATE` (400) antes de vincular; `steam.tsx` lo maneja con `err.apiError.code === 'STEAM_PROFILE_PRIVATE'`; i18n `error_profile_private` ES/EN. BUG-2 (ranking nacional eliminado): `KEYS.country` eliminado de `ranking.service.ts`; `upsertUserScore`/`removeUserFromRankings` sin `countryCode`; `getCountryRanking` eliminada; route `/country/:country` eliminada; `useCountryRanking` eliminada de `useRankings.ts`; filtro "Nacional" eliminado de `rankings.tsx`. BUG-3 (rankings plataforma usan XP total): `upsertUserScore` ahora llama `getPlatformXp(userId, platform)` por cada plataforma y usa el XP específico de esa plataforma para el sorted set — un usuario con 50k XP de Steam ya no aparece #1 en RA. BUG-4 (normalización RA): fórmula corregida a `Math.max(5, Math.round(points/5))` (antes `Math.min(100, Math.max(1, points))`); creado `scripts/backfill-ra-xp.ts` idempotente. BUG-5 (AppState listener): `AppState.addEventListener('change', ...)` en `index.tsx` invalida `my-games` cuando la app vuelve al frente — cubre el caso donde el sync nocturno terminó mientras la app estaba en background. BUG-6 (sort por rareza eliminado): `sortByRarity` state y botón eliminados de `game/[id].tsx` — rareza no es consistente entre plataformas. BUG-7 (Steam en español): `fetchGameSchema` añade `l: 'spanish'` y cambia clave de caché a `steam:schema:{appId}:es` — Steam hace fallback a inglés automáticamente. Tests nuevos: `steam.adapter.test.ts` (8 tests: `checkSteamProfilePublic` + `resolveVanityUrl`); actualización de fórmula RA en `retroachievements.adapter.test.ts`; `ranking.service.test.ts` reescrito con nueva API sin `countryCode` y con XP por plataforma; `sync.worker.test.ts` + `platform.service.test.ts` + `user.service.test.ts` actualizados. Tests: 491 API (37 suites) + 308 mobile (25 suites). 0 errores TS/lint.
-
-**Fecha**: 2026-06-17 (sesión 27) — 6 bugs de dispositivo físico. BUG-1: `justify-center` añadido a todos los Pressable de acción primaria en login, register, steam, ra, psn — sin él, el texto se acumula arriba del espacio vertical en Android. BUG-2: `sync.worker.ts` — cuando `xpEarned=0`, se llama `upsertUserScore` con el XP actual del usuario y todas sus plataformas vinculadas; cubre usuarios que vincularon RA/PSN antes de la sesión 25 y cuyas syncs posteriores no generaban XP nuevo (nunca entraban en `ranking:platform:ra`/`ranking:platform:psn`). BUG-3: `(tabs)/_layout.tsx` — añadido `Redirect href="/(auth)/login"` cuando `!isAuthenticated` (después de todos los hooks, para respetar React Rules of Hooks); el botón "atrás" de Android ya no puede acceder a los tabs tras hacer logout. BUG-5+8: `handleRefresh` en `index.tsx` invalida `sync-summary` en paralelo con `resetQueries` para que `anyPlatformLinked` y el estado de cooldown se actualicen inmediatamente al hacer pull-to-refresh (el `staleTime: 30s` lo retrasaba). BUG-6: `link-platform/steam.tsx`, `ra.tsx` y `psn.tsx` — `onSuccess` invalida `sync-summary` y `my-games`; el empty state "Tus juegos aparecerán pronto" ahora aparece al navegar a la biblioteca tras vincular. BUG-9: `platform.controller.ts` — `queueInitialSync` cambiado de `void` a `.catch(logger.error)` para que los fallos de BullMQ/Redis sean visibles en logs Railway. `sync.worker.test.ts`: mock de `ranking.service.upsertUserScore` añadido; `prisma.user.findUnique` y `prisma.platformAccount.findMany` añadidos al mock de Prisma; test BUG-9 renombrado y ampliado para verificar el nuevo comportamiento. BUG-4 (plataformas no cargan al login) y BUG-7 (error 409 en Steam/RA) no tienen código a cambiar — ya estaban correctos en el código actual. Tests: 484 API (36 suites) + 308 mobile (25 suites). 0 errores TS/lint.
-
-**Fecha**: 2026-06-16 (sesión 26) — Bug mount refresh biblioteca. `LibraryScreen` ahora llama `queryClient.invalidateQueries({ queryKey: ['my-games'] })` en `useEffect([user?.id, queryClient])` al montar. Causa raíz: TanStack Query con `staleTime: 3 min` en React Native no tiene `refetchOnWindowFocus` ni `AppState` listener, y `hydrateFromApi(false)` en `useSyncProgress` no llama `invalidateQueries` cuando no hay syncs activos en Redis. Sin el fix, si el sync nocturno terminó mientras la app estaba en background con caché < 3 min, la lista mostraba datos del caché stale al abrir sin actualizarse. `invalidateQueries` hace background refetch (sin spinner) y descarta el `staleTime`. 2 tests nuevos en `FeedScreen.test.tsx`: "invalida my-games al montar cuando el usuario tiene ID" y "NO invalida when user.id is undefined". Tests: 484 API (36 suites) + 308 mobile (25 suites). 0 errores TS/lint.
-
-**Fecha**: 2026-06-15 (sesión 25) — 4 bugs + Wrapped extendido. BUG-1: `sortGames(games, order, isRunning)` — parámetro `isRunning` nuevo; cuando `true`, `lastActivityAt=null` se trata como `Date.now()+1_000_000_000` para que juegos nuevos durante sync aparezcan arriba. BUG-2: `index.tsx` llama `useSyncStatus(user?.id)` para obtener `anyPlatformLinked`; `ListEmptyComponent` ahora muestra `library.empty_linked_title` ("Tus juegos aparecerán pronto") cuando hay plataformas vinculadas pero sin juegos — sin mensaje erróneo "Vincula tus plataformas". BUG-3: `linkPlatform()` en `platform.service.ts` ahora busca todos los `platformAccounts` del usuario tras crear el registro y llama `upsertUserScore(userId, user.xp, user.countryCode, allPlatforms)` — el usuario aparece en rankings de plataforma inmediatamente al vincular. BUG-4: `handleRefresh` usa `queryClient.resetQueries({ queryKey: ['my-games'] })` en lugar de `invalidateQueries` — carga solo la primera página, spinner resuelve en 1 request. MEJORA-5: `GamingWrapped` extendido con `completedGamesByPlatform`, `platinumsEarned`, `longestStreakInYear`, `mostActivePlatform`, `mostProductiveDay` (tipo `packages/types`). `wrapped.service.ts` — `loadUserAchievements()` extraída, `computeStats` acepta `preloaded` para evitar doble query, `computeExtendedStats()` nueva función (2 queries paralelas: `game.findMany` + `userAchievement.findMany` earnedAllTime; rest calculado en JS desde achievements ya cargados; early return si no hay logros). `wrapped/[year].tsx` — 5 tarjetas nuevas con `FadeInDown` (platinos, completados por plataforma, racha larga, día épico, plataforma activa); solo se muestran si el valor es > 0/null. i18n: 8 claves nuevas en ES/EN (`platinums_earned/sub`, `completed_games_title/a11y`, `longest_streak`, `most_productive_day/count`, `most_active_platform`). Tests: 484 API (36 suites) + 306 mobile (25 suites). 0 errores TS/lint.
-
-**Fecha**: 2026-06-14 (sesión 24) — Paralelismo sync PSN/RA + mejoras SyncStatusBar + onboarding paso 4. API: `psn.adapter.ts` refactorizado: `processSingleTitle()` extraído, `processTitles()` con `Promise.allSettled` chunks de 5 (`PSN_PROCESS_CONCURRENCY=5`). `retroachievements.adapter.ts`: `syncUser()` y `syncUserBatched()` con chunks de 3 (`RA_PROCESS_CONCURRENCY=3`). Steam: `TTL_SCHEMA` ya era 86400 (24h), sin cambio; T15 documentado. Mobile: `SyncStatusBar.tsx` — `useQueryClient` para invalidar `['sync-summary']` al expirar countdown, `setTimeout`-chain para countdown independiente del `refetchInterval` 60s, aviso ámbar `sync_long_warning` tras 30s de sync activo, early return movido después de todos los hooks (Rules of Hooks). `SyncStatusBar.test.tsx` migrado a `renderWithClient` con `QueryClientProvider` (+1 test para `sync-long-warning`). `onboarding.tsx` — paso 4 con botones Steam/PSN/RA (`PlatformRoute` type, `linkPlatform()` llama `completeOnboarding()` + `router.replace`), CTA secundario "Hacer esto más tarde". i18n ES/EN: 8 claves onboarding nuevas (`step4_title/body`, `cta_skip_platforms`, `platform_steam/psn/ra`). Tests: 475 API (36 suites) + 302 mobile (25 suites). 0 errores TS/lint.
-
-**Fecha**: 2026-06-13 (sesión 23) — Google Play Billing vía RevenueCat + pantalla premium. Mobile: `react-native-purchases` v10 instalado, `hooks/useRevenueCat.ts` (initRevenueCat/cleanupRevenueCat, logIn al autenticarse), `hooks/usePremiumPlans.ts` (offerings RC → PremiumPlan[], fallback hardcoded), `hooks/useSubscription.ts` reescrito (purchasePackage, restorePurchases v10 devuelve CustomerInfo directo, cancelSubscription), `refreshAccessToken()` exportada de `lib/api.ts`, `app/premium.tsx` reescrito (título + 4 beneficios + 2 planes radio + CTA con `busy` + separador + canje 300 pts + restaurar + legal), `app/_layout.tsx` añade `<RevenueCatInit />`, `FEATURES.premium = true`, `jest.setup.ts` mock global `react-native-purchases`. Backend: `REVENUECAT_WEBHOOK_SECRET` en `env.ts`, `controllers/webhooks.controller.ts` (verifica bearer, INITIAL_PURCHASE/RENEWAL activa, EXPIRATION/CANCELLATION expira, siempre 200), `services/subscription.service.ts` añade `expireSubscriptionFromWebhook`, `routes/webhooks.routes.ts`, registrado en `routes/index.ts`. i18n ES/EN: `common.close`, `common.or`, sección `premium` completa. Tests: 470 API (+25 webhook tests) + 301 mobile (+13 premium + 3 PremiumBanner fix). 0 errores TS/lint.
-
-**Fecha**: 2026-06-12 (sesión 22) — SyncStatusBar en Biblioteca: feedback completo de sync en tiempo real. Backend: `getAggregateSyncStatus(userId, isPremium)` en `sync.service.ts` — agrega estado Redis por plataforma (`cooldownKey`, `dailyCountKey`), expone `lastSyncAt`, `nextAutoSyncAt`, `canSyncNow`, `manualSyncsUsedToday`, `dailySyncsLimit`, `anyPlatformLinked`. Endpoint `GET /api/v1/sync/my-summary` (declarado antes de `/:platform` para evitar match falso). Mock server actualizado. Hook `useSyncStatus` con `refetchInterval: 60_000`, `staleTime: 30_000`, formateo via claves i18n. `SyncStatusBar` component: botón sync (spinner si activo, cooldown countdown si no puede), syncs restantes (solo free), última sync relativa, próximo auto sync. Integrado en `index.tsx` sustituyendo el botón `⟳` antiguo. Tests: 460 API (+9) + 288 mobile (+25). 0 errores TS/lint.
-
-**Fecha**: 2026-06-11 (sesión 21) — Dos cambios independientes. PARTE 1: borrado en cascada al desvincular plataforma — `unlinkPlatform()` con `prisma.$transaction` atómica (borra `UserAchievement`, `PlatformAccount`, recalcula XP/nivel). `calculateLevel` exportada de `user.service.ts`. Mobile invalida `my-games` + `my-stats` en `onSuccess`. PARTE 2: sort biblioteca carga todas las páginas — `fetchAllRemainingPages` con `result.hasNextPage` del loop, `handleSortChange` llama `fetchAllRemainingPages` si `hasNextPage`, botón sort muestra `ActivityIndicator` mientras carga, pull-to-refresh con sort activo usa `pendingFetchAllAfterRefreshRef` + `useEffect`. Tests: 451 API (+6) + 263 mobile (+4). 0 errores TS/lint.
-
-**Fecha**: 2026-06-09 (sesión 19) — Fix auto-refresco lista durante sync: `hydrateFromApi` (fallback polling) ahora llama `invalidateQueries({ queryKey: ['my-games'] })` cuando hay syncs activos (throttle 15s) y cuando el sync termina en modo fallback. Tests: 445 API + 250 mobile (+2 nuevos). 0 errores TS/lint.
-
-**Fecha**: 2026-06-08 (sesión 18) — 3 mejoras: fix pull-to-refresh separado del infinite scroll (`isManualRefreshing` local, elimina confusión con `isRefetching`), confirmación de auto-refresco durante sync (ya funcionaba por prefix matching TanStack Query), `AvatarPlaceholder` con iniciales + color determinista por username en `UserCard`/`profile.tsx`/`profile/[username].tsx`. Tests: 445 API + 248 mobile (+15 nuevos). 0 errores TS/lint. Cobertura API 80.57% stmt.
-
-**Fecha**: 2026-06-07 (sesión 17) — 10 mejoras UI/UX: jerarquía visual logros en `game/[id].tsx` (badge earned vs no-earned), `lastActivityAt` = MAX(unlockedAt) para sort "último jugado" real (campo `UserAchievement.unlockedAt` confirmado en schema), pull-to-refresh via `queryClient.invalidateQueries`, `contentFit="contain"` en iconos de juego, badge "Platino" en `LibraryGameCard` cuando `platinumEarned`, ícono cámara en avatar de perfil, placeholder PSN sin username real, selector de tema oculto, más espaciado en chips de Search, tab Challenges gateado con `FEATURES.challenges = false`. Tests: 445 API + 233 mobile. 0 errores TS/lint. Cobertura API 80.8% stmt / 83.66% branch.
-
-**Fecha**: 2026-06-06 (sesión 16) — Padding header reducido (`pt-2→pt-1`) en 6 tabs. Badge PSN simplificado: solo tick ✓ verde cuando `isCompleted` — sin texto ni badge de platino. `globalRateLimiter` 300→500 req/15min. Investigación sync PSN: estructural (300 llamadas secuenciales), sin rate limiting detectado, sin cambios de código. Investigación contadores BD: query eficiente con `@@index([userId])`, documentado como T14. Tests: 445 API + 233 mobile. 0 errores TS/lint. Cobertura API 80.8% stmt / 83.66% branch.
-
-**Fecha**: 2026-06-05 (sesión 15) — APK #4 build + smoke test. Sin cambios de código. Build local debug 169 MB. PSN sync falla con "Expired token" — NPSSO del sistema expirado. Auth rate limiter (10 req/15 min) disparado por peticiones curl de diagnóstico desde la misma IP del emulador. Dos hallazgos documentados en Decisiones tomadas.
-
-**Fecha**: 2026-06-04 (sesión 14) — 8 bugs/mejoras UI + sync lockDuration. Padding `pt-4→pt-2` en 5 pantallas. Sort button muestra label activo. `last_played` con desempate por `pct_desc`. Contador juegos: denominador gris. Badges PSN independientes. `lib/platformColors.ts` centralizado (fix `#003087→#1e90ff` en GameCard+AchievementSearchCard). Toggle ES|EN en login. BullMQ `lockDuration: 300_000`. Tests: 445 API + 233 mobile. 0 errores TS/lint. Cobertura API 80.8% stmt / 83.66% branch.
-
-**Fecha**: 2026-06-03 (sesión 13) — Fix rate limiter producción: `max: 100→300` req/15min, `/health` excluido del middleware. 0 código nuevo, solo `app.ts` + `rateLimiter.ts`. Tests: 443 API + 216 mobile. 0 errores TS/lint.
-
-**Fecha**: 2026-06-03 (sesión 12) — Contador `totalGames`/`totalCompletedGames` en cabecera de biblioteca. Backend + hook + UI + i18n + tests. Tests: 443 API + 216 mobile. 0 errores TS/lint. Cobertura API 80.8% stmt / 83.66% branch.
-
-**Fecha**: 2026-06-02 (sesión 11) — Mock server endpoint `sync/status` añadido. BUG-12 `hydrateFromApi` (`socketSilent`). Back buttons WCAG. `fallbackLng: 'en'`. "Biblioteca". i18n audit completo. Tests: 438 API + 214 mobile. 0 errores TS/lint. Cobertura API 80.77% stmt / 83.66% branch.
-
-**Fecha**: 2026-06-01 (sesión 10) — BUG-7/8/9/10/11 corregidos. PSN states, sort modal, color #1e90ff, i18n. Tests: 438 API + 214 mobile. 0 errores TS/lint. Cobertura API 80.77% stmt / 83.66% branch.
-
-**Fecha**: 2026-05-31 (sesión 9) — Fix `PLATFORM_ACCOUNT_ALREADY_LINKED`: código renombrado, handler 409 añadido en psn.tsx, mensajes i18n corregidos en Steam/RA, clave `error_already_linked` añadida en PSN. `LinkPsnScreen.test.tsx` refactorizado a patrón factory. Revisión completa Parte 2: 0 bugs adicionales. Tests: 427 API + 208 mobile. 0 errores TS/lint.
-
-**Fecha**: 2026-05-31 (sesión 8) — Steam y RA vinculación simplificada: solo username. `resolveVanityUrl` + `lookupRaUser` exportadas. UI reescrita (guía colapsada, sin campos de API key). i18n ES/EN actualizado. Tests: 426 API + 204 mobile. 0 errores TS/lint.
-
-**Fecha**: 2026-05-30 (sesión 7) — Smoke test APK #3 completo. BUG-6 identificado (PSN screen NPSSO stale — Metro cache). BUG-3/4/5 re-confirmados ✅. AdMob banners ✅. 15/16 pasos completados (offline mode no testeable en emulador). Ver detalles en Sesión 7.
-
-**Fecha**: 2026-05-30 (sesión 6) — APK #3 generada localmente (debug). Downgrade `react-native-google-mobile-ads` v16→v13. `app-debug.apk` 165.7 MB lista para smoke test. Ver detalles en Sesión 6.
-
-### Sesión 20 — 2026-06-10 — Banner "X juegos nuevos" durante sync activo
-
-**Objetivo**: mostrar un chip discreto en la parte superior de la lista cuando llegan juegos nuevos durante un sync activo, sin interrumpir al usuario si está revisando un juego.
-
-**Análisis previo (PARTE 1):**
-- No existía `flashListRef` en el FlashList — añadido.
-- `isRunning` ya estaba disponible desde `useSyncProgress` (línea 157).
-- No existía detección de juegos nuevos. Se usa `allGames.length` (no `games.length` que varía con filtros) como baseline.
-
-**Componente `components/NewGamesBanner.tsx`:**
-- `Animated.spring` para entrada (opacity 0→1, translateY -20→0) — mismo patrón que `OfflineBanner`.
-- `position: 'absolute'` para flotar sobre la lista sin desplazar contenido.
-- `testID="new-games-banner"` para tests y Maestro.
-- `accessibilityRole="button"` + `accessibilityLabel` via `library.new_games_banner_a11y`.
-
-**Lógica en `app/(tabs)/index.tsx`:**
-- `flashListRef = useRef<FlashList<LibraryGame>>(null)`.
-- `seenGamesCount = useState(0)` — inicializado a `allGames.length` en primera carga (previene banner en load inicial).
-- `showNewGamesBanner = useState(false)`.
-- `useEffect 1` (inicialización): `if allGames.length > 0 && seenGamesCount === 0 → setSeenGamesCount(allGames.length)`.
-- `useEffect 2` (lógica): `!isRunning → hide + reset; isRunning && allGames.length > seenGamesCount && seenGamesCount > 0 → show`.
-- `handleNewGamesBanner`: scroll top + `seenGamesCount = allGames.length` + hide.
-- `handleRefresh` actualizado: hide + `seenGamesCount = allGames.length` antes de invalidar.
-- El FlashList se envuelve en `<View style={{ flex: 1, position: 'relative' }}>` para que el banner flote correctamente.
-
-**i18n ES/EN:**
-- `library.new_games_banner_one/other` + `library.new_games_banner_a11y_one/other` — patrón `_one/_other` de i18next.
-
-**Tests:**
-- `NewGamesBanner.test.tsx` (nuevo, 5 tests): testID presente, accessibilityRole button, accessibilityLabel definido, onPress llamado, texto i18n clave presente.
-- `FeedScreen.test.tsx` (+4 tests): banner NO con `isRunning=false`, banner NO en carga inicial, banner SÍ con sync activo + juegos nuevos, banner desaparece en pull-to-refresh.
-- Mock de `NewGamesBanner` en `FeedScreen.test.tsx` para testear solo lógica de `index.tsx`.
-- `renderWithClient` refactorizado para exponer `rerender` con mismo `QueryClientProvider` wrapper.
-
-**Estado de calidad:**
-| Categoría | Resultado |
-|---|---|
-| TypeScript strict (API + mobile) | ✅ 0 errores |
-| Lint (API + mobile) | ✅ 0 errores, 0 warnings |
-| Tests backend | ✅ 445/445 — 35 suites |
-| Tests mobile | ✅ 259/259 — 22 suites |
-
----
-
-### Sesión 19 — 2026-06-09 — Fix auto-refresco lista durante sync
-
-**Objetivo**: la lista de la biblioteca no se actualizaba progresivamente durante un sync de plataforma — solo al hacer pull-to-refresh manual.
-
-**Diagnóstico:**
-- `useSyncProgress` tiene dos paths para mantener el banner actualizado:
-  1. **Socket.io** (`onSyncProgress`): llama `invalidateQueries` en cada lote ✅ — funciona cuando el socket recibe eventos
-  2. **Fallback polling** (`hydrateFromApi`): llama la API Redis cada 2s — solo actualizaba `activeSyncs` (banner), **sin `invalidateQueries`** ❌
-- En emulador/device, el socket frecuentemente no recibe eventos → el fallback polling mantiene el banner activo pero la lista nunca se refresca → el usuario solo ve cambios al deslizar (pull-to-refresh).
-
-**Fix — `apps/mobile/hooks/useSyncProgress.ts`:**
-- Nueva constante `LIST_INVALIDATE_THROTTLE_MS = 15_000`.
-- Nuevo ref `lastInvalidateRef` para throttle.
-- `hydrateFromApi` ahora llama `void queryClient.invalidateQueries({ queryKey: ['my-games'] })` en dos puntos:
-  1. Cuando `running.length > 0` (sync en curso): throttled a 15s — el socket hace lo mismo sin throttle por cada lote
-  2. Cuando `running.length === 0 && socketSilent` (sync completado en modo fallback): sin throttle — es el refresco final
-- `queryClient` añadido a la dependency array de `hydrateFromApi`.
-
-**Tests añadidos — `__tests__/hooks/useSyncProgress.test.ts`:**
-- `BUG-8: invalida my-games cuando hydrateFromApi detecta syncs en curso (fallback polling)`: verifica que `invalidateQueries` se llama cuando la API devuelve syncs activos.
-- `BUG-8: invalida my-games cuando hydrateFromApi detecta que el sync terminó (socketSilent=true)`: simula el ciclo completo (sync activo → timer de gracia → API devuelve vacío) con fake timers.
-- Existente `BUG-8: hidrata el Map desde la API en el mount...`: añadida aserción de `invalidateQueries`.
-
-**Estado de calidad:**
-| Categoría | Resultado |
-|---|---|
-| TypeScript strict (API + mobile) | ✅ 0 errores |
-| Lint (API + mobile) | ✅ 0 errores, 0 warnings |
-| Tests backend | ✅ 445/445 — 35 suites |
-| Tests mobile | ✅ 250/250 — 21 suites |
-
----
-
-### Sesión 18 — 2026-06-08 — Fix pull-to-refresh, AvatarPlaceholder con iniciales
-
-**Objetivo**: 3 mejoras UX — fix confusión pull-to-refresh vs infinite scroll, confirmación auto-refresco durante sync, placeholder de avatar con iniciales.
-
-**PARTE 1 — Fix pull-to-refresh vs infinite scroll:**
-- **Causa raíz**: `refreshing={isRefetching}` en el `RefreshControl`. En TanStack Query, `isRefetching = isFetching && !isLoading`. Cuando `fetchNextPage()` carga la página siguiente, `isFetching = true` y `isLoading = false` → `isRefetching = true` → el spinner de pull-to-refresh aparecía en el top al llegar al final de la lista.
-- **Fix**: estado local `isManualRefreshing` (empieza en `false`). `handleRefresh` async con `setIsManualRefreshing(true)` → `await queryClient.invalidateQueries(...)` → `setIsManualRefreshing(false)` en `finally`. `RefreshControl` usa `refreshing={isManualRefreshing}`. `isRefetching` eliminado del destructuring de `useMyGames`.
-- `onEndReached` → `fetchNextPage` | `onRefresh` → `handleRefresh` — gestos completamente independientes.
-
-**PARTE 2 — Auto-refresco durante sync (ya funcionaba):**
-- Confirmado: `useSyncProgress` llama `queryClient.invalidateQueries({ queryKey: ['my-games'] })` en cada batch (`sync:progress`) y al completar (`sync:complete`).
-- TanStack Query usa prefix matching: `['my-games']` invalida `['my-games', 'all']`, `['my-games', 'STEAM']`, etc. No había bug. Documentado sin cambiar código.
-
-**PARTE 3 — `AvatarPlaceholder` con iniciales y color determinista:**
-- `components/AvatarPlaceholder.tsx`: `getAvatarColor(username)` — hash sobre paleta de 8 colores (indigo/violet/pink/amber/emerald/blue/red/teal). `getInitials(username)` — primeras 2 letras en mayúsculas. Tamaño configurable (`size` prop, default 80). `testID="avatar-placeholder-container"`. `accessibilityLabel` via i18n `profile.avatar_placeholder`.
-- `UserCard.tsx`: `user.avatar ? <Image> : <AvatarPlaceholder>` — elimina `require('../assets/images/icon.png')` como fallback.
-- `profile.tsx` (perfil propio): `user.avatar ? <Image> : <AvatarPlaceholder size={96}>` — el ícono de cámara sigue visible sobre el placeholder.
-- `profile/[username].tsx` (perfil público): `profile.avatar ? <Image> : <AvatarPlaceholder size={80} style={borderStyle}>` — mantiene el borde de 3px.
-- i18n: `profile.avatar_placeholder` — `"Foto de perfil de {{username}}"` / `"Profile photo of {{username}}"`.
-
-**Tests añadidos/modificados:**
-- `AvatarPlaceholder.test.tsx` (nuevo, 10 tests): `getInitials` (3), `getAvatarColor` (3), componente (4 — iniciales con `includeHiddenElements`, accessibilityLabel, tamaño, color determinista).
-- `UserCard.test.tsx`: mock `AvatarPlaceholder`, 2 tests nuevos (placeholder cuando avatar null, imagen cuando avatar tiene URL).
-- `FeedScreen.test.tsx`: import `act`, test `handleRefresh` convertido a async con `act()`, 2 tests nuevos (callbacks distintos, `refreshing=false` cuando `isFetchingNextPage=true`).
-
-**Estado de calidad:**
-| Categoría | Resultado |
-|---|---|
-| TypeScript strict (API + mobile) | ✅ 0 errores |
-| Lint (API + mobile) | ✅ 0 errores, 0 warnings |
-| Tests backend | ✅ 445/445 — 35 suites |
-| Tests mobile | ✅ 248/248 — 21 suites |
-| Cobertura API | ✅ 80.57% stmt |
-
----
-
-### Sesión 17 — 2026-06-07 — UI/UX polish: jerarquía logros, lastActivityAt, iconos, badges, Challenges gateado
-
-**Objetivo**: 10 mejoras UI/UX priorizadas + verificación de tests + actualización CLAUDE.md.
-
-**P1 — Jerarquía visual logros (`game/[id].tsx`):**
-- Antes: logros earned con `bg-primary/10 border border-primary/30` (apenas visible) parecían más apagados que los no-earned con `bg-surface-card`.
-- Ahora: ambos usan `bg-surface-card`; solo earned recibe borde inline `{ borderWidth: 1, borderColor: 'rgba(129,140,248,0.45)' }`. Iconos: opacity 1 si earned, 0.4 si no.
-
-**P2 — `lastActivityAt` = MAX(unlockedAt) por juego:**
-- Campo `UserAchievement.unlockedAt DateTime` confirmado en schema Prisma — implementación real.
-- `getMyGames` selecciona `unlockedAt: true` en `userAchievements`; el loop actualiza `lastActivityAt = max(entry.lastActivityAt, ua.unlockedAt)`.
-- `useMyGames.ts`: campo `lastActivityAt: string | null` añadido a `LibraryGame`.
-- Sort `last_played` en `index.tsx` usa `lastActivityAt` en lugar de `lastSyncedAt`.
-
-**P3 — Pull-to-refresh via `queryClient.invalidateQueries`:**
-- Añadido `import { useQueryClient }` y `const queryClient = useQueryClient()` en `index.tsx`.
-- `onRefresh` cambiado de `refetch()` a `queryClient.invalidateQueries({ queryKey: ['my-games'] })`.
-- `FeedScreen.test.tsx` actualizado: envuelto en `QueryClientProvider` (necesario para `useQueryClient`), test de pull-to-refresh cambiado a "no lanza".
-
-**P4 — Iconos de juego sin recorte (`contentFit="contain"`):**
-- `LibraryGameCard.tsx`: `contentFit="cover"` → `contentFit="contain"` + `backgroundColor: '#1e293b'`.
-- `game/[id].tsx` header: misma corrección.
-
-**P5 — Badge "Platino" en `LibraryGameCard`:**
-- Reemplaza el tick verde `isCompleted` por badge amarillo `platinumEarned`: `bg-yellow-400 rounded px-1 text-black`.
-- i18n: `library.psn_platinum_badge` → ES `"Platino"` / EN `"Platinum"`.
-- Tests `LibraryGameCard.test.tsx` reescritos para nueva lógica.
-
-**P6 — Ícono cámara en avatar de perfil:**
-- `profile.tsx`: dentro del `Pressable` del avatar, cuando `!avatarMutation.isPending`, muestra badge circular `w-28 h-28 bg-primary` con `Ionicons name="camera"` en esquina inferior derecha.
-- i18n: `profile.change_avatar_hint` → ES/EN.
-
-**P7 — Placeholder PSN sin username real:**
-- `es.json`: `"Ej: Sorrow_Lord"` → `"Ej: tu_username_psn"`.
-- `en.json`: `"e.g. Sorrow_Lord"` → `"e.g. your_psn_username"`.
-
-**P8 — Selector de tema oculto:**
-- Bloque `bg-surface-elevated rounded-xl` del tema eliminado de `profile.tsx` → reemplazado por `{/* TODO Fase 4: selector de tema */}`.
-
-**P9 — Espaciado chips Search:**
-- `contentContainerStyle={{ gap: 8, paddingVertical: 6 }}` → `{ gap: 10, paddingVertical: 8 }`.
-
-**P10 — Challenges gateado:**
-- `featureFlags.ts`: añadido `challenges: false`.
-- `_layout.tsx`: importa `FEATURES`; calcula `href = tab.name === 'challenges' && !FEATURES.challenges ? null : undefined`. La pantalla sigue existiendo.
-
-**Estado de calidad:**
-| Categoría | Resultado |
-|---|---|
-| TypeScript strict (API + mobile) | ✅ 0 errores |
-| Lint (API + mobile) | ✅ 0 errores, 0 warnings |
-| Tests backend | ✅ 445/445 — 35 suites |
-| Tests mobile | ✅ 233/233 — 20 suites |
-| Cobertura API | ✅ 80.8% stmt / 83.66% branch |
-
----
-
-### Sesión 16 — 2026-06-06 — UI polish + rate limiter + investigaciones
-
-**Objetivo**: reducir espacio header→contenido en las 6 tabs, simplificar badges PSN, investigar sync PSN y contadores BD, aumentar rate limiter global.
-
-**PARTE 1 — Padding header reducido:**
-- `pt-2 → pt-1` en `<View>` de cabecera de contenido en index.tsx, search.tsx, rankings.tsx, friends.tsx (×2 ramas).
-- `mb-4 → mb-2` en el título de search.tsx (reducía el gap antes del input de búsqueda).
-- `py-3 → pt-2 pb-3` en challenges.tsx (solo reduce el top, mantiene bottom por el border visual).
-- `pt-8 → pt-6` en profile.tsx sección avatar (24px en lugar de 32px).
-
-**PARTE 2 — Badge PSN simplificado:**
-- Antes: dos badges independientes con texto (`showPsnPlatinum` → `🏆 Platino`, `showPsn100` → `🥇 100%`).
-- Ahora: único tick circular verde (`w-5 h-5 bg-green-500 rounded-full`) con `✓` solo cuando `game.platform === 'PSN' && game.isCompleted`. `platinumEarned` sin badge propio.
-- i18n keys `library.psn_platinum` y `library.psn_100` eliminadas de ES y EN.
-- `LibraryGameCard.test.tsx` reescrito: 5 tests PSN badge + 2 tests básicos.
-
-**PARTE 3 — Investigación sync PSN:**
-- Logs Railway: mínimos (3 líneas del 2026-05-23). NPSSO expirado → no hay syncs PSN activos en producción.
-- **Sin evidencia de 429** de PSN. La lentitud es estructural: `processTitles` tiene un `for...of` secuencial; `getUserTrophiesEarnedForTitle` (no cacheado) = 1 HTTP call por juego = ~300 calls para 300 juegos. `getTitleTrophies` cacheado 24h = 0 calls tras primer sync.
-- **Conclusión**: no se añaden delays. El `lockDuration: 300_000` ya resuelve el stalled job issue.
-
-**PARTE 4 — Investigación contadores BD:**
-- `Game.totalAchievements` está desnormalizado ✅.
-- `earnedAchievements`, `totalGames`, `totalCompletedGames` se calculan en JS a partir de `UserAchievement.findMany` completo.
-- `UserAchievement.userId` tiene `@@index` — query eficiente a escala actual.
-- Riesgo futuro: >100k achievements por usuario. Documentado como T14. **No implementar sin confirmación.**
-
-**PARTE 5 — Rate limiter global 300→500 req/15min:**
-- `apps/api/src/middleware/rateLimiter.ts`: `max: 300 → max: 500`.
-- `authRateLimiter` (10 req/15 min en `/auth/*`) sin cambios.
-- **Distinción documentada**: Express `express-rate-limit` (código nuestro, evita abusos) es completamente independiente de los límites del plan Railway (RAM, horas de ejecución).
-
-**Tests añadidos/modificados:**
-- `LibraryGameCard.test.tsx`: 5 tests badge PSN + 2 básicos (7 total, reescritos).
-
-**Estado de calidad:**
-| Categoría | Resultado |
-|---|---|
-| TypeScript strict (API + mobile) | ✅ 0 errores |
-| Lint (API + mobile) | ✅ 0 errores, 0 warnings |
-| Tests backend | ✅ 445/445 — 35 suites |
-| Tests mobile | ✅ 233/233 — 20 suites |
-| Cobertura API | ✅ 80.8% stmt / 83.66% branch |
-
----
-
-### Sesión 15 — 2026-06-05 — APK #4 smoke test + diagnóstico producción
-
-**Objetivo**: build local debug de APK #4 (todos los cambios sesiones 10-14) + smoke test contra API de producción.
-
-**Build APK #4:**
-- Pre-build checks: TS 0 errores, lint 0 errores, 445 API + 233 mobile tests pasando.
-- `npx expo prebuild --platform android --clean` → `react-native bundle --dev false --entry-file expo-router/entry.js` con `EXPO_PUBLIC_API_URL=https://unlockhub-production.up.railway.app` + `NODE_ENV=production` → `gradlew assembleDebug`.
-- `app-debug.apk` generada: **169 MB**, BUILD SUCCESSFUL en 3m 13s.
-- Bundle verificado: contiene `unlockhub-production.up.railway.app` ✅.
-
-**Hallazgos del smoke test:**
-
-**HALLAZGO 1 — PSN sync: "Expired token" (infra, no código)**
-- Síntoma: biblioteca muestra solo ~50 de 300+ juegos PSN; sync nunca completa.
-- Causa: logs Railway muestran `Sync fallido platform="PSN" err="Expired token"` en cada intento desde las 22:43 del día anterior. El error se repite cada hora (background sync scheduler). RA sync funciona correctamente.
-- Raíz: `PSN_SYSTEM_NPSSO` en Railway ha expirado. El valor en el navegador puede parecer idéntico al configurado en Railway, pero Sony invalida la sesión subyacente periódicamente incluso manteniendo el mismo valor de cookie. No es detectable comparando strings.
-- Fix: logout + login en my.playstation.com → F12 → Application → Cookies → copiar nuevo `npsso` → actualizar `PSN_SYSTEM_NPSSO` en Railway Variables → Railway reinicia automáticamente.
-- Frecuencia estimada: cada ~60 días. Los syncs PSN fallidos se reintentarán solos tras la renovación.
-
-**HALLAZGO 2 — Auth rate limiter compartido con emulador (quirk de diagnóstico)**
-- Síntoma: `RATE_LIMIT_EXCEEDED` al intentar login desde el emulador tras ejecutar pruebas curl desde la misma máquina.
-- Causa: `authRateLimiter` (10 req/15 min en `/auth/*`) aplica por IP. El emulador Android y los comandos curl del sistema host comparten la misma IP externa (NAT del router). Múltiples peticiones curl de diagnóstico (incluyendo las mal formateadas) consumen el cupo del rate limiter y bloquean el login del emulador.
-- Fix: esperar ~15 min para que se resetee la ventana. En diagnósticos futuros, evitar curl masivo a `/auth/*` si hay un emulador activo en la misma red.
-
-**Estado de calidad (sin cambios de código):**
-| Categoría | Resultado |
-|---|---|
-| TypeScript strict (API + mobile) | ✅ 0 errores |
-| Lint (API + mobile) | ✅ 0 errores, 0 warnings |
-| Tests backend | ✅ 445/445 — 35 suites |
-| Tests mobile | ✅ 233/233 — 20 suites |
-| APK #4 build | ✅ BUILD SUCCESSFUL — 169 MB |
-| PSN sync | ⚠️ Falla con "Expired token" — NPSSO expirado (acción del desarrollador) |
-| Auth login | ⚠️ Rate limit disparado por curl de diagnóstico — esperar 15 min |
-
----
-
-### Sesión 14 — 2026-06-04 — UI polish + sync lockDuration
-
-**Objetivo**: 8 bugs/mejoras de UI + fix de stalled jobs en sync de 300+ juegos PSN.
-
-**PARTE 1 — Padding uniforme:**
-- `pt-4` → `pt-2` en cabeceras de `index.tsx`, `search.tsx`, `rankings.tsx`, `friends.tsx` (×2), `game/[id].tsx` (×2).
-
-**PARTE 2 — Sort button con label activo:**
-- `{t('library.sort_button')} ▼` → `{activeSortLabel} ▼`. `activeSortLabel` ya se calculaba en el componente.
-
-**PARTE 3 — Sort `last_played` con desempate:**
-- El comparador ya era correcto. Causa raíz: `lastSyncedAt` es por plataforma (de `syncMap.get(g.platform)`), no por juego. Dentro de la misma plataforma todos los juegos tienen la misma fecha → orden aparentemente aleatorio.
-- Fix: desempate secundario por `completionPct` desc cuando `lastSyncedAt` coincide.
-
-**PARTE 4 — Contador juegos: denominador en gris:**
-- `{totalCompletedGames}/{totalGames}` todo en `text-green-400` → split con `<Text className="text-gray-500">/{totalGames}</Text>` inline. Solo `totalCompletedGames` en verde.
-
-**PARTE 5 — Badges PSN independientes:**
-- Antes: `if (isCompleted) psnBadge = psn_100; else if (platinumEarned) psnBadge = psn_platinum` — mutuamente excluyentes.
-- Ahora: `showPsnPlatinum = platform === 'PSN' && platinumEarned` y `showPsn100 = platform === 'PSN' && isCompleted`, dos renders independientes. Ambos pueden mostrarse simultáneamente (ej: platino ganado + 100% DLC incluido).
-
-**PARTE 6 — `lib/platformColors.ts` centralizado:**
-- Nuevo archivo con `PLATFORM_COLORS` (STEAM `#1b9aaa`, RA `#e8a838`, XBOX `#107c10`, PSN `#1e90ff`) y `getPlatformColor(platform, fallback?)`.
-- `LibraryGameCard`, `GameCard`, `AchievementSearchCard` migrados a importar desde `platformColors.ts`.
-- Fix colateral: `GameCard` y `AchievementSearchCard` tenían PSN `#003087` (contraste insuficiente) — ahora heredan `#1e90ff`.
-- `profile.tsx` conserva su `PLATFORM_COLORS` propio (colores de dots indicadores, uso diferente: oscuros de marca).
-
-**PARTE 7 — Toggle idioma en login:**
-- `useLanguage` hook integrado en `LoginScreen`. Toggle ES|EN en esquina superior derecha (fuera del scroll), disponible sin autenticación.
-- Clave i18n añadida: `auth.login.language_toggle` en ES/EN.
-- `testID="language-toggle"` para selectores de test y Maestro.
-
-**PARTE 8 — BullMQ lockDuration 5 min:**
-- Causa: `lockDuration` por defecto = 30s. 300 juegos PSN / 10 por lote = 30 lotes con llamadas API → fácilmente > 30s → job marcado como stalled.
-- Fix: `lockDuration: 300_000, stalledInterval: 30_000` en opciones del worker de sync.
-- Conservador: no afecta syncs cortos (usuarios con < 20 juegos el lock se renueva normalmente).
-
-**Tests añadidos:**
-- `__tests__/lib/platformColors.test.ts` (nuevo): 7 tests — colores correctos, fallback, fallback personalizado.
-- `__tests__/components/LibraryGameCard.test.tsx` (nuevo): 7 tests — 4 casos de badges PSN + 2 básicos.
-- `__tests__/screens/LoginScreen.test.tsx`: 3 tests nuevos — toggle visible, `changeLanguage('en')`, `changeLanguage('es')`.
-- `apps/api/src/__tests__/sync.worker.test.ts`: 2 tests nuevos — `lockDuration: 300_000`, `stalledInterval: 30_000`, `concurrency: 5`.
-
-**Estado de calidad:**
-| Categoría | Resultado |
-|---|---|
-| TypeScript strict (API + mobile) | ✅ 0 errores |
-| Lint (API + mobile) | ✅ 0 errores, 0 warnings |
-| Tests backend | ✅ 445/445 — 35 suites |
-| Tests mobile | ✅ 233/233 — 20 suites |
-| Cobertura API | ✅ 80.8% stmt / 83.66% branch |
-
----
-
-### Sesión 13 — 2026-06-03 — Fix rate limiter producción
-
-**Objetivo**: corregir `RATE_LIMIT_EXCEEDED` en producción que bloqueaba el acceso a RetroAchievements y eventualmente a toda la API (incluyendo `/health`).
-
-**Causa raíz**: `globalRateLimiter` estaba configurado a `max: 100 / 15 min`. TanStack Query con infinite scroll, múltiples tabs cargando simultáneamente y pull-to-refresh genera decenas de peticiones en ráfaga al abrir la app — este límite se agotaba en uso normal. Adicionalmente, `/health` estaba declarado **después** de `app.use(globalRateLimiter)` en `app.ts`, por lo que UptimeRobot y el healthcheck de Railway también podían ser bloqueados.
-
-**`apps/api/src/middleware/rateLimiter.ts`:**
-- `max: 100` → `max: 300` (≈1 req cada 3 segundos de media — conservador pero funcional)
-
-**`apps/api/src/app.ts`:**
-- `/health` route movida **antes** de `app.use(globalRateLimiter)` — nunca debe ser rate-limited
-- `authRateLimiter` (10 req/15min en `/auth/*`) sin cambios — correcto para seguridad
-
-**Estado de calidad:**
-| Categoría | Resultado |
-|---|---|
-| TypeScript strict (API + mobile) | ✅ 0 errores |
-| Lint (API + mobile) | ✅ 0 errores, 0 warnings |
-| Tests backend | ✅ 443/443 — 35 suites |
-| Tests mobile | ✅ 216/216 — 18 suites |
-
----
-
-### Sesión 12 — 2026-06-03 — Contador juegos completados/totales en biblioteca
-
-**Objetivo**: añadir contador `completados/totales` de juegos a la cabecera de la biblioteca, junto al contador de logros ya existente.
-
-**Backend — `apps/api/src/services/user.service.ts`:**
-- `getMyGames` ahora devuelve `totalGames` (número de juegos distintos del usuario) y `totalCompletedGames` (juegos donde `earnedAchievements === totalAchievements`), calculados sobre `allGames` antes del `slice` de paginación — mismo patrón BUG-10.
-- `isCompleted` ya existía en el map de `allGames` — reutilizado vía `.filter((g) => g.isCompleted).length`, sin duplicación.
-
-**Mobile — `apps/mobile/hooks/useMyGames.ts`:**
-- `LibraryPage` interface extendida con `totalGames: number` y `totalCompletedGames: number`.
-- Ambos campos expuestos en el retorno del hook, leídos de `pages[0]` (mismo patrón que los otros aggregate stats).
-
-**Mobile — `apps/mobile/app/(tabs)/index.tsx`:**
-- Cabecera: condición cambiada de `totalAvailableAchievements > 0` a `totalGames > 0`.
-- Contador de juegos: `{totalCompletedGames}/{totalGames}` en `text-green-400` + etiqueta `library.games_short`.
-- `accessibilityElementsHidden` en los `Text` individuales; `accessibilityLabel` combinado en el `View` padre con claves `library.achievements_progress` y `library.games_progress`.
-
-**i18n — ES + EN:**
-- `library.games_short`: `"juegos completados"` / `"completed"`
-- `library.achievements_progress`: `"{{earned}} logros / {{total}} totales"` / `"{{earned}} achievements / {{total}} total"`
-- `library.games_progress`: `"{{completed}} juegos completados / {{total}} totales"` / `"{{completed}} games completed / {{total}} total"`
-
-**Tests añadidos:**
-- `user.service.test.ts`: 5 tests nuevos — `totalGames` = juegos distintos, `totalCompletedGames` con mezcla completado/incompleto, edge case 0 completados, edge case todos completados, pre-paginación (25 juegos / limit 20 / 5 completados).
-- `FeedScreen.test.tsx`: 2 tests nuevos — contador visible con `includeHiddenElements: true` cuando `totalGames > 0`, invisible cuando `totalGames = 0`. `baseMyGamesResult` extendido con `totalGames: 0` y `totalCompletedGames: 0`.
-
-**Decisiones tomadas:**
-- `getByText('3/10', { includeHiddenElements: true })` en tests mobile — los `Text` tienen `accessibilityElementsHidden={true}`, lo que los excluye del árbol de accesibilidad; `includeHiddenElements` los hace encontrables por el test.
-
-**Estado de calidad:**
-| Categoría | Resultado |
-|---|---|
-| TypeScript strict (API + mobile) | ✅ 0 errores |
-| Lint (API + mobile) | ✅ 0 errores, 0 warnings |
-| Tests backend | ✅ 443/443 — 35 suites |
-| Tests mobile | ✅ 216/216 — 18 suites |
-| Cobertura API | ✅ 80.8% stmt / 83.66% branch |
-
----
-
-### Sesión 11 — 2026-06-02 — Mock server, BUG-12, WCAG back buttons, i18n audit
-
-**Objetivo**: emulador local funcional, banner sync incorrecto, espaciado, back buttons, idioma dispositivo, "Biblioteca", "Último jugado", auditoría i18n completa.
-
-**Fixes:**
-- **PARTE 1** ✅: `GET /api/v1/sync/status` añadido al mock server (`apps/api/mock-server.js`). Endpoint retorna todos los `DEMO_PLATFORMS` con `isRunning: false`. `useAuth.ts`: detección de errores de red ampliada para incluir `TypeError` y mensajes `'Network request failed'` / `'Network Error'` — cubría solo `err.message.includes('fetch')`.
-- **BUG-12** ✅ (`useSyncProgress.ts`): `hydrateFromApi` añadía plataformas al Map pero nunca las eliminaba — si PSN terminaba y el socket se desconectaba, PSN quedaba stuckeada en el Map y el banner mostraba "Syncing PlayStation" durante un sync de RA. Fix: parámetro `socketSilent: boolean`. Cuando `true` (polling de fallback), reconstruye el Map desde cero con solo las plataformas en ejecución según Redis. Cuando `false` (mount), solo añade entradas nuevas para preservar el estado del socket.
-- **PARTE 3** ✅ (`challenges.tsx`): `mt-6` → `mt-3` en skeleton y tarjeta de contenido — gap visual excesivo entre el título de sección y la tarjeta del reto.
-- **PARTE 4** ✅: `game/[id].tsx` y `profile/[username].tsx` — botones back tenían solo `hitSlop` pero no `minWidth/minHeight`. Añadido `style={{ minWidth: 44, minHeight: 44, justifyContent: 'center' }}` en ambos para cumplir WCAG 2.1 AA.
-- **PARTE 5** ✅ (`i18n/index.ts`): `fallbackLng: 'es'` → `'en'` y `?? 'es'` → `?? 'en'`. Dispositivos en francés/alemán/etc. ahora caen a inglés en lugar de español.
-- **PARTE 6** ✅: `library.title` → `"Biblioteca"` / `"Library"`.
-- **PARTE 7** ✅: `library.sort_last_played` → `"Último jugado"` / `"Last played"`. No se añade campo `lastPlayedAt` — `lastSyncedAt` es aproximación suficiente (Steam expone `rtime_last_played` pero PSN/RA no tienen equivalente; añadirlo requeriría modelo `UserGame`, migración y 3 adapters). Decisión documentada.
-- **PARTE 8** ✅: Claves `profile.change_avatar`, `profile.avatar_error_title/message`, `profile.avatar_permission_title/message` añadidas en ES/EN (usadas en `profile.tsx` pero ausentes en ambos locale files). `friends.pending_item_label` añadida en ES/EN. `friends.tsx` línea 115: `accessibilityLabel` hardcodeado en español → `t('friends.pending_item_label', { username })`.
-
-**Decisiones tomadas:**
-- `socketSilent=false` en mount (no reconstruye Map) para preservar posibles eventos previos del socket que llegaron antes de la hidratación API.
-- `socketSilent=true` solo en el timer de polling (cuando el socket lleva >5s silencioso), reconstruyendo desde la verdad de Redis.
-- No se añade `lastPlayedAt` a `Game` ni `UserGame` — ver PARTE 7 arriba.
-
-**Estado de calidad:**
-| Categoría | Resultado |
-|---|---|
-| TypeScript strict (API + mobile) | ✅ 0 errores |
-| Lint (API + mobile) | ✅ 0 errores, 0 warnings |
-| Tests backend | ✅ 438/438 — 35 suites |
-| Tests mobile | ✅ 214/214 — 18 suites |
-| Cobertura API | ✅ 80.77% stmt / 83.66% branch |
-
----
-
-### Sesión 10 — 2026-06-01 — BUG-7 a BUG-11 + PSN states + Sort + Color
-
-**Objetivo**: 5 bugs críticos + estados PSN + ordenación biblioteca + color PSN + optimización sync.
-
-**Bugs corregidos:**
-- **BUG-7** ✅: `useSyncProgress` reescrito con `Map<string, SyncProgressState>` — syncs concurrentes no se sobreescriben.
-- **BUG-8** ✅: `hydrateFromApi()` en mount + polling fallback 2s si Socket.io silencioso >5s — el race condition de conexión async ya no deja la barra stuckeada.
-- **BUG-9** ✅: `addXp(userId, xpEarned, 'ACHIEVEMENT')` añadido en `sync.worker.ts` tras calcular `xpEarned` — XP ahora se persiste correctamente tras cada sync.
-- **BUG-10** ✅: `totalEarnedAchievements`/`totalAvailableAchievements` calculados sobre todos los juegos antes del `slice` de paginación — el header muestra el total real, no el de la página actual.
-- **BUG-11** ✅: XBOX eliminado del array `FILTERS` en `app/(tabs)/index.tsx` — `PlatformFilter` es ahora `'ALL' | 'STEAM' | 'RA' | 'PSN'`.
-
-**Features/mejoras:**
-- PSN states en `LibraryGameCard`: badge `🏆 Platino` (`#f5c518`) cuando `platinumEarned`, badge `🥇 100%` (`#22c55e`) cuando `isCompleted` en juego PSN. `getMyGames` consulta `prisma.achievement.findMany` para detectar platino por `normalizedPoints === 300`.
-- Sort modal en biblioteca: 5 opciones (`last_played`, `alpha_asc`, `alpha_desc`, `pct_desc`, `pct_asc`). Client-side sobre datos ya cargados. Persistido en AsyncStorage via `preferencesStore`.
-- Color PSN cambiado de `#003087` a `#1e90ff` (WCAG ratio ~6.5:1 sobre fondo oscuro, supera AA).
-- i18n ES/EN: claves `syncing`, `syncing_a11y`, `sync_complete`, `sync_complete_a11y`, `sort_*`, `psn_platinum`, `psn_100`.
-- `LibrarySortOrder` movido a `preferencesStore.ts` (eliminada dependencia circular con `app/(tabs)/index`).
-- `@react-native-async-storage/async-storage` mockeado globalmente en `jest.setup.ts`.
-
-**Tests añadidos:**
-- `user.service.test.ts`: 11 tests nuevos — PSN hasPlatinum/platinumEarned/isCompleted, BUG-10 aggregate stats pre-paginación, Steam/isCompleted para non-PSN. Mock `prisma.achievement.findMany` añadido al mock de Prisma.
-- `sync.worker.test.ts`: 2 tests nuevos BUG-9 — verifica que `addXp` se llama con la suma de `normalizedPoints` cuando hay logros nuevos, y que NO se llama si `xpEarned === 0`. Mock `user.service.addXp` añadido.
-- `useSyncProgress.test.ts`: reescrito completamente — 14 tests con nueva API Map. BUG-7 (multi-plataforma), BUG-8 (hidratación API), callbacks, limpieza.
-
-**Estado de calidad:**
-| Categoría | Resultado |
-|---|---|
-| TypeScript strict (API + mobile) | ✅ 0 errores |
-| Lint (API + mobile) | ✅ 0 errores, 0 warnings |
-| Tests backend | ✅ 438/438 — 35 suites |
-| Tests mobile | ✅ 214/214 — 18 suites |
-| Cobertura API | ✅ 80.77% stmt / 83.66% branch |
-
----
-
-### Sesión 7 — 2026-05-30 — Smoke test APK #3 ✅
-
-**Objetivo**: smoke test completo de APK #3 (16 pasos). Verificar AdMob banners, nuevo flujo PSN username-only, banner perfil privado, re-confirmar BUG-3/4/5.
-
-**Resultado**: 15/16 pasos completados. 1 bug nuevo encontrado (BUG-6). 0 crashes nuevos.
-
-**Bugs encontrados:**
-- **BUG-6** 🟡: PSN link screen muestra el flujo NPSSO antiguo ("To connect your PSN account you need your NPSSO token") en lugar del nuevo flujo de username. Causa: Metro bundler usó bundle JS cacheado de antes de los commits PSN (`0f32f35`, `f4a172e`). La causa del cache stale es que `gradlew assembleDebug` no llama a `expo export` — reutiliza el bundle de la compilación previa si el archivo existe. Fix: ejecutar `npx expo prebuild --platform android --clean` (o borrar `android/app/src/main/assets/index.android.bundle`) antes de `gradlew assembleDebug`.
-
-**Bugs re-verificados ✅:**
-- BUG-3 (Rankings crash): ✅ Arreglado
-- BUG-4 (UGC guides crash): ✅ Arreglado
-- BUG-5 (Login wrong password → generic error): ✅ Arreglado
-
-**Pantallas verificadas ✅:** Registro+onboarding, Login, Home+AdMob banner, Search+AdMob+filtros logros, Rankings, Friends, Challenges, Notifications, Profile+Steam validation+RA validation, Game detail (filtros/sort/guides), Wrapped 2025+2024, Perfil público (COMPARISON section), Performance (0 ANR nuevos).
-
-**Notas de entorno:**
-- UMP GDPR: sin dialog (correcto — emulador US = NOT_REQUIRED)
-- Offline mode: no testeable (emulador usa bridge de red del host, `svc wifi/data disable` no corta la conectividad real)
-- AdMob: banner visible como "Espacio publicitario" (placeholder de test — correcto con test App IDs)
-- Filter chips: H~30dp (pre-existente, no regresión APK #3)
-
-**Fix BUG-6 para APK #4:**
-```bash
-# Desde apps/mobile/:
-npx expo prebuild --platform android --clean
-# Añadir en AndroidManifest.xml (APPLICATION_ID meta-data) — ver Sesión 6
-cd android && gradlew assembleDebug
-```
-
-**Estado de calidad (pre-test, sin cambios de código esta sesión):**
-| Categoría | Resultado |
-|---|---|
-| TypeScript strict (API + mobile) | ✅ 0 errores |
-| Lint (API + mobile) | ✅ 0 errores, 0 warnings |
-| Tests backend | ✅ 415/415 |
-| Tests mobile | ✅ 188/188 |
-
----
-
-### Sesión 6 — 2026-05-30 — APK #3 ✅ (build local debug)
-
-**Objetivo**: generar APK #3 con todos los cambios desde APK #2 (`27d0e02d`, 2026-05-27).
-
-**APK generada**:
-- Ruta local: `apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk`
-- Tamaño: 165.7 MB
-- Tipo: debug (signed con debug keystore automático)
-- Diferencia vs EAS preview: sin minificación R8, sin ProGuard. Para smoke test es equivalente funcional.
-
-**Cambios incluidos desde APK #2:**
-- AdMob + UMP SDK (`react-native-google-mobile-ads`, `useInterstitialAd`, `useRewardedAd`, endpoint `POST /api/v1/points/rewarded-ad`)
-- PSN flujo de sistema (`PSN_SYSTEM_NPSSO`): usuario solo proporciona username, sin NPSSO propio
-- PSN perfil privado: `psnProfilePrivate` en schema, `checkPsnProfilePrivacy()`, banner ⚠️ en link screen, badge en Profile
-- 2 tests rewarded-ad en `points.service.test.ts`
-- `.gitignore` fix (`/app.json` solo en root)
-- Downgrade `react-native-google-mobile-ads` v16→v13 (build fix)
-
-**Pre-build checks (pasados antes de lanzar el build):**
-| Categoría | Resultado |
-|---|---|
-| TypeScript strict (API + mobile) | ✅ 0 errores |
-| Lint (API + mobile) | ✅ 0 errores, 0 warnings |
-| Tests backend | ✅ 415/415 |
-| Tests mobile | ✅ 188/188 |
-
-**Historial de intentos EAS (todos fallaron, resuelto localmente):**
-| Build ID | Resultado | Causa del error |
-|---|---|---|
-| `7b5ba56d` | ❌ Fallo Gradle | Plugin `react-native-google-mobile-ads` no resuelto (`find-up` interceptado por `lib/commonjs/package.json`) |
-| `22e28dd7` | ❌ Fallo Gradle | Mismo error |
-| `2ef1ef80` | ❌ Fallo Gradle | `play-services-ads:25.0.0` metadata Kotlin 2.2.0 vs compilador 1.9.0 |
-| local debug | ✅ BUILD SUCCESSFUL | Downgrade v13 + `play-services-ads:23.1.0` (Kotlin 1.x) |
-
-**Causa raíz resuelta** — `play-services-ads:25.0.0` (incluido en v16+) usa metadata Kotlin 2.2.0. El compilador de React Native es 1.9.0 y no puede leerlo. Subir `kotlinVersion` en `expo-build-properties` cambia el stdlib pero no el compilador (controlado por el gradle plugin de React Native), causando un conflicto inverso en `expo-modules-core`. Solución definitiva: downgrade a v13.6.1 que usa `play-services-ads:23.1.0` (Kotlin 1.x).
-
-**Cambios en `app.json` para v13:**
-- Eliminado: `["../../node_modules/react-native-google-mobile-ads/app.plugin.js", {...}]` (v13 no tiene app.plugin.js)
-- Añadido: clave `react-native-google-mobile-ads.android_app_id` en root del JSON (mecanismo nativo de v13)
-- Revertido: `kotlinVersion: "1.9.23"` (no necesario con v13)
-
-**Instalar APK en emulador:**
-```bash
-# Arrancar emulador, luego:
-adb install apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
-```
-
-**Regenerar APK localmente (si se cambia código):**
-```bash
-# Desde apps/mobile/:
-npx expo prebuild --platform android --clean
-# Añadir manualmente en android/app/src/main/AndroidManifest.xml (dentro de <application>):
-# <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-3940256099942544~3347511713"/>
-
-# PASO CRÍTICO: generar bundle JS manualmente antes de Gradle
-# Gradle no llama a Metro en debug builds con este setup de Expo — sin este paso la app crashea
-# con "Unable to load script. index.android.bundle is not packaged correctly"
-# NODE_ENV=production + --dev false es obligatorio para que Babel inlinee EXPO_PUBLIC_* vars;
-# en modo --dev true el transform no las inlinea y process.env queda vacío en Hermes → fallback localhost:3000
-mkdir -p android/app/src/main/assets
-EXPO_PUBLIC_API_URL=https://unlockhub-production.up.railway.app NODE_ENV=production npx react-native bundle \
-  --platform android \
-  --dev false \
-  --entry-file "../../node_modules/expo-router/entry.js" \
-  --bundle-output android/app/src/main/assets/index.android.bundle \
-  --assets-dest android/app/src/main/res
-
-# Compilar (incremental si ya se hizo un build completo antes)
-cd android && JAVA_HOME="C:/Program Files/Android/Android Studio/jbr" ANDROID_HOME="C:/Users/Juanjo/AppData/Local/Android/Sdk" ./gradlew assembleDebug
-```
-
-**EAS Build (cuando se quiera publicar en Play Store):**
-Con el downgrade a v13, `eas build --platform android --profile preview --non-interactive` también debería funcionar ahora (sin el conflicto Kotlin). La cuota EAS resetea 2026-06-01.
-
----
-
-**Fecha**: 2026-05-30 (sesión 5) — PSN perfil privado implementado: `psnProfilePrivate` en schema, `checkPsnProfilePrivacy()`, banner ⚠️ en link screen, badge en Profile, tests. 415 API + 188 mobile. 0 errores TS/lint.
-
-### Sesión 5 — 2026-05-30
-
-**PSN perfil privado — implementación completa:**
-- `PlatformAccount.psnProfilePrivate Boolean @default(false)` + migración `20260530000000_psn_profile_private`
-- `checkPsnProfilePrivacy(auth, accountId)` en `psn.adapter.ts`: probe `getUserTitles limit:1` al vincular
-- `linkPsnHandler`: si privado → vincula con `psnProfilePrivate: true`, omite sync. Si público → vincula + sync express como antes
-- `fetchUserTitles`: envuelve bucle en try/catch → lanza `AppError('PSN_PROFILE_PRIVATE', 403)` si `getUserTitles` falla
-- `sync.worker.ts`: captura `PSN_PROFILE_PRIVATE` → marca flag en BD. Camino de éxito siempre resetea `psnProfilePrivate: false`
-- `link-platform/psn.tsx`: vista inline con banner ⚠️ + pasos + CTA "Ir a biblioteca" cuando `account.psnProfilePrivate === true`
-- `profile.tsx`: badge ⚠️ (testID `psn-private-badge`) junto a cuenta PSN privada; `lastSyncedAt` oculto cuando privado
-- i18n ES/EN: claves `profile_private_title/body/cta/step1-3/go_library`
-- Tests: `checkPsnProfilePrivacy` (false/true), `PSN_PROFILE_PRIVATE` en syncUser, banner/badge en mobile (16 suites / 188 tests)
-
-**Estado de calidad:**
-| Categoría | Resultado |
-|---|---|
-| TypeScript strict (API + mobile) | ✅ 0 errores |
-| Lint (API + mobile) | ✅ 0 errores, 0 warnings |
-| Tests backend | ✅ 415/415 |
-| Tests mobile | ✅ 188/188 |
-
-**Fecha**: 2026-05-29 (sesión 4) — Re-seed kikecorrales10 completado: 879 juegos PSN + 36.649 logros. BD total: ~2.600 juegos + ~142.574 logros. NPSSO consumido → necesita renovación para backfill consola.
-
-### Sesión 4 — 2026-05-29
-
-**Re-seed kikecorrales10 completado:**
-- 882 títulos procesados → **879 juegos PSN, 36.649 logros** insertados vía upsert
-- 59 errores de conexión puntual con BD (proxy pública `yamanote.proxy.rlwy.net`) — el script continuó correctamente con try/catch
-- Token PSN refrescado en títulos 101, 201, 301, 401, 501, 601, 701, 801 — fix `a2dc1e4` funcionó correctamente
-- **NPSSO consumido** tras el seed: PSN invalida el NPSSO después del primer intercambio de tokens. El backfill de consola falló con "Is your NPSSO code valid?" — necesita nuevo NPSSO.
-
-**BD Railway estimada (post sesión 4):** ~2.600 juegos + ~142.574 logros (kikecorrales10 añadió ~529 juegos nuevos + ~29.000 logros al total anterior de 2.161/105.925).
-
-**Git log top 5 (develop):**
-```
-f2a45dd docs: estado sesión 3 — AdMob commiteado, guard Steam confirmado
-5038dda chore: eliminar check-counts.ts + cerrar investigación guard Steam
-e7076a8 feat: AdMob + UMP SDK — rewarded-ad endpoint, hooks, AdBanner por placement, migración REWARDED_AD
-49363a1 docs: BD Railway definitiva 2026-05-29 — 2161 juegos, 0 vacíos
-d257bfd docs: CLAUDE.md PSN sistema credenciales + estado BD 2026-05-29
-```
-
-**Estado de calidad (sin cambios de código esta sesión):**
-| Categoría | Resultado |
-|---|---|
-| TypeScript strict (API + mobile) | ✅ 0 errores |
-| Lint (API + mobile) | ✅ 0 errores, 0 warnings |
-| Tests backend | ✅ 412/412 |
-| Tests mobile | ✅ 179/179 |
-
-**Pendiente para próxima sesión (todo es acción del desarrollador, no código):**
-1. ✅ **`PSN_SYSTEM_NPSSO` renovado** en Railway Variables (2026-05-29 sesión 4).
-2. ✅ **Backfill console kikecorrales10 completado** — 882 juegos actualizados: PS4(417) + PS5(409) + PS3(23) + PSVITA(6) + cross-gen(27).
-3. ✅ **Backfill console Adramm completado** — 509 juegos PSN actualizados con `console` (PS5/PS4/PS3/PSVITA).
-4. ✅ **Railway variables configuradas**: `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `APP_SCHEME=unlockhub`, `CLOUDINARY_URL`, `ADMIN_SECRET`, `LOGTAIL_SOURCE_TOKEN` (N2 ✅), `POSTHOG_API_KEY` (N4 ✅) — todas configuradas.
-5. **EAS Build producción** (N5) — NO lanzar sin pedirlo explícitamente en ese mensaje.
-6. **T8**: upgrade Expo SDK 51→55 + vulnerabilidades build-time. PR dedicado post-lanzamiento.
-
-**Nota NPSSO**: el NPSSO es una cookie de sesión de PlayStation que PSN invalida tras el primer intercambio por access+refresh tokens. Los scripts de seed usan `buildAuthWithRefresh()` que consume el NPSSO una vez y luego renueva con el refresh token. Para volver a autenticar desde cero (backfill, nuevo seed) se necesita un NPSSO fresco.
-
-**Fecha**: 2026-05-29 (sesión 2) — Sistema de vinculación PSN migrado a credenciales del sistema. 0 errores TS/lint. 412 tests API + 179 mobile. 4 commits en `develop`.
-
-### PSN sistema de credenciales — sesión 2026-05-29
-
-**Objetivo**: cambiar el flujo de vinculación PSN de "el usuario proporciona su NPSSO" a "el usuario proporciona su username público, el backend usa sus propias credenciales" — mismo modelo que PSNProfiles/TrueTrophies/Exophase.
-
-#### Archivos modificados
-- **`packages/validators/src/platform.validators.ts`**: `linkPsnAccountSchema` cambiado de `{ npsso }` a `{ username: string (3-16 chars, regex [A-Za-z0-9_-]) }`.
-- **`apps/api/src/config/env.ts`**: `PSN_SYSTEM_NPSSO: z.string().optional()` añadido.
-- **`apps/api/.env.example`**: sección `PSN_SYSTEM_NPSSO` con instrucciones de obtención.
-- **`apps/api/src/platforms/psn.adapter.ts`**: `getSystemPsnAuth()` + `lookupPsnUser()` exportadas. `syncUser()` usa `getSystemPsnAuth()` + `account.externalId`. `buildAuthWithRefresh()` hecho público (lo sigue usando `seed-games.ts`). `fetchUserTitles()` y `fetchMergedTrophies()` reciben `accountId` explícito.
-- **`apps/api/src/controllers/platform.controller.ts`**: `linkPsnHandler` acepta `{ username }`, llama `lookupPsnUser` → obtiene `accountId` + `onlineId`, persiste con `encryptedToken: ''`.
-- **`apps/mobile/app/link-platform/psn.tsx`**: reescrito — formulario de username simple + guía expandible 3 pasos "¿Cómo hacer tu perfil público?". Sin NPSSO, sin cookies, sin banner de reauth.
-- **`apps/mobile/i18n/locales/es.json` + `en.json`**: sección `psn` actualizada — nuevas claves `username_label/placeholder/hint`, `guide_title/step1-3`, `error_not_found/service_unavailable`.
-- **`apps/api/src/platforms/psn.adapter.test.ts`**: reescrito — tests de `getSystemPsnAuth` (cache hit, cache miss, no configurado, NPSSO expirado), `lookupPsnUser` (encontrado, no encontrado), `PsnAdapter.syncUser` (usa token del sistema, no actualiza `encryptedToken`).
-- **`apps/api/src/__tests__/psn.adapter.test.ts`**: reescrito — tests de `buildAuthWithRefresh` (token válido, access expirado, refresh expirado, token corrupto).
-
-#### Estado de calidad
-| Categoría | Resultado |
-|---|---|
-| TypeScript strict (API) | ✅ 0 errores |
-| TypeScript strict (mobile) | ✅ 0 errores |
-| Lint (API) | ✅ 0 errores, 0 warnings |
-| Lint (mobile) | ✅ 0 errores, 0 warnings |
-| Tests backend | ✅ 412/412 |
-| Tests mobile | ✅ 179/179 |
-
-#### BD Railway post-seed Adramm + limpieza (2026-05-29)
-- Seed parcial: Adramm procesó 345/948 títulos antes de que el NPSSO expirara.
-- **19 juegos Steam vacíos** eliminados — residuos anteriores a la corrección del 2026-05-22 que sobrevivieron esa limpieza. El guard `if (schema.length === 0 || playerAchievements.length === 0) continue` está en `processGames()` (método compartido), que es llamado por `syncUser`, `syncUserExpress` y `syncUserBatched` — todos los caminos están cubiertos. No hay fix de código pendiente.
-- **Totales finales**: **2.161 juegos (80 Steam + 1.001 RA + 1.080 PSN) + 105.925 logros, 0 juegos sin logros.**
-- kikecorrales10: seed parcial — 350/882 juegos. Token PSN expiró a mitad + caída breve de BD. Fix aplicado (`a2dc1e4`): refresco de token cada 100 títulos.
-- ✅ **Backfill console Adramm completado** (sesión 2026-05-29): 509 juegos PSN actualizados con `console`.
-
-#### Acciones pendientes para el desarrollador
-1. ✅ **`PSN_SYSTEM_NPSSO`** — configurar en Railway dashboard → Variables. **Sin esto, el sync PSN de usuarios no funcionará en producción.**
-2. **Re-seed kikecorrales10** (350/882 juegos, token expiró): `cd apps/api && railway run -- sh -c 'DATABASE_URL="${DIRECT_URL:-$DATABASE_URL}" PSN_NPSSO="${PSN_NPSSO:-$PSN_SYSTEM_NPSSO}" npx tsx ../../scripts/seed-games.ts --only-psn --usernames="kikecorrales10"'`
-3. ✅ Backfill `console` Adramm completado — 509 juegos actualizados.
-4. ✅ Eliminado `apps/api/check-counts.ts` (script temporal de verificación).
-
-**Nota importante**: Al ejecutar scripts localmente via `railway run`, usar siempre `DATABASE_URL="${DIRECT_URL:-$DATABASE_URL}"` — la URL interna `postgres.railway.internal` no es accesible desde fuera de Railway. `DIRECT_URL` (proxy pública `*.proxy.rlwy.net`) funciona desde local.
-
-**Fecha**: 2026-05-29 — Revisión pre-lanzamiento completa. Sin datos sensibles. 0 errores TS/lint. 407 tests pasando. 2 fixes aplicados.
-
-### Revisión pre-lanzamiento — sesión 2026-05-29
-
-**Objetivo**: auditoría completa de seguridad, código, tests y configuración antes de publicar en Play Store.
-
-#### Seguridad ✅
-- **Historial Git**: limpio. Los placeholders `[NIF_DESARROLLADOR]` / `[NOMBRE_DESARROLLADOR]` son el resultado de la limpieza `git filter-branch` de 2026-05-28. 0 datos personales reales en el historial.
-- **AdMob IDs**: solo IDs públicos de prueba de Google (`ca-app-pub-3940256099942544/*`) en el código. IDs de producción en EAS secrets — nunca en el repo.
-- **`.env`**: nunca fue commitado. `.gitignore` cubre `.env`, `.env.local`, `*.pem`, `*.jks`, `google-play-service-account.json`.
-- **`console.log`**: 0 ocurrencias en código de producción.
-- **TODO/FIXME**: 0 en código fuente.
-
-#### Correcciones aplicadas
-- **`chore: .gitignore`** — `app.json` cambiado a `/app.json` para que la regla solo aplique al directorio raíz, evitando que `apps/mobile/app.json` quede untrackeable si se elimina del índice.
-- **`test: claimRewardedAdPoints`** — 2 tests añadidos a `points.service.test.ts`: camino feliz (otorga 10 pts + escribe en Redis) y cooldown activo (lanza 429 `REWARDED_AD_COOLDOWN`).
-
-#### Estado de calidad
-| Categoría | Resultado |
-|---|---|
-| TypeScript strict (API) | ✅ 0 errores |
-| TypeScript strict (mobile) | ✅ 0 errores |
-| Lint (API) | ✅ 0 errores, 0 warnings |
-| Lint (mobile) | ✅ 0 errores, 0 warnings |
-| Tests backend | ✅ 407/407, cobertura 80.59% stmt / 82.44% branch |
-| Tests mobile | ✅ 179/179 |
-| console.log en producción | ✅ 0 |
-| TODO/FIXME en código | ✅ 0 |
-| Datos sensibles en código | ✅ 0 (solo placeholders y test IDs públicos) |
-| Datos sensibles en historial Git | ✅ 0 (limpieza previa confirmada) |
-| .env commitado | ✅ Nunca |
-
-#### Vulnerabilidades npm (sin cambios respecto a T8)
-- **API — 2 high**: `node-tar` vía `@mapbox/node-pre-gyp` — build-time, no runtime. Sin fix no-breaking disponible.
-- **API — 5 moderate**: `ws` (socket.io), `brace-expansion`. Fix requiere `--force` con breaking changes.
-- **Mobile — 17 high + 15 moderate**: `node-tar` + `ws` vía Expo build tooling — build-time. Pendiente T8 post-lanzamiento.
-- **Ninguna vulnerabilidad nueva de runtime** detectada.
-
-#### Edge cases revisados ✅
-- `steam.adapter.ts`: guards `schema.length === 0 || playerAchievements.length === 0` antes del upsert. Arrays con null coalescing. Errores de red con fallback a `[]`.
-- `psn.adapter.ts`: `buildAuthWithRefresh()` maneja access token expirado + refresh expirado (`PSN_REFRESH_TOKEN_EXPIRED`). Guard `trophies.length === 0` antes del upsert.
-- `authenticate.ts`: token Bearer correcto. `authenticateOptional` no falla sin token.
-- `sync.worker.ts`: Redis progress key eliminada en error (`redis.del`) y en completado. Socket.io emit solo si `io !== null`. `requiresReauth=true` en PSN refresh expirado.
-- `AdBanner.tsx` / `useRewardedAd.ts` / `useInterstitialAd.ts`: `user?.isPremium` check al inicio. `admobModule` con try/catch. `EARNED_REWARD` antes de `CLOSED` para la recompensa.
-- Paginación: `limit.max(50)` en todos los endpoints vía Zod.
-- Rate limiting: global (100 req/15min), auth (10 req/15min), search (60 req/min), rewarded-ad (cooldown 3h Redis).
-
-#### Configuración verificada ✅
-- `app.json`: versión 1.0.0, bundleIdentifier correcto, AdMob test App IDs. `usesCleartextTraffic: true` — decisión documentada para SDK 51, inofensiva en prod (API es HTTPS).
-- `eas.json`: preview → Railway prod URL, production → app-bundle, `google-play-service-account.json` gitignoreado.
-- `railway.json`: `preDeployCommand: npx prisma migrate deploy`, healthcheck `/health`, restart on failure.
-
-#### Pendiente (no bloqueante para lanzamiento)
-- T8: upgrade Expo SDK 51→55 + fix vulnerabilidades build-time. PR dedicado post-lanzamiento.
-- `usesCleartextTraffic: true` — evaluar usar `app.config.js` para hacerlo profile-dependent al subir a SDK 55.
-
----
-
-**Fecha**: 2026-05-28 — AdMob + UMP SDK integrado: `react-native-google-mobile-ads`, `useInterstitialAd`, `useRewardedAd`, endpoint rewarded-ad backend, migración `REWARDED_AD`.
-
-### AdMob + UMP SDK — sesión 2026-05-28
-
-- **`react-native-google-mobile-ads`** instalado en `apps/mobile`.
-- **`app.json`**: plugin `react-native-google-mobile-ads` con test App IDs (Android `~3347511713`, iOS `~1458002511`). ⚙️ Sustituir por los IDs de producción cuando estén disponibles (B8-B9).
-- **`components/AdBanner.tsx`**: nuevo prop `unitId: 'home' | 'search'` — usa `EXPO_PUBLIC_ADMOB_HOME_BANNER_ID` / `EXPO_PUBLIC_ADMOB_SEARCH_BANNER_ID`. Fallback a test ID de Google. Carga dinámica con try/catch — funciona aunque el módulo nativo no esté disponible.
-- **`app/(tabs)/index.tsx`**: `<AdBanner unitId="home" />`.
-- **`app/(tabs)/search.tsx`**: `<AdBanner unitId="search" />` añadido bajo los chips de filtro.
-- **`hooks/useInterstitialAd.ts`**: pre-carga el anuncio al montar. `show()` fire-and-forget. Solo activo para usuarios free. Re-carga automática tras cierre.
-- **`hooks/useRewardedAd.ts`**: `showForReward()` devuelve `Promise<number | null>`. Llama `POST /api/v1/points/rewarded-ad` solo si el usuario completa el anuncio (`EARNED_REWARD` recibido antes de `CLOSED`).
-- **`apps/api/src/services/points.service.ts`**: `claimRewardedAdPoints()` — cooldown 3h por usuario en Redis (`rewarded-ad:{userId}`), crea `UserPoint` con `reason: REWARDED_AD`, devuelve `{ pointsEarned: 10 }`. Error 429 si cooldown activo.
-- **`apps/api/src/controllers/points.controller.ts`**: `rewardedAdHandler`.
-- **`apps/api/src/routes/points.routes.ts`**: `POST /rewarded-ad`.
-- **`apps/api/prisma/schema.prisma`**: `REWARDED_AD` añadido a enum `PointReason`.
-- **`packages/types/src/index.ts`**: `PointReason` actualizado con `REDEEM | REWARDED_AD`.
-- **Migración**: `20260528000000_point_reason_rewarded_ad` — `ALTER TYPE "PointReason" ADD VALUE 'REWARDED_AD'`.
-- **Test IDs integrados en código**: Banner `6300978111`, Interstitial `1033173712`, Rewarded `5224354917`. Sin hardcoding de IDs de producción — siempre via `EXPO_PUBLIC_*` env vars (EAS secrets, repo público).
-- **TypeScript**: 0 errores API + 0 errores mobile. Lint: 0 errores.
-
----
-
-**Fecha**: 2026-05-28 — limpieza de historial Git: NIF y domicilio del desarrollador eliminados de todos los commits.
-
-### Limpieza de datos personales del historial Git — sesión 2026-05-28
-
-- **Problema**: `docs/privacy-policy.html` tenía NIF y domicilio del desarrollador en el historial desde el commit `b4a22ec`. El repo había sido hecho público para GitHub Pages y luego vuelto a privado, pero el historial quedó con esos datos.
-- **Solución**: `git filter-branch --tree-filter "node /tmp/clean-sensitive.js"` ejecutado sobre los 164 commits. El script Node.js eliminó los datos sensibles de todos los blobs afectados.
-- **Resultado**: 0 ocurrencias de NIF o domicilio en `git log --all -p`. Force push a `origin/develop`.
-- **Estado actual del fichero**: solo contiene `Responsable: Juan Jose Muñoz Reja Villalba` + email de contacto — sin NIF ni dirección.
-- **Acción pendiente del desarrollador**: hacer el repo público de nuevo en GitHub → Settings → Danger Zone → Change visibility → Public. GitHub Pages se reactivará automáticamente.
-
----
-
-**Fecha**: 2026-05-27 — smoke test completo APK #2 `27d0e02d-bc78-438f-b41b-6e308f22a8a2` — BUG-3/4/5 validados, 0 bugs nuevos encontrados.
-
-### Smoke test APK `27d0e02d` — sesión 2026-05-27
-
-Prueba manual completa contra emulador `emulator-5554` (1080×2400, API producción). Cuenta: TestUser99 / test99@example.com / Test1234!.
-
-**Pre-build checks:** TypeScript 0 errores · Lint 0 errores · Tests 179 mobile + 405 API passing.
-
-**BUG-3/4/5 confirmados ✅:**
-- BUG-3 (Rankings crash): ✅ Rankings carga correctamente — Global/National/Steam/RetroAchievements/PlayStation sin crash
-- BUG-4 (UGC Guides crash): ✅ Guías muestran `user.username` correctamente — no crash al submit
-- BUG-5 (Login wrong password → error genérico): ✅ "Email o contraseña incorrectos. Por favor, comprueba tus datos." en rojo
-
-**Pantallas verificadas (✅ sin issues):** Home autenticado (filtros All/Steam/RA/PSN/Xbox, empty state correcto), Notifications center (empty state), Rankings (5 filtros sin crash), Search Games (resultados con badges de plataforma), Search Achievements (XP/rareza/locked state/sub-filtros plataforma/sin Xbox), Challenges (empty state), Friends (empty state + CTA), Profile (Level/XP/Streak, platform links, Advanced Stats paywall, Gaming Wrapped 2025/2024), Wrapped 2025 (empty state sin crash), Language toggle ES↔EN (toda la UI cambia: tabs, secciones, botones, dialogs), Logout (confirmación en idioma activo, redirect correcto).
-
-**0 bugs nuevos encontrados.**
-
-**Nota técnica — entrada de `!` via adb:** `adb shell input text "Test1234!"` no envía `!` correctamente. Solución: `input text "Test1234"` + cambiar a teclado de símbolos (`?123`) + tap directo en tecla `!` en pantalla.
-
-**Pendiente (requiere acción del desarrollador):**
-- Vinculación Steam/RA/PSN con credenciales reales + sync progresivo E2E
-- Forgot Password (requiere `RESEND_API_KEY` en Railway — acción B3)
-
----
-
-**Fecha**: 2026-05-26 — smoke test exhaustivo APK preview `d226d5a5` + fix BUG-3, BUG-4, BUG-5.
-
-### Smoke test APK `d226d5a5` — sesión 2026-05-26
-
-Prueba manual completa contra emulador `emulator-5554` (1080×2400, API producción). Cuenta: TestUser99 / test99@example.com / Test1234!.
-
-**Pantallas verificadas (✅ sin issues):** Register flow completo (validación GDPR edad <16, enlaces ToS/PP, onboarding 3 pasos), Login, Forgot Password, Home autenticado (empty state, filtros, ad placeholder), Search (Games/Achievements/People con sub-filtros), game/[id] completo (header con progreso, filtros All/Unlocked/Pending, sort rarity, share/challenge/guides UGC), Challenges (empty state correcto), Profile completo (stats, vincular plataformas Steam/RA/PSN, Advanced Stats paywall, Wrapped, Settings ES↔EN, delete account dialog, Privacy Policy in-app, Notifications), profile/[username] (sección COMPARISON).
-
-**Bugs encontrados y estado:**
-
-- **BUG-3** ✅ Fix commit `a8a8901`: Rankings crash "Cannot read property 'toLocaleString' of undefined" — `ranking.service.ts` devolvía `{global, globalTotal}` en lugar de `{rank, xp}`; tab protegido por ErrorBoundary hasta nuevo APK.
-- **BUG-4** ✅ Fix commit `a8a8901`: Crash al ver guías tras submit — `Guide` interface usaba `author.username` pero la API devuelve `user.username`. Interfaz corregida en `game/[id].tsx`.
-- **BUG-5** ✅ Fix commit `586c62f`: Login contraseña incorrecta → "error inesperado" en lugar de "Email o contraseña incorrectos". Causa: `apiRequest` interceptaba el 401 de login e intentaba refrescar el token. Fix: `{ skipRefresh: true }` en `loginMutation` y `registerMutation` de `useAuth.ts`.
-
----
-
-**Fecha**: 2026-05-18 — documentación legal publicada: Privacy Policy + ToS en GitHub Pages, texto legal en pantalla de registro, datos del desarrollador rellenados.
-
-### Cambios sesión 2026-05-18 (legal + hosting)
-
-- **`docs/privacy-policy.html`**: Política de privacidad GDPR completa en español — 14 secciones, bases legales Art. 6.1, terceros (AdMob/Sentry/Cloudinary/PostHog/Resend/Railway), derechos RGPD, edad mínima 16 años. Datos del desarrollador rellenados.
-- **`docs/terms-of-service.html`**: ToS completos en español para Google Play — suscripción premium (2,99€/mes · 19,99€/año), sistema de puntos (sin valor monetario), plataformas de terceros, ley española.
-- **`docs/index.html`**: Índice con enlaces a ambos documentos.
-- **GitHub Pages**: Repo hecho público. Pages activo desde branch `develop`, carpeta `/docs`. Auto-deploy en cada push. URLs en vivo verificadas (200).
-- **`app/privacy.tsx`**: `PRIVACY_POLICY_URL` actualizado a URL real de GitHub Pages.
-- **`app/(auth)/register.tsx`**: Bloque de texto legal con `Linking.openURL` a ToS y Privacy Policy antes del botón de submit. Claves i18n nuevas.
-- **`apps/mobile/i18n/locales/es.json` + `en.json`**: Claves `auth.register.legal_prefix`, `legal_connector`, `legal_accessibility`, `terms_label`, `privacy_label`.
-- **Cloudflare Pages**: Descartado — intentó `npm ci` sobre el root del monorepo aunque se configuró `Path: docs`. GitHub Pages fue la solución definitiva.
-
----
-
-**Fecha**: 2026-05-23 — sync progresivo por lotes: Socket.io `sync:progress/complete/error`, `syncUserBatched` en Steam/RA/PSN, `syncUserExpress` al vincular, Redis progress TTL 2h, `useSyncProgress` hook + banner + toast en Biblioteca.
-
-### Resumen ejecutivo
-
-| Categoría | Estado |
-|---|---|
-| TypeScript strict (API) | ✅ 0 errores `tsc --noEmit` |
-| TypeScript strict (mobile) | ✅ 0 errores `tsc --noEmit` |
-| Lint errores (API) | ✅ 0 errores, 0 warnings |
-| Lint errores (mobile) | ✅ 0 errores, 0 warnings |
-| Tests backend | ✅ 405 tests pasando, 35 suites — cobertura 81% stmt / 83% branch |
-| Tests mobile | ✅ 179 tests, 179 pasando |
-| API build | ✅ `tsc -p tsconfig.json` sin errores |
-| npm audit API | ⚠️ 18 high (build-time, pre-existente) — pendiente T8 |
-| npm audit mobile | ⚠️ 17 high: `node-tar` vía Expo build tooling (build-time) — pendiente T8 |
-| Maestro E2E | ✅ 5 flows pasando contra emulador Android (APK preview) |
-
-### Correcciones y limpieza BD (2026-05-22)
-
-- **Token PSN en sync real**: `buildAuthWithRefresh()` ya existía y funcionaba correctamente (renovación con Refresh Token + persistencia). Gap detectado: cuando Refresh Token expira, el error `PSN_REFRESH_TOKEN_EXPIRED` solo se logueaba. Fix: `sync.worker.ts` ahora captura el error → `requiresReauth=true` en BD + notificación in-app. El sync exitoso resetea `requiresReauth=false`. Re-vincular también lo resetea.
-- **`PlatformAccount.requiresReauth Boolean @default(false)`**: nuevo campo para señalizar sesión PSN expirada. Migration: `20260522000000_platform_account_requires_reauth`. Expuesto en `getLinkedPlatforms`, `getProfile`, `getPublicProfile`. Banner de reauth en `app/link-platform/psn.tsx` cuando el campo es `true`.
-- **Guard PSN `syncUser()`**: `if (trophies.length === 0) continue` antes del game upsert — evita insertar títulos PSN sin trofeos (DLC sin soporte, demos).
-- **Guard RA `syncUser()`**: comprobación `if (!achievements || Object.keys(achievements).length === 0)` movida ANTES del `prisma.game.upsert` — evitaba que juegos sin logros entraran en BD.
-- **Guard Steam `syncUser()`**: `if (schema.length === 0 || playerAchievements.length === 0) continue` — `GetPlayerAchievements` puede devolver `success: false` (perfil parcialmente privado, juego sin stats para el usuario) mientras `GetSchemaForGame` devuelve logros desde caché → juego se insertaba sin Achievement records.
-- **Limpieza BD**: eliminados **3.333 juegos Steam vacíos** causados por el bug del guard anterior.
-- **BD Railway post-seed 5 usuarios PSN 2026-05-22: 1.882 juegos (80 Steam + 1.001 RA + 801 PSN) + 92.740 logros, 0 juegos sin logros, 0 duplicados.**
-- `psn.adapter.test.ts` creado: 5 tests cubriendo token válido / access expirado / refresh expirado (×2 aserciones).
-
-### Limpieza BD y correcciones (2026-05-20)
-
-- Eliminados **30.251 juegos sin logros** (30.066 Steam + 185 RA/PSN) — causados por `steam.adapter.ts` que hacía upsert antes del guard de logros vacíos
-- Constraint en `Achievement` corregido: `(platform, externalId)` → `(platform, gameId, externalId)` — el `apiname` Steam no es globalmente único entre juegos
-- Migración manual creada: `20260520000000_achievement_unique_platform_gameid_externalid`
-- Todos los adapters (Steam, RA, PSN, Xbox) y `seed-catalog.worker.ts` actualizados al nuevo accessor `platform_gameId_externalId`
-- `steam.adapter.ts` `syncUser()`: guard `if (schema.length === 0) continue` añadido antes del game upsert
-- `scripts/seed-games.ts`: `refreshPsnAuth()` helper + refresco cada 5 usuarios; guard `trophies ?? []` en PSN
-- BD Railway post-limpieza: **1.406 juegos, 72.264 logros** (Steam: 78/7.807 · RA: 1.001/47.889 · PSN: 327/16.568)
-
-### Seed PSN ejecutado en producción (2026-05-19)
-
-- PSN_NPSSO proporcionado → seed completado: 327 juegos PSN + 16.568 logros insertados en Railway
-- Total BD (antes de limpieza): **1.407 juegos, 72.554 logros** (Steam: 80/8.177 · RA: 1.000/47.809 · PSN: 327/16.568)
-- 45 títulos omitidos por `trophies` undefined en respuesta API (DLC / sin soporte de trofeos)
-- Neozaine/Seithek/Keching07 omitidos por "Expired access token" — token expiró tras 372 títulos
-- `scripts/check-db-size.ts` creado: BD Railway en ~41 MB / 1 GB (4%)
-
-### Features implementadas en esta sesión (2026-05-17)
-
-**FEATURE — Búsqueda global de logros**
-- `GET /api/v1/search?type=achievements&q=...&platform=...` — JWT opcional, Xbox excluido, 20 resultados/pág
-- `GET /api/v1/games/:id/achievements` — logros de un juego con estado isUnlocked por usuario
-- `authenticateOptional` middleware: extrae usuario del JWT si presente, continúa sin error si ausente
-- `AchievementSearchResult` añadido a `packages/types/src/index.ts`; `SearchResponse` incluye `achievements[]`
-- Search tab: nuevo filtro chip "Achievements" + sub-filtro de plataforma (Steam / RA / PSN)
-- `AchievementSearchCard.tsx`: icono con opacity 0.4 si bloqueado, badge de plataforma con color, XP y rareza
-- `useSearchAchievements.ts`: `useInfiniteQuery`, debounce 400ms, staleTime 5min, infinite scroll en FlashList
-- `game/[id].tsx`: header muestra "X/Y logros · Z% completado" cuando autenticado; empty state en filtro "Earned" sin sesión
-
-**NOTA — BD pre-poblada ✅**
-- Seed ejecutado en producción: 1.407 juegos + 72.554 logros (Steam + RA + PSN).
-- Search devuelve resultados desde el día 1 sin necesidad de que ningún usuario haga sync.
-
-### Correcciones aplicadas en esta sesión (2026-05-16)
-
-**BUG CRÍTICO — Profile crash tras registro**
-- `profile.tsx`: `user.xp.toLocaleString()` crasheaba cuando `xp`/`level`/`streakDays` llegaban undefined tras registro
-- Fix: null coalescing en todos los campos numéricos (`user.xp ?? 0`, `user.level ?? 1`, `user.streakDays ?? 0`)
-
-**BUG — Barra de filtros azul a pantalla completa en Home y Rankings**
-- `index.tsx` + `rankings.tsx`: ScrollView horizontal sin `flexGrow: 0` se expandía ocupando todo el flex space
-- Fix: `style={{ flexGrow: 0 }}` + `alignItems: 'center'` en `contentContainerStyle`
-
-**BUG — Icono incorrecto en tab Challenges**
-- `_layout.tsx`: `challenges.tsx` existía en `app/(tabs)/` pero no tenía entry en el array TABS → usaba icono por defecto
-- Fix: añadida entrada con `flash-outline` / `flash` (Ionicons)
-
-**BUG — Errores genéricos en Friends/Rankings/Challenges**
-- `friends.tsx`, `challenges.tsx`, `rankings.tsx`: error UI diferenciada por tipo (network / auth / server)
-- `useFriends.ts`, `useChallenges.ts`: expuesto `error: Error | null` desde TanStack Query
-- Traducciones ES/EN: claves `error_network`, `error_auth`, `error_server` añadidas en las 3 secciones
-
-**INVESTIGACIÓN — Steam muestra 0 logros**
-- Causa raíz: no es un bug de código. `steam.adapter.ts` es correcto.
-- Causas más probables: (1) `STEAM_API_KEY` no en `.env` local, (2) perfil Steam privado, (3) caché Redis TTL 30min-24h con arrays vacíos, (4) todos los juegos sin `has_community_visible_stats`
-
-**Maestro E2E — 5 flows creados y validados**
-- `01_registro.yaml`: clearState + detección condicional de pantalla de login/tabs
-- `02_login_navegacion.yaml`: ✅ login condicional + navegación 6 tabs sin crash
-- `03_vincular_steam.yaml`: ✅ Profile tab + sección vinculación Steam sin crash
-- `04_busqueda.yaml`: ✅ Search tab + input texto sin crash
-- `05_notificaciones.yaml`: ✅ notificaciones sin crash
-- **Limitación documentada**: APK preview usa `https://unlockhub-production.up.railway.app`. `demo@unlockhub.test` es cuenta mock — no existe en producción. Los flows usan `runFlow/when` condicional para adaptarse a sesión activa o expirada. Para tests de auth completos se necesita un development build (`eas build --profile development`) o cuenta real en producción.
-
-**testID en login.tsx**
-- Añadidos `testID="login-email"` y `testID="login-password"` para futuros selectores Maestro más robustos (activos en el próximo build)
-
-### Pendientes documentados
-
-- **T8**: `node-tar` vulnerabilidades high — ninguna runtime. PR dedicado post-lanzamiento.
-- **T12**: ✅ Implementado, ejecutado y corregido en producción (Steam+RA+PSN + 5 usuarios adicionales PSN). **BD 2026-05-22: 1.882 juegos (80 Steam + 1.001 RA + 801 PSN) + 92.740 logros, 0 juegos sin logros.** Guards en todos los adapters + limpieza de 3.333 juegos Steam vacíos.
-- **Maestro auth completa**: requiere development build con `EXPO_PUBLIC_API_URL=http://10.0.2.2:3000` o cuenta real en producción para testear login/registro/plataformas autenticadas.
-- **ChallengesScreen.test.tsx / RankingsScreen.test.tsx**: corregidos (2026-05-18) — error_server en lugar de error_message.
-- **Backfill console en RA**: ✅ Completado (2026-05-21) — 1.001 juegos RA actualizados con sus consolas (NES/SNES/GBA/etc).
-- **Backfill console en PSN**: ✅ Completado (2026-05-21) — 584 juegos PSN actualizados vía `scripts/backfill-psn-console.ts` (getUserTitles only, sin re-seed completo).
-- **Token PSN**: ✅ Renovación automática + notificación reauth implementadas (2026-05-22). `PlatformAccount.requiresReauth` añadido al schema. Migration: `20260522000000_platform_account_requires_reauth`.
+Historial completo en [docs/SESSION_LOG.md](docs/SESSION_LOG.md)
