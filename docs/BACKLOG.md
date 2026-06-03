@@ -93,6 +93,10 @@
 | T49 | **VERIFICAR**: `background-sync.scheduler.ts` condición `gte` vs `lte` en `lastSyncAt` | El scheduler usa `lastSyncAt: { gte: oneDayAgo }` — sincroniza usuarios que SÍ han sincronizado en las últimas 24h. Verificar si debería ser `lte` (usuarios que NO han sincronizado recientemente). La lógica actual podría ser intencionada. Sesión 52 |
 | T50 | **COBERTURA TESTS**: Auth — no hay test para refresh token de usuario con soft delete | `findValidRefreshToken` no verifica `deletedAt: null` en el usuario incluido — un usuario borrado podría refrescar sesión si tiene refresh tokens activos. Añadir test unitario. Sesión 52 |
 | T51 | **COBERTURA TESTS**: Points — no hay test para race condition en `claimRewardedAdPoints` | Corregido con SET NX pero falta test de concurrencia (dos llamadas simultáneas, una debe fallar con REWARDED_AD_COOLDOWN). Sesión 52 |
+| T52 | Desnormalizar datos de juegos para acelerar carga | 🔲 Post-lanzamiento — Cachear/persistir metadatos de juegos (título, iconUrl, totalAchievements) de forma más agresiva para reducir llamadas a APIs externas en cada sync. Investigar si conviene un modelo GameCache en Redis con TTL más largo o desnormalización en PostgreSQL. |
+| T53 | Investigar crash por sync largo | 🔲 Post-lanzamiento — La app crashea cuando lleva sincronizando mucho tiempo (posiblemente memoria, socket timeout o BullMQ lock expirado). Reproducir con cuenta PSN de 300+ juegos, capturar stack trace en Sentry, correlacionar con logs Railway. |
+| T54 | Refactor general post-lanzamiento | 🔲 Fase 4 — Refactor de deuda técnica acumulada: QueryKeys centralizadas (T45), deduplicar middleware de upload (T44), debounce unificado (T46), limpieza de code smells T44-T51. Hacer en rama dedicada refactor/fase4. |
+| T55 | Fix edge-to-edge Android 15 — contenido desplazado hacia arriba | 🔲 PL14 — Con targetSdkVersion: 35, Android 15 fuerza edge-to-edge y el contenido aparece desplazado hacia arriba en algunas pantallas. Revisar SafeAreaView en todas las pantallas (tabs, auth, game detail, profile) y ajustar padding/insets. Verificar en dispositivo físico con Android 15 antes de promover a Producción. |
 
 ### 🟢 Features
 
@@ -118,6 +122,7 @@
 | F18 | FriendshipButton consciente del estado de relación en perfil público | ✅ 5 estados (none/pending_sent/pending_received/accepted/blocked) · GET /api/v1/friends/status/:username · confirmación Alert en eliminar · sesión 35 |
 | F19 | Banner upload (Cloudinary) | ✅ POST /api/v1/users/me/banner · Pressable 120px en profile.tsx · aspect 3:1 · crop/fill 1500×500 · sesión 42 |
 | F20 | Ampliar placements de AdMob | 🔲 Fase 4 — Placements actuales: Home banner, Search banner, Interstitial, Rewarded. Añadir: Banner en Rankings, Banner en Friends, Interstitial al ver Wrapped, Interstitial al completar juego 100%. Arquitectura ya preparada — AdBanner acepta unitId como prop. Requiere: crear nuevos ad units en AdMob, añadir EAS secrets correspondientes, integrar en pantallas. |
+| F21 | Ver logros de otros usuarios | 🔲 Fase 4 — Desde el perfil público de un usuario, mostrar su biblioteca de juegos y logros desbloqueados. Endpoint GET /api/v1/users/:username/games ya tiene base — ampliar para exponer logros públicos con isUnlocked del usuario visitado. |
 
 ### 🔶 Post-lanzamiento — Verificaciones pendientes
 
