@@ -299,7 +299,6 @@ export default function FriendsScreen() {
           <FlashList
             data={filteredFriends}
             keyExtractor={(item) => item.id}
-            estimatedItemSize={72}
             accessibilityLabel={t('friends.loading_label')}
             refreshControl={
               <RefreshControl
@@ -333,7 +332,6 @@ export default function FriendsScreen() {
           <FlashList
             data={pendingRequests}
             keyExtractor={(item) => item.id}
-            estimatedItemSize={72}
             renderItem={({ item }) => (
               <PendingItem
                 item={item}

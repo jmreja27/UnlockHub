@@ -15,7 +15,7 @@ jest.mock('../../hooks/useSyncStatus', () => ({
 }));
 
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { act, render, fireEvent } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { SyncStatusBar } from '../../components/SyncStatusBar';
@@ -187,8 +187,10 @@ describe('SyncStatusBar', () => {
 
     const { getByTestId } = renderWithClient(<SyncStatusBar />);
 
-    // Avanzar 31 segundos para activar el aviso
-    jest.advanceTimersByTime(31_000);
+    // React 19 exige act() para avances de timer que causan actualizaciones de estado
+    act(() => {
+      jest.advanceTimersByTime(31_000);
+    });
 
     expect(getByTestId('sync-long-warning')).toBeTruthy();
     jest.useRealTimers();

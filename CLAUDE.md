@@ -101,7 +101,7 @@ Aplicación móvil (iOS + Android) para tracking unificado de logros de videojue
 | expo-network | Detección de conectividad (OfflineBanner global) |
 | Intl.NumberFormat / Intl.DateTimeFormat | Formateo localizado — usar siempre, nunca hardcodear formatos |
 | socket.io-client | Conexión Socket.io para sync progress en tiempo real |
-| react-native-reanimated | Animaciones nativas (usado en OfflineBanner, transiciones) |
+| react-native-reanimated | Animaciones nativas (usado en SkeletonBox, transiciones) — v4, requiere react-native-worklets@0.7.x |
 | posthog-react-native | SDK de PostHog para analytics — usar siempre via `lib/analytics.ts` |
 | react-native-purchases (RevenueCat) v10 | Google Play Billing — compra, restauración, offerings desde RevenueCat |
 
@@ -828,14 +828,21 @@ cd apps/api && npm run mock   # Mock server en :3000
 
 Cuenta de prueba: `demo@unlockhub.test` / `Demo1234!`
 
-**Quirks críticos (Expo SDK 51):**
+**Quirks críticos (Expo SDK 55 / React Native 0.83.6):**
 - URL del host desde el emulador: `http://10.0.2.2:3000`, no `localhost`.
 - `adb reverse` no es fiable — preferir siempre `10.0.2.2`.
-- `usesCleartextTraffic` debe ir en `app.json > plugins` mediante `expo-build-properties`:
+- `usesCleartextTraffic` sigue requiriendo `expo-build-properties` en `app.json`:
 
 ```json
 "plugins": [["expo-build-properties", { "android": { "usesCleartextTraffic": true } }]]
 ```
+- `kotlinVersion: "2.1.20"` en `expo-build-properties` — alinea con el compilador de RN 0.83.6. No usar "1.9.x" (downgrade que conflictúa con play-services-ads 25.x de AdMob v16+).
+- `compileSdkVersion: 35` en `expo-build-properties` — seguro con SDK 55. En SDK 51 fallaba por `expo-modules-core`.
+- `react-native-google-mobile-ads` en v16+ (antes gateado a v13.6.1 por Kotlin 2.2.0 metadata). Ahora compatible — RN 0.83.6 usa Kotlin 2.1.20.
+- `react-native-reanimated` v4 requiere `react-native-worklets` como peer dep. Debe instalarse en `apps/mobile/` Y en el root del monorepo (para que el Babel plugin lo encuentre). Versión compatible: `worklets@0.7.x` para `reanimated@4.2.x`.
+- Jest y `react-native-reanimated` v4: no usar `jest.requireActual('react-native-reanimated/mock')` — carga worklets nativo. Usar mock manual en `jest.setup.ts` (ya configurado). El moduleNameMapper redirige `react-native-worklets` a `__mocks__/react-native-worklets.js`.
+- React 19: `jest.advanceTimersByTime()` que dispara actualizaciones de estado debe envolverse en `act()`.
+- `@shopify/flash-list` v2: eliminado el prop `estimatedItemSize` — FlashList v2 lo calcula automáticamente.
 
 ### Producción — Railway
 
@@ -1167,6 +1174,8 @@ Ver [docs/BACKLOG.md](docs/BACKLOG.md)
 ---
 
 ## Última revisión de código
+
+**Fecha**: 2026-06-04 (sesión 56) — T8: upgrade Expo SDK 51 → 55. Versiones finales: `expo@55.0.26`, `react-native@0.83.6`, `react@19.2.0`, `react-native-reanimated@4.2.1`, `react-native-worklets@0.7.4` (en `apps/mobile/` y root), `@shopify/flash-list@2.0.2`, `react-native-google-mobile-ads@16.3.3`, `@sentry/react-native@7.11.0`. Breaking changes resueltos: (1) FlashList v2 — eliminado `estimatedItemSize` de 7 FlashLists; (2) reanimated v4 — mock manual en `jest.setup.ts` sin `requireActual`, `moduleNameMapper` para `react-native-worklets`, worklets instalado en root; (3) React 19 — `jest.advanceTimersByTime` envuelto en `act()` en `SyncStatusBar.test.tsx`; (4) `kotlinVersion` actualizado a "2.1.20" y `compileSdkVersion: 35` añadido en `app.json`. `react-native-google-mobile-ads` actualizado a v16 (ya compatible con Kotlin 2.1.20). Resultado: 19/19 expo doctor, 0 errores TS, 0 errores lint, 352/352 tests.
 
 **Fecha**: 2026-06-04 (sesión 55) — F20: ampliar placements AdMob. `AdBanner` type ampliado a `'home'|'search'|'rankings'|'friends'`; vars de entorno `EXPO_PUBLIC_ADMOB_RANKINGS_BANNER_ID` + `EXPO_PUBLIC_ADMOB_FRIENDS_BANNER_ID` con fallback a test ID. `<AdBanner unitId="rankings" />` en `RankingsScreen` entre filtros y lista; banner footer de `RankingList` reemplazado. `<AdBanner unitId="friends" />` en `FriendsScreen` después del selector de tabs. Nuevo `hooks/useWrappedInterstitial.ts`: cooldown 24h por AsyncStorage (`admob:wrapped_interstitial:last_shown`), delay 1.5s — llamado en `wrapped/[year].tsx`. Nuevo `hooks/useCompletedGamesInterstitial.ts`: AsyncStorage `admob:completed_game_ids` por gameId (max 500), solo dispara para IDs nunca vistos al 100% — llamado en `index.tsx` con la lista completa de juegos. `.env.example` actualizado con los 6 IDs separados. 0 errores TS/lint. **Pendiente acción dev**: crear 2 nuevos ad units Banner en AdMob Console y configurar como EAS secrets.
 

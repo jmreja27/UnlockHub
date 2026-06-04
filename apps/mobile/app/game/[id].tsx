@@ -434,7 +434,6 @@ export default function GameDetailScreen() {
           <FlashList
             data={filteredAchievements}
             keyExtractor={(a) => a.id}
-            estimatedItemSize={100}
             contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24 }}
             renderItem={({ item: achievement }) => {
               const isEarned = earnedSet.has(achievement.id);

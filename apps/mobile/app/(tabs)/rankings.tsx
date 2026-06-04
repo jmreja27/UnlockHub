@@ -137,7 +137,6 @@ function RankingList({
       data={data?.data ?? []}
       renderItem={renderItem}
       keyExtractor={(item) => item.userId}
-      estimatedItemSize={68}
       contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}
       accessibilityLabel={t('rankings.list_label')}
       refreshControl={

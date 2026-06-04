@@ -49,7 +49,7 @@
 | T5 | Tests de carga k6 | ✅ |
 | T6 | Tests unitarios nuevos servicios | ✅ |
 | T7 | Reescribir FeedScreen.test.tsx | ✅ Reescrito correctamente — mockea `useMyGames`; 9 tests pasando |
-| T8 | Subir Expo a v55 para vulnerabilidades node-tar | 🟠 Media — Fase 4. 17 high mobile (build-time vía Expo) + 2 high API (bcrypt build-time) — ninguna runtime; PR dedicado en rama `feat/expo-55`. |
+| T8 | Subir Expo a v55 para vulnerabilidades node-tar | ✅ Completado sesión 56 — Expo 55.0.26, RN 0.83.6, React 19.2.0, reanimated 4.2.1+worklets 0.7.4, flashlist 2.0.2, rn-google-mobile-ads 16.3.3, sentry 7.11.0. 352/352 tests. 0 errores TS/lint. |
 | T9 | Resolver 145 warnings import/order en API | ✅ Resuelto — `eslint --fix` + override en `.eslintrc.js` para ficheros de test |
 | T10 | Flows Maestro E2E | ✅ 5 flows en `apps/mobile/.maestro/` — todos pasando contra emulador Android con APK preview |
 | T11 | Search de logros + endpoint logros de juego | ✅ Backend `GET /api/v1/games/:id/achievements` + `GET /api/v1/search?type=achievements` — JWT opcional, Xbox excluido, paginado 20/pág |

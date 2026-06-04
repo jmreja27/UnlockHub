@@ -476,7 +476,6 @@ export default function LibraryScreen() {
             data={games}
             renderItem={renderItem}
             keyExtractor={(item) => item.id}
-            estimatedItemSize={76}
             contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}
             accessibilityLabel={t('library.list_label')}
             onEndReached={() => {

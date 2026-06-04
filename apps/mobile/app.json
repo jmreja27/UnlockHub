@@ -53,11 +53,17 @@
         {
           "android": {
             "usesCleartextTraffic": true,
-            "kotlinVersion": "1.9.23",
+            "kotlinVersion": "2.1.20",
+            "compileSdkVersion": 35,
             "targetSdkVersion": 35
           }
         }
-      ]
+      ],
+      "@sentry/react-native",
+      "expo-image",
+      "expo-localization",
+      "expo-secure-store",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true

@@ -140,7 +140,6 @@ export default function SearchScreen() {
               </Text>
             );
           }}
-          estimatedItemSize={72}
           contentContainerStyle={{ paddingBottom: 24 }}
           onEndReachedThreshold={0.3}
         />
