@@ -837,6 +837,14 @@ Cuenta de prueba: `demo@unlockhub.test` / `Demo1234!`
 - `react-native-google-mobile-ads` en v16+ (antes gateado a v13.6.1 por Kotlin 2.2.0 metadata). Ahora compatible — RN 0.83.6 usa Kotlin 2.1.20.
 - `react-native-reanimated` v4 requiere `react-native-worklets` como peer dep. Debe instalarse en `apps/mobile/` Y en el root del monorepo (para que el Babel plugin lo encuentre). Versión compatible: `worklets@0.7.x` para `reanimated@4.2.x`.
 - **Gradle 9.0.0 incompatible con RN 0.83.6**: `expo prebuild --clean` genera Gradle 9.0.0 que rompe el build local. Tras cada prebuild, parchear manualmente `android/gradle/wrapper/gradle-wrapper.properties` → `distributionUrl=...gradle-8.13-all.zip`. EAS Build gestiona esto automáticamente — solo afecta a builds locales.
+- **`react-native bundle` roto con CLI v20**: el comando falla con `Cannot resolve @react-native/metro-config`. El reemplazo correcto es `expo export:embed`:
+  ```bash
+  npx expo export:embed --platform android --dev false \
+    --bundle-output android/app/src/main/assets/index.android.bundle \
+    --assets-dest android/app/src/main/res
+  ```
+- **`--entry-file` no funciona en monorepo**: la ruta se resuelve desde la raíz del workspace y falla. Omitirlo — `package.json "main": "expo-router/entry"` lo resuelve automáticamente.
+- **`@react-native-community/cli`**: instalar desde la raíz del monorepo con `npm install` — incluye `@react-native-community/cli@20.1.3` como dependencia transitiva de RN 0.83.6.
 - Jest y `react-native-reanimated` v4: no usar `jest.requireActual('react-native-reanimated/mock')` — carga worklets nativo. Usar mock manual en `jest.setup.ts` (ya configurado). El moduleNameMapper redirige `react-native-worklets` a `__mocks__/react-native-worklets.js`.
 - React 19: `jest.advanceTimersByTime()` que dispara actualizaciones de estado debe envolverse en `act()`.
 - `@shopify/flash-list` v2: eliminado el prop `estimatedItemSize` — FlashList v2 lo calcula automáticamente.
@@ -1171,6 +1179,8 @@ Ver [docs/BACKLOG.md](docs/BACKLOG.md)
 ---
 
 ## Última revisión de código
+
+**Fecha**: 2026-06-04 (sesión 58) — Build local APK debug validado con SDK 55 + RN 0.83.6. BUILD SUCCESSFUL — APK debug 204.9 MB. Proceso documentado en docs/BUILD_LOCAL.md. Quirks nuevos: react-native bundle → expo export:embed (CLI v20 rompe el comando anterior); --entry-file omitido en monorepo (se resuelve desde package.json "main"); Gradle 9.0.0 → 8.13 tras cada prebuild. @react-native-community/cli@20.1.3 instalado desde raíz del monorepo.
 
 **Fecha**: 2026-06-04 (sesión 57) — Verificación pre-AAB v4 + corrección tests rotos. T17/T18 verificados: Railway Deploy Logs confirma "8 migrations found" — todas las migraciones incluyendo gdpr_soft_delete aplicadas en producción. 3 tests API corregidos que estaban rotos por cambios de sesiones anteriores: repositories.test.ts (findUserByUsername con deletedAt: null), user.service.test.ts (mock refreshToken.updateMany), xbox.adapter.test.ts (tokenJson sin cifrar). Quirks SDK 55 + RN 0.83.6 documentados: Gradle 9.0.0 incompatible con RN 0.83.6 → parchear a 8.13 tras cada prebuild local; compileSdkVersion actualizado a 36 por androidx.core:1.17.0. EAS Build no requiere estos parches. bundleRelease BUILD SUCCESSFUL — AAB local 68.7 MB. API: 566/566 tests ✅. Mobile: 352/352 tests ✅. 0 errores TS/lint.
 
