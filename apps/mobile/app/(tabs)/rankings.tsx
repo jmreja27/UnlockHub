@@ -154,7 +154,7 @@ function RankingList({
           <Text className="text-gray-400 text-base text-center">{t('rankings.empty')}</Text>
         </View>
       }
-      ListFooterComponent={<AdBanner />}
+      ListFooterComponent={<View className="h-4" />}
     />
   );
 }
@@ -231,6 +231,8 @@ export default function RankingsScreen() {
           </View>
         </View>
       )}
+
+      <AdBanner unitId="rankings" />
 
       <RankingList
         filter={activeFilter}

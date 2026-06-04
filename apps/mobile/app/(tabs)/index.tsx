@@ -14,6 +14,7 @@ import { usePreferencesStore } from '../../stores/preferencesStore';
 import type { LibrarySortOrder } from '../../stores/preferencesStore';
 import { useSyncProgress } from '../../hooks/useSyncProgress';
 import { useSyncStatus } from '../../hooks/useSyncStatus';
+import { useCompletedGamesInterstitial } from '../../hooks/useCompletedGamesInterstitial';
 import { LibraryGameCard } from '../../components/LibraryGameCard';
 import { SyncStatusBar } from '../../components/SyncStatusBar';
 import { SkeletonBox } from '../../components/SkeletonBox';
@@ -219,6 +220,9 @@ export default function LibraryScreen() {
   } = useMyGames(platform);
 
   const [isManualRefreshing, setIsManualRefreshing] = useState(false);
+
+  // Detecta juegos recién completados al 100% y muestra un interstitial la primera vez por juego
+  useCompletedGamesInterstitial(allGames);
 
   // Carga todas las páginas restantes — necesario para que el sort client-side sea completo
   const fetchAllRemainingPages = useCallback(async () => {

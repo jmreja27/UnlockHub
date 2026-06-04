@@ -8,12 +8,20 @@ const BANNER_HEIGHT = 50;
 // IDs de prueba de Google — usados cuando no está definida la var de entorno
 const TEST_BANNER_ID = 'ca-app-pub-3940256099942544/6300978111';
 
-const UNIT_IDS: Record<'home' | 'search', string> = {
+type BannerPlacement = 'home' | 'search' | 'rankings' | 'friends';
+
+const UNIT_IDS: Record<BannerPlacement, string> = {
   home:
     process.env['EXPO_PUBLIC_ADMOB_HOME_BANNER_ID'] ??
     TEST_BANNER_ID,
   search:
     process.env['EXPO_PUBLIC_ADMOB_SEARCH_BANNER_ID'] ??
+    TEST_BANNER_ID,
+  rankings:
+    process.env['EXPO_PUBLIC_ADMOB_RANKINGS_BANNER_ID'] ??
+    TEST_BANNER_ID,
+  friends:
+    process.env['EXPO_PUBLIC_ADMOB_FRIENDS_BANNER_ID'] ??
     TEST_BANNER_ID,
 };
 
@@ -53,7 +61,7 @@ try {
 }
 
 interface AdBannerProps {
-  unitId?: 'home' | 'search';
+  unitId?: BannerPlacement;
 }
 
 export function AdBanner({ unitId = 'home' }: AdBannerProps) {

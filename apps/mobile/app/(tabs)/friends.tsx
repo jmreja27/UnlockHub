@@ -12,6 +12,7 @@ import { useSessionStore } from '../../stores/sessionStore';
 import { ApiRequestError } from '../../lib/api';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { EmptyState } from '../../components/EmptyState';
+import { AdBanner } from '../../components/AdBanner';
 
 type Tab = 'friends' | 'pending';
 
@@ -228,6 +229,8 @@ export default function FriendsScreen() {
           </TouchableOpacity>
         ))}
       </View>
+
+      <AdBanner unitId="friends" />
 
       {/* Buscador (solo en tab amigos) */}
       {activeTab === 'friends' && (

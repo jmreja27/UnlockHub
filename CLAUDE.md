@@ -642,6 +642,8 @@ El servidor valida un subconjunto al arrancar mediante schema Zod (`apps/api/src
 | `EXPO_PUBLIC_ADMOB_SEARCH_BANNER_ID` | Banner Search (EAS secret) | prod | ✅ Configurado como EAS secret (B9) |
 | `EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID` | Interstitial (EAS secret) | prod | ✅ Configurado como EAS secret (B9) |
 | `EXPO_PUBLIC_ADMOB_REWARDED_ID` | Rewarded (EAS secret) | prod | ✅ Configurado como EAS secret (B9) |
+| `EXPO_PUBLIC_ADMOB_RANKINGS_BANNER_ID` | Banner Rankings (EAS secret) | prod | ✅ Configurado como EAS secret — ad unit `unlockhub_rankings_banner` |
+| `EXPO_PUBLIC_ADMOB_FRIENDS_BANNER_ID` | Banner Friends (EAS secret) | prod | ✅ Configurado como EAS secret — ad unit `unlockhub_friends_banner` |
 | `POSTHOG_API_KEY` | Analíticas | staging, prod | ✅ Configurada en Railway (N4 ✅) |
 | `ADMIN_SECRET` | Acceso al dashboard admin (bearer) | prod | ✅ Configurada en Railway |
 | `PSN_SYSTEM_NPSSO` | Sync PSN de usuarios (credencial del sistema) | prod | ⚙️ Obtener en my.playstation.com → F12 → Application → Cookies → `npsso`. Caduca ~60 días. **El valor puede parecer idéntico en el navegador y estar expirado — comparar strings no es diagnóstico fiable.** Síntoma: `Sync fallido err="Expired token"` en logs Railway (RA sigue funcionando). Fix: logout + login → nuevo `npsso` → Railway Variables. Configurar en Railway dashboard → Variables. **Nunca en código ni `.env` commiteado.** |
@@ -1058,7 +1060,11 @@ Métricas disponibles:
 |---|---|
 | AdMob banner Home | ✅ Activo |
 | AdMob banner Search | ✅ Activo |
+| AdMob banner Rankings | ✅ Activo |
+| AdMob banner Friends | ✅ Activo |
 | AdMob interstitial | ✅ Activo |
+| AdMob interstitial Wrapped | ✅ Activo |
+| AdMob interstitial 100% completado | ✅ Activo |
 | AdMob rewarded (10 pts por visualización) | ✅ Activo |
 | Pantalla premium (RevenueCat) | 🚩 Gateado |
 | Compra de suscripción (RevenueCat) | 🚩 Gateado |
@@ -1161,6 +1167,8 @@ Ver [docs/BACKLOG.md](docs/BACKLOG.md)
 ---
 
 ## Última revisión de código
+
+**Fecha**: 2026-06-04 (sesión 55) — F20: ampliar placements AdMob. `AdBanner` type ampliado a `'home'|'search'|'rankings'|'friends'`; vars de entorno `EXPO_PUBLIC_ADMOB_RANKINGS_BANNER_ID` + `EXPO_PUBLIC_ADMOB_FRIENDS_BANNER_ID` con fallback a test ID. `<AdBanner unitId="rankings" />` en `RankingsScreen` entre filtros y lista; banner footer de `RankingList` reemplazado. `<AdBanner unitId="friends" />` en `FriendsScreen` después del selector de tabs. Nuevo `hooks/useWrappedInterstitial.ts`: cooldown 24h por AsyncStorage (`admob:wrapped_interstitial:last_shown`), delay 1.5s — llamado en `wrapped/[year].tsx`. Nuevo `hooks/useCompletedGamesInterstitial.ts`: AsyncStorage `admob:completed_game_ids` por gameId (max 500), solo dispara para IDs nunca vistos al 100% — llamado en `index.tsx` con la lista completa de juegos. `.env.example` actualizado con los 6 IDs separados. 0 errores TS/lint. **Pendiente acción dev**: crear 2 nuevos ad units Banner en AdMob Console y configurar como EAS secrets.
 
 **Fecha**: 2026-06-03 (sesión 54) — Fase 4 inicio: backlog actualizado + 4 ítems inmediatos completados. **T55 (edge-to-edge Android 15)**: todos los tabs cambiados a `edges={['left', 'right']}` en SafeAreaView — el header de React Navigation gestiona top y el tab bar gestiona bottom; sin el fix, `targetSdkVersion=35` contaba el safe area inset del status bar dos veces. **T53 (crash sync largo)**: 4 fixes — `syncProgressKey` en `finally` de `sync.worker.ts`; guard `MAX_PAGES=10` en `fetchUserTitles` de `psn.adapter.ts`; claves stale RA con TTL 7 días en `retroachievements.adapter.ts`; throttle 15s en handler socket de `useSyncProgress.ts`. **T56 (fixes seguridad sesión 53)**: verificados y correctamente aplicados — xbox doble cifrado, `searchUsers` deletedAt, `deleteAccount` revocación RefreshTokens. **T52 (caché Redis metadatos juego)**: nuevo `game-cache.ts` — clave `game:meta:{platform}:{externalId}` TTL 24h; adapters PSN/RA/Steam comprueban caché antes de cada `game.upsert`; syncs repetidos no generan escrituras a PostgreSQL para juegos ya conocidos. 0 errores TS/lint en API y mobile.
 

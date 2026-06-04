@@ -7,6 +7,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import type { GamingWrapped } from '@unlockhub/types';
 
 import { useWrapped } from '../../hooks/useWrapped';
+import { useWrappedInterstitial } from '../../hooks/useWrappedInterstitial';
 
 const PLATFORM_LABELS: Record<string, string> = {
   STEAM: 'Steam',
@@ -112,6 +113,8 @@ export default function WrappedScreen() {
 
   const period = isMonthly ? `${year}-${String(month!).padStart(2, '0')}` : String(year);
   const { data: wrapped, isLoading, isError } = useWrapped(isMonthly ? period : year);
+
+  useWrappedInterstitial();
 
   const monthNames = MONTH_NAMES[i18n.language] ?? MONTH_NAMES['en']!;
   const periodLabel = isMonthly
