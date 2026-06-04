@@ -1,0 +1,17 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_login.yaml
+
+- tapOn: "Profile"
+- waitForAnimationToEnd
+
+- assertVisible: "Gaming Wrapped"
+
+- tapOn: "Gaming Wrapped 2025"
+- waitForAnimationToEnd
+
+- assertNotVisible: "Something went wrong"
+- assertNotVisible: "The provided year is not valid."
+
+- pressKey: Back
+- waitForAnimationToEnd

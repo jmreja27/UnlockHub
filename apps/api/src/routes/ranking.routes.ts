@@ -3,7 +3,6 @@ import { Router } from 'express';
 import { authenticate } from '../middleware/authenticate';
 import {
   getGlobalRankingHandler,
-  getCountryRankingHandler,
   getPlatformRankingHandler,
   getMyRankHandler,
 } from '../controllers/ranking.controller';
@@ -12,9 +11,6 @@ const router = Router();
 
 // GET /api/v1/rankings/global?page=1&limit=20
 router.get('/global', getGlobalRankingHandler);
-
-// GET /api/v1/rankings/country/:country?page=1&limit=20
-router.get('/country/:country', getCountryRankingHandler);
 
 // GET /api/v1/rankings/platform/:platform?page=1&limit=20
 router.get('/platform/:platform', getPlatformRankingHandler);

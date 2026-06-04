@@ -6,6 +6,18 @@ import rankingRouter from './ranking.routes';
 import userRouter from './user.routes';
 import platformRouter from './platform.routes';
 import subscriptionRouter from './subscription.routes';
+import friendshipRouter from './friendship.routes';
+import pointsRouter from './points.routes';
+import activityRouter from './activity.routes';
+import challengeRouter from './challenge.routes';
+import notificationRouter from './notification.routes';
+import wrappedRouter from './wrapped.routes';
+import adminRouter from './admin.routes';
+import searchRouter from './search.routes';
+import gamesRouter from './games.routes';
+import achievementRouter from './achievement.routes';
+import guideRouter from './guide.routes';
+import webhooksRouter from './webhooks.routes';
 
 const router = Router();
 
@@ -19,8 +31,17 @@ router.use('/rankings', rankingRouter);
 router.use('/users', userRouter);
 router.use('/platforms', platformRouter);
 router.use('/subscriptions', subscriptionRouter);
-
-// Se irán añadiendo en los pasos siguientes:
-// router.use('/achievements', achievementRouter);
+router.use('/friends', friendshipRouter);
+router.use('/users/me/points', pointsRouter);
+router.use('/activity', activityRouter);
+router.use('/challenges', challengeRouter);
+router.use('/notifications', notificationRouter);
+router.use('/wrapped', wrappedRouter);
+router.use('/admin', adminRouter);
+router.use('/search', searchRouter);
+router.use('/games', gamesRouter);
+router.use('/achievements', achievementRouter);
+router.use('/guides', guideRouter);
+router.use('/webhooks', webhooksRouter);
 
 export default router;

@@ -1,0 +1,21 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_login.yaml
+
+- tapOn: "Rankings"
+- waitForAnimationToEnd
+
+# Tap en el primer usuario del ranking para ver su perfil público
+- tapOn: "Global"
+- waitForAnimationToEnd
+- scroll
+- waitForAnimationToEnd
+
+# Buscar un username clicable en el ranking
+- tapOn: "TestUser99"
+- waitForAnimationToEnd
+
+- assertNotVisible: "Something went wrong"
+- pressKey: Back
+- waitForAnimationToEnd
+- assertVisible: "Rankings"

@@ -1,0 +1,12 @@
+appId: com.unlockhub.app
+---
+# Verifica si Challenges tab aparece o no en la navbar.
+# Según FEATURES.challenges = false, el tab debería estar oculto (href: null).
+# Si aparece en el navbar, es un bug a reportar.
+- runFlow: _setup_login.yaml
+
+- assertVisible: "Home"
+- assertVisible: "Search"
+- assertVisible: "Rankings"
+- assertVisible: "Friends"
+- assertVisible: "Profile"

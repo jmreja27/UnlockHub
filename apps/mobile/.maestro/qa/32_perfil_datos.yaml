@@ -1,0 +1,13 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_login.yaml
+
+- tapOn: "Profile"
+- waitForAnimationToEnd
+
+- assertVisible: "Level"
+- assertVisible: "XP"
+- assertVisible: "Streak"
+- assertNotVisible: "undefined"
+- assertNotVisible: "NaN"
+- assertNotVisible: "Something went wrong"

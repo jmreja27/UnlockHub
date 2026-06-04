@@ -1,0 +1,11 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_login.yaml
+
+- tapOn: "Search"
+- waitForAnimationToEnd
+
+- assertVisible: "Search"
+- assertNotVisible: "Something went wrong"
+# El banner AdMob aparece en Search tab; verificamos que no rompe la pantalla
+- assertNotVisible: "error_boundary_title"

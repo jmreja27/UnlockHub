@@ -1,12 +1,13 @@
-// Banner reutilizable que muestra el estado premium del usuario o invita a actualizar
 import { View, Text, Pressable } from 'react-native';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { useTranslation } from 'react-i18next';
 
 import { useSubscription } from '../hooks/useSubscription';
 import { useSessionStore } from '../stores/sessionStore';
+import { PLAN_PRICES } from '../lib/iap';
+import { FEATURES } from '../lib/featureFlags';
 
-// Formatea una fecha ISO a formato legible en español
 function formatExpiryDate(isoDate: string): string {
   return new Date(isoDate).toLocaleDateString('es-ES', {
     day: 'numeric',
@@ -15,11 +16,12 @@ function formatExpiryDate(isoDate: string): string {
   });
 }
 
-// Banner de promoción premium para usuarios free: invita a actualizar con beneficios clave
 function FreeBanner() {
+  const { t } = useTranslation();
+
   function handlePress() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/(tabs)/profile');
+    router.push('/premium');
   }
 
   return (
@@ -27,74 +29,83 @@ function FreeBanner() {
       className="mx-6 mb-4 bg-primary/20 border border-primary/40 rounded-2xl px-4 py-4 active:opacity-80"
       onPress={handlePress}
       accessibilityRole="button"
-      accessibilityLabel="Actualiza a Premium"
-      accessibilityHint="Abre la pantalla para suscribirte a Premium y eliminar anuncios"
+      accessibilityLabel={t('premium.banner_cta')}
+      accessibilityHint={t('premium.banner_hint')}
       style={{ minHeight: 44 }}
     >
       <View className="flex-row items-center justify-between">
         <View className="flex-1 mr-3">
-          <Text
-            className="text-primary-light font-bold text-sm mb-0.5"
-            accessibilityRole="text"
-          >
-            Actualiza a Premium
+          <Text className="text-primary-light font-bold text-sm mb-0.5">
+            {t('premium.banner_title')}
           </Text>
           <Text className="text-gray-400 text-xs">
-            Sin anuncios + sync cada 5 min
+            {t('premium.banner_subtitle', { price: PLAN_PRICES.MONTHLY })}
           </Text>
         </View>
-        <View
-          className="bg-primary/30 rounded-full px-3 py-1"
-          accessibilityElementsHidden
-        >
-          <Text className="text-primary-light text-xs font-semibold">Ver más</Text>
+        <View className="bg-primary/30 rounded-full px-3 py-1" accessibilityElementsHidden>
+          <Text className="text-primary-light text-xs font-semibold">{t('premium.banner_action')}</Text>
         </View>
       </View>
     </Pressable>
   );
 }
 
-// Banner de confirmación premium para usuarios con suscripción activa
-function PremiumActiveBanner({ expiresAt }: { expiresAt: string | null }) {
+function PremiumActiveBanner({
+  plan,
+  expiresAt,
+}: {
+  plan: string | null;
+  expiresAt: string | null;
+}) {
+  const { t } = useTranslation();
+  const isLifetime = plan === 'LIFETIME';
+
   return (
     <View
       className="mx-6 mb-4 bg-surface-elevated border border-primary/30 rounded-2xl px-4 py-4"
       accessible
       accessibilityLabel={
-        expiresAt
-          ? `Eres Premium. Tu suscripción vence el ${formatExpiryDate(expiresAt)}`
-          : 'Eres Premium'
+        isLifetime
+          ? t('premium.active_lifetime_aria')
+          : expiresAt
+          ? t('premium.active_monthly_aria', { date: formatExpiryDate(expiresAt) })
+          : t('premium.active_aria')
       }
       accessibilityRole="text"
     >
-      <View className="flex-row items-center">
+      <View className="flex-row items-center justify-between">
         <View className="flex-1">
           <Text className="text-primary-light font-bold text-sm mb-0.5">
-            Eres Premium ✓
+            {isLifetime ? t('premium.active_lifetime') : t('premium.active_monthly')}
           </Text>
-          {expiresAt && (
-            <Text className="text-gray-400 text-xs">
-              Vence el {formatExpiryDate(expiresAt)}
-            </Text>
-          )}
+          <Text className="text-gray-400 text-xs">
+            {isLifetime
+              ? t('premium.active_lifetime_desc')
+              : expiresAt
+              ? t('premium.active_expires', { date: formatExpiryDate(expiresAt) })
+              : ''}
+          </Text>
         </View>
+        <Text className="text-green-400 text-lg" accessibilityElementsHidden>✓</Text>
       </View>
     </View>
   );
 }
 
-// Componente principal: renderiza el banner adecuado según el estado de suscripción
 export function PremiumBanner() {
   const { isAuthenticated } = useSessionStore();
   const { subscriptionStatus, isLoadingStatus } = useSubscription();
 
-  // No renderizar si el usuario no está autenticado o la consulta está cargando
-  if (!isAuthenticated || isLoadingStatus) {
-    return null;
-  }
+  if (!FEATURES.premium) return null;
+  if (!isAuthenticated || isLoadingStatus) return null;
 
   if (subscriptionStatus?.isPremium) {
-    return <PremiumActiveBanner expiresAt={subscriptionStatus.expiresAt} />;
+    return (
+      <PremiumActiveBanner
+        plan={subscriptionStatus.plan}
+        expiresAt={subscriptionStatus.expiresAt}
+      />
+    );
   }
 
   return <FreeBanner />;

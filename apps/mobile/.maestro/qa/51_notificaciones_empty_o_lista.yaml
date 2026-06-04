@@ -1,0 +1,11 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_login.yaml
+
+- tapOn: "Notifications"
+- waitForAnimationToEnd
+
+- assertVisible: "Notifications"
+
+# O hay notificaciones (lista visible) o empty state
+- assertNotVisible: "Something went wrong"

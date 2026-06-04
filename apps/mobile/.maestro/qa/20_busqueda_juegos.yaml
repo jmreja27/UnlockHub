@@ -1,0 +1,24 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_login.yaml
+
+- tapOn: "Search"
+- waitForAnimationToEnd
+- assertVisible: "Search"
+
+# Chip de juegos activo por defecto
+- assertVisible: "Games"
+
+- tapOn:
+    id: "search-input"
+    optional: true
+- runFlow:
+    when:
+      notVisible: "Type at least 2 characters"
+    commands:
+      - tapOn: "Games, players, achievements…"
+
+- inputText: "Batman"
+- waitForAnimationToEnd
+
+- assertNotVisible: "Something went wrong"

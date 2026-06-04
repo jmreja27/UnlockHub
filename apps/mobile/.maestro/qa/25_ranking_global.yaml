@@ -1,0 +1,10 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_login.yaml
+
+- tapOn: "Rankings"
+- waitForAnimationToEnd
+
+- assertVisible: "Rankings"
+- assertNotVisible: "Something went wrong"
+- assertNotVisible: "Server error"

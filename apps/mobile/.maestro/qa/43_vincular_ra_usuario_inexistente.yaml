@@ -1,0 +1,16 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_login.yaml
+
+- tapOn: "Profile"
+- waitForAnimationToEnd
+
+- tapOn: "Link RetroAchievements"
+- waitForAnimationToEnd
+
+- tapOn: "RetroAchievements username"
+- inputText: "sovelyss_noexiste_xyz123abc"
+- tapOn: "Link RetroAchievements"
+- waitForAnimationToEnd
+
+- assertVisible: "No RetroAchievements account found"

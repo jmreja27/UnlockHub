@@ -1,0 +1,32 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_login.yaml
+
+- tapOn: "Profile"
+- waitForAnimationToEnd
+
+- assertVisible: "Settings"
+
+- tapOn: "Language"
+- waitForAnimationToEnd
+
+# Cambiar a español
+- tapOn: "Español"
+- waitForAnimationToEnd
+
+# Tab Home debería mostrar "Inicio" o "Biblioteca"
+- tapOn: "Inicio"
+- waitForAnimationToEnd
+- assertVisible: "Biblioteca"
+
+# Volver a Profile y cambiar a inglés
+- tapOn: "Perfil"
+- waitForAnimationToEnd
+- tapOn: "Idioma"
+- waitForAnimationToEnd
+- tapOn: "English"
+- waitForAnimationToEnd
+
+- tapOn: "Home"
+- waitForAnimationToEnd
+- assertVisible: "Library"

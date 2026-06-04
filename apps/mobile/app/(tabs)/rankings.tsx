@@ -1,17 +1,38 @@
-// Pantalla de rankings globales con FlashList, skeleton y posición del usuario destacada
-import { useCallback } from 'react';
-import { View, Text, RefreshControl } from 'react-native';
+import { useCallback, useState } from 'react';
+import { View, Text, RefreshControl, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import { useTranslation } from 'react-i18next';
-
-import { useGlobalRankings, useMyRanking } from '../../hooks/useRankings';
-import { useSessionStore } from '../../stores/sessionStore';
-import { RankingItem } from '../../components/RankingItem';
-import { SkeletonBox } from '../../components/SkeletonBox';
+import { useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import type { RankingEntry } from '@unlockhub/types';
 
-// Número de ítems skeleton que se muestran durante la carga inicial
+import { useGlobalRankings, usePlatformRanking, useMyRanking } from '../../hooks/useRankings';
+import { useSessionStore } from '../../stores/sessionStore';
+import { ApiRequestError } from '../../lib/api';
+import { RankingItem } from '../../components/RankingItem';
+import { SkeletonBox } from '../../components/SkeletonBox';
+import { AdBanner } from '../../components/AdBanner';
+
+type RankingFilter = 'global' | 'STEAM' | 'RA' | 'PSN';
+
+function classifyError(err: Error | null): 'network' | 'auth' | 'server' {
+  if (!err) return 'server';
+  if (err instanceof ApiRequestError) {
+    if (err.statusCode === 401 || err.statusCode === 403) return 'auth';
+    if (err.statusCode >= 500) return 'server';
+  }
+  if (err.message.toLowerCase().includes('fetch') || err.message.toLowerCase().includes('network')) return 'network';
+  return 'server';
+}
+
+const FILTERS: { key: RankingFilter; labelKey: string }[] = [
+  { key: 'global', labelKey: 'rankings.filter_global' },
+  { key: 'STEAM',  labelKey: 'rankings.filter_steam' },
+  { key: 'RA',     labelKey: 'rankings.filter_ra' },
+  { key: 'PSN',    labelKey: 'rankings.filter_psn' },
+];
+
 const SKELETON_COUNT = 10;
 
 function RankingSkeletonList() {
@@ -25,16 +46,12 @@ function RankingSkeletonList() {
           accessible={false}
           accessibilityElementsHidden
         >
-          {/* Posición */}
           <SkeletonBox width={28} height={20} borderRadius={4} style={{ marginRight: 12 }} />
-          {/* Avatar */}
           <SkeletonBox width={40} height={40} borderRadius={20} style={{ marginRight: 12 }} />
-          {/* Nombre */}
           <View className="flex-1">
             <SkeletonBox width={120} height={16} borderRadius={4} style={{ marginBottom: 6 }} />
             <SkeletonBox width={60} height={12} borderRadius={4} />
           </View>
-          {/* XP */}
           <SkeletonBox width={50} height={16} borderRadius={4} />
         </View>
       ))}
@@ -42,83 +59,66 @@ function RankingSkeletonList() {
   );
 }
 
-export default function RankingsScreen() {
+function RankingList({
+  filter,
+  currentUserId,
+  onPressUser,
+}: {
+  filter: RankingFilter;
+  currentUserId: string | undefined;
+  onPressUser: (username: string) => void;
+}) {
   const { t } = useTranslation();
-  const { user } = useSessionStore();
-  const {
-    data: rankingsData,
-    isLoading,
-    isError,
-    refetch,
-    isRefetching,
-  } = useGlobalRankings(1, 50);
+  const queryClient = useQueryClient();
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
 
-  const { data: myRanking } = useMyRanking();
+  const globalQuery = useGlobalRankings(1, 50);
+  const platformQuery = usePlatformRanking(filter !== 'global' ? filter : '', 1, 50);
 
-  const handleRefresh = useCallback(() => {
-    void refetch();
-  }, [refetch]);
+  const query = filter === 'global' ? globalQuery : platformQuery;
+
+  const { data, isLoading, isError, error, refetch } = query;
+
+  async function handleRefresh(): Promise<void> {
+    setIsManualRefreshing(true);
+    try {
+      await queryClient.invalidateQueries({ queryKey: ['rankings'] });
+    } finally {
+      setIsManualRefreshing(false);
+    }
+  }
 
   const renderItem = useCallback(
-    ({ item }: { item: RankingEntry }) => {
-      const isCurrentUser = user?.id === item.userId;
-      return <RankingItem entry={item} isCurrentUser={isCurrentUser} />;
-    },
-    [user?.id],
+    ({ item }: { item: RankingEntry }) => (
+      <RankingItem
+        entry={item}
+        isCurrentUser={currentUserId === item.userId}
+        onPress={() => onPressUser(item.username)}
+      />
+    ),
+    [currentUserId, onPressUser],
   );
 
-  const keyExtractor = useCallback((item: RankingEntry) => item.userId, []);
+  if (isLoading) return <RankingSkeletonList />;
 
-  return (
-    <SafeAreaView className="flex-1 bg-surface">
-      {/* Cabecera */}
-      <View className="px-4 pt-4 pb-2">
-        <Text className="text-white text-2xl font-bold" accessibilityRole="header">
-          {t('rankings.title')}
+  if (isError) {
+    const errorType = classifyError(error);
+    return (
+      <View
+        className="flex-1 items-center justify-center px-6"
+        accessible
+        accessibilityLiveRegion="polite"
+        accessibilityRole="alert"
+      >
+        <Text className="text-red-400 text-lg font-semibold mb-2">{t('rankings.error_title')}</Text>
+        <Text className="text-gray-400 text-sm text-center mb-6">
+          {errorType === 'network'
+            ? t('rankings.error_network')
+            : errorType === 'auth'
+              ? t('rankings.error_auth')
+              : t('rankings.error_server')}
         </Text>
-        <Text className="text-gray-400 text-sm mt-1">{t('rankings.subtitle')}</Text>
-      </View>
-
-      {/* Tarjeta con la posición del usuario autenticado */}
-      {user && myRanking && (
-        <View
-          className="mx-4 mb-3 bg-primary/20 border border-primary/40 rounded-xl px-4 py-3"
-          accessible
-          accessibilityLabel={
-            myRanking.rank
-              ? t('rankings.my_position_aria', { rank: myRanking.rank, xp: myRanking.xp.toLocaleString() })
-              : t('rankings.my_position_unranked_aria', { xp: myRanking.xp.toLocaleString() })
-          }
-        >
-          <Text className="text-gray-400 text-xs mb-1">{t('rankings.my_position_label')}</Text>
-          <View className="flex-row items-center justify-between">
-            <Text className="text-primary-light font-bold text-lg">
-              {myRanking.rank ? `#${myRanking.rank}` : '—'}
-            </Text>
-            <Text className="text-white font-semibold">
-              {myRanking.xp.toLocaleString()} XP
-            </Text>
-          </View>
-        </View>
-      )}
-
-      {/* Estado de carga — skeleton */}
-      {isLoading && <RankingSkeletonList />}
-
-      {/* Estado de error */}
-      {isError && !isLoading && (
-        <View
-          className="flex-1 items-center justify-center px-6"
-          accessible
-          accessibilityLiveRegion="polite"
-          accessibilityRole="alert"
-        >
-          <Text className="text-red-400 text-lg font-semibold mb-2">
-            {t('rankings.error_title')}
-          </Text>
-          <Text className="text-gray-400 text-sm text-center mb-6">
-            {t('rankings.error_message')}
-          </Text>
+        {errorType !== 'auth' && (
           <Text
             className="text-primary-light text-base"
             onPress={() => void refetch()}
@@ -127,40 +127,117 @@ export default function RankingsScreen() {
           >
             {t('common.retry')}
           </Text>
+        )}
+      </View>
+    );
+  }
+
+  return (
+    <FlashList
+      data={data?.data ?? []}
+      renderItem={renderItem}
+      keyExtractor={(item) => item.userId}
+      contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}
+      accessibilityLabel={t('rankings.list_label')}
+      refreshControl={
+        <RefreshControl
+          refreshing={isManualRefreshing}
+          onRefresh={() => void handleRefresh()}
+          tintColor="#818cf8"
+          colors={['#4f46e5']}
+          accessibilityLabel={t('rankings.refresh_label')}
+        />
+      }
+      ListEmptyComponent={
+        <View className="items-center justify-center py-8" accessible accessibilityLiveRegion="polite">
+          <Text className="text-gray-400 text-base text-center">{t('rankings.empty')}</Text>
+        </View>
+      }
+      ListFooterComponent={<View className="h-4" />}
+    />
+  );
+}
+
+export default function RankingsScreen() {
+  const { t } = useTranslation();
+  const router = useRouter();
+  const { user } = useSessionStore();
+  const [activeFilter, setActiveFilter] = useState<RankingFilter>('global');
+
+  // Pasar el filtro activo para que "Mi posición" muestre XP del mismo sorted set que la lista.
+  // Sin filtro ('global') → XP total; con filtro ('STEAM'/'RA'/'PSN') → XP específico de plataforma.
+  const { data: myRanking } = useMyRanking(activeFilter !== 'global' ? activeFilter : undefined);
+
+  const handlePressUser = useCallback(
+    (username: string) => {
+      router.push(`/profile/${username}`);
+    },
+    [router],
+  );
+
+  return (
+    <SafeAreaView className="flex-1 bg-surface" edges={['left', 'right']}>
+      <View className="px-4 pt-1 pb-2">
+        <Text className="text-white text-2xl font-bold" accessibilityRole="header">
+          {t('rankings.title')}
+        </Text>
+      </View>
+
+      {/* Filtros horizontales */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={{ flexGrow: 0 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 8, gap: 8, alignItems: 'center' }}
+        accessibilityRole="tablist"
+        accessibilityLabel={t('rankings.filter_label')}
+      >
+        {FILTERS.map(({ key, labelKey }) => (
+          <Pressable
+            key={key}
+            onPress={() => setActiveFilter(key)}
+            className={`px-4 py-2 rounded-full ${activeFilter === key ? 'bg-primary' : 'bg-surface-2'}`}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeFilter === key }}
+            accessibilityLabel={t(labelKey)}
+          >
+            <Text className={`font-semibold text-sm ${activeFilter === key ? 'text-white' : 'text-gray-400'}`}>
+              {t(labelKey)}
+            </Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+
+      {/* Mi posición */}
+      {user && myRanking && (
+        <View
+          className="mx-4 mb-3 bg-primary/20 border border-primary/40 rounded-xl px-4 py-3"
+          accessible
+          accessibilityLabel={
+            myRanking.rank
+              ? t('rankings.my_position_aria', { rank: myRanking.rank, xp: (myRanking.xp ?? 0).toLocaleString() })
+              : t('rankings.my_position_unranked_aria', { xp: (myRanking.xp ?? 0).toLocaleString() })
+          }
+        >
+          <Text className="text-gray-400 text-xs mb-1">{t('rankings.my_position_label')}</Text>
+          <View className="flex-row items-center justify-between">
+            <Text className="text-primary-light font-bold text-lg">
+              {myRanking.rank ? `#${myRanking.rank}` : '—'}
+            </Text>
+            <Text className="text-white font-semibold">
+              {(myRanking.xp ?? 0).toLocaleString()} XP
+            </Text>
+          </View>
         </View>
       )}
 
-      {/* Lista de rankings */}
-      {!isLoading && !isError && (
-        <FlashList
-          data={rankingsData?.data ?? []}
-          renderItem={renderItem}
-          keyExtractor={keyExtractor}
-          estimatedItemSize={68}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}
-          accessibilityLabel={t('rankings.list_label')}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefetching}
-              onRefresh={handleRefresh}
-              tintColor="#818cf8"
-              colors={['#4f46e5']}
-              accessibilityLabel={t('rankings.refresh_label')}
-            />
-          }
-          ListEmptyComponent={
-            <View
-              className="items-center justify-center py-16"
-              accessible
-              accessibilityLiveRegion="polite"
-            >
-              <Text className="text-gray-400 text-base text-center">
-                {t('rankings.empty')}
-              </Text>
-            </View>
-          }
-        />
-      )}
+      <AdBanner unitId="rankings" />
+
+      <RankingList
+        filter={activeFilter}
+        currentUserId={user?.id}
+        onPressUser={handlePressUser}
+      />
     </SafeAreaView>
   );
 }

@@ -17,6 +17,10 @@ jest.mock('../lib/prisma', () => ({
       updateMany: jest.fn(),
       upsert: jest.fn(),
     },
+    userPoint: {
+      aggregate: jest.fn(),
+      create: jest.fn(),
+    },
     $transaction: jest.fn(),
   },
 }));
@@ -138,6 +142,42 @@ describe('subscriptionService.createOrUpdateSubscription', () => {
     });
   });
 
+  it('activa LIFETIME con premiumUntil=null y fecha centinela en la suscripción', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(baseUser);
+    (mockPrisma.subscription.updateMany as jest.Mock).mockResolvedValue({ count: 0 });
+    (mockPrisma.subscription.upsert as jest.Mock).mockResolvedValue({
+      ...baseSubscription,
+      plan: 'LIFETIME',
+      expiresAt: new Date('2099-12-31T23:59:59Z'),
+    });
+    (mockPrisma.user.update as jest.Mock).mockResolvedValue({
+      ...baseUser,
+      isPremium: true,
+      premiumUntil: null,
+    });
+
+    await subscriptionService.createOrUpdateSubscription('user-1', {
+      plan: 'LIFETIME',
+      provider: 'GOOGLE_PLAY',
+      storeTransactionId: 'txn-lifetime-001',
+    });
+
+    expect(mockPrisma.subscription.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          plan: 'LIFETIME',
+          expiresAt: new Date('2099-12-31T23:59:59Z'),
+        }),
+      }),
+    );
+
+    // premiumUntil debe ser null para LIFETIME — el acceso es permanente
+    expect(mockPrisma.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: { isPremium: true, premiumUntil: null },
+    });
+  });
+
   it('lanza AppError con código USER_NOT_FOUND', async () => {
     (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(null);
 
@@ -193,6 +233,22 @@ describe('subscriptionService.cancelSubscription', () => {
       code: 'NO_ACTIVE_SUBSCRIPTION',
       statusCode: 404,
     });
+  });
+
+  it('lanza LIFETIME_NOT_CANCELLABLE al intentar cancelar una suscripción LIFETIME', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({ ...baseUser, isPremium: true });
+    (mockPrisma.subscription.findFirst as jest.Mock).mockResolvedValue({
+      ...baseSubscription,
+      plan: 'LIFETIME',
+      expiresAt: new Date('2099-12-31T23:59:59Z'),
+    });
+
+    await expect(subscriptionService.cancelSubscription('user-1')).rejects.toMatchObject({
+      code: 'LIFETIME_NOT_CANCELLABLE',
+      statusCode: 400,
+    });
+
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
   });
 });
 
@@ -275,6 +331,22 @@ describe('subscriptionService.expireOldSubscriptions', () => {
     );
   });
 
+  it('no expira suscripciones LIFETIME (la query excluye el plan LIFETIME)', async () => {
+    // findMany devuelve vacío porque la query ya excluye LIFETIME con `plan: { not: 'LIFETIME' }`
+    (mockPrisma.subscription.findMany as jest.Mock).mockResolvedValue([]);
+
+    const count = await subscriptionService.expireOldSubscriptions();
+
+    expect(count).toBe(0);
+    expect(mockPrisma.subscription.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          plan: { not: 'LIFETIME' },
+        }),
+      }),
+    );
+  });
+
   it('deduplica los userIds cuando varios subs pertenecen al mismo usuario', async () => {
     // Dos suscripciones expiradas del mismo usuario
     const expiredSubs = [
@@ -297,5 +369,66 @@ describe('subscriptionService.expireOldSubscriptions', () => {
         where: { id: { in: ['user-1'] } },
       }),
     );
+  });
+});
+
+// ─── redeemPointsForPremium ───────────────────────────────────────────────────
+
+describe('subscriptionService.redeemPointsForPremium', () => {
+  beforeEach(() => {
+    (mockPrisma.userPoint.aggregate as jest.Mock).mockResolvedValue({ _sum: { amount: 600 } });
+    (mockPrisma.$transaction as jest.Mock).mockResolvedValue([]);
+  });
+
+  it('lanza USER_NOT_FOUND si el usuario no existe', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+
+    await expect(subscriptionService.redeemPointsForPremium('noexiste', 300)).rejects.toMatchObject({
+      code: 'USER_NOT_FOUND',
+      statusCode: 404,
+    });
+  });
+
+  it('lanza INVALID_POINTS_AMOUNT si el monto no es múltiplo de 300', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(baseUser);
+
+    await expect(subscriptionService.redeemPointsForPremium('user-1', 150)).rejects.toMatchObject({
+      code: 'INVALID_POINTS_AMOUNT',
+      statusCode: 400,
+    });
+  });
+
+  it('lanza INSUFFICIENT_POINTS si el saldo es inferior al canje solicitado', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(baseUser);
+    (mockPrisma.userPoint.aggregate as jest.Mock).mockResolvedValue({ _sum: { amount: 100 } });
+
+    await expect(subscriptionService.redeemPointsForPremium('user-1', 300)).rejects.toMatchObject({
+      code: 'INSUFFICIENT_POINTS',
+      statusCode: 400,
+    });
+  });
+
+  it('ejecuta transacción y devuelve nuevo saldo y días añadidos', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(baseUser);
+
+    const result = await subscriptionService.redeemPointsForPremium('user-1', 300);
+
+    expect(mockPrisma.$transaction).toHaveBeenCalled();
+    expect(result.newBalance).toBe(300); // 600 - 300
+    expect(result.daysAdded).toBe(7);    // 300 / 300 * 7
+  });
+
+  it('añade días sobre premiumUntil existente si el usuario ya es premium', async () => {
+    const futureDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000); // 3 días en el futuro
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({
+      ...baseUser,
+      isPremium: true,
+      premiumUntil: futureDate,
+    });
+
+    const result = await subscriptionService.redeemPointsForPremium('user-1', 300);
+
+    expect(result.daysAdded).toBe(7);
+    expect(mockPrisma.$transaction).toHaveBeenCalled();
   });
 });

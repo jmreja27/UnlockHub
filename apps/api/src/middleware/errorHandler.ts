@@ -1,11 +1,13 @@
 import type { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
-
+import * as Sentry from '@sentry/node';
 import type { ApiError } from '@unlockhub/types';
+
+import { logger } from '../lib/logger';
 
 export class AppError extends Error {
   constructor(
-    public readonly message: string,
+    public override readonly message: string,
     public readonly code: string,
     public readonly statusCode: number,
     public readonly details?: unknown,
@@ -41,7 +43,9 @@ export function errorHandler(
     return;
   }
 
-  console.error('Error no controlado:', err);
+  // Capturar en Sentry solo errores inesperados (no AppError ni ZodError, que son flujos controlados)
+  Sentry.captureException(err);
+  logger.error({ err }, 'Error no controlado');
   const response: ApiError = {
     error: 'Error interno del servidor',
     code: 'INTERNAL_SERVER_ERROR',

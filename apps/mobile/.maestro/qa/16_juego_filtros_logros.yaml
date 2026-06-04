@@ -1,0 +1,29 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_login.yaml
+
+- tapOn:
+    index: 0
+    text: "achievements"
+- waitForAnimationToEnd
+
+- assertVisible: "← Back"
+
+- tapOn: "All"
+- waitForAnimationToEnd
+- assertNotVisible: "Something went wrong"
+
+- tapOn: "Unlocked"
+- waitForAnimationToEnd
+- assertNotVisible: "Something went wrong"
+
+- tapOn: "Pending"
+- waitForAnimationToEnd
+- assertNotVisible: "Something went wrong"
+
+- tapOn: "All"
+- waitForAnimationToEnd
+
+- tapOn: "← Back"
+- waitForAnimationToEnd
+- assertVisible: "Library"

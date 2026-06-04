@@ -1,3 +1,6 @@
+# Guías privadas — no subir al repositorio
+ACCOUNTS_GUIDE.md
+
 # Dependencias
 node_modules/
 .yarn/cache
@@ -11,11 +14,34 @@ build/
 android/
 ios/
 
-# Variables de entorno
+# Variables de entorno — NUNCA subir ficheros con secrets reales
 .env
 .env.local
 .env.*.local
+.env.production
+.env.staging
+.env.development
 !.env.example
+!.env.*.example
+
+# Claude Code — configuración local del agente (no subir)
+.claude/
+
+# Documentación privada local — no subir al repositorio
+PRODUCTION_ACCOUNTS.md
+SCALING_GUIDE.md
+
+# Credenciales de Firebase / Google Services — contienen claves de API reales
+google-services.json
+GoogleService-Info.plist
+
+# Service account key de Google Play (usada por EAS Submit)
+google-play-service-account.json
+*.serviceaccount.json
+
+# Certificados y claves privadas
+*.pem
+*.p7s
 
 # Logs
 *.log
@@ -40,6 +66,7 @@ Thumbs.db
 
 # Expo / React Native
 *.jks
+*.keystore
 *.p8
 *.p12
 *.key
@@ -52,3 +79,4 @@ web-build/
 
 # Prisma
 prisma/migrations/*.sql.bak
+/app.json

@@ -1,0 +1,10 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_login.yaml
+
+# Tap en la campana de notificaciones (header de Home)
+- tapOn: "Notifications"
+- waitForAnimationToEnd
+
+- assertVisible: "Notifications"
+- assertNotVisible: "Something went wrong"

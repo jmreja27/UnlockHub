@@ -2,11 +2,15 @@ import axios from 'axios';
 import type { PlatformAccount } from '@prisma/client';
 import type { Achievement, Game, SyncResult } from '@unlockhub/types';
 
-import type { PlatformAdapter } from './platform.interface';
-import { decrypt } from '../lib/crypto';
 import { prisma } from '../lib/prisma';
 import { redis } from '../lib/redis';
 import { AppError } from '../middleware/errorHandler';
+
+import type { PlatformAdapter, SyncBatchCallback } from './platform.interface';
+import { getCachedGameMeta, setCachedGameMeta } from './game-cache';
+
+// Clave del sistema — todas las llamadas a Steam usan esta key del servidor
+const STEAM_SYSTEM_API_KEY = process.env['STEAM_API_KEY'] ?? '';
 
 // ─── Constantes ────────────────────────────────────────────────────────────────
 
@@ -19,6 +23,11 @@ const TTL_ACHIEVEMENTS = 1800;  // 30 minutos
 const TTL_SCHEMA = 86400;       // 24 horas
 const TTL_RARITY = 86400;       // 24 horas
 
+// ─── Constantes de batch ───────────────────────────────────────────────────────
+
+const EXPRESS_GAME_LIMIT = 20;
+const BATCH_SIZE = 20;
+
 // ─── Tipos internos de la Steam Web API ───────────────────────────────────────
 
 interface SteamOwnedGame {
@@ -26,6 +35,7 @@ interface SteamOwnedGame {
   name: string;
   img_icon_url: string;
   has_community_visible_stats?: boolean;
+  playtime_forever?: number;
 }
 
 interface SteamPlayerAchievement {
@@ -73,6 +83,85 @@ async function cachedFetch<T>(key: string, ttl: number, fetcher: () => Promise<T
   return value;
 }
 
+// ─── Helpers públicos ─────────────────────────────────────────────────────────
+
+const STEAMID64_REGEX = /^\d{17}$/;
+
+/**
+ * Resuelve un username/vanityURL de Steam a SteamID64.
+ * Si el input ya es un SteamID64 (17 dígitos), lo devuelve directamente.
+ * Si no, llama a ResolveVanityURL con la API key del sistema.
+ * Lanza STEAM_USER_NOT_FOUND (404) si el usuario no existe.
+ * Lanza STEAM_SYSTEM_NOT_CONFIGURED (503) si STEAM_API_KEY no está configurada.
+ */
+export async function resolveVanityUrl(usernameOrId: string): Promise<string> {
+  if (STEAMID64_REGEX.test(usernameOrId)) {
+    return usernameOrId;
+  }
+
+  const apiKey = process.env['STEAM_API_KEY'] ?? '';
+  if (!apiKey) {
+    throw new AppError(
+      'Steam API key del sistema no configurada. Configura STEAM_API_KEY en las variables de entorno.',
+      'STEAM_SYSTEM_NOT_CONFIGURED',
+      503,
+    );
+  }
+
+  const url = `${STEAM_API_BASE}/ISteamUser/ResolveVanityURL/v1/`;
+  const response = await axios.get<{ response: { success: number; steamid?: string } }>(url, {
+    params: { key: apiKey, vanityurl: usernameOrId },
+    timeout: 10_000,
+  });
+
+  const { success, steamid } = response.data.response;
+  if (success !== 1 || !steamid) {
+    throw new AppError(
+      `No se encontró ninguna cuenta de Steam con el username "${usernameOrId}".`,
+      'STEAM_USER_NOT_FOUND',
+      404,
+      { username: usernameOrId },
+    );
+  }
+
+  return steamid;
+}
+
+/**
+ * Verifica que el perfil de Steam es público antes de vincularlo.
+ * communityvisibilitystate: 1=privado, 3=público.
+ * Lanza STEAM_PROFILE_PRIVATE (400) si el perfil no es público.
+ * Lanza STEAM_SYSTEM_NOT_CONFIGURED (503) si STEAM_API_KEY no está configurada.
+ */
+export async function checkSteamProfilePublic(steamId: string): Promise<void> {
+  const apiKey = process.env['STEAM_API_KEY'] ?? '';
+  if (!apiKey) {
+    throw new AppError(
+      'Steam API key del sistema no configurada.',
+      'STEAM_SYSTEM_NOT_CONFIGURED',
+      503,
+    );
+  }
+
+  const url = `${STEAM_API_BASE}/ISteamUser/GetPlayerSummaries/v2/`;
+  const response = await axios.get<{
+    response: { players: Array<{ steamid: string; communityvisibilitystate: number }> };
+  }>(url, {
+    params: { key: apiKey, steamids: steamId },
+    timeout: 10_000,
+  });
+
+  const player = response.data.response.players[0];
+  if (!player || player.communityvisibilitystate !== 3) {
+    throw new AppError(
+      'El perfil de Steam es privado. Hazlo público en la configuración de Steam para vincularlo.',
+      'STEAM_PROFILE_PRIVATE',
+      400,
+      { steamId },
+    );
+  }
+}
+
 // ─── Steam Adapter ────────────────────────────────────────────────────────────
 
 export class SteamAdapter implements PlatformAdapter {
@@ -80,7 +169,8 @@ export class SteamAdapter implements PlatformAdapter {
 
   // ── getUserAchievements ────────────────────────────────────────────────────
 
-  async getUserAchievements(steamId: string, apiKey: string): Promise<Achievement[]> {
+  async getUserAchievements(steamId: string): Promise<Achievement[]> {
+    const apiKey = STEAM_SYSTEM_API_KEY;
     // Obtener lista de juegos del usuario
     const games = await this.fetchOwnedGames(steamId, apiKey);
 
@@ -104,7 +194,9 @@ export class SteamAdapter implements PlatformAdapter {
 
       for (const pa of playerAchievements) {
         const schemaDef = schemaMap.get(pa.apiname);
-        const rarityPercent = rarityMap.get(pa.apiname) ?? 100;
+        const rawRarity = rarityMap.get(pa.apiname) ?? 100;
+        const rarityValue = parseFloat(String(rawRarity));
+        const rarityPercent = isNaN(rarityValue) ? 100 : rarityValue;
         const normalized = normalizePoints(rarityPercent);
 
         allAchievements.push({
@@ -115,11 +207,13 @@ export class SteamAdapter implements PlatformAdapter {
           title: schemaDef?.displayName ?? pa.apiname,
           description: schemaDef?.description ?? null,
           iconUrl: schemaDef?.icon
-            ? `${STEAM_STORE_CDN}/${appId}/${schemaDef.icon}.jpg`
+            ? (schemaDef.icon.startsWith('http')
+                ? schemaDef.icon
+                : `${STEAM_STORE_CDN}/${appId}/${schemaDef.icon}.jpg`)
             : null,
-          rawValue: rarityPercent,
+          rawValue: isNaN(rarityValue) ? null : rarityValue,
           normalizedPoints: normalized,
-          rarity: rarityPercent,
+          rarity: isNaN(rarityValue) ? null : rarityValue,
           externalUrl: `https://store.steampowered.com/app/${appId}`,
         });
       }
@@ -143,6 +237,7 @@ export class SteamAdapter implements PlatformAdapter {
         platform: 'STEAM',
         externalId,
         title: `Steam Game ${externalId}`,
+        console: null,
         iconUrl: null,
         headerUrl: `https://cdn.cloudflare.steamstatic.com/steam/apps/${externalId}/header.jpg`,
         totalAchievements: schema.length,
@@ -155,6 +250,7 @@ export class SteamAdapter implements PlatformAdapter {
       platform: 'STEAM',
       externalId,
       title: `Steam Game ${externalId}`,
+      console: null,
       iconUrl: null,
       headerUrl: `https://cdn.cloudflare.steamstatic.com/steam/apps/${externalId}/header.jpg`,
       totalAchievements: 0,
@@ -164,59 +260,136 @@ export class SteamAdapter implements PlatformAdapter {
   // ── syncUser ───────────────────────────────────────────────────────────────
 
   async syncUser(account: PlatformAccount): Promise<SyncResult> {
-    // 1. Desencriptar el token para obtener la API key de Steam
-    const apiKey = decrypt(account.encryptedToken);
+    const apiKey = STEAM_SYSTEM_API_KEY;
+    const steamId = account.externalId;
+    const games = await this.fetchOwnedGames(steamId, apiKey);
+    const eligible = games.filter((g) => g.has_community_visible_stats);
+    return this.processGames(eligible, steamId, apiKey, account.userId);
+  }
+
+  // ── syncUserExpress ────────────────────────────────────────────────────────
+
+  async syncUserExpress(account: PlatformAccount): Promise<SyncResult> {
+    const apiKey = STEAM_SYSTEM_API_KEY;
     const steamId = account.externalId;
 
-    // 2. Obtener juegos del usuario
     const games = await this.fetchOwnedGames(steamId, apiKey);
+    // Los juegos más jugados probablemente importan más al usuario
+    const eligible = games
+      .filter((g) => g.has_community_visible_stats)
+      .sort((a, b) => (b.playtime_forever ?? 0) - (a.playtime_forever ?? 0))
+      .slice(0, EXPRESS_GAME_LIMIT);
 
+    return this.processGames(eligible, steamId, apiKey, account.userId);
+  }
+
+  // ── syncUserBatched ────────────────────────────────────────────────────────
+
+  async syncUserBatched(account: PlatformAccount, onBatch: SyncBatchCallback): Promise<SyncResult> {
+    const apiKey = STEAM_SYSTEM_API_KEY;
+    const steamId = account.externalId;
+
+    const games = await this.fetchOwnedGames(steamId, apiKey);
+    const eligible = games.filter((g) => g.has_community_visible_stats);
+    const total = eligible.length;
+
+    let achievementsSynced = 0;
+    let gamesUpdated = 0;
+    let processed = 0;
+
+    for (let i = 0; i < eligible.length; i += BATCH_SIZE) {
+      const batch = eligible.slice(i, i + BATCH_SIZE);
+      const batchResult = await this.processGames(batch, steamId, apiKey, account.userId);
+
+      achievementsSynced += batchResult.achievementsSynced;
+      gamesUpdated += batchResult.gamesUpdated;
+      processed += batch.length;
+
+      await onBatch({
+        processed,
+        total,
+        newGamesCount: batchResult.gamesUpdated,
+        newAchievementsCount: batchResult.achievementsSynced,
+      });
+    }
+
+    return {
+      platform: 'STEAM',
+      achievementsSynced,
+      gamesUpdated,
+      syncedAt: new Date().toISOString(),
+    };
+  }
+
+  // ── Lógica de procesamiento compartida ────────────────────────────────────
+
+  private async processGames(
+    games: SteamOwnedGame[],
+    steamId: string,
+    apiKey: string,
+    userId: string,
+  ): Promise<SyncResult> {
     let achievementsSynced = 0;
     let gamesUpdated = 0;
 
     for (const steamGame of games) {
       const appId = String(steamGame.appid);
 
-      if (!steamGame.has_community_visible_stats) continue;
-
-      // 3. Obtener logros, schema y rareza en paralelo para cada juego
       const [playerAchievements, schema, rarityMap] = await Promise.all([
         this.fetchPlayerAchievements(steamId, apiKey, appId),
         this.fetchGameSchema(apiKey, appId),
         this.fetchRarityMap(appId),
       ]);
 
+      if (schema.length === 0 || playerAchievements.length === 0) continue;
+
       const schemaMap = new Map(schema.map((s) => [s.name, s]));
 
-      // 4. Upsert del juego en la BD
-      const dbGame = await prisma.game.upsert({
-        where: { platform_externalId: { platform: 'STEAM', externalId: appId } },
-        create: {
-          platform: 'STEAM',
-          externalId: appId,
+      const steamIconUrl = steamGame.img_icon_url
+        ? `${STEAM_STORE_CDN}/${appId}/${steamGame.img_icon_url}.jpg`
+        : null;
+
+      // Caché de metadatos de juego (24h) — evita un game.upsert por app en cada sync
+      let dbGame: { id: string };
+      const cachedMeta = await getCachedGameMeta('STEAM', appId);
+      if (cachedMeta) {
+        dbGame = { id: cachedMeta.id };
+      } else {
+        dbGame = await prisma.game.upsert({
+          where: { platform_externalId: { platform: 'STEAM', externalId: appId } },
+          create: {
+            platform: 'STEAM',
+            externalId: appId,
+            title: steamGame.name,
+            iconUrl: steamIconUrl,
+            headerUrl: `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/header.jpg`,
+            totalAchievements: schema.length,
+          },
+          update: {
+            title: steamGame.name,
+            totalAchievements: schema.length,
+          },
+        });
+        await setCachedGameMeta('STEAM', appId, {
+          id: dbGame.id,
           title: steamGame.name,
-          iconUrl: steamGame.img_icon_url
-            ? `${STEAM_STORE_CDN}/${appId}/${steamGame.img_icon_url}.jpg`
-            : null,
-          headerUrl: `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/header.jpg`,
+          iconUrl: steamIconUrl,
           totalAchievements: schema.length,
-        },
-        update: {
-          title: steamGame.name,
-          totalAchievements: schema.length,
-        },
-      });
+          console: null,
+        });
+      }
 
       gamesUpdated++;
 
-      // 5. Upsert de cada logro y de UserAchievement si está desbloqueado
       for (const pa of playerAchievements) {
         const schemaDef = schemaMap.get(pa.apiname);
-        const rarityPercent = rarityMap.get(pa.apiname) ?? 100;
+        const rawRarity = rarityMap.get(pa.apiname) ?? 100;
+        const rarityValue = parseFloat(String(rawRarity));
+        const rarityPercent = isNaN(rarityValue) ? 100 : rarityValue;
         const normalized = normalizePoints(rarityPercent);
 
         const dbAchievement = await prisma.achievement.upsert({
-          where: { platform_externalId: { platform: 'STEAM', externalId: pa.apiname } },
+          where: { platform_gameId_externalId: { platform: 'STEAM', gameId: dbGame.id, externalId: pa.apiname } },
           create: {
             gameId: dbGame.id,
             platform: 'STEAM',
@@ -224,39 +397,33 @@ export class SteamAdapter implements PlatformAdapter {
             title: schemaDef?.displayName ?? pa.apiname,
             description: schemaDef?.description ?? null,
             iconUrl: schemaDef?.icon
-              ? `${STEAM_STORE_CDN}/${appId}/${schemaDef.icon}.jpg`
+              ? (schemaDef.icon.startsWith('http')
+                  ? schemaDef.icon
+                  : `${STEAM_STORE_CDN}/${appId}/${schemaDef.icon}.jpg`)
               : null,
-            rawValue: rarityPercent,
+            rawValue: isNaN(rarityValue) ? null : rarityValue,
             normalizedPoints: normalized,
-            rarity: rarityPercent,
+            rarity: isNaN(rarityValue) ? null : rarityValue,
             externalUrl: `https://store.steampowered.com/app/${appId}`,
           },
           update: {
             title: schemaDef?.displayName ?? pa.apiname,
             description: schemaDef?.description ?? null,
-            rawValue: rarityPercent,
+            rawValue: isNaN(rarityValue) ? null : rarityValue,
             normalizedPoints: normalized,
-            rarity: rarityPercent,
+            rarity: isNaN(rarityValue) ? null : rarityValue,
           },
         });
 
-        // 6. Upsert de UserAchievement solo si el logro está desbloqueado
         if (pa.achieved === 1) {
           await prisma.userAchievement.upsert({
-            where: {
-              userId_achievementId: {
-                userId: account.userId,
-                achievementId: dbAchievement.id,
-              },
-            },
+            where: { userId_achievementId: { userId, achievementId: dbAchievement.id } },
             create: {
-              userId: account.userId,
+              userId,
               achievementId: dbAchievement.id,
               unlockedAt: new Date(pa.unlocktime * 1000),
             },
-            update: {
-              unlockedAt: new Date(pa.unlocktime * 1000),
-            },
+            update: { unlockedAt: new Date(pa.unlocktime * 1000) },
           });
           achievementsSynced++;
         }
@@ -364,11 +531,12 @@ export class SteamAdapter implements PlatformAdapter {
 
   /**
    * Obtiene el schema del juego (metadatos de logros) desde la Steam Web API.
-   * Caché: steam:schema:{appId}, TTL 24 horas.
+   * Solicita los nombres en español — Steam hace fallback a inglés automáticamente si no hay traducción.
+   * Caché: steam:schema:{appId}:es, TTL 24 horas.
    */
   private async fetchGameSchema(apiKey: string, appId: string): Promise<SteamSchemaAchievement[]> {
     return cachedFetch<SteamSchemaAchievement[]>(
-      `steam:schema:${appId}`,
+      `steam:schema:${appId}:es`,
       TTL_SCHEMA,
       async () => {
         const url = `${STEAM_API_BASE}/ISteamUserStats/GetSchemaForGame/v2/`;
@@ -383,6 +551,7 @@ export class SteamAdapter implements PlatformAdapter {
             params: {
               key: apiKey,
               appid: appId,
+              l: 'spanish',
               format: 'json',
             },
           });

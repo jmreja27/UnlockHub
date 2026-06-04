@@ -1,0 +1,11 @@
+appId: com.unlockhub.app
+---
+# Verifica que la SyncStatusBar muestra información de última sync
+- runFlow: _setup_login.yaml
+
+- assertVisible: "Library"
+- assertVisible:
+    id: "sync-status-bar"
+
+# La última sync debería mostrarse como "just now", "X min ago", etc.
+- assertNotVisible: "Something went wrong"

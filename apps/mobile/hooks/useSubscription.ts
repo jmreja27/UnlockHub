@@ -1,10 +1,13 @@
-// Hook para gestionar la suscripción premium del usuario
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import Purchases, { PURCHASES_ERROR_CODE } from 'react-native-purchases';
+import type { CustomerInfo } from 'react-native-purchases';
 
-import { api } from '../lib/api';
+import { api, refreshAccessToken } from '../lib/api';
 import { useSessionStore } from '../stores/sessionStore';
 
-// Estructura del estado de suscripción devuelto por la API
+import type { PremiumPlan } from './usePremiumPlans';
+
 interface SubscriptionStatus {
   isPremium: boolean;
   plan: string | null;
@@ -12,67 +15,140 @@ interface SubscriptionStatus {
   provider: string | null;
 }
 
-// Datos necesarios para verificar y activar una suscripción
-interface VerifySubscriptionInput {
-  plan: 'MONTHLY' | 'ANNUAL';
-  provider: 'GOOGLE_PLAY' | 'APP_STORE';
-  storeTransactionId: string;
-  expiresAt: string; // ISO 8601
+interface UseSubscriptionResult {
+  subscriptionStatus: SubscriptionStatus;
+  isLoadingStatus: boolean;
+  statusError: Error | null;
+
+  purchase: (plan: PremiumPlan) => Promise<void>;
+  isPurchasing: boolean;
+  purchaseError: Error | null;
+
+  restorePurchases: () => Promise<void>;
+  isRestoring: boolean;
+
+  cancelSubscription: () => Promise<void>;
+  isCancelling: boolean;
 }
 
-// Clave de caché para TanStack Query
-const SUBSCRIPTION_KEY = ['subscription', 'status'] as const;
-
-// Obtiene el estado de suscripción, verifica una compra y cancela la suscripción activa
-export function useSubscription() {
-  const { isAuthenticated } = useSessionStore();
+/**
+ * Hook que gestiona el ciclo de vida completo de una suscripción premium vía RevenueCat.
+ *
+ * - subscriptionStatus.isPremium: RC es la fuente primaria; user.isPremium del JWT es fallback.
+ * - purchase: llama Purchases.purchasePackage y fuerza refreshAccessToken para que el JWT
+ *   refleje isPremium=true sin requerir logout/login.
+ * - rcApiKey se lee en el cuerpo del hook (no a nivel de módulo) para que los tests puedan
+ *   controlar el env var por test sin jest.resetModules().
+ *
+ * Cuando EXPO_PUBLIC_REVENUECAT_API_KEY no está configurada, subscriptionStatus.isPremium
+ * cae back al valor del JWT — sin errores, permitiendo desarrollo sin RC configurado.
+ */
+export function useSubscription(): UseSubscriptionResult {
   const queryClient = useQueryClient();
+  const { user } = useSessionStore();
+  // Leer en el cuerpo del hook (no a nivel de módulo) para que los tests puedan controlar el valor
+  const rcApiKey = process.env['EXPO_PUBLIC_REVENUECAT_API_KEY'];
 
-  // Query del estado de suscripción actual
-  const statusQuery = useQuery({
-    queryKey: SUBSCRIPTION_KEY,
-    queryFn: () => api.get<SubscriptionStatus>('/api/v1/subscriptions/status'),
-    enabled: isAuthenticated,
-    // El estado de suscripción puede cambiar pero no muy frecuentemente
-    staleTime: 1000 * 60 * 5,
-    gcTime: 1000 * 60 * 30,
-  });
+  const [isPurchasing, setIsPurchasing] = useState(false);
+  const [purchaseError, setPurchaseError] = useState<Error | null>(null);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
+  const [isLoadingStatus, setIsLoadingStatus] = useState(!!rcApiKey);
 
-  // Mutación para verificar y activar una suscripción tras una compra en la tienda
-  const verifyMutation = useMutation({
-    mutationFn: (input: VerifySubscriptionInput) =>
-      api.post<{ message: string }>('/api/v1/subscriptions/verify', input),
-    onSuccess: () => {
-      // Invalidar el cache de estado de suscripción para reflejar el nuevo estado
-      void queryClient.invalidateQueries({ queryKey: SUBSCRIPTION_KEY });
-    },
-  });
+  // Cargar CustomerInfo al montar — fuente de verdad para el estado premium en UI
+  useEffect(() => {
+    if (!rcApiKey) return;
+    void Purchases.getCustomerInfo()
+      .then(setCustomerInfo)
+      .catch(() => {})
+      .finally(() => { setIsLoadingStatus(false); });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Mutación para cancelar la suscripción activa
-  const cancelMutation = useMutation({
-    mutationFn: () => api.delete<{ message: string }>('/api/v1/subscriptions'),
-    onSuccess: () => {
-      // Invalidar el cache de estado de suscripción tras cancelar
-      void queryClient.invalidateQueries({ queryKey: SUBSCRIPTION_KEY });
-    },
-  });
+  // Derivar isPremium: RC es la fuente primaria; user.isPremium del JWT es fallback
+  const isPremiumFromRC =
+    customerInfo !== null
+      ? typeof customerInfo.entitlements.active['premium'] !== 'undefined'
+      : null;
+
+  const subscriptionStatus: SubscriptionStatus = {
+    isPremium: isPremiumFromRC !== null ? isPremiumFromRC : (user?.isPremium ?? false),
+    plan: null,
+    expiresAt: null,
+    provider: null,
+  };
+
+  // Refresca el JWT y el CustomerInfo de RC tras una compra
+  async function syncPremiumState(newCustomerInfo?: CustomerInfo): Promise<void> {
+    if (newCustomerInfo) setCustomerInfo(newCustomerInfo);
+    try {
+      await refreshAccessToken();
+      await queryClient.invalidateQueries({ queryKey: ['me'] });
+    } catch {
+      // Si falla el refresh, la próxima request con 401 lo reintentará automáticamente
+    }
+  }
+
+  async function purchase(plan: PremiumPlan): Promise<void> {
+    setIsPurchasing(true);
+    setPurchaseError(null);
+
+    try {
+      if (!rcApiKey || !plan.rcPackage) {
+        throw new Error('RevenueCat no configurado. Configura EXPO_PUBLIC_REVENUECAT_API_KEY.');
+      }
+
+      const { customerInfo: purchasedInfo } = await Purchases.purchasePackage(plan.rcPackage);
+      const isPremiumNow = typeof purchasedInfo.entitlements.active['premium'] !== 'undefined';
+      if (isPremiumNow) {
+        await syncPremiumState(purchasedInfo);
+      }
+    } catch (err) {
+      setPurchaseError(err instanceof Error ? err : new Error('Error desconocido'));
+      throw err;
+    } finally {
+      setIsPurchasing(false);
+    }
+  }
+
+  async function restorePurchases(): Promise<void> {
+    setIsRestoring(true);
+    try {
+      if (rcApiKey) {
+        const restoredInfo = await Purchases.restorePurchases();
+        const isPremiumNow = typeof restoredInfo.entitlements.active['premium'] !== 'undefined';
+        if (isPremiumNow) {
+          await syncPremiumState(restoredInfo);
+        }
+      }
+    } finally {
+      setIsRestoring(false);
+    }
+  }
+
+  async function cancelSubscription(): Promise<void> {
+    setIsCancelling(true);
+    try {
+      await api.delete('/api/v1/subscriptions');
+      await syncPremiumState();
+    } finally {
+      setIsCancelling(false);
+    }
+  }
 
   return {
-    // Estado de la suscripción
-    subscriptionStatus: statusQuery.data,
-    isLoadingStatus: statusQuery.isLoading,
-    statusError: statusQuery.isError ? statusQuery.error : null,
-
-    // Verificar y activar suscripción
-    verifySubscription: verifyMutation.mutate,
-    verifySubscriptionAsync: verifyMutation.mutateAsync,
-    isVerifying: verifyMutation.isPending,
-    verifyError: verifyMutation.isError ? verifyMutation.error : null,
-
-    // Cancelar suscripción
-    cancelSubscription: cancelMutation.mutate,
-    cancelSubscriptionAsync: cancelMutation.mutateAsync,
-    isCancelling: cancelMutation.isPending,
-    cancelError: cancelMutation.isError ? cancelMutation.error : null,
+    subscriptionStatus,
+    isLoadingStatus,
+    statusError: null,
+    purchase,
+    isPurchasing,
+    purchaseError,
+    restorePurchases,
+    isRestoring,
+    cancelSubscription,
+    isCancelling,
   };
 }
+
+export { PURCHASES_ERROR_CODE };

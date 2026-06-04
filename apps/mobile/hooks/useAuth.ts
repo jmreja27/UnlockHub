@@ -1,11 +1,10 @@
-// Hook de autenticación: encapsula login, register y logout
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-
-import { api, ApiRequestError } from '../lib/api';
-import { useSessionStore } from '../stores/sessionStore';
 import type { User } from '@unlockhub/types';
+
+import { api, ApiRequestError, saveRefreshToken, getRefreshToken, deleteRefreshToken } from '../lib/api';
+import { useSessionStore } from '../stores/sessionStore';
 
 interface LoginInput {
   email: string;
@@ -16,13 +15,19 @@ interface RegisterInput {
   username: string;
   email: string;
   password: string;
+  birthDate: string;
 }
 
 interface AuthResponse {
+  accessToken: string;
+  refreshToken: string;
   user: User;
 }
 
-// Convierte errores de la API a mensajes legibles para el usuario
+/**
+ * Convierte un error de autenticación en un mensaje legible para el usuario.
+ * Clasifica errores de red, HTTP y errores de la API.
+ */
 function humanizeAuthError(error: unknown): string {
   if (error instanceof ApiRequestError) {
     const { statusCode, apiError } = error;
@@ -33,52 +38,62 @@ function humanizeAuthError(error: unknown): string {
     if (statusCode >= 500) return 'El servidor no está disponible. Por favor, inténtalo más tarde.';
     return apiError.error || 'Ocurrió un error inesperado.';
   }
-  if (error instanceof Error && error.message.includes('fetch')) {
+  if (error instanceof TypeError || (error instanceof Error && (
+    error.message.includes('fetch') ||
+    error.message.includes('Network request failed') ||
+    error.message.includes('Network Error')
+  ))) {
     return 'Sin conexión a internet. Comprueba tu red e inténtalo de nuevo.';
   }
   return 'Ocurrió un error inesperado. Por favor, inténtalo de nuevo.';
 }
 
+/**
+ * Hook central de autenticación: login, registro y logout.
+ * En logout, elimina el refresh token de SecureStore, limpia la sesión en Zustand y
+ * vacía el caché de TanStack Query antes de navegar a login.
+ */
 export function useAuth() {
-  const { setUser, clearSession } = useSessionStore();
+  const { setSession, clearSession } = useSessionStore();
   const queryClient = useQueryClient();
 
-  // Mutación de login
   const loginMutation = useMutation({
     mutationFn: (credentials: LoginInput) =>
-      api.post<AuthResponse>('/api/v1/auth/login', credentials),
-    onSuccess: (data) => {
-      setUser(data.user);
-      // Limpiar caché de otro usuario anterior antes de navegar
+      api.post<AuthResponse>('/api/v1/auth/login', credentials, { skipRefresh: true }),
+    onSuccess: async (data) => {
+      await saveRefreshToken(data.refreshToken);
+      setSession(data.user, data.accessToken);
       queryClient.removeQueries();
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace('/(tabs)');
     },
   });
 
-  // Mutación de registro
   const registerMutation = useMutation({
     mutationFn: (input: RegisterInput) =>
-      api.post<AuthResponse>('/api/v1/auth/register', input),
-    onSuccess: (data) => {
-      setUser(data.user);
+      api.post<AuthResponse>('/api/v1/auth/register', input, { skipRefresh: true }),
+    onSuccess: async (data) => {
+      await saveRefreshToken(data.refreshToken);
+      setSession(data.user, data.accessToken);
       queryClient.removeQueries();
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.replace('/(tabs)');
+      router.replace('/onboarding');
     },
   });
 
-  // Mutación de logout
   const logoutMutation = useMutation({
-    mutationFn: () => api.post<void>('/api/v1/auth/logout'),
-    onSuccess: () => {
+    mutationFn: async () => {
+      const refreshToken = await getRefreshToken();
+      return api.post<void>('/api/v1/auth/logout', { refreshToken });
+    },
+    onSuccess: async () => {
+      await deleteRefreshToken();
       clearSession();
-      // Limpiamos todas las queries cacheadas al cerrar sesión
       void queryClient.clear();
       router.replace('/(auth)/login');
     },
-    onError: () => {
-      // Aunque falle la llamada al servidor, limpiamos la sesión local
+    onError: async () => {
+      await deleteRefreshToken();
       clearSession();
       void queryClient.clear();
       router.replace('/(auth)/login');

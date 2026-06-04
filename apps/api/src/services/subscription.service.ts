@@ -1,16 +1,21 @@
 import { AppError } from '../middleware/errorHandler';
 import { prisma } from '../lib/prisma';
 
-// Estado activo de suscripción
+const POINTS_PER_WEEK = 300;
+const DAYS_PER_REDEMPTION = 7;
+
 const ACTIVE_STATUS = 'active';
 const CANCELLED_STATUS = 'cancelled';
 const EXPIRED_STATUS = 'expired';
 
+// Fecha centinela para suscripciones LIFETIME — nunca vencen
+const LIFETIME_EXPIRES_AT = new Date('2099-12-31T23:59:59Z');
+
 interface CreateOrUpdateSubscriptionData {
-  plan: 'MONTHLY' | 'ANNUAL';
+  plan: 'MONTHLY' | 'ANNUAL' | 'LIFETIME';
   provider: 'GOOGLE_PLAY' | 'APP_STORE';
   storeTransactionId: string;
-  expiresAt: Date;
+  expiresAt?: Date;
 }
 
 interface SubscriptionStatus {
@@ -42,7 +47,9 @@ export async function createOrUpdateSubscription(
     data: { status: EXPIRED_STATUS },
   });
 
-  // Upsert de la suscripción por storeTransactionId (idempotente)
+  const isLifetime = data.plan === 'LIFETIME';
+  const expiresAt = isLifetime ? LIFETIME_EXPIRES_AT : (data.expiresAt as Date);
+
   await prisma.subscription.upsert({
     where: { storeTransactionId: data.storeTransactionId },
     create: {
@@ -52,22 +59,22 @@ export async function createOrUpdateSubscription(
       storeTransactionId: data.storeTransactionId,
       status: ACTIVE_STATUS,
       startedAt: new Date(),
-      expiresAt: data.expiresAt,
+      expiresAt,
     },
     update: {
       plan: data.plan,
       provider: data.provider,
       status: ACTIVE_STATUS,
-      expiresAt: data.expiresAt,
+      expiresAt,
     },
   });
 
-  // Marcar al usuario como premium con fecha de vencimiento
+  // LIFETIME: premiumUntil=null (permanente). MONTHLY/ANNUAL: premiumUntil=fecha de expiración.
   await prisma.user.update({
     where: { id: userId },
     data: {
       isPremium: true,
-      premiumUntil: data.expiresAt,
+      premiumUntil: isLifetime ? null : expiresAt,
     },
   });
 }
@@ -87,6 +94,15 @@ export async function cancelSubscription(userId: string): Promise<void> {
 
   if (!activeSubscription) {
     throw new AppError('No tienes una suscripción activa', 'NO_ACTIVE_SUBSCRIPTION', 404);
+  }
+
+  // LIFETIME no se puede cancelar — es un pago único permanente
+  if (activeSubscription.plan === 'LIFETIME') {
+    throw new AppError(
+      'El acceso de por vida no puede cancelarse',
+      'LIFETIME_NOT_CANCELLABLE',
+      400,
+    );
   }
 
   // Marcar la suscripción como cancelada y revocar el premium del usuario
@@ -139,15 +155,141 @@ export async function getSubscriptionStatus(userId: string): Promise<Subscriptio
   };
 }
 
+interface RedeemPointsResult {
+  daysAdded: number;
+  premiumUntil: Date;
+  pointsSpent: number;
+  newBalance: number;
+}
+
+// Canjea puntos por días premium. 300 puntos = 7 días.
+// Usa transacción para garantizar consistencia entre deducción de puntos y activación de premium.
+export async function redeemPointsForPremium(
+  userId: string,
+  pointsToRedeem: number,
+): Promise<RedeemPointsResult> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, isPremium: true, premiumUntil: true },
+  });
+
+  if (!user) {
+    throw new AppError('Usuario no encontrado', 'USER_NOT_FOUND', 404);
+  }
+
+  // Validar que sea múltiplo de POINTS_PER_WEEK y al menos 300
+  if (pointsToRedeem < POINTS_PER_WEEK || pointsToRedeem % POINTS_PER_WEEK !== 0) {
+    throw new AppError(
+      `Los puntos deben ser múltiplo de ${POINTS_PER_WEEK} y al menos ${POINTS_PER_WEEK}`,
+      'INVALID_POINTS_AMOUNT',
+      400,
+    );
+  }
+
+  // Calcular saldo actual sumando todos los movimientos del historial
+  const balanceResult = await prisma.userPoint.aggregate({
+    where: { userId },
+    _sum: { amount: true },
+  });
+  const currentBalance = balanceResult._sum.amount ?? 0;
+
+  if (currentBalance < pointsToRedeem) {
+    throw new AppError(
+      `Saldo insuficiente. Tienes ${currentBalance} puntos y necesitas ${pointsToRedeem}`,
+      'INSUFFICIENT_POINTS',
+      400,
+    );
+  }
+
+  const daysToAdd = (pointsToRedeem / POINTS_PER_WEEK) * DAYS_PER_REDEMPTION;
+  const now = new Date();
+
+  // Calcular nueva fecha de expiración: max(ahora, premiumUntil actual) + días a añadir
+  const baseDate = user.premiumUntil && user.premiumUntil > now ? user.premiumUntil : now;
+  const newPremiumUntil = new Date(baseDate.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
+
+  const transactionId = `points-${userId}-${Date.now()}`;
+
+  // Ejecutar en transacción: deducir puntos, actualizar usuario y crear registro de suscripción
+  await prisma.$transaction([
+    prisma.userPoint.create({
+      data: {
+        userId,
+        amount: -pointsToRedeem,
+        reason: 'REDEEM',
+      },
+    }),
+    prisma.user.update({
+      where: { id: userId },
+      data: {
+        isPremium: true,
+        premiumUntil: newPremiumUntil,
+      },
+    }),
+    prisma.subscription.create({
+      data: {
+        userId,
+        plan: 'POINTS_REDEEM',
+        provider: 'INTERNAL',
+        storeTransactionId: transactionId,
+        status: ACTIVE_STATUS,
+        startedAt: now,
+        expiresAt: newPremiumUntil,
+      },
+    }),
+  ]);
+
+  const newBalance = currentBalance - pointsToRedeem;
+
+  return {
+    daysAdded: daysToAdd,
+    premiumUntil: newPremiumUntil,
+    pointsSpent: pointsToRedeem,
+    newBalance,
+  };
+}
+
+// Invocado por el webhook de RevenueCat cuando una suscripción expira o se cancela.
+// No lanza error si el userId no existe — el webhook debe devolver 200 siempre.
+export async function expireSubscriptionFromWebhook(
+  userId: string,
+  storeTransactionId: string,
+): Promise<void> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true },
+  });
+  if (!user) return; // userId desconocido — ignorar silenciosamente
+
+  // Marcar la suscripción concreta como expirada si existe
+  await prisma.subscription.updateMany({
+    where: { userId, storeTransactionId, status: ACTIVE_STATUS },
+    data: { status: EXPIRED_STATUS },
+  });
+
+  // Verificar si quedan suscripciones activas — por canje de puntos u otras plataformas
+  const remaining = await prisma.subscription.count({
+    where: { userId, status: ACTIVE_STATUS },
+  });
+
+  if (remaining === 0) {
+    await prisma.user.update({
+      where: { id: userId },
+      data: { isPremium: false, premiumUntil: null },
+    });
+  }
+}
+
 // Job para expirar suscripciones caducadas. Devuelve el número de suscripciones expiradas.
 // Llamar desde un cron job al arrancar el servidor o periódicamente.
 export async function expireOldSubscriptions(): Promise<number> {
   const now = new Date();
 
-  // Buscar suscripciones activas que ya hayan vencido
+  // Buscar suscripciones activas vencidas — excluir LIFETIME (nunca vencen)
   const expiredSubscriptions = await prisma.subscription.findMany({
     where: {
       status: ACTIVE_STATUS,
+      plan: { not: 'LIFETIME' },
       expiresAt: { lt: now },
     },
     select: { id: true, userId: true },

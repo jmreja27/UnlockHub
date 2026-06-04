@@ -1,0 +1,9 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_login.yaml
+
+- assertVisible: "Library"
+- assertVisible: "achievements"
+- assertVisible: "completed"
+- assertVisible:
+    id: "sync-status-bar"

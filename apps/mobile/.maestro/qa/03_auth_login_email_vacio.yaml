@@ -1,0 +1,13 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_logout.yaml
+
+- assertVisible: "Log in"
+
+- pressKey: Enter
+- inputText: "Test1234!"
+- tapOn: "Log in"
+- waitForAnimationToEnd
+
+- assertVisible: "Email is required."
+- assertNotVisible: "Library"

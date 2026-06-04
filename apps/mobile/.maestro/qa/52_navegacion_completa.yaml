@@ -1,0 +1,27 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_login.yaml
+
+- tapOn: "Home"
+- waitForAnimationToEnd
+- assertNotVisible: "Something went wrong"
+
+- tapOn: "Search"
+- waitForAnimationToEnd
+- assertNotVisible: "Something went wrong"
+
+- tapOn: "Rankings"
+- waitForAnimationToEnd
+- assertNotVisible: "Something went wrong"
+
+- tapOn: "Friends"
+- waitForAnimationToEnd
+- assertNotVisible: "Something went wrong"
+
+- tapOn: "Profile"
+- waitForAnimationToEnd
+- assertNotVisible: "Something went wrong"
+
+- tapOn: "Home"
+- waitForAnimationToEnd
+- assertVisible: "Library"

@@ -1,0 +1,10 @@
+appId: com.unlockhub.app
+---
+# Precondición: al menos una plataforma vinculada (TestUser99 tiene PSN)
+- runFlow: _setup_login.yaml
+
+- assertVisible: "Library"
+- assertVisible:
+    id: "sync-status-bar"
+
+- assertNotVisible: "Something went wrong"

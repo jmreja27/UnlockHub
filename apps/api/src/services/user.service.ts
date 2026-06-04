@@ -1,17 +1,58 @@
+import type { User, PublicUser, PlatformAccount, PointReason, Platform } from '@unlockhub/types';
+
 import { AppError } from '../middleware/errorHandler';
 import { prisma } from '../lib/prisma';
-import { upsertUserScore } from './ranking.service';
-import type { User, PlatformAccount, PointReason } from '@unlockhub/types';
+import { cloudinary } from '../lib/cloudinary';
+
+import { upsertUserScore, removeUserFromRankings } from './ranking.service';
 
 // XP necesario por nivel — cada 1000 XP sube un nivel, máximo nivel 100
-const XP_PER_LEVEL = 1000;
-const MAX_LEVEL = 100;
+export const XP_PER_LEVEL = 1000;
+export const MAX_LEVEL = 100;
 
-function calculateLevel(xp: number): number {
-  return Math.min(Math.floor(xp / XP_PER_LEVEL) + 1, MAX_LEVEL);
+/**
+ * Calcula el nivel del usuario en función de su XP acumulado.
+ * Fórmula: floor(xp / 1000) + 1, mínimo nivel 1, máximo nivel 100.
+ */
+export function calculateLevel(xp: number): number {
+  return Math.min(Math.max(1, Math.floor(Math.max(0, xp) / XP_PER_LEVEL) + 1), MAX_LEVEL);
 }
 
-// Transforma el usuario de Prisma al tipo compartido User (sin passwordHash)
+/**
+ * Transforma el usuario de Prisma al tipo PublicUser compartido.
+ * Excluye email, isPremium, premiumUntil y lastSyncAt — campos privados que no
+ * deben exponerse en perfiles públicos no autenticados.
+ */
+function mapPublicUser(dbUser: {
+  id: string;
+  username: string;
+  avatar: string | null;
+  banner: string | null;
+  bio: string | null;
+  level: number;
+  xp: number;
+  streakDays: number;
+  countryCode: string | null;
+  createdAt: Date;
+}): PublicUser {
+  return {
+    id: dbUser.id,
+    username: dbUser.username,
+    avatar: dbUser.avatar,
+    banner: dbUser.banner,
+    bio: dbUser.bio,
+    level: dbUser.level,
+    xp: dbUser.xp,
+    streakDays: dbUser.streakDays,
+    countryCode: dbUser.countryCode,
+    createdAt: dbUser.createdAt.toISOString(),
+  };
+}
+
+/**
+ * Transforma el usuario de Prisma al tipo User compartido (incluye email).
+ * Solo usar para el perfil propio autenticado — nunca para perfiles públicos.
+ */
 function mapUser(dbUser: {
   id: string;
   username: string;
@@ -46,7 +87,10 @@ function mapUser(dbUser: {
   };
 }
 
-// Transforma una cuenta de plataforma de Prisma al tipo compartido (sin token cifrado)
+/**
+ * Transforma una cuenta de plataforma de Prisma al tipo PlatformAccount compartido.
+ * Omite el campo encryptedToken para no exponer tokens AES-256 en respuestas de la API.
+ */
 function mapPlatformAccount(dbAccount: {
   id: string;
   userId: string;
@@ -54,6 +98,8 @@ function mapPlatformAccount(dbAccount: {
   externalId: string;
   username: string;
   lastSyncedAt: Date | null;
+  requiresReauth: boolean;
+  psnProfilePrivate: boolean;
 }): PlatformAccount {
   return {
     id: dbAccount.id,
@@ -62,10 +108,16 @@ function mapPlatformAccount(dbAccount: {
     externalId: dbAccount.externalId,
     username: dbAccount.username,
     lastSyncedAt: dbAccount.lastSyncedAt?.toISOString() ?? null,
+    requiresReauth: dbAccount.requiresReauth,
+    psnProfilePrivate: dbAccount.psnProfilePrivate,
   };
 }
 
-// Obtiene el perfil completo del usuario autenticado, incluyendo sus cuentas de plataforma
+/**
+ * Obtiene el perfil completo del usuario autenticado, incluyendo sus cuentas de plataforma.
+ * Usa mapUser (con email) — solo para uso interno con sesión activa.
+ * @throws {AppError} USER_NOT_FOUND (404) si el userId no existe.
+ */
 export async function getProfile(
   userId: string,
 ): Promise<User & { platformAccounts: PlatformAccount[] }> {
@@ -80,6 +132,8 @@ export async function getProfile(
           externalId: true,
           username: true,
           lastSyncedAt: true,
+          requiresReauth: true,
+          psnProfilePrivate: true,
         },
       },
     },
@@ -95,12 +149,17 @@ export async function getProfile(
   };
 }
 
-// Obtiene el perfil público de un usuario por su username
+/**
+ * Obtiene el perfil público de un usuario por su username.
+ * Usa mapPublicUser para excluir email y campos privados — seguro para respuestas no autenticadas.
+ * Filtra usuarios con soft delete (deletedAt !== null) para cumplir GDPR.
+ * @throws {AppError} USER_NOT_FOUND (404) si el username no existe o el usuario está eliminado.
+ */
 export async function getPublicProfile(
   username: string,
-): Promise<User & { platformAccounts: PlatformAccount[] }> {
+): Promise<PublicUser & { platformAccounts: PlatformAccount[] }> {
   const dbUser = await prisma.user.findUnique({
-    where: { username },
+    where: { username, deletedAt: null },
     include: {
       platformAccounts: {
         select: {
@@ -110,6 +169,8 @@ export async function getPublicProfile(
           externalId: true,
           username: true,
           lastSyncedAt: true,
+          requiresReauth: true,
+          psnProfilePrivate: true,
         },
       },
     },
@@ -120,12 +181,15 @@ export async function getPublicProfile(
   }
 
   return {
-    ...mapUser(dbUser),
+    ...mapPublicUser(dbUser),
     platformAccounts: dbUser.platformAccounts.map(mapPlatformAccount),
   };
 }
 
-// Actualiza campos editables del perfil del usuario
+/**
+ * Actualiza campos editables del perfil del usuario (bio, avatar, banner, countryCode).
+ * El countryCode afecta la entrada del usuario en los sorted sets de ranking por país en Redis.
+ */
 export async function updateProfile(
   userId: string,
   data: { bio?: string; avatar?: string; banner?: string; countryCode?: string },
@@ -138,7 +202,15 @@ export async function updateProfile(
   return mapUser(dbUser);
 }
 
-// Añade XP al usuario, recalcula su nivel y actualiza el ranking en Redis
+/**
+ * Añade XP al usuario, recalcula su nivel y actualiza los sorted sets de ranking en Redis.
+ * Crea un registro en UserPoint (historial auditable de puntos).
+ * La actualización de usuario y UserPoint se hace en una sola transacción Prisma.
+ * @param userId - ID del usuario en Prisma
+ * @param amount - Cantidad de XP a añadir (positivo)
+ * @param reason - Motivo del XP (para auditoría — PointReason)
+ * @throws {AppError} USER_NOT_FOUND (404) si el userId no existe.
+ */
 export async function addXp(
   userId: string,
   amount: number,
@@ -179,9 +251,370 @@ export async function addXp(
   await upsertUserScore(
     userId,
     newXp,
-    dbUser.countryCode,
     platforms.map((p) => p.platform),
   );
 
   return { newXp, newLevel, leveledUp };
+}
+
+type LibraryGame = {
+  id: string;
+  title: string;
+  platform: string;
+  iconUrl: string | null;
+  totalAchievements: number;
+  earnedAchievements: number;
+  completionPct: number;
+  lastSyncedAt: string | null;
+  // MAX(unlockedAt) del juego — usado para sort "último jugado" real
+  lastActivityAt: string | null;
+  // Estados PSN: solo presentes cuando platform === 'PSN'
+  hasPlatinum: boolean;
+  platinumEarned: boolean;
+  isCompleted: boolean;
+};
+
+// Devuelve los juegos con logros del usuario, agrupados por juego con stats de completado.
+// Soporta paginación via page/limit — la agregación ocurre en memoria para evitar
+// GROUP BY complejo en Prisma. Suficiente para la escala esperada por usuario.
+//
+// Los aggregate stats (totalEarnedAchievements, totalAvailableAchievements) se calculan
+// sobre TODOS los juegos (antes de paginar) para que el header del cliente los muestre
+// correctamente aunque no todas las páginas estén cargadas.
+export async function getMyGames(
+  userId: string,
+  platform?: Platform,
+  page = 1,
+  limit = 20,
+): Promise<{
+  data: LibraryGame[];
+  total: number;
+  page: number;
+  limit: number;
+  totalEarnedAchievements: number;
+  totalAvailableAchievements: number;
+  totalGames: number;
+  totalCompletedGames: number;
+}> {
+  const [userAchievements, platformAccounts] = await Promise.all([
+    prisma.userAchievement.findMany({
+      where: {
+        userId,
+        achievement: platform ? { platform } : undefined,
+      },
+      select: {
+        achievementId: true,
+        unlockedAt: true,
+        achievement: {
+          select: {
+            gameId: true,
+            platform: true,
+            // normalizedPoints === 300 identifica el trofeo platino en PSN (ver CLAUDE.md)
+            normalizedPoints: true,
+            game: {
+              select: {
+                id: true,
+                title: true,
+                platform: true,
+                iconUrl: true,
+                totalAchievements: true,
+              },
+            },
+          },
+        },
+      },
+    }),
+    prisma.platformAccount.findMany({
+      where: { userId },
+      select: { platform: true, lastSyncedAt: true },
+    }),
+  ]);
+
+  const syncMap = new Map<string, string | null>();
+  for (const pa of platformAccounts) {
+    syncMap.set(pa.platform, pa.lastSyncedAt?.toISOString() ?? null);
+  }
+
+  // Para PSN: mapear juego → achievements del usuario (para calcular hasPlatinum y platinumEarned)
+  // Se necesitan todos los achievements del juego para saber si hay platino disponible
+  const psnGameIds = new Set(
+    userAchievements
+      .filter((ua) => ua.achievement.platform === 'PSN')
+      .map((ua) => ua.achievement.gameId),
+  );
+
+  // Obtener todos los achievements PSN de los juegos (no solo los desbloqueados)
+  // para saber si el juego tiene un trofeo platino
+  const psnAllAchievements = psnGameIds.size > 0
+    ? await prisma.achievement.findMany({
+        where: { gameId: { in: Array.from(psnGameIds) }, platform: 'PSN' },
+        select: { gameId: true, normalizedPoints: true },
+      })
+    : [];
+
+  // Map gameId → ¿tiene trofeo platino disponible? (algún achievement con 300 pts)
+  const psnHasPlatinumMap = new Map<string, boolean>();
+  for (const ach of psnAllAchievements) {
+    if (ach.normalizedPoints === 300) {
+      psnHasPlatinumMap.set(ach.gameId, true);
+    }
+  }
+
+  // Map gameId → ¿el usuario ha ganado el platino?
+  const psnEarnedPlatinumMap = new Map<string, boolean>();
+  for (const ua of userAchievements) {
+    if (ua.achievement.platform === 'PSN' && ua.achievement.normalizedPoints === 300) {
+      psnEarnedPlatinumMap.set(ua.achievement.gameId, true);
+    }
+  }
+
+  const gameMap = new Map<
+    string,
+    {
+      id: string;
+      title: string;
+      platform: string;
+      iconUrl: string | null;
+      totalAchievements: number;
+      earnedAchievements: number;
+      lastActivityAt: Date | null;
+    }
+  >();
+
+  for (const ua of userAchievements) {
+    const { gameId, game } = ua.achievement;
+    const entry = gameMap.get(gameId);
+    if (!entry) {
+      gameMap.set(gameId, {
+        id: game.id,
+        title: game.title,
+        platform: game.platform,
+        iconUrl: game.iconUrl,
+        totalAchievements: game.totalAchievements,
+        earnedAchievements: 1,
+        lastActivityAt: ua.unlockedAt,
+      });
+    } else {
+      entry.earnedAchievements++;
+      // Mantener el MAX(unlockedAt) para reflejar la actividad más reciente por juego
+      if (ua.unlockedAt > (entry.lastActivityAt ?? new Date(0))) {
+        entry.lastActivityAt = ua.unlockedAt;
+      }
+    }
+  }
+
+  const allGames: LibraryGame[] = Array.from(gameMap.values()).map((g) => {
+    const isCompleted =
+      g.totalAchievements > 0 && g.earnedAchievements === g.totalAchievements;
+    const hasPlatinum = g.platform === 'PSN' ? (psnHasPlatinumMap.get(g.id) ?? false) : false;
+    const platinumEarned = g.platform === 'PSN' ? (psnEarnedPlatinumMap.get(g.id) ?? false) : false;
+
+    return {
+      id: g.id,
+      title: g.title,
+      platform: g.platform,
+      iconUrl: g.iconUrl,
+      totalAchievements: g.totalAchievements,
+      earnedAchievements: g.earnedAchievements,
+      completionPct:
+        g.totalAchievements > 0
+          ? Math.round((g.earnedAchievements / g.totalAchievements) * 100)
+          : 0,
+      lastSyncedAt: syncMap.get(g.platform) ?? null,
+      lastActivityAt: g.lastActivityAt?.toISOString() ?? null,
+      hasPlatinum,
+      platinumEarned,
+      isCompleted,
+    };
+  });
+
+  // Aggregate stats sobre todos los juegos (antes de paginar) — BUG-10
+  const totalEarnedAchievements = allGames.reduce((sum, g) => sum + g.earnedAchievements, 0);
+  const totalAvailableAchievements = allGames.reduce((sum, g) => sum + g.totalAchievements, 0);
+  const totalGames = allGames.length;
+  const totalCompletedGames = allGames.filter((g) => g.isCompleted).length;
+
+  const sorted = allGames.sort((a, b) => a.title.localeCompare(b.title));
+
+  const total = sorted.length;
+  const start = (page - 1) * limit;
+  const data = sorted.slice(start, start + limit);
+
+  return {
+    data, total, page, limit,
+    totalEarnedAchievements, totalAvailableAchievements,
+    totalGames, totalCompletedGames,
+  };
+}
+
+/**
+ * Devuelve los logros ganados por el usuario en un juego específico.
+ * Usado para mostrar el estado Desbloqueado/Pendiente en la pantalla de detalle de juego.
+ * @param userId - ID del usuario autenticado
+ * @param gameId - ID interno del juego en Prisma (no el externalId de la plataforma)
+ */
+export async function getMyGameAchievements(
+  userId: string,
+  gameId: string,
+): Promise<{ achievementId: string; unlockedAt: string }[]> {
+  const earned = await prisma.userAchievement.findMany({
+    where: { userId, achievement: { gameId } },
+    select: { achievementId: true, unlockedAt: true },
+  });
+  return earned.map((e) => ({
+    achievementId: e.achievementId,
+    unlockedAt: e.unlockedAt.toISOString(),
+  }));
+}
+
+/**
+ * Compara el perfil del usuario autenticado con el de otro usuario.
+ * Calcula logros y juegos compartidos, y la diferencia de XP.
+ * @throws {AppError} USER_NOT_FOUND (404) si el targetUsername no existe o está eliminado.
+ */
+export async function compareProfiles(
+  myUserId: string,
+  targetUsername: string,
+): Promise<{
+  targetUser: { username: string; level: number; xp: number; avatar: string | null };
+  xpDiff: number;
+  sharedAchievementCount: number;
+  sharedGameCount: number;
+}> {
+  const targetUser = await prisma.user.findUnique({
+    where: { username: targetUsername, deletedAt: null },
+    select: { id: true, username: true, level: true, xp: true, avatar: true },
+  });
+  if (!targetUser) throw new AppError('Usuario no encontrado', 'USER_NOT_FOUND', 404);
+
+  const myUser = await prisma.user.findUnique({
+    where: { id: myUserId },
+    select: { xp: true },
+  });
+  if (!myUser) throw new AppError('Usuario no encontrado', 'USER_NOT_FOUND', 404);
+
+  const [myAchievements, theirAchievements] = await Promise.all([
+    prisma.userAchievement.findMany({
+      where: { userId: myUserId },
+      select: { achievementId: true, achievement: { select: { gameId: true } } },
+    }),
+    prisma.userAchievement.findMany({
+      where: { userId: targetUser.id },
+      select: { achievementId: true, achievement: { select: { gameId: true } } },
+    }),
+  ]);
+
+  const myAchievementIds = new Set(myAchievements.map((a) => a.achievementId));
+  const myGameIds = new Set(myAchievements.map((a) => a.achievement.gameId));
+  const theirGameIds = new Set(theirAchievements.map((a) => a.achievement.gameId));
+
+  const sharedAchievementCount = theirAchievements.filter((a) =>
+    myAchievementIds.has(a.achievementId),
+  ).length;
+
+  const sharedGameCount = [...theirGameIds].filter((id) => myGameIds.has(id)).length;
+
+  return {
+    targetUser: {
+      username: targetUser.username,
+      level: targetUser.level,
+      xp: targetUser.xp,
+      avatar: targetUser.avatar,
+    },
+    xpDiff: myUser.xp - targetUser.xp,
+    sharedAchievementCount,
+    sharedGameCount,
+  };
+}
+
+// Aplica el flujo de borrado GDPR especificado en CLAUDE.md:
+// 1. Soft delete: User.deletedAt = now() — el usuario no puede hacer login
+// 2. Anonimizar: ActivityEvent.payload → {}
+// 3. Eliminar: PlatformAccount y PasswordResetToken
+// 4. Mantener: UserPoint y UserChallenge (auditoría de puntos)
+// 5. El borrado físico lo ejecuta gdpr-cleanup.scheduler a los 30 días
+export async function deleteAccount(userId: string): Promise<void> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { platformAccounts: { select: { platform: true } } },
+  });
+  if (!user) throw new AppError('Usuario no encontrado', 'USER_NOT_FOUND', 404);
+
+  const platforms = user.platformAccounts.map((a) => a.platform);
+
+  await prisma.$transaction(async (tx) => {
+    // 1. Soft delete — impide login inmediatamente
+    await tx.user.update({
+      where: { id: userId },
+      data: { deletedAt: new Date() },
+    });
+
+    // 2. Anonimizar eventos de actividad
+    await tx.activityEvent.updateMany({
+      where: { userId },
+      data: { payload: {} },
+    });
+
+    // 3. Eliminar cuentas de plataforma y tokens de reset de contraseña
+    await tx.platformAccount.deleteMany({ where: { userId } });
+    await tx.passwordResetToken.deleteMany({ where: { userId } });
+    // 4. Revocar todos los refresh tokens — el usuario no debe poder obtener nuevos access tokens
+    await tx.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    // UserPoint y UserChallenge se mantienen para integridad de auditoría
+  });
+
+  // Limpiar Redis fuera de la transacción (no admite operaciones externas)
+  await removeUserFromRankings(userId, platforms);
+}
+
+/**
+ * Sube un avatar a Cloudinary y actualiza el campo avatar del usuario en BD.
+ * La imagen se redimensiona a 256×256 con crop/fill y detección de cara (gravity: face).
+ * Requiere CLOUDINARY_URL en el entorno — el SDK lee la variable automáticamente.
+ */
+export async function uploadAvatar(userId: string, fileBuffer: Buffer, mimetype: string): Promise<User> {
+  const dataUri = `data:${mimetype};base64,${fileBuffer.toString('base64')}`;
+
+  const result = await cloudinary.uploader.upload(dataUri, {
+    folder: 'unlockhub/avatars',
+    public_id: `user_${userId}`,
+    overwrite: true,
+    transformation: [{ width: 256, height: 256, crop: 'fill', gravity: 'face' }],
+  });
+
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data: { avatar: result.secure_url },
+  });
+
+  return mapUser(updated);
+}
+
+/**
+ * Sube un banner a Cloudinary y actualiza el campo banner del usuario en BD.
+ * La imagen se redimensiona a 1500×500 (aspect ratio 3:1) con crop/fill.
+ * @throws {AppError} USER_NOT_FOUND (404) si el userId no existe.
+ */
+export async function uploadBanner(userId: string, fileBuffer: Buffer, mimetype: string): Promise<User> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+  if (!user) throw new AppError('Usuario no encontrado', 'USER_NOT_FOUND', 404);
+
+  const dataUri = `data:${mimetype};base64,${fileBuffer.toString('base64')}`;
+
+  const result = await cloudinary.uploader.upload(dataUri, {
+    folder: 'unlockhub/banners',
+    public_id: `${userId}-banner`,
+    overwrite: true,
+    transformation: [{ width: 1500, height: 500, crop: 'fill' }],
+  });
+
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data: { banner: result.secure_url },
+  });
+
+  return mapUser(updated);
 }

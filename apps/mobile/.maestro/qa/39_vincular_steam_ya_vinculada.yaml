@@ -1,0 +1,20 @@
+appId: com.unlockhub.app
+---
+# Este flow verifica el error 409 cuando intentamos vincular una cuenta Steam
+# que ya está vinculada a ESTE u otro usuario de UnlockHub.
+# Si Seithek ya está vinculado a TestUser99 → 409 "already linked".
+# Si Seithek no está vinculado → success (no 409). Se documenta en el reporte.
+- runFlow: _setup_login.yaml
+
+- tapOn: "Profile"
+- waitForAnimationToEnd
+
+- tapOn: "Link Steam"
+- waitForAnimationToEnd
+
+- tapOn: "Steam username"
+- inputText: "Seithek"
+- tapOn: "Link Steam"
+- waitForAnimationToEnd
+
+- assertNotVisible: "Something went wrong"

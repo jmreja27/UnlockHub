@@ -1,0 +1,16 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_login.yaml
+- assertVisible: "Library"
+
+# Minimizar la app (presionar Home)
+- pressKey: Home
+- waitForAnimationToEnd
+
+# Volver a la app (3s después)
+- launchApp
+- waitForAnimationToEnd
+
+# La biblioteca debe seguir visible sin pantalla en blanco
+- assertVisible: "Library"
+- assertNotVisible: "Something went wrong"

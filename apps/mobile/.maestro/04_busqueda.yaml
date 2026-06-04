@@ -1,0 +1,47 @@
+appId: com.unlockhub.app
+---
+- launchApp
+
+- waitForAnimationToEnd
+
+- runFlow:
+    when:
+      visible: "Email"
+    commands:
+      - inputText:
+          label: "Email"
+          text: "demo@unlockhub.test"
+      - inputText:
+          label: "Password"
+          text: "Demo1234!"
+      - tapOn:
+          text: "Log in"
+      - waitForAnimationToEnd
+
+- tapOn:
+    text: "Search"
+
+- waitForAnimationToEnd
+
+- assertVisible: "Search"
+
+# Escribir en el buscador — tap en el campo por placeholder
+- tapOn:
+    text: "~.*(search|Search|buscar).*"
+    optional: true
+
+- inputText: "Persona"
+
+- waitForAnimationToEnd
+
+# No debe crashear
+- assertNotVisible: "Algo salió mal"
+
+# Cambiar a filtro Users si existe
+- tapOn:
+    text: "~.*(Usuarios|Users).*"
+    optional: true
+
+- waitForAnimationToEnd
+
+- assertNotVisible: "Algo salió mal"

@@ -30,10 +30,11 @@ jest.mock('../lib/crypto', () => ({
   decrypt: jest.fn((token: string) => token), // Devuelve el token tal cual en tests
 }));
 
-import { retroAchievementsAdapter } from './retroachievements.adapter';
 import { redis } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
+
+import { retroAchievementsAdapter, lookupRaUser } from './retroachievements.adapter';
 
 const mockAxios = axios as jest.Mocked<typeof axios>;
 const mockRedis = redis as jest.Mocked<typeof redis>;
@@ -67,7 +68,7 @@ const mockRaGameProgress = {
       Title: 'Speed Demon',
       Description: 'Finish act in under 1 minute',
       BadgeName: 'badge102',
-      Points: 150, // Mayor que 100 — debe normalizarse a 100
+      Points: 150, // 150/5 = 30 con la fórmula correcta
       TrueRatio: 200,
       DateEarned: null,
       DateEarnedHardcore: null,
@@ -77,7 +78,7 @@ const mockRaGameProgress = {
       Title: 'First Steps',
       Description: 'Start the game',
       BadgeName: 'badge103',
-      Points: 0, // Menor que 1 — debe normalizarse a 1
+      Points: 0, // 0 → mínimo 5 con la fórmula correcta
       TrueRatio: 0,
       DateEarned: '2024-01-14 09:00:00',
       DateEarnedHardcore: null,
@@ -238,27 +239,27 @@ describe('normalización de puntos (via getUserAchievements)', () => {
     expect(ach?.rawValue).toBe(5);
   });
 
-  it('Points=150 → normalizedPoints=100 (capped al máximo)', async () => {
+  it('Points=150 → normalizedPoints=30 (Math.round(150/5)=30)', async () => {
     mockAxios.get.mockResolvedValue({ data: mockRaGameProgress });
 
     const achievements = await retroAchievementsAdapter.getUserAchievements(EXTERNAL_ID, API_KEY);
 
     const ach = achievements.find((a) => a.externalId === '102');
-    expect(ach?.normalizedPoints).toBe(100);
+    expect(ach?.normalizedPoints).toBe(30);
     expect(ach?.rawValue).toBe(150);
   });
 
-  it('Points=0 → normalizedPoints=1 (mínimo garantizado)', async () => {
+  it('Points=0 → normalizedPoints=5 (mínimo garantizado)', async () => {
     mockAxios.get.mockResolvedValue({ data: mockRaGameProgress });
 
     const achievements = await retroAchievementsAdapter.getUserAchievements(EXTERNAL_ID, API_KEY);
 
     const ach = achievements.find((a) => a.externalId === '103');
-    expect(ach?.normalizedPoints).toBe(1);
+    expect(ach?.normalizedPoints).toBe(5);
     expect(ach?.rawValue).toBe(0);
   });
 
-  it('Points=undefined → normalizedPoints=1 (fallback al mínimo)', async () => {
+  it('Points=undefined → normalizedPoints=5 (fallback al mínimo)', async () => {
     const dataWithUndefinedPoints = {
       ...mockRaGameProgress,
       Achievements: {
@@ -274,7 +275,7 @@ describe('normalización de puntos (via getUserAchievements)', () => {
 
     const achievements = await retroAchievementsAdapter.getUserAchievements(EXTERNAL_ID, API_KEY);
 
-    expect(achievements[0]?.normalizedPoints).toBe(1);
+    expect(achievements[0]?.normalizedPoints).toBe(5);
   });
 });
 
@@ -489,6 +490,42 @@ describe('retroAchievementsAdapter.syncUser', () => {
     // Los logros 101 y 103 sí → 2 upserts de UserAchievement
     expect(mockPrisma.userAchievement.upsert).toHaveBeenCalledTimes(2);
   });
+
+  it('procesa múltiples juegos en paralelo — gamesUpdated refleja todos los procesados', async () => {
+    const twoCompletedGames = [
+      { GameID: 1234, Title: 'Sonic', NumAchievements: 3 },
+      { GameID: 5678, Title: 'Mario', NumAchievements: 3 },
+    ];
+
+    mockAxios.get
+      .mockResolvedValueOnce({ data: twoCompletedGames })
+      .mockResolvedValue({ data: mockRaGameProgress }); // ambos juegos devuelven logros
+
+    const result = await retroAchievementsAdapter.syncUser(mockPlatformAccount);
+
+    expect(result.gamesUpdated).toBe(2);
+    expect(result.platform).toBe('RA');
+  });
+
+  it('no lanza excepción aunque todos los juegos fallen — aislamiento por Promise.allSettled', async () => {
+    const twoCompletedGames = [
+      { GameID: 1234, Title: 'Sonic', NumAchievements: 3 },
+      { GameID: 5678, Title: 'Mario', NumAchievements: 3 },
+    ];
+
+    mockAxios.get
+      .mockResolvedValueOnce({ data: twoCompletedGames })
+      .mockResolvedValue({ data: mockRaGameProgress });
+
+    // Prisma falla en todos los upserts de juego
+    mockPrisma.game.upsert.mockRejectedValue(new Error('DB connection lost'));
+
+    const result = await retroAchievementsAdapter.syncUser(mockPlatformAccount);
+
+    // La función no lanza — los fallos quedan aislados
+    expect(result.gamesUpdated).toBe(0);
+    expect(result.achievementsSynced).toBe(0);
+  });
 });
 
 // ─── Tests del campo platform ─────────────────────────────────────────────────
@@ -496,5 +533,68 @@ describe('retroAchievementsAdapter.syncUser', () => {
 describe('retroAchievementsAdapter.platform', () => {
   it('tiene platform igual a "RA"', () => {
     expect(retroAchievementsAdapter.platform).toBe('RA');
+  });
+});
+
+// ─── Tests de lookupRaUser ────────────────────────────────────────────────────
+
+describe('lookupRaUser — RA_SYSTEM_NOT_CONFIGURED', () => {
+  beforeEach(() => {
+    delete process.env['RA_SYSTEM_KEY'];
+  });
+
+  it('lanza RA_SYSTEM_NOT_CONFIGURED si RA_SYSTEM_KEY no está configurada', async () => {
+    await expect(lookupRaUser('someuser')).rejects.toMatchObject({
+      code: 'RA_SYSTEM_NOT_CONFIGURED',
+      statusCode: 503,
+    });
+    expect(mockAxios.get).not.toHaveBeenCalled();
+  });
+});
+
+describe('lookupRaUser — con credenciales del sistema configuradas', () => {
+  beforeEach(() => {
+    process.env['RA_SYSTEM_USER'] = 'systemuser';
+    process.env['RA_SYSTEM_KEY'] = 'systemkey';
+  });
+
+  afterEach(() => {
+    delete process.env['RA_SYSTEM_USER'];
+    delete process.env['RA_SYSTEM_KEY'];
+  });
+
+  it('resuelve correctamente cuando el usuario existe (ID no nulo)', async () => {
+    mockAxios.get.mockResolvedValueOnce({ data: { ID: 12345 } });
+    await expect(lookupRaUser('existinguser')).resolves.toBeUndefined();
+    expect(mockAxios.get).toHaveBeenCalledWith(
+      expect.stringContaining('API_GetUserSummary'),
+      expect.objectContaining({
+        params: expect.objectContaining({ u: 'existinguser' }),
+      }),
+    );
+  });
+
+  it('lanza RA_USER_NOT_FOUND si la API devuelve ID null', async () => {
+    mockAxios.get.mockResolvedValueOnce({ data: { ID: null } });
+    await expect(lookupRaUser('ghostuser')).rejects.toMatchObject({
+      code: 'RA_USER_NOT_FOUND',
+      statusCode: 404,
+    });
+  });
+
+  it('lanza RA_USER_NOT_FOUND si la respuesta está vacía', async () => {
+    mockAxios.get.mockResolvedValueOnce({ data: null });
+    await expect(lookupRaUser('emptyresponse')).rejects.toMatchObject({
+      code: 'RA_USER_NOT_FOUND',
+      statusCode: 404,
+    });
+  });
+
+  it('lanza RA_USER_NOT_FOUND si la petición axios falla', async () => {
+    mockAxios.get.mockRejectedValueOnce(new Error('Network error'));
+    await expect(lookupRaUser('erroruser')).rejects.toMatchObject({
+      code: 'RA_USER_NOT_FOUND',
+      statusCode: 404,
+    });
   });
 });

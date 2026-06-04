@@ -1,0 +1,21 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_login.yaml
+
+- tapOn: "Profile"
+- waitForAnimationToEnd
+
+- assertVisible: "Gaming Wrapped"
+
+# Abrir Wrapped mensual (formato "2025-01" a través de la pantalla de wrapped anual)
+- tapOn: "Gaming Wrapped 2025"
+- waitForAnimationToEnd
+
+- assertNotVisible: "Something went wrong"
+- assertNotVisible: "The provided year is not valid."
+
+# La pantalla debe mostrar estadísticas sin crash
+- assertVisible: "Wrapped"
+
+- pressKey: Back
+- waitForAnimationToEnd

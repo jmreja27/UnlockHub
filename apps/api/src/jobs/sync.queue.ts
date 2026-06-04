@@ -1,13 +1,13 @@
 import { Queue } from 'bullmq';
-
 import type { Platform } from '@unlockhub/types';
+
 import { redis } from '../lib/redis';
 
 export interface SyncJobData {
   userId: string;
   platformAccountId: string;
   platform: Platform;
-  triggerType: 'manual' | 'auto';
+  triggerType: 'manual' | 'auto' | 'initial';
 }
 
 export interface SyncJobResult {

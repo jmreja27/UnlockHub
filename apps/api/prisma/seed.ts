@@ -3,31 +3,31 @@ import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
-async function main() {
-  console.warn('Ejecutando seed...');
+async function main(): Promise<void> {
+  console.log('Seeding database...');
 
-  const passwordHash = await bcrypt.hash('Admin1234!', 12);
-
-  const admin = await prisma.user.upsert({
-    where: { email: 'admin@unlockhub.dev' },
+  const passwordHash = await bcrypt.hash('Demo1234!', 12);
+  await prisma.user.upsert({
+    where: { email: 'demo@unlockhub.test' },
     update: {},
     create: {
-      username: 'admin',
-      email: 'admin@unlockhub.dev',
+      email: 'demo@unlockhub.test',
+      username: 'demo',
       passwordHash,
-      level: 1,
-      xp: 0,
+      level: 5,
+      xp: 2450,
+      streakDays: 3,
+      countryCode: 'ES',
     },
   });
 
-  console.warn(`Usuario seed creado: ${admin.email}`);
+  console.log('✓ Demo user upserted');
+  console.log('Seed complete.');
 }
 
 main()
-  .catch((e) => {
-    console.error(e);
+  .catch((err) => {
+    console.error('Seed failed:', err);
     process.exit(1);
   })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+  .finally(() => void prisma.$disconnect());

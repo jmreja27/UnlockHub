@@ -1,0 +1,33 @@
+appId: com.unlockhub.app
+---
+- launchApp:
+    clearState: true
+
+- waitForAnimationToEnd
+
+# clearState mantiene SecureStore — la app puede arrancar en tabs o en login.
+# Esperar a que la UI estabilice y comprobar qué pantalla estamos.
+
+# Si la pantalla de login está visible, intentar crear cuenta
+- runFlow:
+    when:
+      visible: "Create account"
+    commands:
+      - tapOn:
+          text: "Create account"
+      - waitForAnimationToEnd
+      - inputText:
+          label: "~.*(Username|Usuario).*"
+          text: "testmaestro"
+      - inputText:
+          label: "Email"
+          text: "testmaestro@example.com"
+      - inputText:
+          label: "Password"
+          text: "Test1234!"
+      - tapOn:
+          text: "Create account"
+      - waitForAnimationToEnd
+
+# La app no crasheó — sea cual sea el estado (tabs, login, onboarding)
+- assertNotVisible: "Algo salió mal"

@@ -1,0 +1,17 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_login.yaml
+
+- scroll
+- waitForAnimationToEnd
+- assertVisible: "Library"
+
+- tapOn: "Steam"
+- waitForAnimationToEnd
+- scroll
+- waitForAnimationToEnd
+- assertNotVisible: "Something went wrong"
+
+- tapOn: "All"
+- waitForAnimationToEnd
+- assertVisible: "Library"

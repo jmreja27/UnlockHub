@@ -1,0 +1,19 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_logout.yaml
+
+- assertVisible: "Your achievements hub"
+
+# Toggle ES|EN: content-desc="Change language" en inglés
+- tapOn: "Change language"
+- waitForAnimationToEnd
+
+# Tras toggle: cambia a español
+- assertVisible: "Iniciar sesión"
+
+# En español el content-desc cambia a "Cambiar idioma"
+- tapOn: "Cambiar idioma"
+- waitForAnimationToEnd
+
+# Vuelve a inglés
+- assertVisible: "Log in"

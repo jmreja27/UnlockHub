@@ -1,15 +1,30 @@
-// Componente de banner publicitario para usuarios free.
-// Muestra un anuncio de AdMob si la librería está disponible,
-// o un placeholder visual con las dimensiones de un banner estándar (320x50).
 import { View, Text } from 'react-native';
 
 import { useSessionStore } from '../stores/sessionStore';
 
-// Dimensiones estándar de un banner de AdMob
 const BANNER_WIDTH = 320;
 const BANNER_HEIGHT = 50;
 
-// Placeholder visual cuando la librería de AdMob no está disponible
+// IDs de prueba de Google — usados cuando no está definida la var de entorno
+const TEST_BANNER_ID = 'ca-app-pub-3940256099942544/6300978111';
+
+type BannerPlacement = 'home' | 'search' | 'rankings' | 'friends';
+
+const UNIT_IDS: Record<BannerPlacement, string> = {
+  home:
+    process.env['EXPO_PUBLIC_ADMOB_HOME_BANNER_ID'] ??
+    TEST_BANNER_ID,
+  search:
+    process.env['EXPO_PUBLIC_ADMOB_SEARCH_BANNER_ID'] ??
+    TEST_BANNER_ID,
+  rankings:
+    process.env['EXPO_PUBLIC_ADMOB_RANKINGS_BANNER_ID'] ??
+    TEST_BANNER_ID,
+  friends:
+    process.env['EXPO_PUBLIC_ADMOB_FRIENDS_BANNER_ID'] ??
+    TEST_BANNER_ID,
+};
+
 function AdPlaceholder() {
   return (
     <View
@@ -25,8 +40,6 @@ function AdPlaceholder() {
   );
 }
 
-// Intenta importar BannerAd de react-native-google-mobile-ads de forma dinámica.
-// Si no está instalada, renderiza el placeholder.
 let AdMobBanner: React.ComponentType<{
   unitId: string;
   size: string;
@@ -36,7 +49,7 @@ let AdMobBanner: React.ComponentType<{
 let BannerAdSize: { BANNER: string } | null = null;
 
 try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const admob = require('react-native-google-mobile-ads') as {
     BannerAd: NonNullable<typeof AdMobBanner>;
     BannerAdSize: NonNullable<typeof BannerAdSize>;
@@ -44,26 +57,22 @@ try {
   AdMobBanner = admob.BannerAd;
   BannerAdSize = admob.BannerAdSize;
 } catch {
-  // react-native-google-mobile-ads no está instalado; se usará el placeholder
+  // react-native-google-mobile-ads no disponible; se usará el placeholder
 }
 
-// ID de unidad de anuncio: en producción usar la variable de entorno correspondiente
-const AD_UNIT_ID =
-  process.env['EXPO_PUBLIC_ADMOB_BANNER_ID'] ?? 'ca-app-pub-3940256099942544/6300978111'; // ID de prueba de Google
+interface AdBannerProps {
+  unitId?: BannerPlacement;
+}
 
-// Renderiza null para usuarios premium, banner de AdMob o placeholder para usuarios free
-export function AdBanner() {
+export function AdBanner({ unitId = 'home' }: AdBannerProps) {
   const { user } = useSessionStore();
 
-  // Los usuarios premium nunca ven anuncios
-  if (user?.isPremium) {
-    return null;
-  }
+  if (user?.isPremium) return null;
 
-  // Si AdMob está disponible, mostrar el banner real
   if (AdMobBanner !== null && BannerAdSize !== null) {
     const BannerComponent = AdMobBanner;
     const adSize = BannerAdSize.BANNER;
+    const adUnitId = UNIT_IDS[unitId];
 
     return (
       <View
@@ -72,11 +81,10 @@ export function AdBanner() {
         accessibilityLabel="Anuncio"
         accessibilityRole="none"
       >
-        <BannerComponent unitId={AD_UNIT_ID} size={adSize} />
+        <BannerComponent unitId={adUnitId} size={adSize} />
       </View>
     );
   }
 
-  // Fallback al placeholder si AdMob no está disponible
   return <AdPlaceholder />;
 }

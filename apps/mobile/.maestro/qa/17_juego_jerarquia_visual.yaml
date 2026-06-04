@@ -1,0 +1,20 @@
+appId: com.unlockhub.app
+---
+# Precondición: cuenta con juegos que tienen logros desbloqueados (TestUser99 tiene PSN)
+- runFlow: _setup_login.yaml
+
+- tapOn:
+    index: 0
+    text: "achievements"
+- waitForAnimationToEnd
+
+- assertVisible: "← Back"
+- assertNotVisible: "Something went wrong"
+
+# Verificar que hay logros visibles (filter Unlocked tiene contenido)
+- tapOn: "Unlocked"
+- waitForAnimationToEnd
+- assertNotVisible: "No achievements for this filter"
+
+- tapOn: "← Back"
+- waitForAnimationToEnd

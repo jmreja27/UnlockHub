@@ -1,0 +1,16 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_login.yaml
+
+- tapOn: "Search"
+- waitForAnimationToEnd
+
+- tapOn: "People"
+- waitForAnimationToEnd
+- assertVisible: "People"
+
+- tapOn: "Games, players, achievements…"
+- inputText: "testuser"
+- waitForAnimationToEnd
+
+- assertNotVisible: "Something went wrong"

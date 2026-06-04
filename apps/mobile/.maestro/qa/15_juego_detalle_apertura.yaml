@@ -1,0 +1,15 @@
+appId: com.unlockhub.app
+---
+- runFlow: _setup_login.yaml
+
+# Tap en el primer juego de la lista
+- tapOn:
+    index: 0
+    text: "achievements"
+- waitForAnimationToEnd
+
+- assertVisible: "← Back"
+- assertNotVisible: "Something went wrong"
+
+# Header debe mostrar progreso
+- assertVisible: "achievements"

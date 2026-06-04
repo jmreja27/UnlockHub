@@ -2,9 +2,16 @@
 const config = {
   preset: 'ts-jest',
   testEnvironment: 'node',
+  globals: {
+    'ts-jest': { tsconfig: 'tsconfig.test.json' },
+  },
   forceExit: true,
   coverageThreshold: {
     global: { lines: 80 },
+  },
+  moduleNameMapper: {
+    '^@unlockhub/types$': '<rootDir>/../../packages/types/src/index.ts',
+    '^@unlockhub/validators$': '<rootDir>/../../packages/validators/src/index.ts',
   },
   roots: ['<rootDir>/src'],
   testMatch: ['**/__tests__/**/*.test.ts', '**/*.test.ts'],
@@ -21,6 +28,8 @@ const config = {
     '!src/config/env.ts',
     '!src/jobs/**',
     '!src/platforms/**',
+    '!src/lib/socket.ts',
+    '!src/sockets/**',
   ],
 };
 

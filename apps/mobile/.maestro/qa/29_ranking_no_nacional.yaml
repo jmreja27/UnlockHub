@@ -1,0 +1,12 @@
+appId: com.unlockhub.app
+---
+# BUG-2 (sesión 28): el ranking nacional fue eliminado.
+# Este flow verifica que no existe el filtro "National" en la pantalla de Rankings.
+- runFlow: _setup_login.yaml
+
+- tapOn: "Rankings"
+- waitForAnimationToEnd
+
+- assertVisible: "Rankings"
+- assertNotVisible: "National"
+- assertNotVisible: "Nacional"

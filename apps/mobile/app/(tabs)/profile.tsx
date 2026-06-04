@@ -1,19 +1,49 @@
 // Pantalla de perfil de usuario: avatar, stats, plataformas y logout
 import { useState, useCallback } from 'react';
-import { View, Text, Pressable, ScrollView, RefreshControl, Alert } from 'react-native';
+import { View, Text, Pressable, ScrollView, RefreshControl, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { useQuery } from '@tanstack/react-query';
+import * as ImagePicker from 'expo-image-picker';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import type { PlatformAccount } from '@unlockhub/types';
+import { Ionicons } from '@expo/vector-icons';
 
 import { useSessionStore } from '../../stores/sessionStore';
 import { useAuth } from '../../hooks/useAuth';
+import { useLanguage } from '../../hooks/useLanguage';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { PremiumBanner } from '../../components/PremiumBanner';
+import { ActivityCard } from '../../components/ActivityCard';
+import { AvatarPlaceholder } from '../../components/AvatarPlaceholder';
+import { FEATURES } from '../../lib/featureFlags';
 import { api } from '../../lib/api';
-import type { PlatformAccount } from '@unlockhub/types';
+import { useFeed } from '../../hooks/useFeed';
+
+interface UserStats {
+  xpByWeek: { week: string; xp: number }[];
+  rarestAchievement: { id: string; title: string; iconUrl: string | null; rarity: number; platform: string } | null;
+  favoritePlatform: string | null;
+  bestStreak: number;
+  completedGames: number;
+  totalAchievements: number;
+  totalXp: number;
+}
+
+function isWrappedAvailable(): boolean {
+  return new Date().getMonth() >= 11; // Disponible desde diciembre (mes 11 en base 0)
+}
+
+function getWrappedYears(): number[] {
+  const currentYear = new Date().getFullYear();
+  const years: number[] = [];
+  // Años pasados siempre accesibles; año actual solo desde diciembre
+  for (let y = currentYear - 1; y >= 2024; y--) years.push(y);
+  if (isWrappedAvailable()) years.unshift(currentYear);
+  return years;
+}
 
 const AVATAR_BLURHASH = 'L6PZfSi_.AyE_3t7t7R**0o#DgR4';
 
@@ -65,22 +95,181 @@ export default function ProfileScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Obtiene las plataformas vinculadas del usuario
+  const queryClient = useQueryClient();
+
+  const { events, isError: isFeedError, refetch: refetchFeed } = useFeed();
+  const { currentLanguage, changeLanguage } = useLanguage();
+
+  const { data: statsData, isLoading: statsLoading } = useQuery({
+    queryKey: ['user-stats'],
+    queryFn: () => api.get<UserStats>('/api/v1/users/me/stats'),
+    enabled: isAuthenticated && FEATURES.advancedStats && (user?.isPremium ?? false),
+    staleTime: 1000 * 60 * 60,
+  });
+
   const {
     data: platforms,
     isLoading: isLoadingPlatforms,
     refetch: refetchPlatforms,
   } = useQuery({
     queryKey: ['platforms', user?.id],
-    queryFn: () => api.get<PlatformAccount[]>('/api/v1/users/me/platforms'),
+    queryFn: () => api.get<PlatformAccount[]>('/api/v1/platforms/'),
     enabled: isAuthenticated,
     staleTime: 1000 * 60 * 5,
   });
 
+  const unlinkMutation = useMutation({
+    mutationFn: (platform: string) =>
+      api.delete(`/api/v1/platforms/${platform.toLowerCase()}/unlink`),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['platforms', user?.id] });
+      void queryClient.invalidateQueries({ queryKey: ['linkedPlatforms'] });
+      // Los logros y juegos de la plataforma se borraron en el backend — actualizar la biblioteca
+      void queryClient.invalidateQueries({ queryKey: ['my-games'] });
+      void queryClient.invalidateQueries({ queryKey: ['my-stats'] });
+      // refetchQueries (no invalidateQueries) para que anyPlatformLinked se actualice
+      // de forma INMEDIATA sin esperar al staleTime — evita el flash de "Tus juegos
+      // aparecerán pronto" cuando el refetch de my-games termina antes que el de sync-summary.
+      void queryClient.refetchQueries({ queryKey: ['sync-summary'] });
+    },
+  });
+
+  const bannerMutation = useMutation({
+    mutationFn: async () => {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(t('profile.avatar_permission_title'), t('profile.avatar_permission_message'));
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [3, 1],
+        quality: 0.8,
+      });
+      if (result.canceled || !result.assets[0]) return;
+      const uri = result.assets[0].uri;
+      const filename = uri.split('/').pop() ?? 'banner.jpg';
+      const ext = filename.split('.').pop()?.toLowerCase() ?? 'jpg';
+      const mimeMap: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
+      const type = mimeMap[ext] ?? 'image/jpeg';
+      const form = new FormData();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      form.append('banner', { uri, name: filename, type } as any);
+      return api.post('/api/v1/users/me/banner', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['profile'] });
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+    onError: () => {
+      Alert.alert(t('profile.banner_error_title'), t('profile.banner_error_message'));
+    },
+  });
+
+  const avatarMutation = useMutation({
+    mutationFn: async (uri: string) => {
+      const form = new FormData();
+      const filename = uri.split('/').pop() ?? 'avatar.jpg';
+      const ext = filename.split('.').pop()?.toLowerCase() ?? 'jpg';
+      const mimeMap: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
+      const type = mimeMap[ext] ?? 'image/jpeg';
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      form.append('avatar', { uri, name: filename, type } as any);
+      return api.post<{ avatar: string }>('/api/v1/users/me/avatar', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    },
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: ['profile'] });
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const current = useSessionStore.getState().user;
+      if (current) {
+        useSessionStore.getState().setUser({ ...current, avatar: data.avatar });
+      }
+    },
+    onError: () => {
+      Alert.alert(t('profile.avatar_error_title'), t('profile.avatar_error_message'));
+    },
+  });
+
+  async function handleAvatarPress() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(t('profile.avatar_permission_title'), t('profile.avatar_permission_message'));
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      avatarMutation.mutate(result.assets[0].uri);
+    }
+  }
+
+  function handleUnlink(platform: string, label: string) {
+    const platformKey = platform.toLowerCase();
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Alert.alert(
+      label,
+      t(`link_platform.${platformKey}.unlink_confirm`),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t(`link_platform.${platformKey}.unlink`),
+          style: 'destructive',
+          onPress: () => {
+            void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            unlinkMutation.mutate(platform);
+          },
+        },
+      ],
+    );
+  }
+
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    await refetchPlatforms();
-    setIsRefreshing(false);
+    try {
+      await refetchPlatforms();
+    } finally {
+      setIsRefreshing(false);
+    }
   }, [refetchPlatforms]);
+
+  const deleteAccountMutation = useMutation({
+    mutationFn: () => api.delete('/api/v1/users/me'),
+    onSuccess: () => {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      logout();
+    },
+  });
+
+  function handleDeleteAccount() {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    Alert.alert(
+      t('profile.delete_account_dialog_title'),
+      t('profile.delete_account_dialog_message'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('profile.delete_account_confirm'),
+          style: 'destructive',
+          onPress: () => {
+            void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            deleteAccountMutation.mutate();
+          },
+        },
+      ],
+      { cancelable: true },
+    );
+  }
 
   function handleLogout() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -108,7 +297,7 @@ export default function ProfileScreen() {
   // Estado no autenticado
   if (!isAuthenticated || !user) {
     return (
-      <SafeAreaView className="flex-1 bg-surface">
+      <SafeAreaView className="flex-1 bg-surface" edges={['left', 'right']}>
         <View className="flex-1 items-center justify-center px-6">
           <Text
             className="text-white text-2xl font-bold mb-3 text-center"
@@ -137,7 +326,7 @@ export default function ProfileScreen() {
   // Estado de carga inicial
   if (isLoadingPlatforms && !platforms) {
     return (
-      <SafeAreaView className="flex-1 bg-surface">
+      <SafeAreaView className="flex-1 bg-surface" edges={['left', 'right']}>
         <ProfileSkeleton />
       </SafeAreaView>
     );
@@ -158,24 +347,89 @@ export default function ProfileScreen() {
           />
         }
       >
+        {/* Banner de perfil — franja horizontal superior */}
+        <Pressable
+          onPress={() => { bannerMutation.mutate(); }}
+          accessibilityRole="button"
+          accessibilityLabel={t('profile.change_banner')}
+          style={{ width: '100%', height: 120 }}
+        >
+          {user.banner ? (
+            <Image
+              source={{ uri: user.banner }}
+              style={{ width: '100%', height: 120 }}
+              contentFit="cover"
+              accessibilityElementsHidden
+            />
+          ) : (
+            <View style={{ width: '100%', height: 120, backgroundColor: '#1e293b' }} />
+          )}
+          {bannerMutation.isPending ? (
+            <View
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' }}
+              accessibilityLiveRegion="polite"
+              accessibilityLabel={t('common.loading')}
+            >
+              <ActivityIndicator color="white" />
+            </View>
+          ) : (
+            <View
+              style={{ position: 'absolute', bottom: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20, padding: 6 }}
+              importantForAccessibility="no"
+              accessibilityElementsHidden
+            >
+              <Ionicons name="camera" size={18} color="white" />
+            </View>
+          )}
+        </Pressable>
+
         {/* Sección de avatar y datos principales */}
         <View
-          className="items-center pt-8 pb-6 px-6"
+          className="items-center pt-6 pb-6 px-6"
           accessible
           accessibilityLabel={t('profile.profile_aria', {
             username: user.username,
-            level: user.level,
-            xp: user.xp.toLocaleString(),
+            level: user.level ?? 1,
+            xp: (user.xp ?? 0).toLocaleString(),
           })}
         >
-          <Image
-            source={user.avatar ?? undefined}
-            placeholder={AVATAR_BLURHASH}
+          <Pressable
+            onPress={() => { void handleAvatarPress(); }}
+            accessibilityRole="button"
+            accessibilityLabel={t('profile.change_avatar')}
             style={{ width: 96, height: 96, borderRadius: 48, marginBottom: 12 }}
-            contentFit="cover"
-            transition={300}
-            accessibilityElementsHidden
-          />
+          >
+            {user.avatar ? (
+              <Image
+                source={{ uri: user.avatar }}
+                placeholder={AVATAR_BLURHASH}
+                style={{ width: 96, height: 96, borderRadius: 48 }}
+                contentFit="cover"
+                transition={300}
+                accessibilityElementsHidden
+              />
+            ) : (
+              <AvatarPlaceholder username={user.username} size={96} />
+            )}
+            {avatarMutation.isPending ? (
+              <View
+                style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 48, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}
+                accessibilityLiveRegion="polite"
+                accessibilityLabel={t('common.loading')}
+              >
+                <ActivityIndicator color="#818cf8" />
+              </View>
+            ) : (
+              /* Indicador de cámara — indica al usuario que puede cambiar el avatar */
+              <View
+                style={{ position: 'absolute', bottom: 0, right: 0, width: 28, height: 28, borderRadius: 14, backgroundColor: '#818cf8', justifyContent: 'center', alignItems: 'center' }}
+                importantForAccessibility="no"
+                accessibilityElementsHidden
+              >
+                <Ionicons name="camera" size={16} color="#fff" />
+              </View>
+            )}
+          </Pressable>
 
           <Text className="text-white text-2xl font-bold mb-1">{user.username}</Text>
 
@@ -183,7 +437,7 @@ export default function ProfileScreen() {
             <Text className="text-gray-400 text-sm text-center mt-1 mb-2">{user.bio}</Text>
           )}
 
-          {user.isPremium && (
+          {FEATURES.premium && user.isPremium && (
             <View className="bg-primary/30 border border-primary/50 rounded-full px-3 py-1 mt-2">
               <Text
                 className="text-primary-light text-xs font-semibold"
@@ -200,23 +454,39 @@ export default function ProfileScreen() {
           className="flex-row mx-6 mb-6 bg-surface-elevated rounded-2xl py-4"
           accessible
           accessibilityLabel={t('profile.stats_aria', {
-            level: user.level,
-            xp: user.xp.toLocaleString(),
-            streak: user.streakDays,
+            level: user.level ?? 1,
+            xp: (user.xp ?? 0).toLocaleString(),
+            streak: user.streakDays ?? 0,
           })}
         >
           <View className="flex-1 items-center">
-            <Text className="text-white text-xl font-bold">{user.level}</Text>
+            <Text className="text-white text-xl font-bold">{user.level ?? 1}</Text>
             <Text className="text-gray-400 text-xs mt-1">{t('profile.stat_level')}</Text>
           </View>
           <View className="w-px bg-surface-card" />
           <View className="flex-1 items-center">
-            <Text className="text-white text-xl font-bold">{user.xp.toLocaleString()}</Text>
+            <Text className="text-white text-xl font-bold">{(user.xp ?? 0).toLocaleString()}</Text>
             <Text className="text-gray-400 text-xs mt-1">{t('profile.stat_xp')}</Text>
           </View>
           <View className="w-px bg-surface-card" />
           <View className="flex-1 items-center">
-            <Text className="text-white text-xl font-bold">{user.streakDays}</Text>
+            <View className="flex-row items-center gap-1">
+              <Text className="text-white text-xl font-bold">{user.streakDays ?? 0}</Text>
+              {(user as unknown as { streakShields?: number }).streakShields != null &&
+                (user as unknown as { streakShields: number }).streakShields > 0 && (
+                  <View
+                    className="bg-indigo-900/60 border border-indigo-500/50 rounded-full px-1.5 py-0.5"
+                    accessible
+                    accessibilityLabel={t('profile.streak_shields_label', {
+                      count: (user as unknown as { streakShields: number }).streakShields,
+                    })}
+                  >
+                    <Text className="text-indigo-300 text-xs font-bold">
+                      🛡 {(user as unknown as { streakShields: number }).streakShields}
+                    </Text>
+                  </View>
+                )}
+            </View>
             <Text className="text-gray-400 text-xs mt-1">{t('profile.stat_streak')}</Text>
           </View>
         </View>
@@ -228,36 +498,59 @@ export default function ProfileScreen() {
           </Text>
 
           {platforms && platforms.length > 0 ? (
-            platforms.map((account) => (
-              <View
-                key={account.id}
-                className="flex-row items-center bg-surface-elevated rounded-xl px-4 py-3 mb-2"
-                accessible
-                accessibilityLabel={`${PLATFORM_LABELS[account.platform] ?? account.platform}: ${account.username}`}
-              >
+            platforms.map((account) => {
+              const canUnlink = account.platform === 'PSN' || account.platform === 'STEAM' || account.platform === 'RA';
+              const label = PLATFORM_LABELS[account.platform] ?? account.platform;
+              return (
                 <View
-                  style={{
-                    width: 10,
-                    height: 10,
-                    borderRadius: 5,
-                    backgroundColor: PLATFORM_COLORS[account.platform] ?? '#6b7280',
-                    marginRight: 12,
-                  }}
-                  accessibilityElementsHidden
-                />
-                <View className="flex-1">
-                  <Text className="text-white font-semibold text-sm">
-                    {PLATFORM_LABELS[account.platform] ?? account.platform}
-                  </Text>
-                  <Text className="text-gray-400 text-xs mt-0.5">{account.username}</Text>
+                  key={account.id}
+                  className="flex-row items-center bg-surface-elevated rounded-xl px-4 py-3 mb-2"
+                  accessible
+                  accessibilityLabel={`${label}: ${account.username}`}
+                >
+                  <View
+                    style={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: 5,
+                      backgroundColor: PLATFORM_COLORS[account.platform] ?? '#6b7280',
+                      marginRight: 12,
+                    }}
+                    accessibilityElementsHidden
+                  />
+                  <View className="flex-1">
+                    <Text className="text-white font-semibold text-sm">{label}</Text>
+                    <Text className="text-gray-400 text-xs mt-0.5">{account.username}</Text>
+                  </View>
+                  {account.platform === 'PSN' && account.psnProfilePrivate && (
+                    <Pressable
+                      onPress={() => router.push('/link-platform/psn')}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('link_platform.psn.profile_private_title')}
+                      style={{ minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center', marginRight: 4 }}
+                      testID="psn-private-badge"
+                    >
+                      <Ionicons name="warning" size={18} color="#fbbf24" />
+                    </Pressable>
+                  )}
+                  {account.lastSyncedAt && !account.psnProfilePrivate && (
+                    <Text className="text-gray-500 text-xs mr-2">
+                      {t('profile.sync_prefix')} {new Date(account.lastSyncedAt).toLocaleDateString()}
+                    </Text>
+                  )}
+                  {canUnlink && (
+                    <Pressable
+                      onPress={() => handleUnlink(account.platform, label)}
+                      accessibilityRole="button"
+                      accessibilityLabel={t(`link_platform.${account.platform.toLowerCase()}.unlink`)}
+                      style={{ minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'flex-end' }}
+                    >
+                      <Text className="text-red-400 text-xs">✕</Text>
+                    </Pressable>
+                  )}
                 </View>
-                {account.lastSyncedAt && (
-                  <Text className="text-gray-500 text-xs">
-                    {t('profile.sync_prefix')} {new Date(account.lastSyncedAt).toLocaleDateString()}
-                  </Text>
-                )}
-              </View>
-            ))
+              );
+            })
           ) : (
             <View
               className="bg-surface-elevated rounded-xl px-4 py-6 items-center"
@@ -269,10 +562,332 @@ export default function ProfileScreen() {
               </Text>
             </View>
           )}
+
+          {/* Botones para vincular PSN / Steam / RA si aún no están vinculados */}
+          {(() => {
+            const linked = new Set(platforms?.map((p) => p.platform) ?? []);
+            return (
+              <View className="mt-2 gap-2">
+                {!linked.has('PSN') && (
+                  <Pressable
+                    onPress={() => router.push('/link-platform/psn')}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('link_platform.psn.submit_label')}
+                    className="flex-row items-center bg-surface-elevated border border-[#003791]/60 rounded-xl px-4 py-3 active:opacity-80"
+                    style={{ minHeight: 52 }}
+                  >
+                    <View
+                      style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#003791', marginRight: 12 }}
+                      accessibilityElementsHidden
+                    />
+                    <Text className="text-white font-semibold text-sm flex-1">
+                      {t('link_platform.psn.submit')}
+                    </Text>
+                    <Text className="text-gray-400 text-lg">›</Text>
+                  </Pressable>
+                )}
+                {!linked.has('STEAM') && (
+                  <Pressable
+                    onPress={() => router.push('/link-platform/steam')}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('link_platform.steam.submit_label')}
+                    className="flex-row items-center bg-surface-elevated border border-[#1b2838]/80 rounded-xl px-4 py-3 active:opacity-80"
+                    style={{ minHeight: 52 }}
+                  >
+                    <View
+                      style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#1b9fff', marginRight: 12 }}
+                      accessibilityElementsHidden
+                    />
+                    <Text className="text-white font-semibold text-sm flex-1">
+                      {t('link_platform.steam.submit')}
+                    </Text>
+                    <Text className="text-gray-400 text-lg">›</Text>
+                  </Pressable>
+                )}
+                {!linked.has('RA') && (
+                  <Pressable
+                    onPress={() => router.push('/link-platform/ra')}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('link_platform.ra.submit_label')}
+                    className="flex-row items-center bg-surface-elevated border border-[#c0392b]/60 rounded-xl px-4 py-3 active:opacity-80"
+                    style={{ minHeight: 52 }}
+                  >
+                    <View
+                      style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#c0392b', marginRight: 12 }}
+                      accessibilityElementsHidden
+                    />
+                    <Text className="text-white font-semibold text-sm flex-1">
+                      {t('link_platform.ra.submit')}
+                    </Text>
+                    <Text className="text-gray-400 text-lg">›</Text>
+                  </Pressable>
+                )}
+              </View>
+            );
+          })()}
         </View>
 
-        {/* Banner de suscripción premium */}
-        {isAuthenticated && <PremiumBanner />}
+        {/* Banner de suscripción premium — visible solo cuando FEATURES.premium está activo */}
+        {FEATURES.premium && isAuthenticated && <PremiumBanner />}
+
+        {/* Rachas conseguidas — badges de hitos */}
+        {(user.streakDays ?? 0) >= 7 && (
+          <View className="px-6 mb-4">
+            <Text className="text-gray-300 text-sm font-semibold mb-3 uppercase tracking-wider">
+              {t('profile.streak_badges_section')}
+            </Text>
+            <View className="flex-row flex-wrap gap-2">
+              {(user.streakDays ?? 0) >= 7 && (
+                <View
+                  className="bg-orange-900/40 border border-orange-500/50 rounded-full px-3 py-1.5"
+                  accessible
+                  accessibilityLabel={`Racha de 7 días conseguida`}
+                >
+                  <Text className="text-orange-300 text-xs font-semibold">🔥 {t('profile.streak_badge_week')}</Text>
+                </View>
+              )}
+              {(user.streakDays ?? 0) >= 30 && (
+                <View
+                  className="bg-amber-900/40 border border-amber-500/50 rounded-full px-3 py-1.5"
+                  accessible
+                  accessibilityLabel={`Racha de 30 días conseguida`}
+                >
+                  <Text className="text-amber-300 text-xs font-semibold">🔥 {t('profile.streak_badge_month')}</Text>
+                </View>
+              )}
+              {(user.streakDays ?? 0) >= 100 && (
+                <View
+                  className="bg-yellow-900/40 border border-yellow-500/50 rounded-full px-3 py-1.5"
+                  accessible
+                  accessibilityLabel={`Racha de 100 días conseguida`}
+                >
+                  <Text className="text-yellow-300 text-xs font-semibold">⭐ {t('profile.streak_badge_century')}</Text>
+                </View>
+              )}
+              {(user.streakDays ?? 0) >= 365 && (
+                <View
+                  className="bg-purple-900/40 border border-purple-500/50 rounded-full px-3 py-1.5"
+                  accessible
+                  accessibilityLabel={`Racha de 365 días conseguida`}
+                >
+                  <Text className="text-purple-300 text-xs font-semibold">👑 {t('profile.streak_badge_year')}</Text>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* Estadísticas avanzadas (F1) — premium-only con paywall para usuarios free */}
+        {FEATURES.advancedStats && (
+          <View className="px-6 mb-4">
+            <Text className="text-gray-300 text-sm font-semibold mb-3 uppercase tracking-wider">
+              {t('profile.advanced_stats_section')}
+            </Text>
+
+            {user.isPremium ? (
+              statsLoading ? (
+                <SkeletonBox width={'100%'} height={140} borderRadius={12} />
+              ) : statsData ? (
+                <View className="gap-2">
+                  {/* Grid 2×2 de métricas principales */}
+                  <View className="flex-row gap-2">
+                    <View className="flex-1 bg-surface-elevated rounded-xl p-3">
+                      <Text className="text-white text-base font-bold">
+                        {new Intl.NumberFormat().format(statsData.totalXp)}
+                      </Text>
+                      <Text className="text-gray-400 text-xs mt-0.5">
+                        {t('profile.stats_total_xp')}
+                      </Text>
+                    </View>
+                    <View className="flex-1 bg-surface-elevated rounded-xl p-3">
+                      <Text className="text-white text-base font-bold">
+                        {new Intl.NumberFormat().format(statsData.totalAchievements)}
+                      </Text>
+                      <Text className="text-gray-400 text-xs mt-0.5">
+                        {t('profile.stats_total_achievements')}
+                      </Text>
+                    </View>
+                  </View>
+                  <View className="flex-row gap-2">
+                    <View className="flex-1 bg-surface-elevated rounded-xl p-3">
+                      <Text className="text-white text-base font-bold">
+                        {statsData.completedGames}
+                      </Text>
+                      <Text className="text-gray-400 text-xs mt-0.5">
+                        {t('profile.stats_completed_games')}
+                      </Text>
+                    </View>
+                    <View className="flex-1 bg-surface-elevated rounded-xl p-3">
+                      <Text className="text-white text-base font-bold">
+                        {statsData.bestStreak} 🔥
+                      </Text>
+                      <Text className="text-gray-400 text-xs mt-0.5">
+                        {t('profile.stats_best_streak')}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Plataforma favorita */}
+                  {statsData.favoritePlatform && (
+                    <View className="bg-surface-elevated rounded-xl px-4 py-3 flex-row items-center justify-between">
+                      <Text className="text-gray-400 text-sm">
+                        {t('profile.stats_favorite_platform')}
+                      </Text>
+                      <Text className="text-white font-semibold text-sm">
+                        {PLATFORM_LABELS[statsData.favoritePlatform] ?? statsData.favoritePlatform}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Logro más raro */}
+                  {statsData.rarestAchievement && (
+                    <View className="bg-surface-elevated rounded-xl px-4 py-3 flex-row items-center">
+                      <Image
+                        source={
+                          statsData.rarestAchievement.iconUrl ??
+                          require('../../assets/images/icon.png')
+                        }
+                        style={{ width: 36, height: 36, borderRadius: 6 }}
+                        contentFit="cover"
+                        accessibilityElementsHidden
+                      />
+                      <View className="flex-1 ml-3">
+                        <Text className="text-gray-400 text-xs">
+                          {t('profile.stats_rarest_achievement')}
+                        </Text>
+                        <Text className="text-white text-sm font-semibold" numberOfLines={1}>
+                          {statsData.rarestAchievement.title}
+                        </Text>
+                      </View>
+                      <Text className="text-gray-500 text-xs ml-2">
+                        {t('profile.stats_rarity_pct', {
+                          pct: statsData.rarestAchievement.rarity.toFixed(1),
+                        })}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              ) : null
+            ) : (
+              /* Paywall para usuarios free */
+              <View className="bg-surface-elevated rounded-2xl px-5 py-6 items-center">
+                <Text className="text-3xl mb-3">📊</Text>
+                <Text className="text-white text-sm font-semibold text-center mb-2">
+                  {t('profile.advanced_stats_section')}
+                </Text>
+                <Text className="text-gray-400 text-xs text-center mb-4">
+                  {t('profile.advanced_stats_locked')}
+                </Text>
+                <Pressable
+                  onPress={() => router.push('/premium')}
+                  className="bg-primary rounded-xl px-6 py-2.5"
+                  accessibilityRole="button"
+                  accessibilityLabel={t('profile.advanced_stats_premium_cta')}
+                  style={{ minHeight: 44, justifyContent: 'center' }}
+                >
+                  <Text className="text-white font-semibold text-sm">
+                    {t('profile.advanced_stats_premium_cta')}
+                  </Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Gaming Wrapped — solo cuando FEATURES.wrapped está activo */}
+        {FEATURES.wrapped && (() => {
+          const years = getWrappedYears();
+          if (years.length === 0) return null;
+          return (
+            <View className="px-6 mb-4">
+              <Text className="text-gray-300 text-sm font-semibold mb-3 uppercase tracking-wider">
+                {t('wrapped.section_title')}
+              </Text>
+              {years.map((y) => (
+                <Pressable
+                  key={y}
+                  className="flex-row items-center justify-between bg-surface-elevated rounded-xl px-4 py-3 mb-2 active:opacity-80"
+                  onPress={() => router.push(`/wrapped/${y}`)}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('wrapped.open_year', { year: y })}
+                  style={{ minHeight: 52 }}
+                >
+                  <Text className="text-white font-semibold">Gaming Wrapped {y}</Text>
+                  <Text className="text-gray-400 text-lg">›</Text>
+                </Pressable>
+              ))}
+            </View>
+          );
+        })()}
+
+        {/* Ajustes */}
+        <View className="px-6 mb-6">
+          <Text className="text-gray-300 text-sm font-semibold mb-3 uppercase tracking-wider">
+            {t('profile.settings_section')}
+          </Text>
+
+          {/* Idioma */}
+          <View className="bg-surface-elevated rounded-xl px-4 py-3 mb-2">
+            <Text className="text-gray-400 text-xs mb-2">{t('profile.settings_language')}</Text>
+            <View className="flex-row gap-2">
+              {(['es', 'en'] as const).map((lang) => (
+                <Pressable
+                  key={lang}
+                  onPress={() => changeLanguage(lang)}
+                  className={`flex-1 py-2 rounded-lg items-center ${currentLanguage === lang ? 'bg-primary' : 'bg-surface-card'}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: currentLanguage === lang }}
+                  accessibilityLabel={lang === 'es' ? 'Español' : 'English'}
+                  style={{ minHeight: 36 }}
+                >
+                  <Text className={`text-sm font-semibold ${currentLanguage === lang ? 'text-white' : 'text-gray-400'}`}>
+                    {lang === 'es' ? '🇪🇸 Español' : '🇬🇧 English'}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          {/* TODO Fase 4: selector de tema — oculto hasta implementar modo claro completo */}
+        </View>
+
+        {/* Actividad reciente */}
+        {(events.length > 0 || isFeedError) && (
+          <View className="px-6 mb-6">
+            <Text className="text-gray-300 text-sm font-semibold mb-3 uppercase tracking-wider">
+              {t('profile.recent_activity')}
+            </Text>
+            {isFeedError ? (
+              <View
+                className="bg-surface-elevated rounded-xl px-4 py-5 items-center"
+                accessible
+                accessibilityLiveRegion="polite"
+                accessibilityRole="alert"
+              >
+                <Text className="text-red-400 text-sm font-semibold mb-1">
+                  {t('feed.error_title')}
+                </Text>
+                <Text className="text-gray-400 text-xs text-center mb-4">
+                  {t('feed.error_message')}
+                </Text>
+                <Pressable
+                  onPress={() => void refetchFeed()}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('common.retry')}
+                  style={{ minHeight: 44, justifyContent: 'center' }}
+                >
+                  <Text className="text-primary-light text-sm font-medium">
+                    {t('common.retry')}
+                  </Text>
+                </Pressable>
+              </View>
+            ) : (
+              events.slice(0, 5).map((event) => (
+                <ActivityCard key={event.id} event={event} />
+              ))
+            )}
+          </View>
+        )}
 
         {/* Botón cerrar sesión */}
         <View className="px-6">
@@ -289,6 +904,41 @@ export default function ProfileScreen() {
             <Text className="text-red-400 font-semibold text-base">
               {isLoggingOut ? t('profile.logging_out') : t('profile.logout')}
             </Text>
+          </Pressable>
+        </View>
+
+        {/* Zona de peligro — eliminar cuenta */}
+        <View className="px-6 mt-6 mb-2">
+          <Text className="text-gray-500 text-xs font-semibold mb-3 uppercase tracking-wider">
+            {t('profile.danger_zone')}
+          </Text>
+          <Pressable
+            className="w-full border border-red-800/60 rounded-xl py-4 items-center active:opacity-80"
+            onPress={handleDeleteAccount}
+            disabled={deleteAccountMutation.isPending}
+            accessibilityRole="button"
+            accessibilityLabel={t('profile.delete_account')}
+            accessibilityHint={t('profile.delete_account_hint')}
+            accessibilityState={{ disabled: deleteAccountMutation.isPending, busy: deleteAccountMutation.isPending }}
+            style={{ minHeight: 52 }}
+          >
+            <Text className="text-red-700 font-semibold text-base">
+              {deleteAccountMutation.isPending
+                ? t('profile.deleting_account')
+                : t('profile.delete_account')}
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* Enlace a la política de privacidad — requerido por Google Play y RGPD */}
+        <View className="px-6 mt-4 mb-2 items-center">
+          <Pressable
+            onPress={() => router.push('/privacy')}
+            accessibilityRole="link"
+            accessibilityLabel={t('privacy.link_label')}
+            style={{ minHeight: 44, justifyContent: 'center' }}
+          >
+            <Text className="text-gray-500 text-sm">{t('privacy.link_label')}</Text>
           </Pressable>
         </View>
       </ScrollView>

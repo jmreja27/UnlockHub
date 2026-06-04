@@ -1,0 +1,291 @@
+import React from 'react';
+import { render, fireEvent } from '@testing-library/react-native';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { RankingEntry } from '@unlockhub/types';
+
+import RankingsScreen from '../../app/(tabs)/rankings';
+import { useGlobalRankings, usePlatformRanking, useMyRanking } from '../../hooks/useRankings';
+import { useSessionStore } from '../../stores/sessionStore';
+
+jest.mock('../../hooks/useRankings');
+jest.mock('../../stores/sessionStore');
+jest.mock('../../components/AdBanner', () => ({ AdBanner: () => null }));
+
+const mockUseGlobalRankings = useGlobalRankings as jest.Mock;
+const mockUsePlatformRanking = usePlatformRanking as jest.Mock;
+const mockUseMyRanking = useMyRanking as jest.Mock;
+const mockUseSessionStore = useSessionStore as unknown as jest.Mock;
+
+function renderWithClient(ui: React.ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
+
+const sampleEntries: RankingEntry[] = [
+  { userId: 'u1', username: 'campeon', avatar: null, xp: 9000, rank: 1, countryCode: 'ES' },
+  { userId: 'u2', username: 'segundo', avatar: null, xp: 7500, rank: 2, countryCode: null },
+  { userId: 'u3', username: 'tercero', avatar: null, xp: 6000, rank: 3, countryCode: 'MX' },
+];
+
+const emptyPlatformQuery = {
+  data: undefined,
+  isLoading: false,
+  isError: false,
+  refetch: jest.fn(),
+};
+
+function setupMocks(
+  entries: RankingEntry[] = [],
+  isLoading = false,
+  isError = false,
+  myRanking: { rank: number | null; xp: number } | null = null,
+  currentUserId: string | null = null,
+  isRefetching = false,
+) {
+  mockUseGlobalRankings.mockReturnValue({
+    data: entries.length > 0 ? { data: entries, total: entries.length } : undefined,
+    isLoading,
+    isError,
+    refetch: jest.fn(),
+    isRefetching,
+  });
+  // usePlatformRanking se usa cuando el filtro no es 'global'
+  mockUsePlatformRanking.mockReturnValue(emptyPlatformQuery);
+  mockUseMyRanking.mockReturnValue({ data: myRanking });
+  mockUseSessionStore.mockReturnValue({
+    user: currentUserId ? { id: currentUserId, isPremium: false } : null,
+  });
+}
+
+describe('RankingsScreen', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('renderiza el titulo', () => {
+    setupMocks();
+    const { getByRole } = renderWithClient(<RankingsScreen />);
+    expect(getByRole('header')).toBeTruthy();
+  });
+
+  it('muestra el skeleton durante la carga', () => {
+    setupMocks([], true);
+    const { queryByRole } = renderWithClient(<RankingsScreen />);
+    expect(queryByRole('alert')).toBeNull();
+  });
+
+  it('muestra titulo y mensaje de error cuando la carga falla', () => {
+    setupMocks([], false, true);
+    const { getByRole, getByText } = renderWithClient(<RankingsScreen />);
+    expect(getByRole('alert')).toBeTruthy();
+    expect(getByText('rankings.error_title')).toBeTruthy();
+    expect(getByText('rankings.error_server')).toBeTruthy();
+  });
+
+  it('muestra el boton de reintento con accessibilityLabel en estado de error', () => {
+    setupMocks([], false, true);
+    const { getByRole } = renderWithClient(<RankingsScreen />);
+    expect(getByRole('button', { name: 'rankings.retry_label' })).toBeTruthy();
+  });
+
+  it('renderiza los items del ranking', () => {
+    setupMocks(sampleEntries);
+    const { getByText } = renderWithClient(<RankingsScreen />);
+    expect(getByText('campeon')).toBeTruthy();
+    expect(getByText('segundo')).toBeTruthy();
+    expect(getByText('tercero')).toBeTruthy();
+  });
+
+  it('muestra el estado vacio cuando no hay jugadores', () => {
+    setupMocks([]);
+    const { getByText } = renderWithClient(<RankingsScreen />);
+    expect(getByText('rankings.empty')).toBeTruthy();
+  });
+
+  it('muestra la tarjeta de posicion del usuario autenticado', () => {
+    setupMocks(sampleEntries, false, false, { rank: 5, xp: 4500 }, 'u1');
+    const { getByText } = renderWithClient(<RankingsScreen />);
+    expect(getByText('rankings.my_position_label')).toBeTruthy();
+    expect(getByText('#5')).toBeTruthy();
+  });
+
+  it('muestra guion cuando el usuario no tiene posicion en el ranking', () => {
+    setupMocks(sampleEntries, false, false, { rank: null, xp: 100 }, 'u1');
+    const { getByText } = renderWithClient(<RankingsScreen />);
+    expect(getByText('—')).toBeTruthy();
+  });
+
+  it('NO muestra la tarjeta de posicion cuando no hay usuario autenticado', () => {
+    setupMocks(sampleEntries, false, false, null, null);
+    const { queryByText } = renderWithClient(<RankingsScreen />);
+    expect(queryByText('rankings.my_position_label')).toBeNull();
+  });
+
+  it('NO muestra la tarjeta de posicion cuando no hay datos de ranking propio', () => {
+    setupMocks(sampleEntries, false, false, null, 'u1');
+    const { queryByText } = renderWithClient(<RankingsScreen />);
+    expect(queryByText('rankings.my_position_label')).toBeNull();
+  });
+
+  it('resalta al usuario actual en la lista', () => {
+    setupMocks(sampleEntries, false, false, { rank: 1, xp: 9000 }, 'u1');
+    const { getByText } = renderWithClient(<RankingsScreen />);
+    expect(getByText('campeon (Tú)')).toBeTruthy();
+  });
+
+  it('la tarjeta de posicion tiene el accessibilityLabel correcto con rank', () => {
+    setupMocks(sampleEntries, false, false, { rank: 3, xp: 6000 }, 'u1');
+    const { getByLabelText } = renderWithClient(<RankingsScreen />);
+    expect(getByLabelText('rankings.my_position_aria')).toBeTruthy();
+  });
+
+  it('la tarjeta de posicion tiene accessibilityLabel de sin ranking cuando rank es null', () => {
+    setupMocks(sampleEntries, false, false, { rank: null, xp: 200 }, 'u1');
+    const { getByLabelText } = renderWithClient(<RankingsScreen />);
+    expect(getByLabelText('rankings.my_position_unranked_aria')).toBeTruthy();
+  });
+
+  // BUG-4: useMyRanking debe recibir el filtro de plataforma activo para mostrar XP correcto
+  it('BUG-4: llama useMyRanking con undefined cuando el filtro es global (estado inicial)', () => {
+    setupMocks(sampleEntries, false, false, { rank: 1, xp: 9000 }, 'u1');
+    renderWithClient(<RankingsScreen />);
+    // El filtro inicial es 'global' → useMyRanking(undefined)
+    expect(mockUseMyRanking).toHaveBeenCalledWith(undefined);
+  });
+
+  it('BUG-4: llama useMyRanking con "PSN" al cambiar el filtro a PSN', () => {
+    setupMocks(sampleEntries, false, false, { rank: 2, xp: 900 }, 'u1');
+    const { getByRole } = renderWithClient(<RankingsScreen />);
+    // Presionar el filtro PSN
+    fireEvent.press(getByRole('tab', { name: 'rankings.filter_psn' }));
+    // Ahora useMyRanking debe ser llamado con 'PSN' para leer del sorted set ranking:platform:psn
+    expect(mockUseMyRanking).toHaveBeenCalledWith('PSN');
+  });
+
+  it('BUG-4: llama useMyRanking con "STEAM" al cambiar el filtro a Steam', () => {
+    setupMocks(sampleEntries, false, false, { rank: 1, xp: 5000 }, 'u1');
+    const { getByRole } = renderWithClient(<RankingsScreen />);
+    fireEvent.press(getByRole('tab', { name: 'rankings.filter_steam' }));
+    expect(mockUseMyRanking).toHaveBeenCalledWith('STEAM');
+  });
+
+  it('BUG-4: llama useMyRanking con undefined cuando el filtro vuelve a global', () => {
+    setupMocks(sampleEntries, false, false, { rank: 2, xp: 800 }, 'u1');
+    const { getByRole } = renderWithClient(<RankingsScreen />);
+    // Cambiar a PSN y luego a global
+    fireEvent.press(getByRole('tab', { name: 'rankings.filter_psn' }));
+    fireEvent.press(getByRole('tab', { name: 'rankings.filter_global' }));
+    // La última llamada debe ser con undefined
+    const calls = mockUseMyRanking.mock.calls as Array<[string | undefined]>;
+    const lastCall = calls[calls.length - 1];
+    expect(lastCall?.[0]).toBeUndefined();
+  });
+
+  // FIX4: RefreshControl usa isManualRefreshing local, no isRefetching del query
+  it('FIX4: refreshing es false aunque isRefetching del query sea true', () => {
+    setupMocks(sampleEntries, false, false, null, null, true);
+    const { UNSAFE_getAllByType } = renderWithClient(<RankingsScreen />);
+
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { RefreshControl } = require('react-native') as typeof import('react-native');
+    const controls = UNSAFE_getAllByType(RefreshControl);
+    expect(controls.length).toBeGreaterThan(0);
+    controls.forEach((ctrl) => {
+      expect((ctrl.props as { refreshing: boolean }).refreshing).toBe(false);
+    });
+  });
+
+  // BUG PRINCIPAL: el banner "Tu posición" debe mostrar XP del sorted set de plataforma,
+  // no el XP global, cuando hay un filtro de plataforma activo.
+  it('banner muestra XP de PSN (1.200) al activar filtro PSN, no el XP global (367.155)', () => {
+    const GLOBAL_XP = 367_155;
+    const PSN_XP = 1_200;
+
+    // useMyRanking devuelve valores distintos según el argumento platform
+    mockUseMyRanking.mockImplementation((platform?: string) => {
+      if (platform === 'PSN') return { data: { rank: 3, xp: PSN_XP } };
+      return { data: { rank: 1, xp: GLOBAL_XP } };
+    });
+    mockUseSessionStore.mockReturnValue({
+      user: { id: 'u1', isPremium: false },
+    });
+    mockUseGlobalRankings.mockReturnValue({
+      data: { data: sampleEntries, total: sampleEntries.length },
+      isLoading: false,
+      isError: false,
+      refetch: jest.fn(),
+      isRefetching: false,
+    });
+    mockUsePlatformRanking.mockReturnValue(emptyPlatformQuery);
+
+    const { getByRole, getByText } = renderWithClient(<RankingsScreen />);
+
+    // Estado inicial (global): el banner muestra el XP global
+    expect(getByText(`${GLOBAL_XP.toLocaleString()} XP`)).toBeTruthy();
+
+    // Cambiar al filtro PSN
+    fireEvent.press(getByRole('tab', { name: 'rankings.filter_psn' }));
+
+    // El banner ahora debe mostrar el XP de PSN, no el global
+    expect(getByText(`${PSN_XP.toLocaleString()} XP`)).toBeTruthy();
+  });
+
+  it('banner muestra XP de RA (450) al activar filtro RA, no el XP global', () => {
+    const GLOBAL_XP = 367_155;
+    const RA_XP = 450;
+
+    mockUseMyRanking.mockImplementation((platform?: string) => {
+      if (platform === 'RA') return { data: { rank: 8, xp: RA_XP } };
+      return { data: { rank: 1, xp: GLOBAL_XP } };
+    });
+    mockUseSessionStore.mockReturnValue({
+      user: { id: 'u1', isPremium: false },
+    });
+    mockUseGlobalRankings.mockReturnValue({
+      data: { data: sampleEntries, total: sampleEntries.length },
+      isLoading: false,
+      isError: false,
+      refetch: jest.fn(),
+      isRefetching: false,
+    });
+    mockUsePlatformRanking.mockReturnValue(emptyPlatformQuery);
+
+    const { getByRole, getByText } = renderWithClient(<RankingsScreen />);
+
+    // Cambiar al filtro RA
+    fireEvent.press(getByRole('tab', { name: 'rankings.filter_ra' }));
+
+    expect(getByText(`${RA_XP.toLocaleString()} XP`)).toBeTruthy();
+  });
+
+  it('banner vuelve a mostrar XP global al regresar al filtro global desde PSN', () => {
+    const GLOBAL_XP = 367_155;
+    const PSN_XP = 1_200;
+
+    mockUseMyRanking.mockImplementation((platform?: string) => {
+      if (platform === 'PSN') return { data: { rank: 3, xp: PSN_XP } };
+      return { data: { rank: 1, xp: GLOBAL_XP } };
+    });
+    mockUseSessionStore.mockReturnValue({
+      user: { id: 'u1', isPremium: false },
+    });
+    mockUseGlobalRankings.mockReturnValue({
+      data: { data: sampleEntries, total: sampleEntries.length },
+      isLoading: false,
+      isError: false,
+      refetch: jest.fn(),
+      isRefetching: false,
+    });
+    mockUsePlatformRanking.mockReturnValue(emptyPlatformQuery);
+
+    const { getByRole, getByText } = renderWithClient(<RankingsScreen />);
+
+    // Ir a PSN
+    fireEvent.press(getByRole('tab', { name: 'rankings.filter_psn' }));
+    expect(getByText(`${PSN_XP.toLocaleString()} XP`)).toBeTruthy();
+
+    // Volver a global
+    fireEvent.press(getByRole('tab', { name: 'rankings.filter_global' }));
+    expect(getByText(`${GLOBAL_XP.toLocaleString()} XP`)).toBeTruthy();
+  });
+});

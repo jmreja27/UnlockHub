@@ -1,6 +1,10 @@
-import { syncQueue } from './sync.queue';
-import { prisma } from '../lib/prisma';
 import { SYNC_COOLDOWNS } from '@unlockhub/types';
+
+import { prisma } from '../lib/prisma';
+import { FEATURES } from '../config/features';
+import { logger } from '../lib/logger';
+
+import { syncQueue } from './sync.queue';
 
 // Programa syncs automáticos repetibles para un usuario y plataforma
 export async function scheduleAutoSync(
@@ -9,7 +13,7 @@ export async function scheduleAutoSync(
   platform: string,
   isPremium: boolean,
 ) {
-  const tier = isPremium ? 'premium' : 'free';
+  const tier = (FEATURES.premium && isPremium) ? 'premium' : 'free';
   const intervalMinutes = SYNC_COOLDOWNS[tier].autoSyncIntervalMinutes;
 
   const jobId = `auto-sync:${userId}:${platform}`;
@@ -29,7 +33,12 @@ export async function scheduleAutoSync(
 // Cancela el sync automático (p.ej. cuando el usuario desvincula la plataforma)
 export async function cancelAutoSync(userId: string, platform: string) {
   const jobId = `auto-sync:${userId}:${platform}`;
-  await syncQueue.removeRepeatable(jobId, { every: 0 });
+  const repeatables = await syncQueue.getRepeatableJobs();
+  for (const job of repeatables) {
+    if (job.id === jobId || job.name === jobId) {
+      await syncQueue.removeRepeatableByKey(job.key);
+    }
+  }
 }
 
 // Re-programa todos los syncs automáticos al arrancar el servidor
@@ -47,5 +56,5 @@ export async function restoreAutoSyncs() {
     );
   }
 
-  console.warn(`Auto-syncs restaurados: ${accounts.length} cuentas`);
+  logger.info({ count: accounts.length }, 'Auto-syncs restaurados');
 }

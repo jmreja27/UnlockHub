@@ -1,0 +1,22 @@
+appId: com.unlockhub.app
+---
+# Precondición: si Steam YA está vinculado a TestUser99, este flow obtendrá
+# un error 409 ("already linked"). Si no está vinculado, vinculará con Seithek.
+# Ambos resultados son válidos para este flujo.
+- runFlow: _setup_login.yaml
+
+- tapOn: "Profile"
+- waitForAnimationToEnd
+
+- tapOn: "Link Steam"
+- waitForAnimationToEnd
+
+- assertVisible: "Link Steam"
+
+- tapOn: "Steam username"
+- inputText: "Seithek"
+- tapOn: "Link Steam"
+- waitForAnimationToEnd
+
+# Si ya está vinculado → error already_linked. Si no → success.
+- assertNotVisible: "Something went wrong"
