@@ -828,19 +828,15 @@ cd apps/api && npm run mock   # Mock server en :3000
 
 Cuenta de prueba: `demo@unlockhub.test` / `Demo1234!`
 
-**Quirks (Expo SDK 55 / React Native 0.83.6):**
+**Quirks críticos (Expo SDK 55 + RN 0.83.6):**
 - URL del host desde el emulador: `http://10.0.2.2:3000`, no `localhost`.
 - `adb reverse` no es fiable — preferir siempre `10.0.2.2`.
-- `usesCleartextTraffic` sigue requiriendo `expo-build-properties` en `app.json`:
-
-```json
-"plugins": [["expo-build-properties", { "android": { "usesCleartextTraffic": true } }]]
-```
+- `usesCleartextTraffic` debe ir en `app.json > plugins` mediante `expo-build-properties`.
 - `kotlinVersion: "2.1.20"` en `expo-build-properties` — alinea con el compilador de RN 0.83.6. No usar "1.9.x" (downgrade que conflictúa con play-services-ads 25.x de AdMob v16+).
-- `compileSdkVersion: 36` en `expo-build-properties` — requerido con SDK 55 porque `androidx.core:1.17.0` y `androidx.activity:1.11.0` (traídas por Expo SDK 55) necesitan `minCompileSdk=36`. Con `compileSdkVersion: 35` el task `checkReleaseAarMetadata` falla.
+- **compileSdkVersion 36 requerido**: `androidx.core:1.17.0` (dependencia transitiva de RN 0.83.6) requiere `compileSdk >= 36`. Configurado en `app.json` → `expo-build-properties` → `android.compileSdkVersion: 36`.
 - `react-native-google-mobile-ads` en v16+ (antes gateado a v13.6.1 por Kotlin 2.2.0 metadata). Ahora compatible — RN 0.83.6 usa Kotlin 2.1.20.
 - `react-native-reanimated` v4 requiere `react-native-worklets` como peer dep. Debe instalarse en `apps/mobile/` Y en el root del monorepo (para que el Babel plugin lo encuentre). Versión compatible: `worklets@0.7.x` para `reanimated@4.2.x`.
-- **Gradle 8.13 + sentry.properties para build local**: `expo prebuild --clean` genera `gradle-9.0.0-bin.zip` que falla con `NoSuchFieldError: JvmVendorSpec IBM_SEMERU` en plugins de RN 0.83.6. Tras cada prebuild hacer dos pasos: (1) parchear `android/gradle/wrapper/gradle-wrapper.properties`: `gradle-9.0.0-bin.zip` → `gradle-8.13-bin.zip`; (2) crear `android/sentry.properties` con contenido `upload.enabled=false` (sin este archivo el task `createBundleReleaseJsAndAssets_SentryUpload` falla por falta de `--org`). EAS Build gestiona ambas cosas automáticamente; estos parches son solo para `bundleRelease` local.
+- **Gradle 9.0.0 incompatible con RN 0.83.6**: `expo prebuild --clean` genera Gradle 9.0.0 que rompe el build local. Tras cada prebuild, parchear manualmente `android/gradle/wrapper/gradle-wrapper.properties` → `distributionUrl=...gradle-8.13-all.zip`. EAS Build gestiona esto automáticamente — solo afecta a builds locales.
 - Jest y `react-native-reanimated` v4: no usar `jest.requireActual('react-native-reanimated/mock')` — carga worklets nativo. Usar mock manual en `jest.setup.ts` (ya configurado). El moduleNameMapper redirige `react-native-worklets` a `__mocks__/react-native-worklets.js`.
 - React 19: `jest.advanceTimersByTime()` que dispara actualizaciones de estado debe envolverse en `act()`.
 - `@shopify/flash-list` v2: eliminado el prop `estimatedItemSize` — FlashList v2 lo calcula automáticamente.
@@ -1175,6 +1171,8 @@ Ver [docs/BACKLOG.md](docs/BACKLOG.md)
 ---
 
 ## Última revisión de código
+
+**Fecha**: 2026-06-04 (sesión 57) — Verificación pre-AAB v4 + corrección tests rotos. T17/T18 verificados: Railway Deploy Logs confirma "8 migrations found" — todas las migraciones incluyendo gdpr_soft_delete aplicadas en producción. 3 tests API corregidos que estaban rotos por cambios de sesiones anteriores: repositories.test.ts (findUserByUsername con deletedAt: null), user.service.test.ts (mock refreshToken.updateMany), xbox.adapter.test.ts (tokenJson sin cifrar). Quirks SDK 55 + RN 0.83.6 documentados: Gradle 9.0.0 incompatible con RN 0.83.6 → parchear a 8.13 tras cada prebuild local; compileSdkVersion actualizado a 36 por androidx.core:1.17.0. EAS Build no requiere estos parches. bundleRelease BUILD SUCCESSFUL — AAB local 68.7 MB. API: 566/566 tests ✅. Mobile: 352/352 tests ✅. 0 errores TS/lint.
 
 **Fecha**: 2026-06-04 (sesión 56) — T49/T50/T51 + upgrade Expo SDK 51→55. **T49 (bug crítico background-sync)**: `background-sync.scheduler.ts` línea 35 — `gte: oneDayAgo` → `lte: oneDayAgo`. La condición anterior sincronizaba usuarios que YA habían sincronizado recientemente en lugar de los que llevan más de 24h sin hacerlo — exactamente el comportamiento inverso al deseado. **T50 (tests auth soft-delete)**: `auth.routes.test.ts` — test 1: `POST /refresh` → 401 cuando tokens revocados por `deleteAccount`; test 2: `GET /me` → 401 `ACCOUNT_DELETED` cuando middleware `authenticate` detecta `deletedAt`. Mock de `prisma.user.findUnique` añadido al fichero. **T51 (tests race condition rewarded ad)**: `points.service.test.ts` — corregidos mocks existentes para reflejar implementación `SET NX` real (antes mockeaban `redis.get` en lugar de `redis.set`); nuevo test `Promise.allSettled` con 2 llamadas simultáneas → exactamente 1 fulfilled con `{ pointsEarned: 10 }`, 1 rejected con `REWARDED_AD_COOLDOWN` 429. **Expo SDK 51→55**: `expo` ~51→^55, `react-native` 0.74.5→0.83.6, `react` 18.2.0→19.2.0, `react-native-reanimated` 3→4 + `react-native-worklets` 0.7.4, `react-native-google-mobile-ads` v13→v16.3.3 (workaround Kotlin ya no necesario), `@shopify/flash-list` v1→v2 (`estimatedItemSize` eliminado en 7 usos), `kotlinVersion` 1.9.23→2.1.20, `compileSdkVersion` 34→35. `expo doctor` 19/19 ✅. Tests: 352/352 ✅.
 
