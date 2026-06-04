@@ -837,9 +837,10 @@ Cuenta de prueba: `demo@unlockhub.test` / `Demo1234!`
 "plugins": [["expo-build-properties", { "android": { "usesCleartextTraffic": true } }]]
 ```
 - `kotlinVersion: "2.1.20"` en `expo-build-properties` — alinea con el compilador de RN 0.83.6. No usar "1.9.x" (downgrade que conflictúa con play-services-ads 25.x de AdMob v16+).
-- `compileSdkVersion: 35` en `expo-build-properties` — seguro con SDK 55. En SDK 51 fallaba por `expo-modules-core`.
+- `compileSdkVersion: 36` en `expo-build-properties` — requerido con SDK 55 porque `androidx.core:1.17.0` y `androidx.activity:1.11.0` (traídas por Expo SDK 55) necesitan `minCompileSdk=36`. Con `compileSdkVersion: 35` el task `checkReleaseAarMetadata` falla.
 - `react-native-google-mobile-ads` en v16+ (antes gateado a v13.6.1 por Kotlin 2.2.0 metadata). Ahora compatible — RN 0.83.6 usa Kotlin 2.1.20.
 - `react-native-reanimated` v4 requiere `react-native-worklets` como peer dep. Debe instalarse en `apps/mobile/` Y en el root del monorepo (para que el Babel plugin lo encuentre). Versión compatible: `worklets@0.7.x` para `reanimated@4.2.x`.
+- **Gradle 8.13 + sentry.properties para build local**: `expo prebuild --clean` genera `gradle-9.0.0-bin.zip` que falla con `NoSuchFieldError: JvmVendorSpec IBM_SEMERU` en plugins de RN 0.83.6. Tras cada prebuild hacer dos pasos: (1) parchear `android/gradle/wrapper/gradle-wrapper.properties`: `gradle-9.0.0-bin.zip` → `gradle-8.13-bin.zip`; (2) crear `android/sentry.properties` con contenido `upload.enabled=false` (sin este archivo el task `createBundleReleaseJsAndAssets_SentryUpload` falla por falta de `--org`). EAS Build gestiona ambas cosas automáticamente; estos parches son solo para `bundleRelease` local.
 - Jest y `react-native-reanimated` v4: no usar `jest.requireActual('react-native-reanimated/mock')` — carga worklets nativo. Usar mock manual en `jest.setup.ts` (ya configurado). El moduleNameMapper redirige `react-native-worklets` a `__mocks__/react-native-worklets.js`.
 - React 19: `jest.advanceTimersByTime()` que dispara actualizaciones de estado debe envolverse en `act()`.
 - `@shopify/flash-list` v2: eliminado el prop `estimatedItemSize` — FlashList v2 lo calcula automáticamente.

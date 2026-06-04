@@ -37,6 +37,9 @@ jest.mock('../lib/prisma', () => ({
     passwordResetToken: {
       deleteMany: jest.fn(),
     },
+    refreshToken: {
+      updateMany: jest.fn(),
+    },
     $transaction: jest.fn(),
   },
 }));

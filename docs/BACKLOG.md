@@ -21,7 +21,7 @@
 | B18 | ~~Cuenta RevenueCat + productos + webhook~~ | 🚩 **Diferido a Fase 4** — `FEATURES.premium = false`. El backend está intacto; activar cambiando el flag cuando RC esté configurado. |
 | B19 | ~~`EXPO_PUBLIC_REVENUECAT_API_KEY` como EAS secret~~ | 🚩 **Diferido a Fase 4** — no necesario hasta activar `FEATURES.premium = true`. |
 | B20 | ~~`REVENUECAT_WEBHOOK_SECRET` en Railway~~ | 🚩 **Diferido a Fase 4** — no necesario hasta activar `FEATURES.premium = true`. |
-| T17 | Verificar que migración gdpr_soft_delete se aplica en Railway | Railway dashboard → Logs del deploy → buscar `migrate deploy` sin errores. Sin esto `deleteAccount` fallará en producción si `deletedAt` no existe en el esquema |
+| T17 | ✅ Verificar que migración gdpr_soft_delete se aplica en Railway | ✅ Verificado en Railway Deploy Logs — 8 migrations found, todas aplicadas incluyendo gdpr_soft_delete |
 
 ### 🟡 UX — todas implementadas ✅
 
@@ -59,7 +59,7 @@
 | T15 | Steam skip-completed optimization via `rtime_last_played` | 🔲 `GetOwnedGames` devuelve `rtime_last_played` (Unix timestamp) por juego. Usarlo para saltar juegos sin actividad reciente reduciría llamadas a Steam. No implementado: requiere añadir `lastPlayedAt` al modelo de caché Redis + interfaz `GameCacheEntry`, con riesgo de saltar achievements de DLC. Documentar como pendiente post-lanzamiento. |
 | T16 | ✅ Backfill RA XP con fórmula correcta | Script `scripts/backfill-ra-xp.ts` creado e idempotente — pendiente solo ejecución manual en prod con `DATABASE_URL="${DIRECT_URL}"`. Nota: el XP de usuarios en BD/Redis NO se actualiza automáticamente — los usuarios verán el XP corregido en su próximo sync. |
 | T17 | BUG-CRÍTICO-1/2 + BUG-MEDIO-3/4 corregidos | ✅ Sesión 31: soft delete GDPR, email eliminado de perfil público, RA syncUserExpress con Promise.allSettled, deletedAt:null filters, gdpr-cleanup scheduler, authenticate con DB check, rankings RefreshControl fix, upsertUserScore paralelo, useSubscription RC CustomerInfo |
-| T18 | Migración Prisma gdpr_soft_delete en producción | ⚙️ Aplicar `npx prisma migrate deploy` en Railway tras el próximo deploy — la migración añade el campo `deletedAt` a `User` si no existía ya |
+| T18 | ✅ Migración Prisma gdpr_soft_delete en producción | ✅ Verificado en Railway Deploy Logs — 8 migrations found, todas aplicadas incluyendo gdpr_soft_delete |
 | T19 | BUG-1: biblioteca no carga sort completo al abrir | ✅ useEffect([isLoading]) en index.tsx — sesión 34 |
 | T20 | BUG-2: pull-to-refresh pierde páginas con sort activo | ✅ handleRefresh llama fetchAllRemainingPages cuando sort activo — sesión 34 |
 | T21 | BUG-3: rankings PSN XP desincronizado entre "mi posición" y lista | ✅ getUserRank lee sorted set correcto por plataforma — sesión 34 |

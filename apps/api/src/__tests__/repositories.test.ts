@@ -48,7 +48,7 @@ describe('userRepository.findUserByUsername', () => {
   it('llama a prisma.user.findUnique con where username', async () => {
     (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
     await userRepo.findUserByUsername('testuser');
-    expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { username: 'testuser' } });
+    expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { username: 'testuser', deletedAt: null } });
   });
 });
 

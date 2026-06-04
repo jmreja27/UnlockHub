@@ -163,7 +163,8 @@ describe('exchangeXboxCodeForTokens', () => {
 
     expect(result.xuid).toBe(XUID);
     expect(result.gamertag).toBe(GAMERTAG);
-    expect(result.encryptedTokenJson).toContain('enc:');
+    expect(result.tokenJson).toBeDefined();
+    expect(() => JSON.parse(result.tokenJson)).not.toThrow();
   });
 
   it('llama a los endpoints de MS, XBL y XSTS en orden correcto', async () => {
