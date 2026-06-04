@@ -1180,7 +1180,7 @@ Ver [docs/BACKLOG.md](docs/BACKLOG.md)
 
 ## Última revisión de código
 
-**Fecha**: 2026-06-04 (sesión 59) — PL13 script limpieza BD + merge develop→main + tag v1.0.0. Script `scripts/cleanup-test-users.ts` creado con borrado atómico Prisma (14 tablas), opciones `--dry-run` y `--preserve-username`, limpieza Redis rankings (`ranking:global`, `ranking:global:*`, `ranking:platform:*`) y verificación integridad catálogo post-borrado. Merge develop → main con `--no-ff`. Tag `v1.0.0` creado y publicado en GitHub. EAS Build versionCode 5 publicado en Prueba interna. PL13 ✅, PL15 ✅.
+**Fecha**: 2026-06-04 (sesión 59) — PL13 script limpieza BD + merge develop→main + tag v1.0.0+ limpieza ejecutada en producción. Script `scripts/cleanup-test-users.ts` creado y ejecutado: 7 usuarios de prueba eliminados, TestUser99 y Sovelyss preservados, catálogo intacto (**2.878 juegos + 134.928 logros**). Script ampliado a múltiples `--preserve-username` (Prisma `notIn`). Merge develop → main `--no-ff`. Tag `v1.0.0` en GitHub. PL13 ✅, PL15 ✅.
 
 **Fecha**: 2026-06-04 (sesión 58) — Build local APK debug validado con SDK 55 + RN 0.83.6. BUILD SUCCESSFUL — APK debug 204.9 MB. Proceso documentado en docs/BUILD_LOCAL.md. Quirks nuevos: react-native bundle → expo export:embed (CLI v20 rompe el comando anterior); --entry-file omitido en monorepo (se resuelve desde package.json "main"); Gradle 9.0.0 → 8.13 tras cada prebuild. @react-native-community/cli@20.1.3 instalado desde raíz del monorepo.
 
