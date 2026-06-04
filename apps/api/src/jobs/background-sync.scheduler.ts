@@ -32,7 +32,7 @@ export async function runBackgroundSyncs(): Promise<void> {
 
   const accounts = await prisma.platformAccount.findMany({
     where: {
-      user: { lastSyncAt: { gte: oneDayAgo } },
+      user: { lastSyncAt: { lte: oneDayAgo } },
     },
     select: {
       id: true,

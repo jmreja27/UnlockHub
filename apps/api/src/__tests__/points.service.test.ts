@@ -83,8 +83,7 @@ describe('getPointsTotal', () => {
 });
 
 describe('claimRewardedAdPoints', () => {
-  it('otorga 10 puntos y activa cooldown Redis si no hay cooldown activo', async () => {
-    mockRedisGet.mockResolvedValue(null);
+  it('otorga 10 puntos y activa cooldown Redis si no hay cooldown activo (SET NX EX)', async () => {
     mockCreate.mockResolvedValue({});
     mockRedisSet.mockResolvedValue('OK');
 
@@ -94,22 +93,66 @@ describe('claimRewardedAdPoints', () => {
     expect(mockCreate).toHaveBeenCalledWith({
       data: { userId: 'u1', amount: 10, reason: 'REWARDED_AD' },
     });
+    // La implementación usa SET NX EX atómico — verifica los 5 argumentos incluyendo 'NX'
     expect(mockRedisSet).toHaveBeenCalledWith(
       'rewarded-ad:u1',
       '1',
       'EX',
       10800,
+      'NX',
     );
   });
 
-  it('lanza 429 si el cooldown Redis está activo', async () => {
-    mockRedisGet.mockResolvedValue('1');
+  it('lanza 429 si el cooldown Redis está activo (SET NX devuelve null — clave ya existe)', async () => {
+    // SET NX devuelve null cuando la clave ya existe → cooldown activo
+    mockRedisSet.mockResolvedValue(null);
 
     await expect(claimRewardedAdPoints('u1')).rejects.toMatchObject({
       code: 'REWARDED_AD_COOLDOWN',
       statusCode: 429,
     });
     expect(mockCreate).not.toHaveBeenCalled();
-    expect(mockRedisSet).not.toHaveBeenCalled();
+  });
+});
+
+// ─── claimRewardedAdPoints — race condition (T51) ─────────────────────────────
+// Verifica el comportamiento atómico de SET NX ante dos llamadas simultáneas.
+// Sin el lock atómico, ambas pasarían el check y el saldo subiría +20 en lugar de +10.
+
+describe('claimRewardedAdPoints — race condition', () => {
+  it('dos llamadas simultáneas: solo una obtiene el lock y el saldo sube exactamente 10, no 20', async () => {
+    // Primera llamada: SET NX devuelve 'OK' (lock adquirido)
+    // Segunda llamada: SET NX devuelve null (clave ya existe — cooldown activo)
+    mockRedisSet
+      .mockResolvedValueOnce('OK')
+      .mockResolvedValueOnce(null);
+    mockCreate.mockResolvedValue({});
+
+    const results = await Promise.allSettled([
+      claimRewardedAdPoints('u1'),
+      claimRewardedAdPoints('u1'),
+    ]);
+
+    const fulfilled = results.filter(
+      (r): r is PromiseFulfilledResult<{ pointsEarned: number }> => r.status === 'fulfilled',
+    );
+    const rejected = results.filter(
+      (r): r is PromiseRejectedResult => r.status === 'rejected',
+    );
+
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+
+    // La llamada exitosa devuelve exactamente 10 puntos
+    expect(fulfilled[0]?.value).toEqual({ pointsEarned: 10 });
+
+    // La llamada rechazada lanza REWARDED_AD_COOLDOWN 429
+    expect(rejected[0]?.reason).toMatchObject({ code: 'REWARDED_AD_COOLDOWN', statusCode: 429 });
+
+    // UserPoint.create se llama exactamente una vez → saldo +10, no +20
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(mockCreate).toHaveBeenCalledWith({
+      data: { userId: 'u1', amount: 10, reason: 'REWARDED_AD' },
+    });
   });
 });

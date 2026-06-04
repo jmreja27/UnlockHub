@@ -7,14 +7,23 @@ jest.mock('../middleware/rateLimiter', () => ({
   globalRateLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),
   authRateLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
+jest.mock('../lib/prisma', () => ({
+  prisma: {
+    user: {
+      findUnique: jest.fn().mockResolvedValue({ id: 'user-1' }),
+    },
+  },
+}));
 
 import request from 'supertest';
 
 import * as authService from '../services/auth.service';
 import app from '../app';
 import { signAccessToken } from '../lib/jwt';
+import { prisma } from '../lib/prisma';
 
 const mockAuthService = authService as jest.Mocked<typeof authService>;
+const mockUserFindUnique = prisma.user.findUnique as jest.Mock;
 
 const baseUser = {
   id: 'user-1',
@@ -31,6 +40,8 @@ beforeEach(() => {
   process.env['JWT_ACCESS_SECRET'] = 'test_secret_at_least_32_characters_long_x';
   process.env['JWT_REFRESH_SECRET'] = 'test_refresh_secret_at_least_32_chars_xx';
   process.env['ENCRYPTION_KEY'] = '0'.repeat(64);
+  // Por defecto el usuario existe en BD (no está eliminado)
+  mockUserFindUnique.mockResolvedValue({ id: 'user-1' });
 });
 
 // ─── POST /register ───────────────────────────────────────────────────────────
@@ -187,5 +198,42 @@ describe('GET /api/v1/auth/me', () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ id: 'user-1', email: 'test@example.com' });
+  });
+});
+
+// ─── Soft delete — T50 ───────────────────────────────────────────────────────
+// Verifica que un usuario con soft delete no puede refrescar sesión ni acceder
+// a endpoints protegidos. El fix de sesión 53 revoca todos los RefreshTokens
+// en deleteAccount, por lo que findValidRefreshToken devuelve null.
+
+describe('autenticación con usuario eliminado (soft delete)', () => {
+  it('POST /refresh 401 cuando el refresh token fue revocado por deleteAccount', async () => {
+    const { AppError } = await import('../middleware/errorHandler');
+    // deleteAccount revocó todos los tokens (revokedAt seteado) →
+    // findValidRefreshToken devuelve null → authService.refresh lanza 401
+    mockAuthService.refresh.mockRejectedValue(
+      new AppError('Refresh token inválido o expirado', 'INVALID_REFRESH_TOKEN', 401),
+    );
+
+    const res = await request(app)
+      .post('/api/v1/auth/refresh')
+      .send({ refreshToken: 'token-revocado-por-soft-delete' });
+
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe('INVALID_REFRESH_TOKEN');
+  });
+
+  it('GET /me 401 cuando el access token pertenece a un usuario con soft delete', async () => {
+    // El middleware authenticate llama prisma.user.findUnique({ where: { id, deletedAt: null } })
+    // Para un usuario soft-deleted, deletedAt != null → findUnique devuelve null → 401
+    const token = signAccessToken({ sub: 'deleted-user-1', email: 'borrado@example.com', isPremium: false });
+    mockUserFindUnique.mockResolvedValueOnce(null);
+
+    const res = await request(app)
+      .get('/api/v1/auth/me')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe('ACCOUNT_DELETED');
   });
 });
