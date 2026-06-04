@@ -11,13 +11,15 @@
  *   cd apps/api && DATABASE_URL="${DIRECT_URL}" REDIS_URL="redis://..." \
  *     npx ts-node ../../scripts/cleanup-test-users.ts --dry-run
  *
- *   # Conservar la cuenta de revisión de Google Play y previsualizar:
+ *   # Conservar múltiples cuentas y previsualizar (--preserve-username se puede repetir):
  *   cd apps/api && DATABASE_URL="${DIRECT_URL}" REDIS_URL="redis://..." \
- *     npx ts-node ../../scripts/cleanup-test-users.ts --dry-run --preserve-username=TestUser99
+ *     npx ts-node ../../scripts/cleanup-test-users.ts --dry-run \
+ *     --preserve-username=TestUser99 --preserve-username=Sovelyss
  *
- *   # Limpieza completa conservando la cuenta de revisión de Google Play:
+ *   # Limpieza conservando múltiples cuentas:
  *   cd apps/api && DATABASE_URL="${DIRECT_URL}" REDIS_URL="redis://..." \
- *     npx ts-node ../../scripts/cleanup-test-users.ts --preserve-username=TestUser99
+ *     npx ts-node ../../scripts/cleanup-test-users.ts \
+ *     --preserve-username=TestUser99 --preserve-username=Sovelyss
  *
  *   # Limpieza completa sin preservar ninguna cuenta:
  *   cd apps/api && DATABASE_URL="${DIRECT_URL}" REDIS_URL="redis://..." \
@@ -45,19 +47,20 @@ import Redis from 'ioredis';
 
 interface Args {
   dryRun: boolean;
-  preserveUsername: string | null;
+  preserveUsernames: string[];
 }
 
 function parseArgs(): Args {
   const argv = process.argv.slice(2);
   const dryRun = argv.includes('--dry-run');
-  let preserveUsername: string | null = null;
+  const preserveUsernames: string[] = [];
   for (const arg of argv) {
     if (arg.startsWith('--preserve-username=')) {
-      preserveUsername = arg.slice('--preserve-username='.length).trim() || null;
+      const val = arg.slice('--preserve-username='.length).trim();
+      if (val) preserveUsernames.push(val);
     }
   }
-  return { dryRun, preserveUsername };
+  return { dryRun, preserveUsernames };
 }
 
 // ─── Conteo de entidades ──────────────────────────────────────────────────────
@@ -224,31 +227,32 @@ async function handleRedis(dryRun: boolean): Promise<void> {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  const { dryRun, preserveUsername } = parseArgs();
+  const { dryRun, preserveUsernames } = parseArgs();
 
   if (dryRun) console.log('══════════ DRY-RUN: no se modificará nada ══════════\n');
 
   const prisma = new PrismaClient();
 
   try {
-    // 1. Resolver cuenta preservada
-    let preservedUserId: string | null = null;
-    if (preserveUsername) {
+    // 1. Resolver cuentas preservadas
+    const preservedUserIds: string[] = [];
+    for (const username of preserveUsernames) {
       const user = await prisma.user.findUnique({
-        where: { username: preserveUsername },
+        where: { username },
         select: { id: true, email: true },
       });
       if (!user) {
-        console.warn(`⚠  Usuario "${preserveUsername}" no encontrado — se borrarán TODOS los usuarios.\n`);
+        console.warn(`⚠  Usuario "${username}" no encontrado — se omitirá de la lista de preservados.\n`);
       } else {
-        preservedUserId = user.id;
-        console.log(`✓ Cuenta preservada: "${preserveUsername}" (${user.email})\n`);
+        preservedUserIds.push(user.id);
+        console.log(`✓ Cuenta preservada: "${username}" (${user.email})`);
       }
     }
+    if (preservedUserIds.length > 0) console.log('');
 
     // 2. Usuarios a borrar
     const usersToDelete = await prisma.user.findMany({
-      where: preservedUserId ? { id: { not: preservedUserId } } : {},
+      where: preservedUserIds.length > 0 ? { id: { notIn: preservedUserIds } } : {},
       select: { id: true, username: true, email: true },
       orderBy: { createdAt: 'asc' },
     });
@@ -331,8 +335,8 @@ async function main(): Promise<void> {
     }
 
     console.log('\n✓ Limpieza completada. BD lista para Producción pública.');
-    if (preservedUserId) {
-      console.log(`  Cuenta de revisión "${preserveUsername}" conservada y activa.`);
+    if (preservedUserIds.length > 0) {
+      console.log(`  Cuentas conservadas: ${preserveUsernames.join(', ')}`);
     }
   } finally {
     await prisma.$disconnect();
