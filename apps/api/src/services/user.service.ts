@@ -682,6 +682,178 @@ export async function uploadAvatar(userId: string, fileBuffer: Buffer, mimetype:
   return mapUser(updated);
 }
 
+// Verifica que el solicitante puede acceder al perfil según su visibilidad.
+// Comportamiento espejo de getPublicProfile — no lanza si el usuario visita su propio perfil.
+async function checkProfileVisibility(
+  dbUser: { id: string; profileVisibility: string },
+  requestingUserId?: string,
+): Promise<void> {
+  if (dbUser.profileVisibility === 'PRIVATE') {
+    throw new AppError('Usuario no encontrado', 'USER_NOT_FOUND', 404);
+  }
+  if (dbUser.profileVisibility === 'FRIENDS_ONLY') {
+    if (!requestingUserId) {
+      throw new AppError('Este perfil solo es visible para amigos', 'PROFILE_FRIENDS_ONLY', 403);
+    }
+    if (requestingUserId !== dbUser.id) {
+      const friendship = await prisma.friendship.findFirst({
+        where: {
+          OR: [
+            { senderId: requestingUserId, receiverId: dbUser.id },
+            { senderId: dbUser.id, receiverId: requestingUserId },
+          ],
+          status: 'ACCEPTED',
+        },
+        select: { id: true },
+      });
+      if (!friendship) {
+        throw new AppError('Este perfil solo es visible para amigos', 'PROFILE_FRIENDS_ONLY', 403);
+      }
+    }
+  }
+}
+
+/**
+ * Devuelve la biblioteca de juegos de un usuario público con privacidad respetada.
+ * Comportamiento equivalente a getMyGames, pero resuelve username → userId y aplica
+ * los mismos checks de visibilidad que getPublicProfile.
+ * @throws {AppError} USER_NOT_FOUND (404) si el usuario no existe, está eliminado o su perfil es PRIVATE.
+ * @throws {AppError} PROFILE_FRIENDS_ONLY (403) si el perfil es FRIENDS_ONLY y no hay amistad.
+ */
+export async function getUserGames(
+  username: string,
+  requestingUserId?: string,
+  platform?: Platform,
+  page = 1,
+  limit = 20,
+): ReturnType<typeof getMyGames> {
+  const dbUser = await prisma.user.findUnique({
+    where: { username, deletedAt: null },
+    select: { id: true, profileVisibility: true },
+  });
+  if (!dbUser) throw new AppError('Usuario no encontrado', 'USER_NOT_FOUND', 404);
+
+  await checkProfileVisibility(dbUser, requestingUserId);
+
+  return getMyGames(dbUser.id, platform, page, limit);
+}
+
+interface AchievementWithCompareStatus {
+  id: string;
+  title: string;
+  description: string | null;
+  iconUrl: string | null;
+  rarity: number | null;
+  normalizedPoints: number;
+  platform: string;
+  externalId: string;
+  externalUrl: string | null;
+  isUnlocked: boolean;
+  unlockedAt: string | null;
+  // null cuando el solicitante no está autenticado o es el mismo usuario visitado
+  isUnlockedByMe: boolean | null;
+}
+
+/**
+ * Devuelve los logros de un juego concreto para un usuario público.
+ * Incluye isUnlocked (estado del usuario visitado) e isUnlockedByMe (estado del solicitante).
+ * Respeta la misma lógica de privacidad que getUserGames/getPublicProfile.
+ * @throws {AppError} USER_NOT_FOUND (404) si el usuario no existe, está eliminado o es PRIVATE.
+ * @throws {AppError} PROFILE_FRIENDS_ONLY (403) si el perfil es FRIENDS_ONLY y no hay amistad.
+ * @throws {AppError} GAME_NOT_FOUND (404) si el juego no existe en la BD.
+ */
+export async function getUserGameAchievements(
+  username: string,
+  gameId: string,
+  requestingUserId?: string,
+): Promise<{
+  game: {
+    id: string;
+    title: string;
+    iconUrl: string | null;
+    platform: string;
+    totalAchievements: number;
+    earnedAchievements: number;
+    completionPct: number;
+  };
+  achievements: AchievementWithCompareStatus[];
+  earnedCount: number;
+  totalCount: number;
+}> {
+  const dbUser = await prisma.user.findUnique({
+    where: { username, deletedAt: null },
+    select: { id: true, profileVisibility: true },
+  });
+  if (!dbUser) throw new AppError('Usuario no encontrado', 'USER_NOT_FOUND', 404);
+
+  await checkProfileVisibility(dbUser, requestingUserId);
+
+  const game = await prisma.game.findUnique({
+    where: { id: gameId },
+    select: { id: true, title: true, iconUrl: true, platform: true, totalAchievements: true },
+  });
+  if (!game) throw new AppError('Juego no encontrado', 'GAME_NOT_FOUND', 404);
+
+  const achievementRows = await prisma.achievement.findMany({
+    where: { gameId },
+    orderBy: [{ rarity: 'asc' }, { normalizedPoints: 'desc' }],
+  });
+
+  const targetEarnedMap = new Map<string, string>();
+  if (achievementRows.length > 0) {
+    const targetEarned = await prisma.userAchievement.findMany({
+      where: { userId: dbUser.id, achievementId: { in: achievementRows.map((a) => a.id) } },
+      select: { achievementId: true, unlockedAt: true },
+    });
+    targetEarned.forEach((e) => targetEarnedMap.set(e.achievementId, e.unlockedAt.toISOString()));
+  }
+
+  // Logros del solicitante — solo si hay sesión activa y no es el mismo usuario visitado
+  const myEarnedSet = new Set<string>();
+  const canCompare = !!requestingUserId && requestingUserId !== dbUser.id;
+  if (canCompare && achievementRows.length > 0) {
+    const myEarned = await prisma.userAchievement.findMany({
+      where: { userId: requestingUserId, achievementId: { in: achievementRows.map((a) => a.id) } },
+      select: { achievementId: true },
+    });
+    myEarned.forEach((e) => myEarnedSet.add(e.achievementId));
+  }
+
+  const earnedCount = targetEarnedMap.size;
+  const achievements: AchievementWithCompareStatus[] = achievementRows.map((a) => ({
+    id: a.id,
+    title: a.title,
+    description: a.description,
+    iconUrl: a.iconUrl,
+    rarity: a.rarity,
+    normalizedPoints: a.normalizedPoints,
+    platform: a.platform as string,
+    externalId: a.externalId,
+    externalUrl: a.externalUrl,
+    isUnlocked: targetEarnedMap.has(a.id),
+    unlockedAt: targetEarnedMap.get(a.id) ?? null,
+    isUnlockedByMe: canCompare ? myEarnedSet.has(a.id) : null,
+  }));
+
+  return {
+    game: {
+      id: game.id,
+      title: game.title,
+      iconUrl: game.iconUrl,
+      platform: game.platform as string,
+      totalAchievements: game.totalAchievements,
+      earnedAchievements: earnedCount,
+      completionPct:
+        game.totalAchievements > 0
+          ? Math.round((earnedCount / game.totalAchievements) * 100)
+          : 0,
+    },
+    achievements,
+    earnedCount,
+    totalCount: achievementRows.length,
+  };
+}
+
 /**
  * Sube un banner a Cloudinary y actualiza el campo banner del usuario en BD.
  * La imagen se redimensiona a 1500×500 (aspect ratio 3:1) con crop/fill.

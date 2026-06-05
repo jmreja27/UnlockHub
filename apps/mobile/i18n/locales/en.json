@@ -343,7 +343,17 @@
     "compare_title": "Comparison",
     "compare_shared_achievements": "Achievements in common",
     "compare_shared_games": "Games in common",
-    "compare_xp_label": "XP difference"
+    "compare_xp_label": "XP difference",
+    "games_section": "Game Library",
+    "no_games": "This user has no games yet."
+  },
+  "user_game": {
+    "their_achievements": "Their achievements",
+    "compare": "Compare",
+    "you": "You",
+    "them": "Them",
+    "unlocked": "unlocked",
+    "locked": "locked"
   },
   "rankings": {
     "title": "Rankings",
