@@ -7,11 +7,13 @@ import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 
 import { usePublicProfile } from '../../hooks/usePublicProfile';
+import { useUserGames } from '../../hooks/useUserGames';
 import { useSessionStore } from '../../stores/sessionStore';
 import { api, ApiRequestError } from '../../lib/api';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { AvatarPlaceholder } from '../../components/AvatarPlaceholder';
 import { FriendshipButton } from '../../components/FriendshipButton';
+import { getPlatformColor } from '../../lib/platformColors';
 
 interface CompareResult {
   targetUser: { username: string; level: number; xp: number; avatar: string | null };
@@ -33,6 +35,13 @@ function ProfileSkeleton() {
     </View>
   );
 }
+
+const PLATFORM_LABEL: Record<string, string> = {
+  STEAM: 'Steam',
+  RA: 'RetroAchievements',
+  XBOX: 'Xbox',
+  PSN: 'PlayStation',
+};
 
 export default function PublicProfileScreen() {
   const { username } = useLocalSearchParams<{ username: string }>();
@@ -59,6 +68,8 @@ export default function PublicProfileScreen() {
     enabled: !!username && isAuthenticated,
     staleTime: 1000 * 60 * 5,
   });
+
+  const { data: gamesData, isLoading: gamesLoading } = useUserGames(username ?? '');
 
   return (
     <SafeAreaView className="flex-1 bg-surface">
@@ -203,6 +214,72 @@ export default function PublicProfileScreen() {
                 </View>
               </View>
             )}
+
+            {/* Sección de juegos — F21 */}
+            <View className="mt-6 mb-8">
+              <Text className="text-gray-400 text-xs font-semibold uppercase tracking-wide mb-2">
+                {t('public_profile.games_section')}
+              </Text>
+              {gamesLoading ? (
+                <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                  {[0, 1, 2].map((i) => (
+                    <SkeletonBox key={i} height={64} style={{ marginBottom: 8 }} borderRadius={12} />
+                  ))}
+                </View>
+              ) : !gamesData || gamesData.data.length === 0 ? (
+                <Text className="text-gray-500 text-sm">{t('public_profile.no_games')}</Text>
+              ) : (
+                gamesData.data.map((game) => {
+                  const platformColor = getPlatformColor(game.platform);
+                  const pct = game.completionPct;
+                  return (
+                    <Pressable
+                      key={game.id}
+                      onPress={() => router.push(`/user-game/${profile.username}/${game.id}` as never)}
+                      className="bg-surface-card rounded-xl mb-2 px-4 py-3 active:opacity-70"
+                      accessibilityRole="button"
+                      accessibilityLabel={`${game.title}, ${game.earnedAchievements}/${game.totalAchievements} logros, ${pct}%`}
+                    >
+                      <View className="flex-row items-center">
+                        <Image
+                          source={game.iconUrl ?? require('../../assets/images/icon.png')}
+                          style={{ width: 40, height: 40, borderRadius: 6, backgroundColor: '#1e293b' }}
+                          contentFit="contain"
+                          accessibilityElementsHidden
+                        />
+                        <View className="flex-1 ml-3">
+                          <View className="flex-row items-center justify-between">
+                            <Text className="text-white font-semibold text-sm flex-1 mr-2" numberOfLines={1}>
+                              {game.title}
+                            </Text>
+                            <View
+                              className="px-2 py-0.5 rounded-full"
+                              style={{ backgroundColor: platformColor + '33' }}
+                              importantForAccessibility="no"
+                            >
+                              <Text className="text-xs font-medium" style={{ color: platformColor }}>
+                                {PLATFORM_LABEL[game.platform] ?? game.platform}
+                              </Text>
+                            </View>
+                          </View>
+                          <View className="flex-row items-center justify-between mt-0.5">
+                            <Text className="text-gray-400 text-xs">
+                              {game.earnedAchievements}/{game.totalAchievements}
+                            </Text>
+                            <Text className="text-xs font-semibold" style={{ color: game.isCompleted ? '#22c55e' : platformColor }}>
+                              {game.isCompleted ? '100%' : `${pct}%`}
+                            </Text>
+                          </View>
+                          <View className="h-1.5 bg-surface rounded-full overflow-hidden mt-1.5" accessibilityElementsHidden>
+                            <View style={{ width: `${pct}%`, backgroundColor: game.isCompleted ? '#22c55e' : platformColor, height: '100%', borderRadius: 9999 }} />
+                          </View>
+                        </View>
+                      </View>
+                    </Pressable>
+                  );
+                })
+              )}
+            </View>
           </View>
         </ScrollView>
       )}

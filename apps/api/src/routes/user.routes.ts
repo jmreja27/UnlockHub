@@ -8,6 +8,8 @@ import {
   getStreakMilestoneHandler,
   getMyGamesHandler,
   getMyGameAchievementsHandler,
+  getUserGamesHandler,
+  getUserGameAchievementsHandler,
   compareProfilesHandler,
   deleteAccountHandler,
   uploadAvatarHandler,
@@ -35,5 +37,9 @@ router.get('/:username', authenticateOptional, getPublicProfileHandler);
 
 // Ruta privada — comparar perfil autenticado con otro usuario
 router.get('/:username/compare', authenticate, compareProfilesHandler);
+
+// Rutas públicas F21 — biblioteca y logros de un usuario público
+router.get('/:username/games', authenticateOptional, getUserGamesHandler);
+router.get('/:username/games/:gameId/achievements', authenticateOptional, getUserGameAchievementsHandler);
 
 export default router;

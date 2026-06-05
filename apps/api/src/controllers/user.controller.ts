@@ -128,6 +128,39 @@ export async function deleteAccountHandler(
   }
 }
 
+// GET /api/v1/users/:username/games — biblioteca pública de juegos
+export async function getUserGamesHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { username } = req.params as { username: string };
+    const requestingUserId = (req as OptionallyAuthenticatedRequest).user?.id;
+    const { platform, page, limit } = myGamesQuerySchema.parse(req.query);
+    const result = await userService.getUserGames(username, requestingUserId, platform, page, limit);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// GET /api/v1/users/:username/games/:gameId/achievements — logros de un juego para un usuario público
+export async function getUserGameAchievementsHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { username, gameId } = req.params as { username: string; gameId: string };
+    const requestingUserId = (req as OptionallyAuthenticatedRequest).user?.id;
+    const result = await userService.getUserGameAchievements(username, gameId, requestingUserId);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
 // GET /api/v1/users/:username — perfil público de un usuario
 // authenticateOptional permite leer el userId del visitante para FRIENDS_ONLY
 export async function getPublicProfileHandler(

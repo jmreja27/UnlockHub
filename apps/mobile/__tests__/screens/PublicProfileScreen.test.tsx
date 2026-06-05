@@ -4,10 +4,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import PublicProfileScreen from '../../app/profile/[username]';
 import { usePublicProfile } from '../../hooks/usePublicProfile';
+import { useUserGames } from '../../hooks/useUserGames';
 import { useSessionStore } from '../../stores/sessionStore';
 
 jest.mock('../../hooks/usePublicProfile');
+jest.mock('../../hooks/useUserGames');
 jest.mock('../../stores/sessionStore');
+jest.mock('../../lib/platformColors', () => ({
+  getPlatformColor: jest.fn(() => '#6366f1'),
+}));
 jest.mock('../../components/FriendshipButton', () => ({
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   FriendshipButton: ({ username }: { username: string }) => {
@@ -36,6 +41,7 @@ jest.mock('expo-router', () => {
 });
 
 const mockUsePublicProfile = usePublicProfile as jest.Mock;
+const mockUseUserGames = useUserGames as jest.Mock;
 const mockUseSessionStore = useSessionStore as unknown as jest.Mock;
 
 const sampleProfile = {
@@ -74,6 +80,8 @@ describe('PublicProfileScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     setupStore();
+    // Silenciar la query de juegos en todos los tests por defecto
+    mockUseUserGames.mockReturnValue({ data: undefined, isLoading: false, isError: false });
   });
 
   it('muestra el skeleton durante la carga del perfil', () => {
@@ -138,5 +146,29 @@ describe('PublicProfileScreen', () => {
     await waitFor(() => {
       expect(jest.requireMock('expo-router').useRouter().replace).not.toHaveBeenCalled();
     });
+  });
+
+  it('F21: muestra la sección de juegos cuando los datos están disponibles', () => {
+    mockUsePublicProfile.mockReturnValue({ data: sampleProfile, isLoading: false, isError: false, refetch: jest.fn() });
+    mockUseUserGames.mockReturnValue({
+      data: {
+        data: [{ id: 'g1', title: 'Portal', platform: 'STEAM', iconUrl: null, totalAchievements: 4, earnedAchievements: 2, completionPct: 50, lastSyncedAt: null, lastActivityAt: null, hasPlatinum: false, platinumEarned: false, isCompleted: false }],
+        total: 1, page: 1, limit: 20, totalEarnedAchievements: 2, totalAvailableAchievements: 4, totalGames: 1, totalCompletedGames: 0,
+      },
+      isLoading: false,
+      isError: false,
+    });
+
+    const { getByText } = renderWithClient(<PublicProfileScreen />);
+    expect(getByText('public_profile.games_section')).toBeTruthy();
+    expect(getByText('Portal')).toBeTruthy();
+  });
+
+  it('F21: muestra "no_games" cuando el usuario no tiene juegos', () => {
+    mockUsePublicProfile.mockReturnValue({ data: sampleProfile, isLoading: false, isError: false, refetch: jest.fn() });
+    mockUseUserGames.mockReturnValue({ data: { data: [], total: 0 }, isLoading: false, isError: false });
+
+    const { getByText } = renderWithClient(<PublicProfileScreen />);
+    expect(getByText('public_profile.no_games')).toBeTruthy();
   });
 });

@@ -342,3 +342,93 @@ describe('POST /api/v1/users/me/banner', () => {
     expect(res.body.code).toBe('UPLOAD_ERROR');
   });
 });
+
+// ─── GET /:username/games (F21) ───────────────────────────────────────────────
+
+describe('GET /api/v1/users/:username/games', () => {
+  const gamesResponse = {
+    data: [{ id: 'g1', title: 'Portal', platform: 'STEAM', iconUrl: null, totalAchievements: 4, earnedAchievements: 2, completionPct: 50, lastSyncedAt: null, lastActivityAt: null, hasPlatinum: false, platinumEarned: false, isCompleted: false }],
+    total: 1, page: 1, limit: 20, totalEarnedAchievements: 2, totalAvailableAchievements: 4, totalGames: 1, totalCompletedGames: 0,
+  };
+
+  it('200 devuelve la biblioteca pública del usuario', async () => {
+    mockUserService.getUserGames.mockResolvedValue(gamesResponse as unknown as never);
+
+    const res = await request(app).get('/api/v1/users/testuser/games');
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(mockUserService.getUserGames).toHaveBeenCalledWith('testuser', undefined, undefined, 1, 20);
+  });
+
+  it('200 pasa requestingUserId cuando hay token válido', async () => {
+    mockUserService.getUserGames.mockResolvedValue({ ...gamesResponse, data: [] } as unknown as never);
+
+    await request(app)
+      .get('/api/v1/users/testuser/games')
+      .set('Authorization', `Bearer ${validToken}`);
+
+    expect(mockUserService.getUserGames).toHaveBeenCalledWith('testuser', 'user-1', undefined, 1, 20);
+  });
+
+  it('404 USER_NOT_FOUND si el perfil es PRIVATE', async () => {
+    mockUserService.getUserGames.mockRejectedValue(new AppError('no encontrado', 'USER_NOT_FOUND', 404));
+
+    const res = await request(app).get('/api/v1/users/secretuser/games');
+
+    expect(res.status).toBe(404);
+    expect(res.body.code).toBe('USER_NOT_FOUND');
+  });
+
+  it('403 PROFILE_FRIENDS_ONLY si el perfil es FRIENDS_ONLY sin sesión', async () => {
+    mockUserService.getUserGames.mockRejectedValue(new AppError('friends only', 'PROFILE_FRIENDS_ONLY', 403));
+
+    const res = await request(app).get('/api/v1/users/friendsonly/games');
+
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('PROFILE_FRIENDS_ONLY');
+  });
+});
+
+// ─── GET /:username/games/:gameId/achievements (F21) ─────────────────────────
+
+describe('GET /api/v1/users/:username/games/:gameId/achievements', () => {
+  const achievementsResponse = {
+    game: { id: 'g1', title: 'Portal', iconUrl: null, platform: 'STEAM', totalAchievements: 2, earnedAchievements: 1, completionPct: 50 },
+    achievements: [
+      { id: 'ach-1', title: 'Logro A', description: null, iconUrl: null, rarity: 0.5, normalizedPoints: 50, platform: 'STEAM', externalId: 'A', externalUrl: null, isUnlocked: true, unlockedAt: '2024-01-01T00:00:00.000Z', isUnlockedByMe: null },
+    ],
+    earnedCount: 1,
+    totalCount: 2,
+  };
+
+  it('200 devuelve achievements con isUnlocked del usuario visitado', async () => {
+    mockUserService.getUserGameAchievements.mockResolvedValue(achievementsResponse as unknown as never);
+
+    const res = await request(app).get('/api/v1/users/testuser/games/g1/achievements');
+
+    expect(res.status).toBe(200);
+    expect(res.body.game.title).toBe('Portal');
+    expect(res.body.achievements[0].isUnlocked).toBe(true);
+    expect(mockUserService.getUserGameAchievements).toHaveBeenCalledWith('testuser', 'g1', undefined);
+  });
+
+  it('200 pasa requestingUserId cuando hay token — habilita modo comparación', async () => {
+    mockUserService.getUserGameAchievements.mockResolvedValue({ ...achievementsResponse, achievements: [{ ...achievementsResponse.achievements[0], isUnlockedByMe: false }] } as unknown as never);
+
+    await request(app)
+      .get('/api/v1/users/testuser/games/g1/achievements')
+      .set('Authorization', `Bearer ${validToken}`);
+
+    expect(mockUserService.getUserGameAchievements).toHaveBeenCalledWith('testuser', 'g1', 'user-1');
+  });
+
+  it('404 GAME_NOT_FOUND si el juego no existe', async () => {
+    mockUserService.getUserGameAchievements.mockRejectedValue(new AppError('no encontrado', 'GAME_NOT_FOUND', 404));
+
+    const res = await request(app).get('/api/v1/users/testuser/games/nope/achievements');
+
+    expect(res.status).toBe(404);
+    expect(res.body.code).toBe('GAME_NOT_FOUND');
+  });
+});
