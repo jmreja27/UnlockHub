@@ -243,6 +243,9 @@ Usar siempre estos en lugar de recrear funcionalidad equivalente.
 | `ActivityCard` | `components/ActivityCard.tsx` | ✅ | Evento del feed de actividad. |
 | `NotificationBell` | `components/NotificationBell.tsx` | ✅ | Campana en header con badge de no leídas. |
 | `AchievementSearchCard` | `components/AchievementSearchCard.tsx` | ✅ | Tarjeta de logro en resultados de búsqueda — estado locked/unlocked, XP, rareza, badge de plataforma. |
+| `useDebounce` | `hooks/useDebounce.ts` | ✅ | Hook genérico de debounce `useDebounce<T>(value, delay)` — usar siempre en lugar de implementar timerRef manualmente. |
+| `queryKeys` | `lib/queryKeys.ts` | ✅ | QueryKeys centralizadas de TanStack Query — usar siempre, nunca strings literales inline en queryKey. |
+| `ADMOB_TEST_IDS` | `lib/adUnits.ts` | ✅ | IDs de test AdMob centralizados (BANNER, INTERSTITIAL, REWARDED) — usar en lugar de hardcodear strings. |
 
 ---
 
