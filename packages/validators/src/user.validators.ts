@@ -8,6 +8,7 @@ export const updateProfileSchema = z.object({
     .length(2, 'El código de país debe tener exactamente 2 caracteres')
     .toUpperCase()
     .optional(),
+  profileVisibility: z.enum(['PUBLIC', 'FRIENDS_ONLY', 'PRIVATE']).optional(),
 });
 
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;

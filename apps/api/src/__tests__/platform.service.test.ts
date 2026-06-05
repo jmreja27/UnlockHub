@@ -63,6 +63,7 @@ const baseUser = {
   isPremium: false,
   xp: 0,
   countryCode: null,
+  profileVisibility: 'PUBLIC' as const,
 };
 
 // Cuenta de plataforma base para los tests
@@ -172,6 +173,7 @@ describe('platformService.linkPlatform', () => {
       'user-1',
       500,
       expect.arrayContaining(['STEAM', 'PSN']),
+      'PUBLIC',
     );
   });
 
@@ -257,7 +259,7 @@ function setupTransactionMock() {
 }
 
 describe('platformService.unlinkPlatform', () => {
-  const baseUserWithXp = { xp: 500, countryCode: 'ES' };
+  const baseUserWithXp = { xp: 500, countryCode: 'ES', profileVisibility: 'PUBLIC' as const };
   const steamAchievements = [
     { id: 'ua-1', achievement: { normalizedPoints: 100 } },
     { id: 'ua-2', achievement: { normalizedPoints: 50 } },
@@ -380,7 +382,7 @@ describe('platformService.unlinkPlatform', () => {
 
     await platformService.unlinkPlatform('user-1', 'STEAM');
 
-    expect(mockUpsertUserScore).toHaveBeenCalledWith('user-1', 350, ['RA']);
+    expect(mockUpsertUserScore).toHaveBeenCalledWith('user-1', 350, ['RA'], 'PUBLIC');
   });
 
   it('deleteMany usa IDs del findMany previo, no relation filter (fix compatibilidad Prisma)', async () => {

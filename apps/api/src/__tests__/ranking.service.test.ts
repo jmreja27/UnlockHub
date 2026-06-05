@@ -170,6 +170,29 @@ describe('rankingService.upsertUserScore', () => {
     const countryCall = calls.find((c) => (c[0] as string).includes('ranking:global:'));
     expect(countryCall).toBeUndefined();
   });
+
+  it('F29: profileVisibility=PRIVATE no llama a zadd', async () => {
+    await rankingService.upsertUserScore('u1', 500, ['STEAM'], 'PRIVATE');
+
+    expect(mockRedis.zadd).not.toHaveBeenCalled();
+  });
+
+  it('F29: profileVisibility=FRIENDS_ONLY no llama a zadd', async () => {
+    await rankingService.upsertUserScore('u1', 500, ['STEAM'], 'FRIENDS_ONLY');
+
+    expect(mockRedis.zadd).not.toHaveBeenCalled();
+  });
+
+  it('F29: profileVisibility=PUBLIC sí llama a zadd (comportamiento normal)', async () => {
+    mockRedis.zadd.mockResolvedValue(1 as never);
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValueOnce([
+      { achievement: { normalizedPoints: 100 } },
+    ]);
+
+    await rankingService.upsertUserScore('u1', 500, ['STEAM'], 'PUBLIC');
+
+    expect(mockRedis.zadd).toHaveBeenCalledWith('ranking:global', 500, 'u1');
+  });
 });
 
 describe('rankingService.removeUserFromRankings', () => {

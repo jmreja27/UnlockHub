@@ -486,7 +486,7 @@ describe('startSyncWorker — addXp persistido cuando hay logros nuevos (BUG-9)'
     });
 
     // Setup mocks para el else branch: user.findUnique + platformAccount.findMany
-    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValueOnce({ xp: 500 });
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValueOnce({ xp: 500, profileVisibility: 'PUBLIC' });
     (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValueOnce([
       { platform: 'STEAM' }, { platform: 'RA' },
     ]);
@@ -495,6 +495,6 @@ describe('startSyncWorker — addXp persistido cuando hay logros nuevos (BUG-9)'
 
     expect(mockAddXp).not.toHaveBeenCalled();
     // upsertUserScore debe llamarse para mantener al usuario en los sorted sets de plataforma
-    expect(mockUpsertUserScore).toHaveBeenCalledWith('user-1', 500, ['STEAM', 'RA']);
+    expect(mockUpsertUserScore).toHaveBeenCalledWith('user-1', 500, ['STEAM', 'RA'], 'PUBLIC');
   });
 });
