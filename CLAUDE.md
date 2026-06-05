@@ -1106,6 +1106,7 @@ Métricas disponibles:
 | Idioma ES/EN persistente | ✅ Activo |
 | Tema (solo oscuro activo) | ⚙️ Parcial |
 | Estadísticas avanzadas premium | 🚩 Gateado |
+| Privacidad de perfil (PUBLIC/FRIENDS_ONLY/PRIVATE) | ✅ Activo |
 
 ### Infraestructura y operaciones
 
