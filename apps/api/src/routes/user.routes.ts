@@ -1,6 +1,6 @@
 import { Router } from 'express';
 
-import { authenticate } from '../middleware/authenticate';
+import { authenticate, authenticateOptional } from '../middleware/authenticate';
 import {
   getMeHandler,
   updateMeHandler,
@@ -30,7 +30,8 @@ router.get('/me/stats', authenticate, getMyStatsHandler);
 router.delete('/me', authenticate, deleteAccountHandler);
 
 // Ruta pública — perfil de cualquier usuario por username
-router.get('/:username', getPublicProfileHandler);
+// authenticateOptional: si hay token, extrae el userId para respetar FRIENDS_ONLY
+router.get('/:username', authenticateOptional, getPublicProfileHandler);
 
 // Ruta privada — comparar perfil autenticado con otro usuario
 router.get('/:username/compare', authenticate, compareProfilesHandler);

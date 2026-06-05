@@ -36,13 +36,20 @@ async function getPlatformXp(userId: string, platform: string): Promise<number> 
  * Actualiza la puntuación del usuario en todos los sorted sets de Redis.
  * - ranking:global → totalXp del usuario
  * - ranking:platform:{p} → XP acumulado SOLO en esa plataforma (calculado con getPlatformXp)
+ * Si profileVisibility no es PUBLIC, se omite el upsert (el usuario no aparece en rankings).
  * Las queries de XP por plataforma se ejecutan en paralelo para minimizar latencia.
  */
 export async function upsertUserScore(
   userId: string,
   totalXp: number,
   platforms: string[],
+  profileVisibility?: string,
 ) {
+  // Perfiles no públicos no aparecen en rankings
+  if (profileVisibility === 'FRIENDS_ONLY' || profileVisibility === 'PRIVATE') {
+    return;
+  }
+
   // Global: score = XP total del usuario
   await redis.zadd(KEYS.global, totalXp, userId);
 
@@ -153,6 +160,7 @@ export async function takeRankingSnapshot() {
  */
 export async function seedRankingsFromDb() {
   const users = await prisma.user.findMany({
+    where: { profileVisibility: 'PUBLIC' },
     select: { id: true, xp: true, platformAccounts: { select: { platform: true } } },
   });
 

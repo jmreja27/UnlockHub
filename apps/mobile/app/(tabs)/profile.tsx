@@ -8,7 +8,7 @@ import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import type { PlatformAccount } from '@unlockhub/types';
+import type { PlatformAccount, ProfileVisibility } from '@unlockhub/types';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useSessionStore } from '../../stores/sessionStore';
@@ -242,6 +242,18 @@ export default function ProfileScreen() {
       setIsRefreshing(false);
     }
   }, [refetchPlatforms]);
+
+  const privacyMutation = useMutation({
+    mutationFn: (visibility: ProfileVisibility) =>
+      api.patch<{ profileVisibility: ProfileVisibility }>('/api/v1/users/me', { profileVisibility: visibility }),
+    onSuccess: (data) => {
+      const current = useSessionStore.getState().user;
+      if (current) {
+        useSessionStore.getState().setUser({ ...current, profileVisibility: data.profileVisibility });
+      }
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+  });
 
   const deleteAccountMutation = useMutation({
     mutationFn: () => api.delete('/api/v1/users/me'),
@@ -825,6 +837,44 @@ export default function ProfileScreen() {
           <Text className="text-gray-300 text-sm font-semibold mb-3 uppercase tracking-wider">
             {t('profile.settings_section')}
           </Text>
+
+          {/* Privacidad del perfil */}
+          <View className="bg-surface-elevated rounded-xl px-4 py-3 mb-2" testID="privacy-selector">
+            <Text className="text-gray-400 text-xs mb-2">{t('profile.privacy_title')}</Text>
+            <View className="flex-row gap-2">
+              {(['PUBLIC', 'FRIENDS_ONLY', 'PRIVATE'] as const).map((option) => {
+                const labelKey = option === 'PUBLIC'
+                  ? 'profile.privacy_public'
+                  : option === 'FRIENDS_ONLY'
+                  ? 'profile.privacy_friends'
+                  : 'profile.privacy_private';
+                const currentVisibility = user.profileVisibility ?? 'PUBLIC';
+                const isSelected = currentVisibility === option;
+                return (
+                  <Pressable
+                    key={option}
+                    onPress={() => {
+                      if (!isSelected && !privacyMutation.isPending) {
+                        privacyMutation.mutate(option);
+                      }
+                    }}
+                    className={`flex-1 py-2 rounded-lg items-center ${isSelected ? 'bg-primary' : 'bg-surface-card'}`}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected, disabled: privacyMutation.isPending }}
+                    accessibilityLabel={t(labelKey)}
+                    style={{ minHeight: 36, opacity: privacyMutation.isPending && !isSelected ? 0.5 : 1 }}
+                    testID={`privacy-option-${option.toLowerCase()}`}
+                  >
+                    <Text className={`text-xs font-semibold ${isSelected ? 'text-white' : 'text-gray-400'}`}>
+                      {privacyMutation.isPending && isSelected
+                        ? t('profile.privacy_saving')
+                        : t(labelKey)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
 
           {/* Idioma */}
           <View className="bg-surface-elevated rounded-xl px-4 py-3 mb-2">

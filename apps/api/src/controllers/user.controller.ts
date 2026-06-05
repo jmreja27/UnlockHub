@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { updateProfileSchema } from '@unlockhub/validators';
 
 import * as userService from '../services/user.service';
-import type { AuthenticatedRequest } from '../middleware/authenticate';
+import type { AuthenticatedRequest, OptionallyAuthenticatedRequest } from '../middleware/authenticate';
 import { redis } from '../lib/redis';
 
 // GET /api/v1/users/me — perfil del usuario autenticado
@@ -129,6 +129,7 @@ export async function deleteAccountHandler(
 }
 
 // GET /api/v1/users/:username — perfil público de un usuario
+// authenticateOptional permite leer el userId del visitante para FRIENDS_ONLY
 export async function getPublicProfileHandler(
   req: Request,
   res: Response,
@@ -136,7 +137,8 @@ export async function getPublicProfileHandler(
 ): Promise<void> {
   try {
     const { username } = req.params as { username: string };
-    const profile = await userService.getPublicProfile(username);
+    const requestingUserId = (req as OptionallyAuthenticatedRequest).user?.id;
+    const profile = await userService.getPublicProfile(username, requestingUserId);
     res.json(profile);
   } catch (err) {
     next(err);

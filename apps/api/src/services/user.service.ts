@@ -1,4 +1,5 @@
-import type { User, PublicUser, PlatformAccount, PointReason, Platform } from '@unlockhub/types';
+import type { User, PublicUser, PlatformAccount, PointReason, Platform, ProfileVisibility } from '@unlockhub/types';
+import type { ProfileVisibility as PrismaProfileVisibility } from '@prisma/client';
 
 import { AppError } from '../middleware/errorHandler';
 import { prisma } from '../lib/prisma';
@@ -33,6 +34,7 @@ function mapPublicUser(dbUser: {
   xp: number;
   streakDays: number;
   countryCode: string | null;
+  profileVisibility: string;
   createdAt: Date;
 }): PublicUser {
   return {
@@ -45,6 +47,7 @@ function mapPublicUser(dbUser: {
     xp: dbUser.xp,
     streakDays: dbUser.streakDays,
     countryCode: dbUser.countryCode,
+    profileVisibility: dbUser.profileVisibility as ProfileVisibility,
     createdAt: dbUser.createdAt.toISOString(),
   };
 }
@@ -67,6 +70,7 @@ function mapUser(dbUser: {
   isPremium: boolean;
   premiumUntil: Date | null;
   lastSyncAt: Date | null;
+  profileVisibility: string;
   createdAt: Date;
 }): User {
   return {
@@ -83,6 +87,7 @@ function mapUser(dbUser: {
     isPremium: dbUser.isPremium,
     premiumUntil: dbUser.premiumUntil?.toISOString() ?? null,
     lastSyncAt: dbUser.lastSyncAt?.toISOString() ?? null,
+    profileVisibility: dbUser.profileVisibility as ProfileVisibility,
     createdAt: dbUser.createdAt.toISOString(),
   };
 }
@@ -153,10 +158,15 @@ export async function getProfile(
  * Obtiene el perfil público de un usuario por su username.
  * Usa mapPublicUser para excluir email y campos privados — seguro para respuestas no autenticadas.
  * Filtra usuarios con soft delete (deletedAt !== null) para cumplir GDPR.
- * @throws {AppError} USER_NOT_FOUND (404) si el username no existe o el usuario está eliminado.
+ * Respeta la configuración de privacidad del perfil:
+ * - PRIVATE → 404 (indistinguible de "no existe" por privacidad)
+ * - FRIENDS_ONLY → 403 si el solicitante no es amigo aceptado
+ * @throws {AppError} USER_NOT_FOUND (404) si el username no existe, está eliminado, o el perfil es PRIVATE.
+ * @throws {AppError} PROFILE_FRIENDS_ONLY (403) si el perfil es FRIENDS_ONLY y el solicitante no es amigo.
  */
 export async function getPublicProfile(
   username: string,
+  requestingUserId?: string,
 ): Promise<PublicUser & { platformAccounts: PlatformAccount[] }> {
   const dbUser = await prisma.user.findUnique({
     where: { username, deletedAt: null },
@@ -180,6 +190,35 @@ export async function getPublicProfile(
     throw new AppError('Usuario no encontrado', 'USER_NOT_FOUND', 404);
   }
 
+  // No devolver 404 vs 403 por perfil privado — mismo mensaje que "no existe" para no filtrar info
+  if (dbUser.profileVisibility === 'PRIVATE') {
+    throw new AppError('Usuario no encontrado', 'USER_NOT_FOUND', 404);
+  }
+
+  if (dbUser.profileVisibility === 'FRIENDS_ONLY') {
+    if (!requestingUserId || requestingUserId === dbUser.id) {
+      // Permite al propio usuario ver su perfil; visitantes no autenticados reciben 403
+      if (!requestingUserId) {
+        throw new AppError('Este perfil solo es visible para amigos', 'PROFILE_FRIENDS_ONLY', 403);
+      }
+    } else {
+      // Verificar que existe amistad ACCEPTED entre los dos usuarios
+      const friendship = await prisma.friendship.findFirst({
+        where: {
+          OR: [
+            { senderId: requestingUserId, receiverId: dbUser.id },
+            { senderId: dbUser.id, receiverId: requestingUserId },
+          ],
+          status: 'ACCEPTED',
+        },
+        select: { id: true },
+      });
+      if (!friendship) {
+        throw new AppError('Este perfil solo es visible para amigos', 'PROFILE_FRIENDS_ONLY', 403);
+      }
+    }
+  }
+
   return {
     ...mapPublicUser(dbUser),
     platformAccounts: dbUser.platformAccounts.map(mapPlatformAccount),
@@ -187,17 +226,41 @@ export async function getPublicProfile(
 }
 
 /**
- * Actualiza campos editables del perfil del usuario (bio, avatar, banner, countryCode).
- * El countryCode afecta la entrada del usuario en los sorted sets de ranking por país en Redis.
+ * Actualiza campos editables del perfil del usuario (bio, avatar, banner, countryCode, profileVisibility).
+ * Cuando profileVisibility cambia, sincroniza los sorted sets de Redis en consecuencia:
+ * - A no-PUBLIC → removeUserFromRankings (el usuario deja de aparecer en rankings)
+ * - A PUBLIC → upsertUserScore (el usuario vuelve a los rankings)
  */
 export async function updateProfile(
   userId: string,
-  data: { bio?: string; avatar?: string; banner?: string; countryCode?: string },
+  data: { bio?: string; avatar?: string; banner?: string; countryCode?: string; profileVisibility?: PrismaProfileVisibility },
 ): Promise<User> {
+  const previousUser = data.profileVisibility !== undefined
+    ? await prisma.user.findUnique({
+        where: { id: userId },
+        select: { xp: true, profileVisibility: true },
+      })
+    : null;
+
   const dbUser = await prisma.user.update({
     where: { id: userId },
     data,
   });
+
+  // Sincronizar rankings Redis si cambió la visibilidad del perfil
+  if (data.profileVisibility !== undefined && previousUser && data.profileVisibility !== previousUser.profileVisibility) {
+    const platforms = await prisma.platformAccount.findMany({
+      where: { userId },
+      select: { platform: true },
+    });
+    const platformList = platforms.map((p) => p.platform);
+
+    if (data.profileVisibility === 'PUBLIC') {
+      await upsertUserScore(userId, dbUser.xp, platformList, 'PUBLIC');
+    } else {
+      await removeUserFromRankings(userId, platformList);
+    }
+  }
 
   return mapUser(dbUser);
 }
@@ -216,7 +279,12 @@ export async function addXp(
   amount: number,
   reason: PointReason,
 ): Promise<{ newXp: number; newLevel: number; leveledUp: boolean }> {
-  const dbUser = await prisma.user.findUnique({ where: { id: userId } });
+  const dbUser = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      level: true, xp: true, profileVisibility: true,
+    },
+  });
 
   if (!dbUser) {
     throw new AppError('Usuario no encontrado', 'USER_NOT_FOUND', 404);
@@ -242,7 +310,7 @@ export async function addXp(
     }),
   ]);
 
-  // Actualizar el ranking en Redis tras el cambio de XP
+  // Actualizar el ranking en Redis tras el cambio de XP (respeta visibilidad del perfil)
   const platforms = await prisma.platformAccount.findMany({
     where: { userId },
     select: { platform: true },
@@ -252,6 +320,7 @@ export async function addXp(
     userId,
     newXp,
     platforms.map((p) => p.platform),
+    dbUser.profileVisibility,
   );
 
   return { newXp, newLevel, leveledUp };
@@ -483,9 +552,29 @@ export async function compareProfiles(
 }> {
   const targetUser = await prisma.user.findUnique({
     where: { username: targetUsername, deletedAt: null },
-    select: { id: true, username: true, level: true, xp: true, avatar: true },
+    select: { id: true, username: true, level: true, xp: true, avatar: true, profileVisibility: true },
   });
   if (!targetUser) throw new AppError('Usuario no encontrado', 'USER_NOT_FOUND', 404);
+
+  // Respetar la privacidad del perfil objetivo
+  if (targetUser.profileVisibility === 'PRIVATE') {
+    throw new AppError('Usuario no encontrado', 'USER_NOT_FOUND', 404);
+  }
+  if (targetUser.profileVisibility === 'FRIENDS_ONLY') {
+    const friendship = await prisma.friendship.findFirst({
+      where: {
+        OR: [
+          { senderId: myUserId, receiverId: targetUser.id },
+          { senderId: targetUser.id, receiverId: myUserId },
+        ],
+        status: 'ACCEPTED',
+      },
+      select: { id: true },
+    });
+    if (!friendship) {
+      throw new AppError('Este perfil solo es visible para amigos', 'PROFILE_FRIENDS_ONLY', 403);
+    }
+  }
 
   const myUser = await prisma.user.findUnique({
     where: { id: myUserId },

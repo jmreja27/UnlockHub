@@ -43,7 +43,7 @@ export async function linkPlatform(
   // Verificar que el usuario existe
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, isPremium: true, xp: true, countryCode: true },
+    select: { id: true, isPremium: true, xp: true, countryCode: true, profileVisibility: true },
   });
 
   if (!user) {
@@ -114,6 +114,7 @@ export async function linkPlatform(
     userId,
     user.xp,
     allPlatforms.map((p) => p.platform),
+    user.profileVisibility,
   );
 
   return mapPlatformAccount(dbAccount);
@@ -199,16 +200,17 @@ export async function unlinkPlatform(
   // Eliminar al usuario del ranking de esta plataforma y actualizar su puntuación global
   await removeUserFromRankings(userId, [platform]);
 
-  // Obtener plataformas restantes para recalcular el score global con el XP actualizado
-  const remainingPlatforms = await prisma.platformAccount.findMany({
-    where: { userId },
-    select: { platform: true },
-  });
+  // Obtener plataformas restantes y visibilidad para recalcular el score global
+  const [remainingPlatforms, updatedUser] = await Promise.all([
+    prisma.platformAccount.findMany({ where: { userId }, select: { platform: true } }),
+    prisma.user.findUnique({ where: { id: userId }, select: { profileVisibility: true } }),
+  ]);
 
   await upsertUserScore(
     userId,
     newXp,
     remainingPlatforms.map((p) => p.platform as Platform),
+    updatedUser?.profileVisibility,
   );
 
   return { deletedAchievements };

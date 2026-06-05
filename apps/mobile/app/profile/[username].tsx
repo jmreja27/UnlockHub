@@ -8,7 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { usePublicProfile } from '../../hooks/usePublicProfile';
 import { useSessionStore } from '../../stores/sessionStore';
-import { api } from '../../lib/api';
+import { api, ApiRequestError } from '../../lib/api';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { AvatarPlaceholder } from '../../components/AvatarPlaceholder';
 import { FriendshipButton } from '../../components/FriendshipButton';
@@ -39,7 +39,8 @@ export default function PublicProfileScreen() {
   const router = useRouter();
   const { t } = useTranslation();
 
-  const { data: profile, isLoading, isError, refetch } = usePublicProfile(username ?? '');
+  const { data: profile, isLoading, isError, error, refetch } = usePublicProfile(username ?? '');
+  const isFriendsOnly = isError && error instanceof ApiRequestError && error.statusCode === 403;
   const isAuthenticated = useSessionStore((s) => s.isAuthenticated);
   const currentUser = useSessionStore((s) => s.user);
 
@@ -80,10 +81,14 @@ export default function PublicProfileScreen() {
             accessibilityRole="alert"
             accessibilityLiveRegion="polite"
           >
-            {t('public_profile.error_title')}
+            {isFriendsOnly
+              ? t('public_profile.friends_only_title')
+              : t('public_profile.error_title')}
           </Text>
           <Text className="text-gray-400 mt-2 text-center">
-            {t('public_profile.error_message')}
+            {isFriendsOnly
+              ? t('public_profile.friends_only_message')
+              : t('public_profile.error_message')}
           </Text>
         </View>
       ) : (

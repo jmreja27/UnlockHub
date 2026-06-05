@@ -213,7 +213,8 @@ describe('GET /api/v1/users/:username', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.username).toBe('testuser');
-    expect(mockUserService.getPublicProfile).toHaveBeenCalledWith('testuser');
+    // authenticateOptional: sin token, requestingUserId es undefined
+    expect(mockUserService.getPublicProfile).toHaveBeenCalledWith('testuser', undefined);
   });
 
   it('404 USER_NOT_FOUND si el usuario no existe', async () => {
