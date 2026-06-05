@@ -10,6 +10,7 @@ import { GameCard } from '../../components/GameCard';
 import { UserCard } from '../../components/UserCard';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { AdBanner } from '../../components/AdBanner';
+import { useTheme } from '../../hooks/useTheme';
 
 type FilterOption = { key: SearchFilter; labelKey: string };
 
@@ -27,6 +28,7 @@ type ListItem =
 
 export default function SearchScreen() {
   const { t } = useTranslation();
+  const colors = useTheme();
   const [filter, setFilter] = useState<SearchFilter>('all');
 
   const { query, setQuery, data, isFetching, enabled } = useSearch(filter);
@@ -34,20 +36,21 @@ export default function SearchScreen() {
   const items: ListItem[] = buildItems(filter, data, enabled, t);
 
   return (
-    <SafeAreaView className="flex-1 bg-surface" edges={['left', 'right']}>
+    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.background }} edges={['left', 'right']}>
       {/* Barra de búsqueda */}
       <View className="px-4 pt-1 pb-3">
-        <Text className="text-white text-2xl font-bold mb-2" accessibilityRole="header">
+        <Text className="text-2xl font-bold mb-2" style={{ color: colors.text }} accessibilityRole="header">
           {t('search.title')}
         </Text>
-        <View className="flex-row items-center bg-surface-card rounded-xl px-3 h-11">
-          <Text className="text-gray-400 mr-2 text-base" accessibilityElementsHidden>🔍</Text>
+        <View className="flex-row items-center rounded-xl px-3 h-11" style={{ backgroundColor: colors.surfaceCard }}>
+          <Text className="mr-2 text-base" style={{ color: colors.textSecondary }} accessibilityElementsHidden>🔍</Text>
           <TextInput
             value={query}
             onChangeText={setQuery}
             placeholder={t('search.placeholder')}
-            placeholderTextColor="#6b7280"
-            className="flex-1 text-white text-sm"
+            placeholderTextColor={colors.textMuted}
+            className="flex-1 text-sm"
+            style={{ color: colors.text }}
             autoCapitalize="none"
             autoCorrect={false}
             returnKeyType="search"
@@ -61,7 +64,7 @@ export default function SearchScreen() {
               accessibilityRole="button"
               accessibilityLabel={t('search.clear_label')}
             >
-              <Text className="text-gray-400 text-base">✕</Text>
+              <Text className="text-base" style={{ color: colors.textSecondary }}>✕</Text>
             </Pressable>
           )}
         </View>
@@ -77,19 +80,19 @@ export default function SearchScreen() {
             <Pressable
               key={f.key}
               onPress={() => setFilter(f.key)}
-              className={`px-4 py-1.5 rounded-full border ${
-                filter === f.key
-                  ? 'bg-primary border-primary'
-                  : 'border-surface-card bg-transparent'
-              }`}
+              className="px-4 py-1.5 rounded-full"
+              style={{
+                backgroundColor: filter === f.key ? colors.primary : 'transparent',
+                borderWidth: 1,
+                borderColor: filter === f.key ? colors.primary : colors.border,
+              }}
               accessibilityRole="radio"
               accessibilityState={{ checked: filter === f.key }}
               accessibilityLabel={t(f.labelKey)}
             >
               <Text
-                className={`text-xs font-medium ${
-                  filter === f.key ? 'text-white' : 'text-gray-400'
-                }`}
+                className="text-xs font-medium"
+                style={{ color: filter === f.key ? '#ffffff' : colors.textSecondary }}
               >
                 {t(f.labelKey)}
               </Text>
@@ -130,12 +133,12 @@ export default function SearchScreen() {
               );
             if (item.kind === 'section')
               return (
-                <Text className="text-gray-400 text-xs font-semibold uppercase tracking-wider px-4 mb-2 mt-4">
+                <Text className="text-xs font-semibold uppercase tracking-wider px-4 mb-2 mt-4" style={{ color: colors.textSecondary }}>
                   {item.title}
                 </Text>
               );
             return (
-              <Text className="text-gray-500 text-sm text-center mt-8 px-8">
+              <Text className="text-sm text-center mt-8 px-8" style={{ color: colors.textMuted }}>
                 {item.message}
               </Text>
             );

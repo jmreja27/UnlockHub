@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import type { GameSearchResult } from '@unlockhub/types';
 
 import { getPlatformColor } from '../lib/platformColors';
+import { useTheme } from '../hooks/useTheme';
 
 const PLATFORM_LABEL: Record<string, string> = {
   STEAM: 'Steam',
@@ -19,13 +20,15 @@ interface Props {
 
 export function GameCard({ game }: Props) {
   const { t } = useTranslation();
+  const colors = useTheme();
   const platformLabel = PLATFORM_LABEL[game.platform] ?? game.platform;
   const platformColor = getPlatformColor(game.platform);
 
   return (
     <Pressable
       onPress={() => router.push(`/game/${game.id}`)}
-      className="flex-row items-center px-4 py-3 bg-surface-card rounded-xl mb-2 active:opacity-70"
+      className="flex-row items-center px-4 py-3 rounded-xl mb-2 active:opacity-70"
+      style={{ backgroundColor: colors.surfaceCard }}
       accessibilityRole="button"
       accessibilityLabel={t('search.game_item_label', {
         title: game.title,
@@ -40,11 +43,11 @@ export function GameCard({ game }: Props) {
         accessibilityElementsHidden
       />
       <View className="flex-1 ml-3">
-        <Text className="text-white font-semibold text-sm" numberOfLines={1}>
+        <Text className="font-semibold text-sm" style={{ color: colors.text }} numberOfLines={1}>
           {game.title}
         </Text>
         {(game.totalAchievements > 0 || game.console) && (
-          <Text className="text-gray-400 text-xs mt-0.5">
+          <Text className="text-xs mt-0.5" style={{ color: colors.textSecondary }}>
             {game.totalAchievements > 0
               ? t('search.achievements_count', { count: game.totalAchievements })
               : null}

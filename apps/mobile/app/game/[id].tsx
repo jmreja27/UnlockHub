@@ -26,6 +26,7 @@ import { SkeletonBox } from '../../components/SkeletonBox';
 import { api } from '../../lib/api';
 import { FEATURES } from '../../lib/featureFlags';
 import { useSessionStore } from '../../stores/sessionStore';
+import { useTheme } from '../../hooks/useTheme';
 
 const PLATFORM_LABEL: Record<string, string> = {
   STEAM: 'Steam',
@@ -82,6 +83,7 @@ function AchievementRow({
   onWriteGuide: () => void;
 }) {
   const { t } = useTranslation();
+  const colors = useTheme();
   const queryClient = useQueryClient();
   const [guidesExpanded, setGuidesExpanded] = useState(false);
 
@@ -120,8 +122,8 @@ function AchievementRow({
 
   return (
     <View
-      className="rounded-xl px-3 py-3 mb-2 bg-surface-card"
-      style={isEarned ? { borderWidth: 1, borderColor: 'rgba(129,140,248,0.45)' } : undefined}
+      className="rounded-xl px-3 py-3 mb-2"
+      style={[{ backgroundColor: colors.surfaceCard }, isEarned ? { borderWidth: 1, borderColor: 'rgba(129,140,248,0.45)' } : undefined]}
     >
       {/* Top row: icon + info + action buttons */}
       <View className="flex-row items-center">
@@ -133,13 +135,14 @@ function AchievementRow({
         />
         <View className="flex-1 ml-3">
           <Text
-            className={`font-semibold text-sm ${isEarned ? 'text-white' : 'text-gray-400'}`}
+            className="font-semibold text-sm"
+            style={{ color: isEarned ? colors.text : colors.textSecondary }}
             numberOfLines={1}
           >
             {achievement.title}
           </Text>
           {achievement.description ? (
-            <Text className="text-gray-500 text-xs mt-0.5" numberOfLines={2}>
+            <Text className="text-xs mt-0.5" style={{ color: colors.textMuted }} numberOfLines={2}>
               {achievement.description}
             </Text>
           ) : null}
@@ -148,7 +151,7 @@ function AchievementRow({
               {achievement.normalizedPoints} XP
             </Text>
             {achievement.rarity != null && (
-              <Text className="text-gray-500 text-xs">
+              <Text className="text-xs" style={{ color: colors.textMuted }}>
                 {t('game.rarity', { pct: achievement.rarity.toFixed(1) })}
               </Text>
             )}
@@ -261,6 +264,7 @@ function AchievementRow({
 export default function GameDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t } = useTranslation();
+  const colors = useTheme();
   const queryClient = useQueryClient();
   const { user, isAuthenticated } = useSessionStore();
   const currentUserId = user?.id ?? '';
@@ -338,7 +342,7 @@ export default function GameDetailScreen() {
   }, []);
 
   return (
-    <SafeAreaView className="flex-1 bg-surface">
+    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.background }}>
       <View className="flex-1">
         {/* Header */}
         <View className="px-4 pt-2 pb-3">
@@ -369,13 +373,14 @@ export default function GameDetailScreen() {
               />
               <View className="ml-3 flex-1">
                 <Text
-                  className="text-white text-xl font-bold"
+                  className="text-xl font-bold"
+                  style={{ color: colors.text }}
                   accessibilityRole="header"
                   numberOfLines={2}
                 >
                   {game.title}
                 </Text>
-                <Text className="text-gray-400 text-xs mt-0.5">
+                <Text className="text-xs mt-0.5" style={{ color: colors.textSecondary }}>
                   {PLATFORM_LABEL[game.platform] ?? game.platform}
                   {game.console ? ` · ${game.console}` : ''}
                   {' · '}
@@ -398,7 +403,8 @@ export default function GameDetailScreen() {
         {!isLoading && game && (
           <View className="px-4 mb-2">
             <View
-              className="flex-row bg-surface-2 rounded-xl p-1 mb-2"
+              className="flex-row rounded-xl p-1 mb-2"
+              style={{ backgroundColor: colors.surface }}
               accessibilityRole="tablist"
               accessibilityLabel={t('game.filter_label')}
             >
@@ -406,13 +412,15 @@ export default function GameDetailScreen() {
                 <Pressable
                   key={key}
                   onPress={() => setFilter(key)}
-                  className={`flex-1 py-2 rounded-lg items-center ${filter === key ? 'bg-primary' : ''}`}
+                  className="flex-1 py-2 rounded-lg items-center"
+                  style={{ backgroundColor: filter === key ? colors.primary : 'transparent' }}
                   accessibilityRole="tab"
                   accessibilityState={{ selected: filter === key }}
                   accessibilityLabel={label}
                 >
                   <Text
-                    className={`text-xs font-semibold ${filter === key ? 'text-white' : 'text-gray-400'}`}
+                    className="text-xs font-semibold"
+                    style={{ color: filter === key ? '#ffffff' : colors.textSecondary }}
                   >
                     {label}
                   </Text>
@@ -449,7 +457,7 @@ export default function GameDetailScreen() {
             }}
           />
         ) : game && filteredAchievements.length === 0 ? (
-          <Text className="text-gray-500 text-sm text-center mt-12 px-8">
+          <Text className="text-sm text-center mt-12 px-8" style={{ color: colors.textMuted }}>
             {filter === 'all'
               ? t('game.no_achievements')
               : filter === 'earned' && !isAuthenticated
@@ -472,19 +480,19 @@ export default function GameDetailScreen() {
           style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}
           accessibilityViewIsModal
         >
-          <SafeAreaView edges={['bottom']} className="bg-surface rounded-t-2xl">
+          <SafeAreaView edges={['bottom']} className="rounded-t-2xl" style={{ backgroundColor: colors.background }}>
             <View className="px-4 pt-2 pb-2">
-              <Text className="text-white font-bold text-base mb-0.5">
+              <Text className="font-bold text-base mb-0.5" style={{ color: colors.text }}>
                 {t('game.challenge_select_friend')}
               </Text>
-              <Text className="text-gray-500 text-xs mb-3">
+              <Text className="text-xs mb-3" style={{ color: colors.textMuted }}>
                 {t('game.challenge_friend')}
               </Text>
             </View>
 
             {acceptedFriends.length === 0 ? (
               <View className="px-4 pb-6">
-                <Text className="text-gray-400 text-sm">{t('game.no_friends')}</Text>
+                <Text className="text-sm" style={{ color: colors.textSecondary }}>{t('game.no_friends')}</Text>
               </View>
             ) : (
               <ScrollView
@@ -508,7 +516,8 @@ export default function GameDetailScreen() {
                           });
                         }
                       }}
-                      className="flex-row items-center py-3 border-b border-gray-800"
+                      className="flex-row items-center py-3"
+                      style={{ borderBottomWidth: 1, borderBottomColor: colors.border }}
                       accessibilityRole="button"
                       accessibilityLabel={`${t('game.challenge_friend')} ${friend?.username ?? friendId}`}
                     >
@@ -518,7 +527,7 @@ export default function GameDetailScreen() {
                         contentFit="cover"
                         accessibilityElementsHidden
                       />
-                      <Text className="text-white ml-3 text-sm font-medium flex-1">
+                      <Text className="ml-3 text-sm font-medium flex-1" style={{ color: colors.text }}>
                         {friend?.username ?? friendId}
                       </Text>
                       {challengeMutation.isPending && (
@@ -532,11 +541,12 @@ export default function GameDetailScreen() {
 
             <Pressable
               onPress={() => setChallengeAchievementId(null)}
-              className="mx-4 mt-3 mb-2 py-3 items-center rounded-xl border border-gray-700"
+              className="mx-4 mt-3 mb-2 py-3 items-center rounded-xl"
+              style={{ borderWidth: 1, borderColor: colors.border }}
               accessibilityRole="button"
               accessibilityLabel={t('common.cancel')}
             >
-              <Text className="text-gray-400 text-sm">{t('common.cancel')}</Text>
+              <Text className="text-sm" style={{ color: colors.textSecondary }}>{t('common.cancel')}</Text>
             </Pressable>
           </SafeAreaView>
         </View>
@@ -557,25 +567,25 @@ export default function GameDetailScreen() {
             style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' }}
             accessibilityViewIsModal
           />
-          <SafeAreaView edges={['bottom']} className="bg-surface rounded-t-2xl">
+          <SafeAreaView edges={['bottom']} className="rounded-t-2xl" style={{ backgroundColor: colors.background }}>
             <View className="px-4 pt-4 pb-4">
-              <Text className="text-white font-bold text-base mb-3">
+              <Text className="font-bold text-base mb-3" style={{ color: colors.text }}>
                 {t('game.guides_write')}
               </Text>
               <TextInput
                 value={guideContent}
                 onChangeText={setGuideContent}
                 placeholder={t('game.guide_placeholder')}
-                placeholderTextColor="#64748b"
+                placeholderTextColor={colors.textMuted}
                 multiline
                 textAlignVertical="top"
-                className="bg-surface-2 rounded-xl px-3 py-2.5 text-white text-sm"
-                style={{ minHeight: 120 }}
+                className="rounded-xl px-3 py-2.5 text-sm"
+                style={{ minHeight: 120, backgroundColor: colors.surface, color: colors.text }}
                 accessibilityLabel={t('game.guide_placeholder')}
                 accessibilityHint={t('game.guide_min_length')}
                 maxLength={2000}
               />
-              <Text className="text-gray-600 text-xs mt-1 text-right">
+              <Text className="text-xs mt-1 text-right" style={{ color: colors.textMuted }}>
                 {guideContent.length}/2000
               </Text>
 

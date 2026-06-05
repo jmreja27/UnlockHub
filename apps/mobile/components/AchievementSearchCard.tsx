@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import type { AchievementSearchResult } from '@unlockhub/types';
 
 import { getPlatformColor } from '../lib/platformColors';
+import { useTheme } from '../hooks/useTheme';
 
 const PLATFORM_LABEL: Record<string, string> = {
   STEAM: 'Steam',
@@ -18,6 +19,7 @@ interface Props {
 
 export function AchievementSearchCard({ achievement }: Props) {
   const { t } = useTranslation();
+  const colors = useTheme();
   const platformLabel = PLATFORM_LABEL[achievement.platform] ?? achievement.platform;
   const platformColor = getPlatformColor(achievement.platform);
 
@@ -31,11 +33,11 @@ export function AchievementSearchCard({ achievement }: Props) {
   return (
     <Pressable
       onPress={() => router.push(`/game/${achievement.game.id}`)}
-      className="flex-row items-center bg-surface-card rounded-xl px-3 py-3 mb-2"
+      className="flex-row items-center rounded-xl px-3 py-3 mb-2"
+      style={{ backgroundColor: colors.surfaceCard, minHeight: 44 }}
       accessibilityRole="button"
       accessibilityLabel={accessLabel}
       accessibilityHint={t('search.achievement_in_game', { game: achievement.game.title })}
-      style={{ minHeight: 44 }}
     >
       {/* Icono del logro */}
       <View style={{ position: 'relative' }}>
@@ -52,12 +54,7 @@ export function AchievementSearchCard({ achievement }: Props) {
         />
         {!achievement.isUnlocked && (
           <Text
-            style={{
-              position: 'absolute',
-              bottom: 0,
-              right: 0,
-              fontSize: 10,
-            }}
+            style={{ position: 'absolute', bottom: 0, right: 0, fontSize: 10 }}
             accessibilityElementsHidden
           >
             🔒
@@ -65,12 +62,7 @@ export function AchievementSearchCard({ achievement }: Props) {
         )}
         {achievement.isUnlocked && (
           <Text
-            style={{
-              position: 'absolute',
-              bottom: 0,
-              right: 0,
-              fontSize: 10,
-            }}
+            style={{ position: 'absolute', bottom: 0, right: 0, fontSize: 10 }}
             accessibilityElementsHidden
           >
             ✓
@@ -81,12 +73,13 @@ export function AchievementSearchCard({ achievement }: Props) {
       {/* Información del logro */}
       <View className="flex-1 ml-3">
         <Text
-          className={`text-sm font-semibold ${achievement.isUnlocked ? 'text-white' : 'text-gray-400'}`}
+          className="text-sm font-semibold"
+          style={{ color: achievement.isUnlocked ? colors.text : colors.textSecondary }}
           numberOfLines={1}
         >
           {achievement.title}
         </Text>
-        <Text className="text-gray-500 text-xs mt-0.5" numberOfLines={1}>
+        <Text className="text-xs mt-0.5" style={{ color: colors.textMuted }} numberOfLines={1}>
           {t('search.achievement_in_game', { game: achievement.game.title })}
         </Text>
         <View className="flex-row items-center gap-2 mt-1">
@@ -94,7 +87,7 @@ export function AchievementSearchCard({ achievement }: Props) {
             {t('search.achievement_xp', { xp: achievement.normalizedPoints })}
           </Text>
           {achievement.rarity != null && (
-            <Text className="text-gray-500 text-xs">
+            <Text className="text-xs" style={{ color: colors.textMuted }}>
               {t('search.achievement_rarity', { pct: achievement.rarity.toFixed(1) })}
             </Text>
           )}
@@ -106,7 +99,7 @@ export function AchievementSearchCard({ achievement }: Props) {
         className="px-2 py-0.5 rounded-full ml-2 self-start mt-1"
         style={{ backgroundColor: platformColor }}
       >
-        <Text className="text-white text-xs font-medium">{platformLabel}</Text>
+        <Text className="text-xs font-medium" style={{ color: '#ffffff' }}>{platformLabel}</Text>
       </View>
     </Pressable>
   );

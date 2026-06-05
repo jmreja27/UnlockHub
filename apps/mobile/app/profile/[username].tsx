@@ -14,6 +14,7 @@ import { SkeletonBox } from '../../components/SkeletonBox';
 import { AvatarPlaceholder } from '../../components/AvatarPlaceholder';
 import { FriendshipButton } from '../../components/FriendshipButton';
 import { getPlatformColor } from '../../lib/platformColors';
+import { useTheme } from '../../hooks/useTheme';
 
 interface CompareResult {
   targetUser: { username: string; level: number; xp: number; avatar: string | null };
@@ -47,6 +48,7 @@ export default function PublicProfileScreen() {
   const { username } = useLocalSearchParams<{ username: string }>();
   const router = useRouter();
   const { t } = useTranslation();
+  const colors = useTheme();
 
   const { data: profile, isLoading, isError, error, refetch } = usePublicProfile(username ?? '');
   const isFriendsOnly = isError && error instanceof ApiRequestError && error.statusCode === 403;
@@ -72,7 +74,7 @@ export default function PublicProfileScreen() {
   const { data: gamesData, isLoading: gamesLoading } = useUserGames(username ?? '');
 
   return (
-    <SafeAreaView className="flex-1 bg-surface">
+    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.background }}>
       <Pressable
         onPress={() => router.back()}
         className="px-4 pt-2 pb-1"
@@ -88,7 +90,8 @@ export default function PublicProfileScreen() {
       ) : isError || !profile ? (
         <View className="flex-1 items-center justify-center px-6">
           <Text
-            className="text-white text-lg font-semibold text-center"
+            className="text-lg font-semibold text-center"
+            style={{ color: colors.text }}
             accessibilityRole="alert"
             accessibilityLiveRegion="polite"
           >
@@ -96,7 +99,7 @@ export default function PublicProfileScreen() {
               ? t('public_profile.friends_only_title')
               : t('public_profile.error_title')}
           </Text>
-          <Text className="text-gray-400 mt-2 text-center">
+          <Text className="mt-2 text-center" style={{ color: colors.textSecondary }}>
             {isFriendsOnly
               ? t('public_profile.friends_only_message')
               : t('public_profile.error_message')}
@@ -136,29 +139,30 @@ export default function PublicProfileScreen() {
               />
             )}
             <Text
-              className="text-white text-xl font-bold mt-2"
+              className="text-xl font-bold mt-2"
+              style={{ color: colors.text }}
               accessibilityRole="header"
             >
               {profile.username}
             </Text>
-            <Text className="text-gray-400 text-sm">
+            <Text className="text-sm" style={{ color: colors.textSecondary }}>
               {t('public_profile.level', { level: profile.level })} · {profile.xp} XP
             </Text>
             {profile.bio ? (
-              <Text className="text-gray-300 text-sm mt-3">{profile.bio}</Text>
+              <Text className="text-sm mt-3" style={{ color: colors.textSecondary }}>{profile.bio}</Text>
             ) : null}
 
             <FriendshipButton username={profile.username} />
 
             {profile.platformAccounts.length > 0 && (
               <View className="mt-6">
-                <Text className="text-gray-400 text-xs font-semibold uppercase tracking-wide mb-2">
+                <Text className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: colors.textSecondary }}>
                   {t('public_profile.platforms')}
                 </Text>
                 {profile.platformAccounts.map((pa) => (
-                  <View key={pa.id} className="flex-row items-center py-2 border-b border-gray-800">
-                    <Text className="text-white text-sm flex-1">{pa.platform}</Text>
-                    <Text className="text-gray-400 text-sm">{pa.username}</Text>
+                  <View key={pa.id} className="flex-row items-center py-2" style={{ borderBottomWidth: 1, borderBottomColor: colors.border }}>
+                    <Text className="text-sm flex-1" style={{ color: colors.text }}>{pa.platform}</Text>
+                    <Text className="text-sm" style={{ color: colors.textSecondary }}>{pa.username}</Text>
                   </View>
                 ))}
               </View>
@@ -167,11 +171,12 @@ export default function PublicProfileScreen() {
             {/* Comparación de perfiles — solo para usuarios autenticados */}
             {compareData && (
               <View
-                className="mt-6 bg-surface-elevated rounded-2xl px-4 py-4"
+                className="mt-6 rounded-2xl px-4 py-4"
+                style={{ backgroundColor: colors.surface }}
                 accessible
                 accessibilityLabel={t('public_profile.compare_title')}
               >
-                <Text className="text-gray-300 text-xs font-semibold uppercase tracking-wider mb-3">
+                <Text className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: colors.textSecondary }}>
                   {t('public_profile.compare_title')}
                 </Text>
                 <View className="flex-row justify-around">
@@ -179,35 +184,30 @@ export default function PublicProfileScreen() {
                     <Text className="text-primary-light text-lg font-bold">
                       {compareData.sharedAchievementCount}
                     </Text>
-                    <Text className="text-gray-400 text-xs text-center mt-0.5">
+                    <Text className="text-xs text-center mt-0.5" style={{ color: colors.textSecondary }}>
                       {t('public_profile.compare_shared_achievements')}
                     </Text>
                   </View>
-                  <View className="w-px bg-surface-card" />
+                  <View className="w-px" style={{ backgroundColor: colors.border }} />
                   <View className="items-center">
                     <Text className="text-primary-light text-lg font-bold">
                       {compareData.sharedGameCount}
                     </Text>
-                    <Text className="text-gray-400 text-xs text-center mt-0.5">
+                    <Text className="text-xs text-center mt-0.5" style={{ color: colors.textSecondary }}>
                       {t('public_profile.compare_shared_games')}
                     </Text>
                   </View>
-                  <View className="w-px bg-surface-card" />
+                  <View className="w-px" style={{ backgroundColor: colors.border }} />
                   <View className="items-center">
                     <Text
-                      className={`text-lg font-bold ${
-                        compareData.xpDiff > 0
-                          ? 'text-green-400'
-                          : compareData.xpDiff < 0
-                          ? 'text-red-400'
-                          : 'text-gray-400'
-                      }`}
+                      className="text-lg font-bold"
+                      style={{ color: compareData.xpDiff > 0 ? '#4ade80' : compareData.xpDiff < 0 ? '#f87171' : colors.textSecondary }}
                     >
                       {compareData.xpDiff > 0
                         ? `+${compareData.xpDiff.toLocaleString()}`
                         : compareData.xpDiff.toLocaleString()}
                     </Text>
-                    <Text className="text-gray-400 text-xs text-center mt-0.5">
+                    <Text className="text-xs text-center mt-0.5" style={{ color: colors.textSecondary }}>
                       {t('public_profile.compare_xp_label')}
                     </Text>
                   </View>
@@ -217,7 +217,7 @@ export default function PublicProfileScreen() {
 
             {/* Sección de juegos — F21 */}
             <View className="mt-6 mb-8">
-              <Text className="text-gray-400 text-xs font-semibold uppercase tracking-wide mb-2">
+              <Text className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: colors.textSecondary }}>
                 {t('public_profile.games_section')}
               </Text>
               {gamesLoading ? (
@@ -227,7 +227,7 @@ export default function PublicProfileScreen() {
                   ))}
                 </View>
               ) : !gamesData || gamesData.data.length === 0 ? (
-                <Text className="text-gray-500 text-sm">{t('public_profile.no_games')}</Text>
+                <Text className="text-sm" style={{ color: colors.textMuted }}>{t('public_profile.no_games')}</Text>
               ) : (
                 gamesData.data.map((game) => {
                   const platformColor = getPlatformColor(game.platform);
@@ -236,20 +236,21 @@ export default function PublicProfileScreen() {
                     <Pressable
                       key={game.id}
                       onPress={() => router.push(`/user-game/${profile.username}/${game.id}` as never)}
-                      className="bg-surface-card rounded-xl mb-2 px-4 py-3 active:opacity-70"
+                      className="rounded-xl mb-2 px-4 py-3 active:opacity-70"
+                      style={{ backgroundColor: colors.surfaceCard }}
                       accessibilityRole="button"
                       accessibilityLabel={`${game.title}, ${game.earnedAchievements}/${game.totalAchievements} logros, ${pct}%`}
                     >
                       <View className="flex-row items-center">
                         <Image
                           source={game.iconUrl ?? require('../../assets/images/icon.png')}
-                          style={{ width: 40, height: 40, borderRadius: 6, backgroundColor: '#1e293b' }}
+                          style={{ width: 40, height: 40, borderRadius: 6, backgroundColor: colors.surface }}
                           contentFit="contain"
                           accessibilityElementsHidden
                         />
                         <View className="flex-1 ml-3">
                           <View className="flex-row items-center justify-between">
-                            <Text className="text-white font-semibold text-sm flex-1 mr-2" numberOfLines={1}>
+                            <Text className="font-semibold text-sm flex-1 mr-2" style={{ color: colors.text }} numberOfLines={1}>
                               {game.title}
                             </Text>
                             <View
@@ -263,14 +264,14 @@ export default function PublicProfileScreen() {
                             </View>
                           </View>
                           <View className="flex-row items-center justify-between mt-0.5">
-                            <Text className="text-gray-400 text-xs">
+                            <Text className="text-xs" style={{ color: colors.textSecondary }}>
                               {game.earnedAchievements}/{game.totalAchievements}
                             </Text>
                             <Text className="text-xs font-semibold" style={{ color: game.isCompleted ? '#22c55e' : platformColor }}>
                               {game.isCompleted ? '100%' : `${pct}%`}
                             </Text>
                           </View>
-                          <View className="h-1.5 bg-surface rounded-full overflow-hidden mt-1.5" accessibilityElementsHidden>
+                          <View className="h-1.5 rounded-full overflow-hidden mt-1.5" style={{ backgroundColor: colors.background }} accessibilityElementsHidden>
                             <View style={{ width: `${pct}%`, backgroundColor: game.isCompleted ? '#22c55e' : platformColor, height: '100%', borderRadius: 9999 }} />
                           </View>
                         </View>
