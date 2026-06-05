@@ -11,6 +11,7 @@ import type { PaginatedResponse } from '@unlockhub/types';
 import { api } from '../lib/api';
 import { EmptyState } from '../components/EmptyState';
 import { SkeletonBox } from '../components/SkeletonBox';
+import { useTheme } from '../hooks/useTheme';
 
 interface AppNotification {
   id: string;
@@ -36,6 +37,7 @@ function NotificationItem({
   item: AppNotification;
   onRead: (id: string) => void;
 }) {
+  const colors = useTheme();
   const icon = TYPE_ICONS[item.type] ?? '🔔';
   const timeAgo = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }).format(
     Math.round((new Date(item.createdAt).getTime() - Date.now()) / 1000 / 60),
@@ -50,10 +52,8 @@ function NotificationItem({
       accessibilityRole="button"
       accessibilityLabel={`${item.title}. ${item.body}`}
       accessibilityState={{ checked: item.read }}
-      style={{ minHeight: 64 }}
-      className={`flex-row items-start px-4 py-3 border-b border-surface-elevated ${
-        item.read ? 'opacity-60' : ''
-      }`}
+      style={{ minHeight: 64, borderBottomWidth: 1, borderBottomColor: colors.border, opacity: item.read ? 0.6 : 1 }}
+      className="flex-row items-start px-4 py-3"
     >
       <Text style={{ fontSize: 24, marginRight: 12, marginTop: 2 }} accessibilityElementsHidden>
         {icon}
@@ -61,7 +61,8 @@ function NotificationItem({
       <View className="flex-1">
         <View className="flex-row items-center justify-between mb-0.5">
           <Text
-            className={`text-sm font-semibold ${item.read ? 'text-gray-400' : 'text-white'}`}
+            className="text-sm font-semibold"
+            style={{ color: item.read ? colors.textSecondary : colors.text }}
             numberOfLines={1}
           >
             {item.title}
@@ -73,10 +74,10 @@ function NotificationItem({
             />
           )}
         </View>
-        <Text className="text-gray-400 text-xs" numberOfLines={2}>
+        <Text className="text-xs" style={{ color: colors.textSecondary }} numberOfLines={2}>
           {item.body}
         </Text>
-        <Text className="text-gray-600 text-xs mt-1">{timeAgo}</Text>
+        <Text className="text-xs mt-1" style={{ color: colors.textMuted }}>{timeAgo}</Text>
       </View>
     </Pressable>
   );
@@ -84,6 +85,7 @@ function NotificationItem({
 
 export default function NotificationsScreen() {
   const { t } = useTranslation();
+  const colors = useTheme();
   const queryClient = useQueryClient();
 
   const {
@@ -132,7 +134,7 @@ export default function NotificationsScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView className="flex-1 bg-surface">
+      <SafeAreaView className="flex-1" style={{ backgroundColor: colors.background }}>
         <View className="px-4 pt-4">
           {[1, 2, 3, 4].map((i) => (
             <SkeletonBox key={i} width="100%" height={64} borderRadius={8} style={{ marginBottom: 8 }} />
@@ -143,7 +145,7 @@ export default function NotificationsScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-surface">
+    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.background }}>
       {/* Header */}
       <View className="flex-row items-center justify-between px-4 pt-4 pb-2">
         <Pressable
@@ -155,7 +157,8 @@ export default function NotificationsScreen() {
           <Text className="text-primary-light text-base">{t('common.back')}</Text>
         </Pressable>
         <Text
-          className="text-white text-lg font-bold"
+          className="text-lg font-bold"
+          style={{ color: colors.text }}
           accessibilityRole="header"
         >
           {t('notifications.title')}

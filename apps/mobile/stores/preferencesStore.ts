@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export type ThemePreference = 'dark' | 'system';
+export type ThemePreference = 'dark' | 'light';
 export type LibrarySortOrder = 'last_played' | 'alpha_asc' | 'alpha_desc' | 'pct_desc' | 'pct_asc';
 
 interface PreferencesState {
@@ -54,7 +54,7 @@ export const usePreferencesStore = create<PreferencesState>((set) => ({
       const raw = await AsyncStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as Partial<PreferencesState>;
-        if (parsed.theme === 'dark' || parsed.theme === 'system') {
+        if (parsed.theme === 'dark' || parsed.theme === 'light') {
           set({ theme: parsed.theme });
         }
         if (parsed.onboardingCompleted === true) {

@@ -21,6 +21,7 @@ import { SkeletonBox } from '../../components/SkeletonBox';
 import { EmptyState } from '../../components/EmptyState';
 import { AdBanner } from '../../components/AdBanner';
 import type { LibraryGame } from '../../hooks/useMyGames';
+import { useTheme } from '../../hooks/useTheme';
 
 const PLATFORM_LABELS: Record<string, string> = {
   STEAM: 'Steam',
@@ -38,24 +39,26 @@ function SyncProgressBanner({ platform, processed, total, percentComplete }: {
   percentComplete: number;
 }) {
   const { t } = useTranslation();
+  const colors = useTheme();
   const label = PLATFORM_LABELS[platform] ?? platform;
   const progress = Math.min(Math.max(percentComplete, 0), 100);
   return (
     <View
-      className="mx-4 mb-2 px-4 py-3 bg-surface-2 rounded-xl"
+      className="mx-4 mb-2 px-4 py-3 rounded-xl"
+      style={{ backgroundColor: colors.surface }}
       accessible
       accessibilityLiveRegion="polite"
       accessibilityLabel={t('library.syncing_a11y', { platform: label, processed, total })}
     >
       <View className="flex-row items-center justify-between mb-1.5">
-        <Text className="text-white text-xs font-semibold">
+        <Text className="text-xs font-semibold" style={{ color: colors.text }}>
           {t('library.syncing', { platform: label })}
         </Text>
-        <Text className="text-gray-400 text-xs">
+        <Text className="text-xs" style={{ color: colors.textSecondary }}>
           {total > 0 ? `${processed}/${total}` : '…'}
         </Text>
       </View>
-      <View className="h-1.5 bg-surface rounded-full overflow-hidden">
+      <View className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: colors.surfaceCard }}>
         <View
           className="h-full bg-primary-light rounded-full"
           style={{ width: `${progress}%` }}
@@ -150,6 +153,7 @@ function LibrarySkeleton() {
 
 export default function LibraryScreen() {
   const { t } = useTranslation();
+  const colors = useTheme();
   const { user } = useSessionStore();
   const queryClient = useQueryClient();
   const { anyPlatformLinked } = useSyncStatus(user?.id);
@@ -315,21 +319,22 @@ export default function LibraryScreen() {
   const activeSortLabel = SORT_OPTIONS.find((o) => o.key === (librarySortOrder ?? 'last_played'))?.label ?? '';
 
   return (
-    <SafeAreaView className="flex-1 bg-surface" edges={['left', 'right']}>
+    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.background }} edges={['left', 'right']}>
       {/* Cabecera */}
       <View className="px-4 pt-1 pb-2 flex-row items-center justify-between">
         <View className="flex-1 mr-3">
-          <Text className="text-white text-2xl font-bold" accessibilityRole="header">
+          <Text className="text-2xl font-bold" style={{ color: colors.text }} accessibilityRole="header">
             {t('library.title')}
           </Text>
           {user && (
-            <Text className="text-gray-400 text-sm mt-0.5">
+            <Text className="text-sm mt-0.5" style={{ color: colors.textSecondary }}>
               {t('library.subtitle', { username: user.username })}
             </Text>
           )}
           {updatedAtLabel ? (
             <Text
-              className="text-gray-600 text-xs mt-0.5"
+              className="text-xs mt-0.5"
+              style={{ color: colors.textMuted }}
               accessibilityLabel={updatedAtLabel}
               accessible
             >
@@ -348,13 +353,13 @@ export default function LibraryScreen() {
               <Text className="text-primary-light font-bold text-base" accessibilityElementsHidden>
                 {totalEarnedAchievements}
               </Text>
-              <Text className="text-gray-500 text-xs" accessibilityElementsHidden>
+              <Text className="text-xs" style={{ color: colors.textMuted }} accessibilityElementsHidden>
                 / {totalAvailableAchievements} {t('library.achievements_short')}
               </Text>
-              <Text className="text-green-400 font-semibold text-sm mt-0.5" accessibilityElementsHidden>
-                {totalCompletedGames}<Text className="text-gray-500">/{totalGames}</Text>
+              <Text className="font-semibold text-sm mt-0.5" style={{ color: '#4ade80' }} accessibilityElementsHidden>
+                {totalCompletedGames}<Text style={{ color: colors.textMuted }}>/{totalGames}</Text>
               </Text>
-              <Text className="text-gray-500 text-xs" accessibilityElementsHidden>
+              <Text className="text-xs" style={{ color: colors.textMuted }} accessibilityElementsHidden>
                 {t('library.games_short')}
               </Text>
             </View>
@@ -371,17 +376,18 @@ export default function LibraryScreen() {
           value={search}
           onChangeText={setSearch}
           placeholder={t('library.search_placeholder')}
-          placeholderTextColor="#6b7280"
+          placeholderTextColor={colors.textMuted}
           accessibilityLabel={t('library.search_label')}
-          className="bg-surface-2 text-white px-4 py-3 rounded-xl text-sm flex-1"
+          className="px-4 py-3 rounded-xl text-sm flex-1"
+          style={{ backgroundColor: colors.surface, color: colors.text }}
           returnKeyType="search"
           clearButtonMode="while-editing"
         />
         <Pressable
           onPress={() => setSortModalVisible(true)}
           disabled={isFetchingNextPage}
-          style={{ minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center' }}
-          className="bg-surface-2 px-3 rounded-xl"
+          style={{ minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.surface }}
+          className="px-3 rounded-xl"
           accessibilityRole="button"
           accessibilityLabel={t('library.sort_button_a11y', { current: activeSortLabel })}
           accessibilityState={{ busy: isFetchingNextPage }}
@@ -409,12 +415,13 @@ export default function LibraryScreen() {
           <Pressable
             key={key}
             onPress={() => setActiveFilter(key)}
-            className={`px-4 py-2 rounded-full ${activeFilter === key ? 'bg-primary' : 'bg-surface-2'}`}
+            className="px-4 py-2 rounded-full"
+            style={{ backgroundColor: activeFilter === key ? colors.primary : colors.surface }}
             accessibilityRole="tab"
             accessibilityState={{ selected: activeFilter === key }}
             accessibilityLabel={t(label)}
           >
-            <Text className={`font-semibold text-sm ${activeFilter === key ? 'text-white' : 'text-gray-400'}`}>
+            <Text className="font-semibold text-sm" style={{ color: activeFilter === key ? '#ffffff' : colors.textSecondary }}>
               {t(label)}
             </Text>
           </Pressable>
@@ -458,7 +465,7 @@ export default function LibraryScreen() {
           accessibilityRole="alert"
         >
           <Text className="text-red-400 text-lg font-semibold mb-2">{t('library.error_title')}</Text>
-          <Text className="text-gray-400 text-sm text-center mb-6">{t('library.error_message')}</Text>
+          <Text className="text-sm text-center mb-6" style={{ color: colors.textSecondary }}>{t('library.error_message')}</Text>
           <Text
             className="text-primary-light text-base"
             onPress={() => void refetch()}
@@ -496,7 +503,7 @@ export default function LibraryScreen() {
             ListEmptyComponent={
               search.trim() ? (
                 <View className="items-center justify-center py-8" accessible accessibilityLiveRegion="polite">
-                  <Text className="text-gray-400 text-base text-center">{t('library.no_results')}</Text>
+                  <Text className="text-base text-center" style={{ color: colors.textSecondary }}>{t('library.no_results')}</Text>
                 </View>
               ) : isFetching ? (
                 // Refetch en curso (por invalidación tras desvincular, pull-to-refresh, etc.)
@@ -553,11 +560,12 @@ export default function LibraryScreen() {
           accessibilityLabel={t('common.cancel')}
         >
           <Pressable
-            className="bg-surface-card rounded-t-2xl px-4 pt-4 pb-8"
+            className="rounded-t-2xl px-4 pt-4 pb-8"
+            style={{ backgroundColor: colors.surfaceCard }}
             onPress={() => { /* evitar cierre al pulsar dentro */ }}
           >
-            <View className="w-10 h-1 bg-gray-600 rounded-full self-center mb-4" />
-            <Text className="text-white font-bold text-base mb-3">
+            <View className="w-10 h-1 rounded-full self-center mb-4" style={{ backgroundColor: colors.border }} />
+            <Text className="font-bold text-base mb-3" style={{ color: colors.text }}>
               {t('library.sort_title')}
             </Text>
             {SORT_OPTIONS.map(({ key, label }) => {
@@ -569,15 +577,16 @@ export default function LibraryScreen() {
                     setSortModalVisible(false);
                     void handleSortChange(key);
                   }}
-                  className={`flex-row items-center justify-between py-3.5 border-b border-surface-2`}
+                  className="flex-row items-center justify-between py-3.5"
+                  style={{ borderBottomWidth: 1, borderBottomColor: colors.border }}
                   accessibilityRole="radio"
                   accessibilityState={{ checked: isActive }}
                   accessibilityLabel={label}
                 >
-                  <Text className={`text-sm ${isActive ? 'text-primary-light font-semibold' : 'text-gray-300'}`}>
+                  <Text className="text-sm" style={{ color: isActive ? colors.primary : colors.textSecondary, fontWeight: isActive ? '600' : '400' }}>
                     {label}
                   </Text>
-                  {isActive && <Text className="text-primary-light text-base">✓</Text>}
+                  {isActive && <Text className="text-base" style={{ color: colors.primary }}>✓</Text>}
                 </Pressable>
               );
             })}

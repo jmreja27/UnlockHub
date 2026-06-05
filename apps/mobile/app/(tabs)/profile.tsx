@@ -14,6 +14,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '../../stores/sessionStore';
 import { useAuth } from '../../hooks/useAuth';
 import { useLanguage } from '../../hooks/useLanguage';
+import { useTheme } from '../../hooks/useTheme';
+import { usePreferencesStore, type ThemePreference } from '../../stores/preferencesStore';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { PremiumBanner } from '../../components/PremiumBanner';
 import { ActivityCard } from '../../components/ActivityCard';
@@ -90,6 +92,7 @@ function ProfileSkeleton() {
 
 export default function ProfileScreen() {
   const { t } = useTranslation();
+  const colors = useTheme();
   const { user, isAuthenticated } = useSessionStore();
   const { logout, isLoggingOut } = useAuth();
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -99,6 +102,7 @@ export default function ProfileScreen() {
 
   const { events, isError: isFeedError, refetch: refetchFeed } = useFeed();
   const { currentLanguage, changeLanguage } = useLanguage();
+  const { theme: currentTheme, setTheme } = usePreferencesStore();
 
   const { data: statsData, isLoading: statsLoading } = useQuery({
     queryKey: ['user-stats'],
@@ -309,15 +313,16 @@ export default function ProfileScreen() {
   // Estado no autenticado
   if (!isAuthenticated || !user) {
     return (
-      <SafeAreaView className="flex-1 bg-surface" edges={['left', 'right']}>
+      <SafeAreaView className="flex-1" style={{ backgroundColor: colors.background }} edges={['left', 'right']}>
         <View className="flex-1 items-center justify-center px-6">
           <Text
-            className="text-white text-2xl font-bold mb-3 text-center"
+            className="text-2xl font-bold mb-3 text-center"
+            style={{ color: colors.text }}
             accessibilityRole="header"
           >
             {t('profile.title')}
           </Text>
-          <Text className="text-gray-400 text-base text-center mb-8">
+          <Text className="text-base text-center mb-8" style={{ color: colors.textSecondary }}>
             {t('profile.unauthenticated_message')}
           </Text>
           <Pressable
@@ -328,7 +333,7 @@ export default function ProfileScreen() {
             accessibilityHint={t('profile.login_hint')}
             style={{ minHeight: 52 }}
           >
-            <Text className="text-white font-semibold text-base">{t('profile.login')}</Text>
+            <Text className="font-semibold text-base" style={{ color: '#ffffff' }}>{t('profile.login')}</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -338,14 +343,14 @@ export default function ProfileScreen() {
   // Estado de carga inicial
   if (isLoadingPlatforms && !platforms) {
     return (
-      <SafeAreaView className="flex-1 bg-surface" edges={['left', 'right']}>
+      <SafeAreaView className="flex-1" style={{ backgroundColor: colors.background }} edges={['left', 'right']}>
         <ProfileSkeleton />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-surface">
+    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.background }}>
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 32 }}
@@ -443,10 +448,10 @@ export default function ProfileScreen() {
             )}
           </Pressable>
 
-          <Text className="text-white text-2xl font-bold mb-1">{user.username}</Text>
+          <Text className="text-2xl font-bold mb-1" style={{ color: colors.text }}>{user.username}</Text>
 
           {user.bio && (
-            <Text className="text-gray-400 text-sm text-center mt-1 mb-2">{user.bio}</Text>
+            <Text className="text-sm text-center mt-1 mb-2" style={{ color: colors.textSecondary }}>{user.bio}</Text>
           )}
 
           {FEATURES.premium && user.isPremium && (
@@ -463,7 +468,8 @@ export default function ProfileScreen() {
 
         {/* Estadísticas: nivel, XP, racha */}
         <View
-          className="flex-row mx-6 mb-6 bg-surface-elevated rounded-2xl py-4"
+          className="flex-row mx-6 mb-6 rounded-2xl py-4"
+          style={{ backgroundColor: colors.surface }}
           accessible
           accessibilityLabel={t('profile.stats_aria', {
             level: user.level ?? 1,
@@ -472,18 +478,18 @@ export default function ProfileScreen() {
           })}
         >
           <View className="flex-1 items-center">
-            <Text className="text-white text-xl font-bold">{user.level ?? 1}</Text>
-            <Text className="text-gray-400 text-xs mt-1">{t('profile.stat_level')}</Text>
+            <Text className="text-xl font-bold" style={{ color: colors.text }}>{user.level ?? 1}</Text>
+            <Text className="text-xs mt-1" style={{ color: colors.textSecondary }}>{t('profile.stat_level')}</Text>
           </View>
-          <View className="w-px bg-surface-card" />
+          <View className="w-px" style={{ backgroundColor: colors.border }} />
           <View className="flex-1 items-center">
-            <Text className="text-white text-xl font-bold">{(user.xp ?? 0).toLocaleString()}</Text>
-            <Text className="text-gray-400 text-xs mt-1">{t('profile.stat_xp')}</Text>
+            <Text className="text-xl font-bold" style={{ color: colors.text }}>{(user.xp ?? 0).toLocaleString()}</Text>
+            <Text className="text-xs mt-1" style={{ color: colors.textSecondary }}>{t('profile.stat_xp')}</Text>
           </View>
-          <View className="w-px bg-surface-card" />
+          <View className="w-px" style={{ backgroundColor: colors.border }} />
           <View className="flex-1 items-center">
             <View className="flex-row items-center gap-1">
-              <Text className="text-white text-xl font-bold">{user.streakDays ?? 0}</Text>
+              <Text className="text-xl font-bold" style={{ color: colors.text }}>{user.streakDays ?? 0}</Text>
               {(user as unknown as { streakShields?: number }).streakShields != null &&
                 (user as unknown as { streakShields: number }).streakShields > 0 && (
                   <View
@@ -499,13 +505,13 @@ export default function ProfileScreen() {
                   </View>
                 )}
             </View>
-            <Text className="text-gray-400 text-xs mt-1">{t('profile.stat_streak')}</Text>
+            <Text className="text-xs mt-1" style={{ color: colors.textSecondary }}>{t('profile.stat_streak')}</Text>
           </View>
         </View>
 
         {/* Plataformas vinculadas */}
         <View className="px-6 mb-6">
-          <Text className="text-gray-300 text-sm font-semibold mb-3 uppercase tracking-wider">
+          <Text className="text-sm font-semibold mb-3 uppercase tracking-wider" style={{ color: colors.textSecondary }}>
             {t('profile.platforms_section')}
           </Text>
 
@@ -516,7 +522,8 @@ export default function ProfileScreen() {
               return (
                 <View
                   key={account.id}
-                  className="flex-row items-center bg-surface-elevated rounded-xl px-4 py-3 mb-2"
+                  className="flex-row items-center rounded-xl px-4 py-3 mb-2"
+                  style={{ backgroundColor: colors.surface }}
                   accessible
                   accessibilityLabel={`${label}: ${account.username}`}
                 >
@@ -531,8 +538,8 @@ export default function ProfileScreen() {
                     accessibilityElementsHidden
                   />
                   <View className="flex-1">
-                    <Text className="text-white font-semibold text-sm">{label}</Text>
-                    <Text className="text-gray-400 text-xs mt-0.5">{account.username}</Text>
+                    <Text className="font-semibold text-sm" style={{ color: colors.text }}>{label}</Text>
+                    <Text className="text-xs mt-0.5" style={{ color: colors.textSecondary }}>{account.username}</Text>
                   </View>
                   {account.platform === 'PSN' && account.psnProfilePrivate && (
                     <Pressable
@@ -546,7 +553,7 @@ export default function ProfileScreen() {
                     </Pressable>
                   )}
                   {account.lastSyncedAt && !account.psnProfilePrivate && (
-                    <Text className="text-gray-500 text-xs mr-2">
+                    <Text className="text-xs mr-2" style={{ color: colors.textMuted }}>
                       {t('profile.sync_prefix')} {new Date(account.lastSyncedAt).toLocaleDateString()}
                     </Text>
                   )}
@@ -565,11 +572,12 @@ export default function ProfileScreen() {
             })
           ) : (
             <View
-              className="bg-surface-elevated rounded-xl px-4 py-6 items-center"
+              className="rounded-xl px-4 py-6 items-center"
+              style={{ backgroundColor: colors.surface }}
               accessible
               accessibilityLiveRegion="polite"
             >
-              <Text className="text-gray-400 text-sm text-center">
+              <Text className="text-sm text-center" style={{ color: colors.textSecondary }}>
                 {t('profile.platforms_empty')}
               </Text>
             </View>
@@ -585,17 +593,17 @@ export default function ProfileScreen() {
                     onPress={() => router.push('/link-platform/psn')}
                     accessibilityRole="button"
                     accessibilityLabel={t('link_platform.psn.submit_label')}
-                    className="flex-row items-center bg-surface-elevated border border-[#003791]/60 rounded-xl px-4 py-3 active:opacity-80"
-                    style={{ minHeight: 52 }}
+                    className="flex-row items-center rounded-xl px-4 py-3 active:opacity-80"
+                    style={{ minHeight: 52, backgroundColor: colors.surface, borderWidth: 1, borderColor: '#00379199' }}
                   >
                     <View
                       style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#003791', marginRight: 12 }}
                       accessibilityElementsHidden
                     />
-                    <Text className="text-white font-semibold text-sm flex-1">
+                    <Text className="font-semibold text-sm flex-1" style={{ color: colors.text }}>
                       {t('link_platform.psn.submit')}
                     </Text>
-                    <Text className="text-gray-400 text-lg">›</Text>
+                    <Text className="text-lg" style={{ color: colors.textSecondary }}>›</Text>
                   </Pressable>
                 )}
                 {!linked.has('STEAM') && (
@@ -603,17 +611,17 @@ export default function ProfileScreen() {
                     onPress={() => router.push('/link-platform/steam')}
                     accessibilityRole="button"
                     accessibilityLabel={t('link_platform.steam.submit_label')}
-                    className="flex-row items-center bg-surface-elevated border border-[#1b2838]/80 rounded-xl px-4 py-3 active:opacity-80"
-                    style={{ minHeight: 52 }}
+                    className="flex-row items-center rounded-xl px-4 py-3 active:opacity-80"
+                    style={{ minHeight: 52, backgroundColor: colors.surface, borderWidth: 1, borderColor: '#1b2838' }}
                   >
                     <View
                       style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#1b9fff', marginRight: 12 }}
                       accessibilityElementsHidden
                     />
-                    <Text className="text-white font-semibold text-sm flex-1">
+                    <Text className="font-semibold text-sm flex-1" style={{ color: colors.text }}>
                       {t('link_platform.steam.submit')}
                     </Text>
-                    <Text className="text-gray-400 text-lg">›</Text>
+                    <Text className="text-lg" style={{ color: colors.textSecondary }}>›</Text>
                   </Pressable>
                 )}
                 {!linked.has('RA') && (
@@ -621,17 +629,17 @@ export default function ProfileScreen() {
                     onPress={() => router.push('/link-platform/ra')}
                     accessibilityRole="button"
                     accessibilityLabel={t('link_platform.ra.submit_label')}
-                    className="flex-row items-center bg-surface-elevated border border-[#c0392b]/60 rounded-xl px-4 py-3 active:opacity-80"
-                    style={{ minHeight: 52 }}
+                    className="flex-row items-center rounded-xl px-4 py-3 active:opacity-80"
+                    style={{ minHeight: 52, backgroundColor: colors.surface, borderWidth: 1, borderColor: '#c0392b99' }}
                   >
                     <View
                       style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#c0392b', marginRight: 12 }}
                       accessibilityElementsHidden
                     />
-                    <Text className="text-white font-semibold text-sm flex-1">
+                    <Text className="font-semibold text-sm flex-1" style={{ color: colors.text }}>
                       {t('link_platform.ra.submit')}
                     </Text>
-                    <Text className="text-gray-400 text-lg">›</Text>
+                    <Text className="text-lg" style={{ color: colors.textSecondary }}>›</Text>
                   </Pressable>
                 )}
               </View>
@@ -692,7 +700,7 @@ export default function ProfileScreen() {
         {/* Estadísticas avanzadas (F1) — premium-only con paywall para usuarios free */}
         {FEATURES.advancedStats && (
           <View className="px-6 mb-4">
-            <Text className="text-gray-300 text-sm font-semibold mb-3 uppercase tracking-wider">
+            <Text className="text-sm font-semibold mb-3 uppercase tracking-wider" style={{ color: colors.textSecondary }}>
               {t('profile.advanced_stats_section')}
             </Text>
 
@@ -703,37 +711,37 @@ export default function ProfileScreen() {
                 <View className="gap-2">
                   {/* Grid 2×2 de métricas principales */}
                   <View className="flex-row gap-2">
-                    <View className="flex-1 bg-surface-elevated rounded-xl p-3">
-                      <Text className="text-white text-base font-bold">
+                    <View className="flex-1 rounded-xl p-3" style={{ backgroundColor: colors.surface }}>
+                      <Text className="text-base font-bold" style={{ color: colors.text }}>
                         {new Intl.NumberFormat().format(statsData.totalXp)}
                       </Text>
-                      <Text className="text-gray-400 text-xs mt-0.5">
+                      <Text className="text-xs mt-0.5" style={{ color: colors.textSecondary }}>
                         {t('profile.stats_total_xp')}
                       </Text>
                     </View>
-                    <View className="flex-1 bg-surface-elevated rounded-xl p-3">
-                      <Text className="text-white text-base font-bold">
+                    <View className="flex-1 rounded-xl p-3" style={{ backgroundColor: colors.surface }}>
+                      <Text className="text-base font-bold" style={{ color: colors.text }}>
                         {new Intl.NumberFormat().format(statsData.totalAchievements)}
                       </Text>
-                      <Text className="text-gray-400 text-xs mt-0.5">
+                      <Text className="text-xs mt-0.5" style={{ color: colors.textSecondary }}>
                         {t('profile.stats_total_achievements')}
                       </Text>
                     </View>
                   </View>
                   <View className="flex-row gap-2">
-                    <View className="flex-1 bg-surface-elevated rounded-xl p-3">
-                      <Text className="text-white text-base font-bold">
+                    <View className="flex-1 rounded-xl p-3" style={{ backgroundColor: colors.surface }}>
+                      <Text className="text-base font-bold" style={{ color: colors.text }}>
                         {statsData.completedGames}
                       </Text>
-                      <Text className="text-gray-400 text-xs mt-0.5">
+                      <Text className="text-xs mt-0.5" style={{ color: colors.textSecondary }}>
                         {t('profile.stats_completed_games')}
                       </Text>
                     </View>
-                    <View className="flex-1 bg-surface-elevated rounded-xl p-3">
-                      <Text className="text-white text-base font-bold">
+                    <View className="flex-1 rounded-xl p-3" style={{ backgroundColor: colors.surface }}>
+                      <Text className="text-base font-bold" style={{ color: colors.text }}>
                         {statsData.bestStreak} 🔥
                       </Text>
-                      <Text className="text-gray-400 text-xs mt-0.5">
+                      <Text className="text-xs mt-0.5" style={{ color: colors.textSecondary }}>
                         {t('profile.stats_best_streak')}
                       </Text>
                     </View>
@@ -741,11 +749,11 @@ export default function ProfileScreen() {
 
                   {/* Plataforma favorita */}
                   {statsData.favoritePlatform && (
-                    <View className="bg-surface-elevated rounded-xl px-4 py-3 flex-row items-center justify-between">
-                      <Text className="text-gray-400 text-sm">
+                    <View className="rounded-xl px-4 py-3 flex-row items-center justify-between" style={{ backgroundColor: colors.surface }}>
+                      <Text className="text-sm" style={{ color: colors.textSecondary }}>
                         {t('profile.stats_favorite_platform')}
                       </Text>
-                      <Text className="text-white font-semibold text-sm">
+                      <Text className="font-semibold text-sm" style={{ color: colors.text }}>
                         {PLATFORM_LABELS[statsData.favoritePlatform] ?? statsData.favoritePlatform}
                       </Text>
                     </View>
@@ -753,7 +761,7 @@ export default function ProfileScreen() {
 
                   {/* Logro más raro */}
                   {statsData.rarestAchievement && (
-                    <View className="bg-surface-elevated rounded-xl px-4 py-3 flex-row items-center">
+                    <View className="rounded-xl px-4 py-3 flex-row items-center" style={{ backgroundColor: colors.surface }}>
                       <Image
                         source={
                           statsData.rarestAchievement.iconUrl ??
@@ -764,14 +772,14 @@ export default function ProfileScreen() {
                         accessibilityElementsHidden
                       />
                       <View className="flex-1 ml-3">
-                        <Text className="text-gray-400 text-xs">
+                        <Text className="text-xs" style={{ color: colors.textSecondary }}>
                           {t('profile.stats_rarest_achievement')}
                         </Text>
-                        <Text className="text-white text-sm font-semibold" numberOfLines={1}>
+                        <Text className="text-sm font-semibold" style={{ color: colors.text }} numberOfLines={1}>
                           {statsData.rarestAchievement.title}
                         </Text>
                       </View>
-                      <Text className="text-gray-500 text-xs ml-2">
+                      <Text className="text-xs ml-2" style={{ color: colors.textMuted }}>
                         {t('profile.stats_rarity_pct', {
                           pct: statsData.rarestAchievement.rarity.toFixed(1),
                         })}
@@ -782,12 +790,12 @@ export default function ProfileScreen() {
               ) : null
             ) : (
               /* Paywall para usuarios free */
-              <View className="bg-surface-elevated rounded-2xl px-5 py-6 items-center">
+              <View className="rounded-2xl px-5 py-6 items-center" style={{ backgroundColor: colors.surface }}>
                 <Text className="text-3xl mb-3">📊</Text>
-                <Text className="text-white text-sm font-semibold text-center mb-2">
+                <Text className="text-sm font-semibold text-center mb-2" style={{ color: colors.text }}>
                   {t('profile.advanced_stats_section')}
                 </Text>
-                <Text className="text-gray-400 text-xs text-center mb-4">
+                <Text className="text-xs text-center mb-4" style={{ color: colors.textSecondary }}>
                   {t('profile.advanced_stats_locked')}
                 </Text>
                 <Pressable
@@ -797,7 +805,7 @@ export default function ProfileScreen() {
                   accessibilityLabel={t('profile.advanced_stats_premium_cta')}
                   style={{ minHeight: 44, justifyContent: 'center' }}
                 >
-                  <Text className="text-white font-semibold text-sm">
+                  <Text className="font-semibold text-sm" style={{ color: '#ffffff' }}>
                     {t('profile.advanced_stats_premium_cta')}
                   </Text>
                 </Pressable>
@@ -812,20 +820,20 @@ export default function ProfileScreen() {
           if (years.length === 0) return null;
           return (
             <View className="px-6 mb-4">
-              <Text className="text-gray-300 text-sm font-semibold mb-3 uppercase tracking-wider">
+              <Text className="text-sm font-semibold mb-3 uppercase tracking-wider" style={{ color: colors.textSecondary }}>
                 {t('wrapped.section_title')}
               </Text>
               {years.map((y) => (
                 <Pressable
                   key={y}
-                  className="flex-row items-center justify-between bg-surface-elevated rounded-xl px-4 py-3 mb-2 active:opacity-80"
+                  className="flex-row items-center justify-between rounded-xl px-4 py-3 mb-2 active:opacity-80"
+                  style={{ minHeight: 52, backgroundColor: colors.surface }}
                   onPress={() => router.push(`/wrapped/${y}`)}
                   accessibilityRole="button"
                   accessibilityLabel={t('wrapped.open_year', { year: y })}
-                  style={{ minHeight: 52 }}
                 >
-                  <Text className="text-white font-semibold">Gaming Wrapped {y}</Text>
-                  <Text className="text-gray-400 text-lg">›</Text>
+                  <Text className="font-semibold" style={{ color: colors.text }}>Gaming Wrapped {y}</Text>
+                  <Text className="text-lg" style={{ color: colors.textSecondary }}>›</Text>
                 </Pressable>
               ))}
             </View>
@@ -834,13 +842,13 @@ export default function ProfileScreen() {
 
         {/* Ajustes */}
         <View className="px-6 mb-6">
-          <Text className="text-gray-300 text-sm font-semibold mb-3 uppercase tracking-wider">
+          <Text className="text-sm font-semibold mb-3 uppercase tracking-wider" style={{ color: colors.textSecondary }}>
             {t('profile.settings_section')}
           </Text>
 
           {/* Privacidad del perfil */}
-          <View className="bg-surface-elevated rounded-xl px-4 py-3 mb-2" testID="privacy-selector">
-            <Text className="text-gray-400 text-xs mb-2">{t('profile.privacy_title')}</Text>
+          <View className="rounded-xl px-4 py-3 mb-2" style={{ backgroundColor: colors.surface }} testID="privacy-selector">
+            <Text className="text-xs mb-2" style={{ color: colors.textSecondary }}>{t('profile.privacy_title')}</Text>
             <View className="flex-row gap-2">
               {(['PUBLIC', 'FRIENDS_ONLY', 'PRIVATE'] as const).map((option) => {
                 const labelKey = option === 'PUBLIC'
@@ -858,14 +866,14 @@ export default function ProfileScreen() {
                         privacyMutation.mutate(option);
                       }
                     }}
-                    className={`flex-1 py-2 rounded-lg items-center ${isSelected ? 'bg-primary' : 'bg-surface-card'}`}
+                    className="flex-1 py-2 rounded-lg items-center"
+                    style={{ backgroundColor: isSelected ? colors.primary : colors.surfaceCard, minHeight: 36, opacity: privacyMutation.isPending && !isSelected ? 0.5 : 1 }}
                     accessibilityRole="button"
                     accessibilityState={{ selected: isSelected, disabled: privacyMutation.isPending }}
                     accessibilityLabel={t(labelKey)}
-                    style={{ minHeight: 36, opacity: privacyMutation.isPending && !isSelected ? 0.5 : 1 }}
                     testID={`privacy-option-${option.toLowerCase()}`}
                   >
-                    <Text className={`text-xs font-semibold ${isSelected ? 'text-white' : 'text-gray-400'}`}>
+                    <Text className="text-xs font-semibold" style={{ color: isSelected ? '#ffffff' : colors.textSecondary }}>
                       {privacyMutation.isPending && isSelected
                         ? t('profile.privacy_saving')
                         : t(labelKey)}
@@ -877,20 +885,20 @@ export default function ProfileScreen() {
           </View>
 
           {/* Idioma */}
-          <View className="bg-surface-elevated rounded-xl px-4 py-3 mb-2">
-            <Text className="text-gray-400 text-xs mb-2">{t('profile.settings_language')}</Text>
+          <View className="rounded-xl px-4 py-3 mb-2" style={{ backgroundColor: colors.surface }}>
+            <Text className="text-xs mb-2" style={{ color: colors.textSecondary }}>{t('profile.settings_language')}</Text>
             <View className="flex-row gap-2">
               {(['es', 'en'] as const).map((lang) => (
                 <Pressable
                   key={lang}
                   onPress={() => changeLanguage(lang)}
-                  className={`flex-1 py-2 rounded-lg items-center ${currentLanguage === lang ? 'bg-primary' : 'bg-surface-card'}`}
+                  className="flex-1 py-2 rounded-lg items-center"
+                  style={{ backgroundColor: currentLanguage === lang ? colors.primary : colors.surfaceCard, minHeight: 36 }}
                   accessibilityRole="button"
                   accessibilityState={{ selected: currentLanguage === lang }}
                   accessibilityLabel={lang === 'es' ? 'Español' : 'English'}
-                  style={{ minHeight: 36 }}
                 >
-                  <Text className={`text-sm font-semibold ${currentLanguage === lang ? 'text-white' : 'text-gray-400'}`}>
+                  <Text className="text-sm font-semibold" style={{ color: currentLanguage === lang ? '#ffffff' : colors.textSecondary }}>
                     {lang === 'es' ? '🇪🇸 Español' : '🇬🇧 English'}
                   </Text>
                 </Pressable>
@@ -898,18 +906,44 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          {/* TODO Fase 4: selector de tema — oculto hasta implementar modo claro completo */}
+          {/* Selector de tema */}
+          <View className="rounded-xl px-4 py-3 mb-2" style={{ backgroundColor: colors.surface }} testID="theme-selector">
+            <Text className="text-xs mb-2" style={{ color: colors.textSecondary }}>{t('profile.settings_theme')}</Text>
+            <View className="flex-row gap-2">
+              {(['dark', 'light'] as const).map((themeOption: ThemePreference) => {
+                const isSelected = currentTheme === themeOption;
+                const label = themeOption === 'dark' ? t('profile.theme_dark') : t('profile.theme_light');
+                return (
+                  <Pressable
+                    key={themeOption}
+                    onPress={() => setTheme(themeOption)}
+                    className="flex-1 py-2 rounded-lg items-center"
+                    style={{ backgroundColor: isSelected ? colors.primary : colors.surfaceCard, minHeight: 36 }}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                    accessibilityLabel={label}
+                    testID={`theme-option-${themeOption}`}
+                  >
+                    <Text className="text-sm font-semibold" style={{ color: isSelected ? '#ffffff' : colors.textSecondary }}>
+                      {themeOption === 'dark' ? `🌙 ${label}` : `☀️ ${label}`}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
         </View>
 
         {/* Actividad reciente */}
         {(events.length > 0 || isFeedError) && (
           <View className="px-6 mb-6">
-            <Text className="text-gray-300 text-sm font-semibold mb-3 uppercase tracking-wider">
+            <Text className="text-sm font-semibold mb-3 uppercase tracking-wider" style={{ color: colors.textSecondary }}>
               {t('profile.recent_activity')}
             </Text>
             {isFeedError ? (
               <View
-                className="bg-surface-elevated rounded-xl px-4 py-5 items-center"
+                className="rounded-xl px-4 py-5 items-center"
+                style={{ backgroundColor: colors.surface }}
                 accessible
                 accessibilityLiveRegion="polite"
                 accessibilityRole="alert"
@@ -917,7 +951,7 @@ export default function ProfileScreen() {
                 <Text className="text-red-400 text-sm font-semibold mb-1">
                   {t('feed.error_title')}
                 </Text>
-                <Text className="text-gray-400 text-xs text-center mb-4">
+                <Text className="text-xs text-center mb-4" style={{ color: colors.textSecondary }}>
                   {t('feed.error_message')}
                 </Text>
                 <Pressable
@@ -959,7 +993,7 @@ export default function ProfileScreen() {
 
         {/* Zona de peligro — eliminar cuenta */}
         <View className="px-6 mt-6 mb-2">
-          <Text className="text-gray-500 text-xs font-semibold mb-3 uppercase tracking-wider">
+          <Text className="text-xs font-semibold mb-3 uppercase tracking-wider" style={{ color: colors.textMuted }}>
             {t('profile.danger_zone')}
           </Text>
           <Pressable
@@ -988,7 +1022,7 @@ export default function ProfileScreen() {
             accessibilityLabel={t('privacy.link_label')}
             style={{ minHeight: 44, justifyContent: 'center' }}
           >
-            <Text className="text-gray-500 text-sm">{t('privacy.link_label')}</Text>
+            <Text className="text-sm" style={{ color: colors.textMuted }}>{t('privacy.link_label')}</Text>
           </Pressable>
         </View>
       </ScrollView>
