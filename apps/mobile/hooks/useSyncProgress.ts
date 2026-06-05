@@ -5,6 +5,7 @@ import type { SyncCompleteEvent, SyncErrorEvent, SyncProgressEvent, SyncStatusRe
 import { connectSocket, getSocket } from '../lib/socket';
 import { useSessionStore } from '../stores/sessionStore';
 import { api } from '../lib/api';
+import { queryKeys } from '../lib/queryKeys';
 
 /** Estado de progreso de un sync activo para una plataforma concreta. */
 export interface SyncProgressState {
@@ -74,7 +75,7 @@ export function useSyncProgress(onComplete?: SyncCompleteCallback): UseSyncProgr
           // El socket lleva tiempo silencioso y Redis confirma que no hay nada en curso:
           // limpiar el mapa y hacer un refresco final de la lista con el estado definitivo
           setActiveSyncs(new Map());
-          void queryClient.invalidateQueries({ queryKey: ['my-games'] });
+          void queryClient.invalidateQueries({ queryKey: queryKeys.myGames() });
         }
         stopPolling();
         return;
@@ -105,7 +106,7 @@ export function useSyncProgress(onComplete?: SyncCompleteCallback): UseSyncProgr
       const now = Date.now();
       if (now - lastInvalidateRef.current >= LIST_INVALIDATE_THROTTLE_MS) {
         lastInvalidateRef.current = now;
-        void queryClient.invalidateQueries({ queryKey: ['my-games'] });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.myGames() });
       }
     } catch {
       // Si falla el poll, no mostrar error — el socket lo cubrirá cuando haya eventos
@@ -145,7 +146,7 @@ export function useSyncProgress(onComplete?: SyncCompleteCallback): UseSyncProgr
       const now = Date.now();
       if (now - lastInvalidateRef.current >= LIST_INVALIDATE_THROTTLE_MS) {
         lastInvalidateRef.current = now;
-        void queryClient.invalidateQueries({ queryKey: ['my-games'] });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.myGames() });
       }
     };
 
@@ -156,10 +157,10 @@ export function useSyncProgress(onComplete?: SyncCompleteCallback): UseSyncProgr
         next.delete(event.platform);
         return next;
       });
-      void queryClient.invalidateQueries({ queryKey: ['my-games'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.myGames() });
       // Refrescar XP/nivel y rankings tras el sync
-      void queryClient.invalidateQueries({ queryKey: ['user-stats'] });
-      void queryClient.invalidateQueries({ queryKey: ['rankings'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.userStats() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.rankings() });
       onCompleteRef.current?.(event);
     };
 

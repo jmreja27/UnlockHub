@@ -27,6 +27,7 @@ import { api } from '../../lib/api';
 import { FEATURES } from '../../lib/featureFlags';
 import { useSessionStore } from '../../stores/sessionStore';
 import { useTheme } from '../../hooks/useTheme';
+import { queryKeys } from '../../lib/queryKeys';
 
 const PLATFORM_LABEL: Record<string, string> = {
   STEAM: 'Steam',
@@ -88,7 +89,7 @@ function AchievementRow({
   const [guidesExpanded, setGuidesExpanded] = useState(false);
 
   const { data: guidesData, isLoading: guidesLoading } = useQuery({
-    queryKey: ['achievement-guides', achievement.id],
+    queryKey: queryKeys.achievementGuides(achievement.id),
     queryFn: () =>
       api.get<GuidesResponse>(
         `/api/v1/achievements/${achievement.id}/guides?limit=5`,
@@ -102,7 +103,7 @@ function AchievementRow({
       api.post<void>(`/api/v1/guides/${guideId}/upvote`),
     onSuccess: () => {
       void queryClient.invalidateQueries({
-        queryKey: ['achievement-guides', achievement.id],
+        queryKey: queryKeys.achievementGuides(achievement.id),
       });
     },
   });
@@ -315,7 +316,7 @@ export default function GameDetailScreen() {
       api.post<Guide>(`/api/v1/achievements/${achievementId}/guides`, { content }),
     onSuccess: (_data, vars) => {
       void queryClient.invalidateQueries({
-        queryKey: ['achievement-guides', vars.achievementId],
+        queryKey: queryKeys.achievementGuides(vars.achievementId),
       });
       setWriteGuideAchievementId(null);
       setGuideContent('');

@@ -1,11 +1,10 @@
 import { useEffect, useRef, useCallback } from 'react';
 
 import { useSessionStore } from '../stores/sessionStore';
-
-const TEST_INTERSTITIAL_ID = 'ca-app-pub-3940256099942544/1033173712';
+import { ADMOB_TEST_IDS } from '../lib/adUnits';
 
 const AD_UNIT_ID =
-  process.env['EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID'] ?? TEST_INTERSTITIAL_ID;
+  process.env['EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID'] ?? ADMOB_TEST_IDS.INTERSTITIAL;
 
 // Tipos mínimos del módulo
 type InterstitialAdInstance = {

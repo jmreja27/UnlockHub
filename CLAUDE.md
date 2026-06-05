@@ -1192,6 +1192,8 @@ Ver [docs/BACKLOG.md](docs/BACKLOG.md)
 
 ## Última revisión de código
 
+**Fecha**: 2026-06-05 (sesión 63) — T54 refactor completado. BUILD_LOCAL.md duplicado eliminado (raíz obsoleto vs docs/ actualizado). API: `createUploadMiddleware(field)` factory en upload.middleware.ts (T45); `makeUploadHandler(serviceMethod)` en user.controller.ts (T44). Mobile: `lib/queryKeys.ts` con 30+ claves tipadas — actualizados 15 hooks + 12 screens (T46); `hooks/useDebounce.ts` que reemplaza el patrón timerRef duplicado en useSearch/useSearchAchievements (T47); `lib/adUnits.ts` `ADMOB_TEST_IDS` centraliza los 3 IDs de test AdMob (T48). Fix colateral: `profile.tsx` invalidaba `['my-stats']` (no-op) — corregido a `queryKeys.userStats()`. API: 593/593 tests ✅. Mobile: 364/364 tests ✅. 0 errores TS/lint.
+
 **Fecha**: 2026-06-05 (sesión 62) — T57 modo claro implementado. `lib/colors.ts` con tokens `darkColors`/`lightColors`. `hooks/useTheme.ts` devuelve colores según tema activo. `preferencesStore.theme: 'dark'|'light'`. Selector activado en `profile.tsx` (🌙/☀️). 22 archivos actualizados — NativeWind para layout, inline styles para colores. i18n ES/EN. Tests: 364/364 ✅.
 
 **Fecha**: 2026-06-04 (sesión 59) — PL13 script limpieza BD + merge develop→main + tag v1.0.0+ limpieza ejecutada en producción. Script `scripts/cleanup-test-users.ts` creado y ejecutado: 7 usuarios de prueba eliminados, TestUser99 y Sovelyss preservados, catálogo intacto (**2.878 juegos + 134.928 logros**). Script ampliado a múltiples `--preserve-username` (Prisma `notIn`). Merge develop → main `--no-ff`. Tag `v1.0.0` en GitHub. PL13 ✅, PL15 ✅.

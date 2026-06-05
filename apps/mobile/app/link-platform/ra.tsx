@@ -18,6 +18,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { PlatformAccount } from '@unlockhub/types';
 
 import { api, ApiRequestError } from '../../lib/api';
+import { queryKeys } from '../../lib/queryKeys';
 
 const RA_REGISTER_URL = 'https://retroachievements.org/createaccount.php';
 
@@ -49,10 +50,10 @@ export default function LinkRAScreen() {
       api.post<PlatformAccount>('/api/v1/platforms/ra/link', data),
     onSuccess: () => {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      void queryClient.invalidateQueries({ queryKey: ['linkedPlatforms'] });
-      void queryClient.invalidateQueries({ queryKey: ['platforms'] });
-      void queryClient.invalidateQueries({ queryKey: ['sync-summary'] });
-      void queryClient.invalidateQueries({ queryKey: ['my-games'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.linkedPlatforms() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.platformsBase() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.syncSummaryBase() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.myGames() });
       Alert.alert(t('link_platform.ra.success'), '', [
         { text: 'OK', onPress: () => router.back() },
       ]);

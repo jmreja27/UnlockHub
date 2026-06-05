@@ -22,6 +22,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { AdBanner } from '../../components/AdBanner';
 import type { LibraryGame } from '../../hooks/useMyGames';
 import { useTheme } from '../../hooks/useTheme';
+import { queryKeys } from '../../lib/queryKeys';
 
 const PLATFORM_LABELS: Record<string, string> = {
   STEAM: 'Steam',
@@ -169,7 +170,7 @@ export default function LibraryScreen() {
   useEffect(() => {
     if (user?.id) {
       initialLoadDoneRef.current = false;
-      void queryClient.invalidateQueries({ queryKey: ['my-games'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.myGames() });
     }
   }, [user?.id, queryClient]);
 
@@ -181,7 +182,7 @@ export default function LibraryScreen() {
         // Resetear el ref para que fetchAllRemainingPages se llame si el refetch parcial
         // (página 1 sola) deja hasNextPage=true con sort no-predeterminado activo.
         initialLoadDoneRef.current = false;
-        void queryClient.invalidateQueries({ queryKey: ['my-games'] });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.myGames() });
       }
     };
 
@@ -250,8 +251,8 @@ export default function LibraryScreen() {
       // Cargar todas las páginas a continuación para que el sort sea correcto sobre el set completo,
       // independientemente del sort activo (incluido last_played — BUG-1).
       await Promise.all([
-        queryClient.resetQueries({ queryKey: ['my-games'] }),
-        queryClient.invalidateQueries({ queryKey: ['sync-summary'] }),
+        queryClient.resetQueries({ queryKey: queryKeys.myGames() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.syncSummaryBase() }),
       ]);
       await fetchAllRemainingPages();
     } finally {

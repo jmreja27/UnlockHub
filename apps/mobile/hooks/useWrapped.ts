@@ -3,6 +3,7 @@ import type { GamingWrapped } from '@unlockhub/types';
 
 import { api } from '../lib/api';
 import { useSessionStore } from '../stores/sessionStore';
+import { queryKeys } from '../lib/queryKeys';
 
 // Acepta tanto un año numérico (anual) como un string de período "YYYY-MM" (mensual).
 export function useWrapped(period: number | string) {
@@ -14,7 +15,7 @@ export function useWrapped(period: number | string) {
     : /^\d{4}(-\d{2})?$/.test(periodStr);
 
   return useQuery({
-    queryKey: ['wrapped', periodStr],
+    queryKey: queryKeys.wrapped(periodStr),
     queryFn: () =>
       api
         .get<{ wrapped: GamingWrapped }>(`/api/v1/wrapped/${periodStr}`)

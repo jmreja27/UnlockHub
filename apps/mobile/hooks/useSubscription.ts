@@ -5,6 +5,7 @@ import type { CustomerInfo } from 'react-native-purchases';
 
 import { api, refreshAccessToken } from '../lib/api';
 import { useSessionStore } from '../stores/sessionStore';
+import { queryKeys } from '../lib/queryKeys';
 
 import type { PremiumPlan } from './usePremiumPlans';
 
@@ -84,7 +85,7 @@ export function useSubscription(): UseSubscriptionResult {
     if (newCustomerInfo) setCustomerInfo(newCustomerInfo);
     try {
       await refreshAccessToken();
-      await queryClient.invalidateQueries({ queryKey: ['me'] });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.me() });
     } catch {
       // Si falla el refresh, la próxima request con 401 lo reintentará automáticamente
     }

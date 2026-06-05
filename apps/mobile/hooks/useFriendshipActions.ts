@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { FriendshipStatusResult } from '@unlockhub/types';
 
 import { api } from '../lib/api';
+import { queryKeys } from '../lib/queryKeys';
 
 /**
  * Hook que expone las acciones de relación de amistad para un usuario concreto.
@@ -16,11 +17,11 @@ import { api } from '../lib/api';
  */
 export function useFriendshipActions(username: string) {
   const queryClient = useQueryClient();
-  const statusKey = ['friendship-status', username] as const;
+  const statusKey = queryKeys.friendshipStatus(username);
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: statusKey });
-    void queryClient.invalidateQueries({ queryKey: ['friends'] });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.friends() });
   };
 
   const sendRequest = useMutation({

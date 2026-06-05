@@ -12,6 +12,7 @@ import { api } from '../lib/api';
 import { EmptyState } from '../components/EmptyState';
 import { SkeletonBox } from '../components/SkeletonBox';
 import { useTheme } from '../hooks/useTheme';
+import { queryKeys } from '../lib/queryKeys';
 
 interface AppNotification {
   id: string;
@@ -95,7 +96,7 @@ export default function NotificationsScreen() {
     isFetchingNextPage,
     isLoading,
   } = useInfiniteQuery({
-    queryKey: ['notifications'],
+    queryKey: queryKeys.notifications(),
     queryFn: ({ pageParam = 1 }) =>
       api.get<PaginatedResponse<AppNotification>>(
         `/api/v1/notifications/me?page=${pageParam as number}&limit=20`,
@@ -109,8 +110,8 @@ export default function NotificationsScreen() {
   const markReadMutation = useMutation({
     mutationFn: (id: string) => api.patch(`/api/v1/notifications/me/${id}/read`, {}),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['notifications'] });
-      void queryClient.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.notifications() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.notificationsUnreadCount() });
     },
   });
 
@@ -118,8 +119,8 @@ export default function NotificationsScreen() {
     mutationFn: () => api.patch('/api/v1/notifications/me/read-all', {}),
     onSuccess: () => {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      void queryClient.invalidateQueries({ queryKey: ['notifications'] });
-      void queryClient.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.notifications() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.notificationsUnreadCount() });
     },
   });
 

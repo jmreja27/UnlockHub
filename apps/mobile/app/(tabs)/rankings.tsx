@@ -10,6 +10,7 @@ import type { RankingEntry } from '@unlockhub/types';
 import { useGlobalRankings, usePlatformRanking, useMyRanking } from '../../hooks/useRankings';
 import { useSessionStore } from '../../stores/sessionStore';
 import { ApiRequestError } from '../../lib/api';
+import { queryKeys } from '../../lib/queryKeys';
 import { RankingItem } from '../../components/RankingItem';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { AdBanner } from '../../components/AdBanner';
@@ -84,7 +85,7 @@ function RankingList({
   async function handleRefresh(): Promise<void> {
     setIsManualRefreshing(true);
     try {
-      await queryClient.invalidateQueries({ queryKey: ['rankings'] });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.rankings() });
     } finally {
       setIsManualRefreshing(false);
     }
