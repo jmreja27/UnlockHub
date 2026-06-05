@@ -272,7 +272,7 @@ describe('ProfileScreen', () => {
       await waitFor(() => expect(queryByTestId('psn-private-badge')).toBeNull());
     });
 
-    it('tras desvincular exitosamente, invalida my-games y my-stats', async () => {
+    it('tras desvincular exitosamente, invalida my-games y user-stats', async () => {
       const apiGet = jest.fn(() => Promise.resolve([steamAccount]));
       const apiDelete = jest.fn(() =>
         Promise.resolve({ ok: true, deletedAchievements: 12 }),
@@ -303,7 +303,7 @@ describe('ProfileScreen', () => {
           (call) => (call[0] as { queryKey?: string[] })?.queryKey?.[0],
         );
         expect(keys).toContain('my-games');
-        expect(keys).toContain('my-stats');
+        expect(keys).toContain('user-stats');
       });
     });
 

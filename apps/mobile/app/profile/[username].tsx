@@ -10,6 +10,7 @@ import { usePublicProfile } from '../../hooks/usePublicProfile';
 import { useUserGames } from '../../hooks/useUserGames';
 import { useSessionStore } from '../../stores/sessionStore';
 import { api, ApiRequestError } from '../../lib/api';
+import { queryKeys } from '../../lib/queryKeys';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { AvatarPlaceholder } from '../../components/AvatarPlaceholder';
 import { FriendshipButton } from '../../components/FriendshipButton';
@@ -65,7 +66,7 @@ export default function PublicProfileScreen() {
   }, [currentUser, profile?.username, router]);
 
   const { data: compareData } = useQuery({
-    queryKey: ['compare', username],
+    queryKey: queryKeys.compareProfiles(username),
     queryFn: () => api.get<CompareResult>(`/api/v1/users/${username}/compare`),
     enabled: !!username && isAuthenticated,
     staleTime: 1000 * 60 * 5,

@@ -1,8 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import type { AchievementSearchResult, SearchResponse } from '@unlockhub/types';
 
 import { api } from '../lib/api';
+import { queryKeys } from '../lib/queryKeys';
+
+import { useDebounce } from './useDebounce';
 
 export type AchievementPlatformFilter = 'all' | 'STEAM' | 'RA' | 'PSN';
 
@@ -12,22 +15,13 @@ const PAGE_SIZE = 20;
 
 export function useSearchAchievements(platformFilter: AchievementPlatformFilter = 'all') {
   const [query, setQuery] = useState('');
-  const [debouncedQuery, setDebouncedQuery] = useState('');
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => setDebouncedQuery(query.trim()), DEBOUNCE_MS);
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [query]);
+  const debouncedQuery = useDebounce(query.trim(), DEBOUNCE_MS);
 
   const enabled = debouncedQuery.length >= MIN_QUERY_LENGTH;
   const platformParam = platformFilter !== 'all' ? `&platform=${platformFilter}` : '';
 
   const result = useInfiniteQuery({
-    queryKey: ['search-achievements', debouncedQuery, platformFilter],
+    queryKey: queryKeys.searchAchievements(debouncedQuery, platformFilter),
     queryFn: ({ pageParam }) => {
       const page = pageParam as number;
       return api.get<SearchResponse>(

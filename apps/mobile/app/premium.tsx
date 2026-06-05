@@ -17,6 +17,7 @@ import { usePremiumPlans } from '../hooks/usePremiumPlans';
 import type { PremiumPlan } from '../hooks/usePremiumPlans';
 import { FEATURES } from '../lib/featureFlags';
 import { ComingSoon } from '../components/ComingSoon';
+import { queryKeys } from '../lib/queryKeys';
 const PRIVACY_POLICY_URL = 'https://jmreja27.github.io/UnlockHub/privacy-policy.html';
 const TERMS_URL = 'https://jmreja27.github.io/UnlockHub/terms-of-service.html';
 const POINTS_PER_REDEEM = 300;
@@ -97,7 +98,7 @@ export default function PremiumScreen() {
   const [isRedeeming, setIsRedeeming] = useState(false);
 
   const { data: pointsData } = useQuery({
-    queryKey: ['my-points-total'],
+    queryKey: queryKeys.myPointsTotal(),
     queryFn: () => api.get<{ total: number }>('/api/v1/users/me/points/total'),
     staleTime: 1000 * 60 * 2,
   });

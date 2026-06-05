@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { api } from '../lib/api';
+import { queryKeys } from '../lib/queryKeys';
 
 import type { LibraryGame } from './useMyGames';
 
@@ -54,7 +55,7 @@ export interface UserGameAchievementsResponse {
  */
 export function useUserGames(username: string) {
   return useQuery({
-    queryKey: ['user-games', username] as const,
+    queryKey: queryKeys.userGames(username),
     queryFn: () =>
       api.get<UserGamesPage>(
         `/api/v1/users/${encodeURIComponent(username)}/games?page=1&limit=20`,
@@ -70,7 +71,7 @@ export function useUserGames(username: string) {
  */
 export function useUserGameAchievements(username: string, gameId: string) {
   return useQuery({
-    queryKey: ['user-game-achievements', username, gameId] as const,
+    queryKey: queryKeys.userGameAchievements(username, gameId),
     queryFn: () =>
       api.get<UserGameAchievementsResponse>(
         `/api/v1/users/${encodeURIComponent(username)}/games/${gameId}/achievements`,

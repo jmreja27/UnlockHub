@@ -178,44 +178,26 @@ export async function getPublicProfileHandler(
   }
 }
 
-// POST /api/v1/users/me/avatar — subir avatar del usuario autenticado
-export async function uploadAvatarHandler(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  try {
-    const userId = (req as AuthenticatedRequest).user.id;
-
-    if (!req.file) {
-      res.status(400).json({ error: 'No se proporcionó ningún archivo', code: 'NO_FILE' });
-      return;
+function makeUploadHandler(
+  serviceMethod: (userId: string, buffer: Buffer, mimetype: string) => Promise<unknown>,
+) {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = (req as AuthenticatedRequest).user.id;
+      if (!req.file) {
+        res.status(400).json({ error: 'No se proporcionó ningún archivo', code: 'NO_FILE' });
+        return;
+      }
+      const updated = await serviceMethod(userId, req.file.buffer, req.file.mimetype);
+      res.json(updated);
+    } catch (err) {
+      next(err);
     }
-
-    const updated = await userService.uploadAvatar(userId, req.file.buffer, req.file.mimetype);
-    res.json(updated);
-  } catch (err) {
-    next(err);
-  }
+  };
 }
+
+// POST /api/v1/users/me/avatar — subir avatar del usuario autenticado
+export const uploadAvatarHandler = makeUploadHandler(userService.uploadAvatar);
 
 // POST /api/v1/users/me/banner — subir banner del usuario autenticado
-export async function uploadBannerHandler(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  try {
-    const userId = (req as AuthenticatedRequest).user.id;
-
-    if (!req.file) {
-      res.status(400).json({ error: 'No se proporcionó ningún archivo', code: 'NO_FILE' });
-      return;
-    }
-
-    const updated = await userService.uploadBanner(userId, req.file.buffer, req.file.mimetype);
-    res.json(updated);
-  } catch (err) {
-    next(err);
-  }
-}
+export const uploadBannerHandler = makeUploadHandler(userService.uploadBanner);

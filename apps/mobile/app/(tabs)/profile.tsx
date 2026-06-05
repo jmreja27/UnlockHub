@@ -23,6 +23,7 @@ import { AvatarPlaceholder } from '../../components/AvatarPlaceholder';
 import { FEATURES } from '../../lib/featureFlags';
 import { api } from '../../lib/api';
 import { useFeed } from '../../hooks/useFeed';
+import { queryKeys } from '../../lib/queryKeys';
 
 interface UserStats {
   xpByWeek: { week: string; xp: number }[];
@@ -105,7 +106,7 @@ export default function ProfileScreen() {
   const { theme: currentTheme, setTheme } = usePreferencesStore();
 
   const { data: statsData, isLoading: statsLoading } = useQuery({
-    queryKey: ['user-stats'],
+    queryKey: queryKeys.userStats(),
     queryFn: () => api.get<UserStats>('/api/v1/users/me/stats'),
     enabled: isAuthenticated && FEATURES.advancedStats && (user?.isPremium ?? false),
     staleTime: 1000 * 60 * 60,
@@ -116,7 +117,7 @@ export default function ProfileScreen() {
     isLoading: isLoadingPlatforms,
     refetch: refetchPlatforms,
   } = useQuery({
-    queryKey: ['platforms', user?.id],
+    queryKey: queryKeys.platforms(user?.id ?? ''),
     queryFn: () => api.get<PlatformAccount[]>('/api/v1/platforms/'),
     enabled: isAuthenticated,
     staleTime: 1000 * 60 * 5,
@@ -126,15 +127,15 @@ export default function ProfileScreen() {
     mutationFn: (platform: string) =>
       api.delete(`/api/v1/platforms/${platform.toLowerCase()}/unlink`),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['platforms', user?.id] });
-      void queryClient.invalidateQueries({ queryKey: ['linkedPlatforms'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.platforms(user?.id ?? '') });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.linkedPlatforms() });
       // Los logros y juegos de la plataforma se borraron en el backend — actualizar la biblioteca
-      void queryClient.invalidateQueries({ queryKey: ['my-games'] });
-      void queryClient.invalidateQueries({ queryKey: ['my-stats'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.myGames() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.userStats() });
       // refetchQueries (no invalidateQueries) para que anyPlatformLinked se actualice
       // de forma INMEDIATA sin esperar al staleTime — evita el flash de "Tus juegos
       // aparecerán pronto" cuando el refetch de my-games termina antes que el de sync-summary.
-      void queryClient.refetchQueries({ queryKey: ['sync-summary'] });
+      void queryClient.refetchQueries({ queryKey: queryKeys.syncSummaryBase() });
     },
   });
 
@@ -165,7 +166,7 @@ export default function ProfileScreen() {
       });
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['profile'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.profile() });
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     },
     onError: () => {
@@ -187,7 +188,7 @@ export default function ProfileScreen() {
       });
     },
     onSuccess: (data) => {
-      void queryClient.invalidateQueries({ queryKey: ['profile'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.profile() });
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       const current = useSessionStore.getState().user;
       if (current) {

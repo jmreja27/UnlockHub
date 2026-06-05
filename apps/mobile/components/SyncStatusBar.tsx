@@ -9,6 +9,7 @@ import { useSyncAll } from '../hooks/useSyncAll';
 import { useSyncStatus } from '../hooks/useSyncStatus';
 import { useSyncProgress } from '../hooks/useSyncProgress';
 import { useTheme } from '../hooks/useTheme';
+import { queryKeys } from '../lib/queryKeys';
 
 // Formatea segundos a string legible (misma lógica que useSyncStatus.formatDuration)
 function formatCountdown(secs: number, t: (key: string, opts?: Record<string, unknown>) => string): string {
@@ -81,7 +82,7 @@ export function SyncStatusBar() {
   // Cuando el countdown llega a 0: el cooldown ha expirado — refrescar el estado
   useEffect(() => {
     if (countdownSecs === 0) {
-      void queryClient.invalidateQueries({ queryKey: ['sync-summary'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.syncSummaryBase() });
     }
   }, [countdownSecs, queryClient]);
 

@@ -1,9 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { SearchResponse } from '@unlockhub/types';
 
 import { api } from '../lib/api';
 import { useSessionStore } from '../stores/sessionStore';
+import { queryKeys } from '../lib/queryKeys';
+
+import { useDebounce } from './useDebounce';
 
 export type SearchFilter = 'all' | 'games' | 'users';
 
@@ -12,19 +15,12 @@ const MIN_QUERY_LENGTH = 2;
 
 export function useSearch(filter: SearchFilter = 'all') {
   const [query, setQuery] = useState('');
-  const [debouncedQuery, setDebouncedQuery] = useState('');
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => setDebouncedQuery(query.trim()), DEBOUNCE_MS);
-    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [query]);
+  const debouncedQuery = useDebounce(query.trim(), DEBOUNCE_MS);
 
   const enabled = debouncedQuery.length >= MIN_QUERY_LENGTH;
 
   const result = useQuery({
-    queryKey: ['search', debouncedQuery, filter],
+    queryKey: queryKeys.search(debouncedQuery, filter),
     queryFn: () =>
       api.get<SearchResponse>(
         `/api/v1/search?q=${encodeURIComponent(debouncedQuery)}&type=${filter}`,
@@ -40,7 +36,7 @@ export function useSearch(filter: SearchFilter = 'all') {
 
 export function useGameDetail(gameId: string | null) {
   return useQuery({
-    queryKey: ['game', gameId],
+    queryKey: queryKeys.game(gameId),
     queryFn: () => api.get<GameDetail>(`/api/v1/search/games/${gameId}`),
     enabled: !!gameId,
     staleTime: 1000 * 60 * 10,
@@ -52,7 +48,7 @@ export function useGameDetail(gameId: string | null) {
 export function useMyGameAchievements(gameId: string | null) {
   const { isAuthenticated } = useSessionStore();
   return useQuery({
-    queryKey: ['my-game-achievements', gameId],
+    queryKey: queryKeys.myGameAchievements(gameId),
     queryFn: () =>
       api.get<{ achievementId: string; unlockedAt: string }[]>(
         `/api/v1/users/me/games/${gameId}/achievements`,

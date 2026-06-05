@@ -3,6 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import type { PlatformAccount } from '@unlockhub/types';
 
 import { api } from '../lib/api';
+import { queryKeys } from '../lib/queryKeys';
 
 const COOLDOWN_MS = 30 * 60 * 1000;
 
@@ -19,7 +20,7 @@ export function useSyncAll(userId: string | undefined) {
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
 
   const { data: platforms } = useQuery({
-    queryKey: ['platforms', userId],
+    queryKey: queryKeys.platforms(userId ?? ''),
     queryFn: () => api.get<PlatformAccount[]>('/api/v1/platforms/'),
     enabled: !!userId,
     staleTime: 1000 * 60 * 5,
