@@ -1018,6 +1018,7 @@ Métricas disponibles:
 | Guías UGC de logros (crear + ver) | ✅ Activo |
 | Retar amigo en logro | ⚙️ Parcial |
 | Compartir logro | ✅ Activo |
+| Ver logros de otros usuarios (Sus logros + Comparar) | ✅ Activo |
 
 ### Rankings
 
