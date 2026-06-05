@@ -938,7 +938,7 @@ Métricas disponibles:
 ### Preferencias de usuario
 
 - **Idioma**: ES / EN — cambiable desde Profile → Ajustes
-- **Tema**: Solo "Oscuro" activo — modo claro pendiente (todos los componentes usan `text-white` hardcoded)
+- **Tema**: Oscuro y Claro — cambiable desde Profile → Ajustes (selector 🌙/☀️). Colores dinámicos vía `lib/colors.ts` + `hooks/useTheme.ts`. `preferencesStore.theme: 'dark' | 'light'` con persistencia AsyncStorage.
 - **Onboarding**: `preferencesStore.onboardingCompleted`
 
 ---
@@ -1105,7 +1105,7 @@ Métricas disponibles:
 | Upload de banner (Cloudinary) | ✅ Activo |
 | País (countryCode) | ✅ Activo |
 | Idioma ES/EN persistente | ✅ Activo |
-| Tema (solo oscuro activo) | ⚙️ Parcial |
+| Tema (oscuro y claro) | ✅ Activo |
 | Estadísticas avanzadas premium | 🚩 Gateado |
 | Privacidad de perfil (PUBLIC/FRIENDS_ONLY/PRIVATE) | ✅ Activo |
 
@@ -1191,6 +1191,8 @@ Ver [docs/BACKLOG.md](docs/BACKLOG.md)
 ---
 
 ## Última revisión de código
+
+**Fecha**: 2026-06-05 (sesión 62) — T57 modo claro implementado. `lib/colors.ts` con tokens `darkColors`/`lightColors`. `hooks/useTheme.ts` devuelve colores según tema activo. `preferencesStore.theme: 'dark'|'light'`. Selector activado en `profile.tsx` (🌙/☀️). 22 archivos actualizados — NativeWind para layout, inline styles para colores. i18n ES/EN. Tests: 364/364 ✅.
 
 **Fecha**: 2026-06-04 (sesión 59) — PL13 script limpieza BD + merge develop→main + tag v1.0.0+ limpieza ejecutada en producción. Script `scripts/cleanup-test-users.ts` creado y ejecutado: 7 usuarios de prueba eliminados, TestUser99 y Sovelyss preservados, catálogo intacto (**2.878 juegos + 134.928 logros**). Script ampliado a múltiples `--preserve-username` (Prisma `notIn`). Merge develop → main `--no-ff`. Tag `v1.0.0` en GitHub. PL13 ✅, PL15 ✅.
 

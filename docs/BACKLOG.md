@@ -98,7 +98,7 @@
 | T54 | Refactor general post-lanzamiento | 🔵 Cuando el volumen lo justifique — Fase 4. Deuda técnica acumulada: QueryKeys centralizadas (T46), deduplicar middleware upload (T44/T45), debounce unificado (T47), IDs AdMob centralizados (T48), code smells T44-T51. Rama dedicada `refactor/fase4`. |
 | T55 | ✅ Fix edge-to-edge Android 15 — contenido desplazado hacia arriba | Sesión 54 — todos los tabs cambiados a `edges={['left', 'right']}` en `SafeAreaView`; el header de React Navigation gestiona el inset superior y el tab bar el inferior. Sin el fix, `targetSdkVersion=35` contaba el safe area inset del status bar dos veces. |
 | T56 | ✅ Fixes de seguridad sesión 53 | ✅ En develop — `xbox.adapter.ts`: doble cifrado AES-256-GCM eliminado · `search.service.ts`: filtro `deletedAt: null` añadido en `searchUsers` · `user.service.ts`: revocación `RefreshToken`s añadida a transacción de borrado de cuenta |
-| T57 | Modo claro UI | 🔵 Cuando el volumen lo justifique — Fase 4. Todos los componentes usan `text-white` hardcoded — requiere auditar y añadir variantes de color claras en NativeWind. Rama `feat/light-mode`. |
+| T57 | ✅ Modo claro UI | ✅ Implementado en rama `feat/t57-light-mode` — `lib/colors.ts` (darkColors/lightColors), `hooks/useTheme.ts`, `preferencesStore.theme: 'dark'|'light'`, selector de tema en profile.tsx (🌙/☀️ activo). 22 ficheros actualizados: 9 componentes globales + 5 tabs + 3 pantallas. Inline styles reemplazan clases NativeWind hardcoded. 364/364 tests ✅, 0 errores TS/lint. |
 
 ### 🟢 Features
 
