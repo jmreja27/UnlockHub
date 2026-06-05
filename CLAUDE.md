@@ -810,11 +810,21 @@ io.adapter(createAdapter(pubClient, subClient));
 
 ### Estrategia de branching
 
-- `main` — producción. Solo merges desde `develop` tras smoke tests.
-- `develop` — integración. Base para todas las features.
-- `feat/nombre-feature` — una rama por feature, sale de `develop`.
-- `fix/descripcion` — hotfixes, pueden salir de `main` si es urgente.
-- Merge siempre con `--no-ff` y PR revisada. CI debe pasar antes del merge.
+- `main` — producción. Solo recibe merges desde `develop` en el momento de una release.
+- `develop` — integración. Base para todas las features y fixes.
+- `feat/nombre-feature` — una rama por feature, sale de `develop`, se mergea de vuelta a `develop`.
+- `fix/descripcion` — una rama por fix, sale de `develop`, se mergea de vuelta a `develop`.
+- `hotfix/descripcion` — fix urgente en producción, sale de `main`, se mergea a `main` Y a `develop`.
+
+**Flujo estándar:**
+1. `git checkout develop && git pull origin develop`
+2. `git checkout -b feat/nombre-feature`
+3. Implementar + tests + lint
+4. `git push origin feat/nombre-feature`
+5. PR → `develop` con `--no-ff`
+6. Cuando hay release: `develop` → `main` con `--no-ff` + `git tag vX.Y.Z`
+
+**Nunca** commitear directamente en `main` ni en `develop` — siempre desde rama.
 
 ---
 
