@@ -1,5 +1,6 @@
 jest.mock('../services/user.service', () => ({
   addXp: jest.fn().mockResolvedValue({ newXp: 100, newLevel: 1, leveledUp: false }),
+  invalidateUserPublicCache: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock('../services/ranking.service', () => ({

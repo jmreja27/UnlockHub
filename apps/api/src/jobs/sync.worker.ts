@@ -13,7 +13,7 @@ import { psnAdapter } from '../platforms/psn.adapter';
 import { xboxAdapter } from '../platforms/xbox.adapter';
 import { sendPush } from '../services/notification.service';
 import { createNotification } from '../services/inapp-notification.service';
-import { addXp } from '../services/user.service';
+import { addXp, invalidateUserPublicCache } from '../services/user.service';
 import { upsertUserScore } from '../services/ranking.service';
 
 import type { SyncJobData, SyncJobResult } from './sync.queue';
@@ -220,6 +220,11 @@ export function startSyncWorker() {
           );
         }
       }
+
+      // Invalidar caché pública del usuario — sus juegos/logros acaban de actualizarse
+      await invalidateUserPublicCache(userId).catch((err: unknown) => {
+        logger.warn({ err: (err as Error).message }, '[SyncWorker] Error al invalidar caché pública');
+      });
 
       await redis.del(syncProgressKey(userId, platform as Platform));
       if (io) {

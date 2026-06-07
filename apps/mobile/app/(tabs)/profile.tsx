@@ -10,7 +10,7 @@ import Constants from 'expo-constants';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { PlatformAccount, ProfileVisibility } from '@unlockhub/types';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { useSessionStore } from '../../stores/sessionStore';
 import { useAuth } from '../../hooks/useAuth';
