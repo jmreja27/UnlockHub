@@ -201,3 +201,43 @@ export const uploadAvatarHandler = makeUploadHandler(userService.uploadAvatar);
 
 // POST /api/v1/users/me/banner — subir banner del usuario autenticado
 export const uploadBannerHandler = makeUploadHandler(userService.uploadBanner);
+
+// GET /api/v1/users/:username/og — HTML con meta tags Open Graph para compartir el perfil
+export async function getOgProfileHandler(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { username } = req.params as { username: string };
+    const data = await userService.getOgProfileData(username);
+
+    if (!data) {
+      res.status(404).send('Not Found');
+      return;
+    }
+
+    const ogTitle = `${data.username} en UnlockHub`;
+    const ogDescription = `Nivel ${data.level} · ${data.xp.toLocaleString('es-ES')} XP · ${data.totalAchievements.toLocaleString('es-ES')} logros desbloqueados`;
+    const ogImage = data.avatar ?? 'https://unlockhub.app/og-default.png';
+    const ogUrl = `https://unlockhub.app/u/${encodeURIComponent(data.username)}`;
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(`<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>${ogTitle}</title>
+  <meta property="og:type" content="profile" />
+  <meta property="og:title" content="${ogTitle}" />
+  <meta property="og:description" content="${ogDescription}" />
+  <meta property="og:image" content="${ogImage}" />
+  <meta property="og:url" content="${ogUrl}" />
+  <meta property="og:site_name" content="UnlockHub" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="${ogTitle}" />
+  <meta name="twitter:description" content="${ogDescription}" />
+  <meta name="twitter:image" content="${ogImage}" />
+</head>
+<body></body>
+</html>`);
+  } catch (err) {
+    next(err);
+  }
+}

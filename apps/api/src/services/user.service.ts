@@ -226,6 +226,30 @@ export async function getPublicProfile(
 }
 
 /**
+ * Obtiene los datos mínimos necesarios para generar el HTML Open Graph de un perfil.
+ * Devuelve null si el usuario no existe, está eliminado (soft delete) o su perfil es PRIVATE.
+ * Los perfiles FRIENDS_ONLY exponen datos básicos — el OG tag es para crawlers de redes sociales.
+ */
+export async function getOgProfileData(username: string): Promise<{
+  username: string;
+  level: number;
+  xp: number;
+  avatar: string | null;
+  totalAchievements: number;
+} | null> {
+  const dbUser = await prisma.user.findUnique({
+    where: { username, deletedAt: null },
+    select: { id: true, username: true, level: true, xp: true, avatar: true, profileVisibility: true },
+  });
+
+  if (!dbUser || dbUser.profileVisibility === 'PRIVATE') return null;
+
+  const totalAchievements = await prisma.userAchievement.count({ where: { userId: dbUser.id } });
+
+  return { username: dbUser.username, level: dbUser.level, xp: dbUser.xp, avatar: dbUser.avatar, totalAchievements };
+}
+
+/**
  * Actualiza campos editables del perfil del usuario (bio, avatar, banner, countryCode, profileVisibility).
  * Cuando profileVisibility cambia, sincroniza los sorted sets de Redis en consecuencia:
  * - A no-PUBLIC → removeUserFromRankings (el usuario deja de aparecer en rankings)

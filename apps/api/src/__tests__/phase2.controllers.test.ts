@@ -55,7 +55,7 @@ function makeReq(overrides: Partial<Request & { user: { id: string } }> = {}): R
   } as unknown as Request;
 }
 
-const PAGINATED = { data: [], total: 0, page: 1, limit: 20 };
+const PAGINATED = { data: [], nextCursor: null };
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -71,10 +71,10 @@ beforeEach(() => {
 
 describe('activity controller', () => {
   it('getFriendsFeedHandler devuelve el feed paginado', async () => {
-    const req = makeReq({ query: { page: '1', limit: '20' } });
+    const req = makeReq({ query: { limit: '20' } });
     const res = makeRes();
     await getFriendsFeedHandler(req, res, makeNext());
-    expect(mockGetFriendsFeed).toHaveBeenCalledWith('u1', 1, 20);
+    expect(mockGetFriendsFeed).toHaveBeenCalledWith('u1', 20, undefined);
     expect(res.json).toHaveBeenCalledWith(PAGINATED);
   });
 

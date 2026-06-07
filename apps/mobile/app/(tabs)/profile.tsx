@@ -6,6 +6,7 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
+import Constants from 'expo-constants';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { PlatformAccount, ProfileVisibility } from '@unlockhub/types';
@@ -90,6 +91,9 @@ function ProfileSkeleton() {
     </View>
   );
 }
+
+const APP_VERSION = Constants.expoConfig?.version ?? '—';
+const APP_BUILD = String(Constants.expoConfig?.android?.versionCode ?? '—');
 
 export default function ProfileScreen() {
   const { t } = useTranslation();
@@ -933,6 +937,16 @@ export default function ProfileScreen() {
               })}
             </View>
           </View>
+
+          {/* Versión de la app */}
+          <Text
+            className="text-xs text-center mt-2"
+            style={{ color: colors.textMuted }}
+            accessibilityElementsHidden
+            testID="app-version"
+          >
+            {t('profile.app_version', { version: APP_VERSION, build: APP_BUILD })}
+          </Text>
         </View>
 
         {/* Actividad reciente */}

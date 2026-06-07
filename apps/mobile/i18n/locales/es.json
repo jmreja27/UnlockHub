@@ -345,7 +345,8 @@
     "compare_shared_games": "Juegos en común",
     "compare_xp_label": "Diferencia XP",
     "games_section": "Biblioteca de juegos",
-    "no_games": "Este usuario no tiene juegos aún."
+    "no_games": "Este usuario no tiene juegos aún.",
+    "share_label": "Compartir perfil"
   },
   "user_game": {
     "their_achievements": "Sus logros",
@@ -493,7 +494,8 @@
     "stats_best_streak": "Mejor racha",
     "stats_favorite_platform": "Plataforma favorita",
     "stats_rarest_achievement": "Logro más raro",
-    "stats_rarity_pct": "{{pct}}% lo tienen"
+    "stats_rarity_pct": "{{pct}}% lo tienen",
+    "app_version": "Versión {{version}} ({{build}})"
   },
   "premium": {
     "title": "UnlockHub Premium",

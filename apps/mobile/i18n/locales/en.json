@@ -345,7 +345,8 @@
     "compare_shared_games": "Games in common",
     "compare_xp_label": "XP difference",
     "games_section": "Game Library",
-    "no_games": "This user has no games yet."
+    "no_games": "This user has no games yet.",
+    "share_label": "Share profile"
   },
   "user_game": {
     "their_achievements": "Their achievements",
@@ -493,7 +494,8 @@
     "stats_best_streak": "Best Streak",
     "stats_favorite_platform": "Favorite Platform",
     "stats_rarest_achievement": "Rarest Achievement",
-    "stats_rarity_pct": "{{pct}}% have it"
+    "stats_rarity_pct": "{{pct}}% have it",
+    "app_version": "Version {{version}} ({{build}})"
   },
   "premium": {
     "title": "UnlockHub Premium",

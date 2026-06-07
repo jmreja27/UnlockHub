@@ -5,6 +5,7 @@ import {
   getMeHandler,
   updateMeHandler,
   getPublicProfileHandler,
+  getOgProfileHandler,
   getStreakMilestoneHandler,
   getMyGamesHandler,
   getMyGameAchievementsHandler,
@@ -30,6 +31,9 @@ router.get('/me/games/:gameId/achievements', authenticate, getMyGameAchievements
 router.get('/me/streak-milestone', authenticate, getStreakMilestoneHandler);
 router.get('/me/stats', authenticate, getMyStatsHandler);
 router.delete('/me', authenticate, deleteAccountHandler);
+
+// Ruta pública — HTML Open Graph para compartir perfiles en redes sociales
+router.get('/:username/og', getOgProfileHandler);
 
 // Ruta pública — perfil de cualquier usuario por username
 // authenticateOptional: si hay token, extrae el userId para respetar FRIENDS_ONLY

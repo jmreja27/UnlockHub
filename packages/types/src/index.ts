@@ -134,6 +134,12 @@ export interface PaginatedResponse<T> {
   limit: number;
 }
 
+/** Respuesta paginada por cursor — para feeds con scroll infinito hacia atrás en el tiempo. */
+export interface CursorPaginatedResponse<T> {
+  data: T[];
+  nextCursor: string | null;
+}
+
 /** Estructura de error HTTP consistente en toda la API. Formato: { error, code, details? } */
 export interface ApiError {
   error: string;

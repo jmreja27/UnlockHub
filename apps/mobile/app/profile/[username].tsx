@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
-import { View, Text, ScrollView, Pressable, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, Pressable, RefreshControl, Share } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
+import { Ionicons } from '@expo/vector-icons';
 
 import { usePublicProfile } from '../../hooks/usePublicProfile';
 import { useUserGames } from '../../hooks/useUserGames';
@@ -16,6 +17,7 @@ import { AvatarPlaceholder } from '../../components/AvatarPlaceholder';
 import { FriendshipButton } from '../../components/FriendshipButton';
 import { getPlatformColor } from '../../lib/platformColors';
 import { useTheme } from '../../hooks/useTheme';
+import { analytics } from '../../lib/analytics';
 
 interface CompareResult {
   targetUser: { username: string; level: number; xp: number; avatar: string | null };
@@ -74,17 +76,36 @@ export default function PublicProfileScreen() {
 
   const { data: gamesData, isLoading: gamesLoading } = useUserGames(username ?? '');
 
+  function handleShare() {
+    if (!username) return;
+    const ogUrl = `https://unlockhub.app/u/${encodeURIComponent(username)}`;
+    void Share.share({ message: ogUrl, url: ogUrl });
+    analytics.profileShared();
+  }
+
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.background }}>
-      <Pressable
-        onPress={() => router.back()}
-        className="px-4 pt-2 pb-1"
-        accessibilityLabel={t('common.back')}
-        accessibilityRole="button"
-        style={{ minWidth: 44, minHeight: 44, justifyContent: 'center' }}
-      >
-        <Text className="text-indigo-400 text-base">{t('common.back')}</Text>
-      </Pressable>
+      <View className="flex-row items-center justify-between px-4 pt-2 pb-1">
+        <Pressable
+          onPress={() => router.back()}
+          accessibilityLabel={t('common.back')}
+          accessibilityRole="button"
+          style={{ minWidth: 44, minHeight: 44, justifyContent: 'center' }}
+        >
+          <Text className="text-indigo-400 text-base">{t('common.back')}</Text>
+        </Pressable>
+        {profile && (
+          <Pressable
+            onPress={handleShare}
+            accessibilityRole="button"
+            accessibilityLabel={t('public_profile.share_label')}
+            style={{ minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'flex-end' }}
+            testID="share-profile-button"
+          >
+            <Ionicons name="share-social-outline" size={22} color="#818cf8" />
+          </Pressable>
+        )}
+      </View>
 
       {isLoading ? (
         <ProfileSkeleton />

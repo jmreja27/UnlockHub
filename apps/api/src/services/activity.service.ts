@@ -1,4 +1,4 @@
-import type { ActivityEvent, ActivityEventType, PaginatedResponse } from '@unlockhub/types';
+import type { ActivityEvent, ActivityEventType, PaginatedResponse, CursorPaginatedResponse } from '@unlockhub/types';
 
 import { prisma } from '../lib/prisma';
 import { friendshipRepository } from '../repositories/friendship.repository';
@@ -35,27 +35,28 @@ export async function createEvent(
 
 export async function getFriendsFeed(
   userId: string,
-  page: number,
   limit: number,
-): Promise<PaginatedResponse<ActivityEvent>> {
+  cursor?: string,
+): Promise<CursorPaginatedResponse<ActivityEvent>> {
   const friendIds = await friendshipRepository.findAcceptedFriendIds(userId);
 
   // El feed incluye también los eventos propios del usuario
   const authorIds = [...friendIds, userId];
-  const skip = (page - 1) * limit;
 
-  const [rows, total] = await Promise.all([
-    prisma.activityEvent.findMany({
-      where: { userId: { in: authorIds } },
-      include: { user: { select: { id: true, username: true, avatar: true } } },
-      orderBy: { createdAt: 'desc' },
-      skip,
-      take: limit,
-    }),
-    prisma.activityEvent.count({ where: { userId: { in: authorIds } } }),
-  ]);
+  const rows = await prisma.activityEvent.findMany({
+    where: {
+      userId: { in: authorIds },
+      ...(cursor ? { id: { lt: cursor } } : {}),
+    },
+    include: { user: { select: { id: true, username: true, avatar: true } } },
+    orderBy: { createdAt: 'desc' },
+    take: limit,
+  });
 
-  return { data: rows.map(toDto), total, page, limit };
+  const lastRow = rows[rows.length - 1];
+  const nextCursor = rows.length === limit && lastRow ? lastRow.id : null;
+
+  return { data: rows.map(toDto), nextCursor };
 }
 
 export async function getPublicFeed(
