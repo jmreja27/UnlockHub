@@ -3,9 +3,29 @@ import type { ProfileVisibility as PrismaProfileVisibility } from '@prisma/clien
 
 import { AppError } from '../middleware/errorHandler';
 import { prisma } from '../lib/prisma';
+import { redis } from '../lib/redis';
 import { cloudinary } from '../lib/cloudinary';
 
 import { upsertUserScore, removeUserFromRankings } from './ranking.service';
+
+const USER_GAMES_CACHE_TTL = 300; // 5 minutos
+const USER_GAMES_KEYS_SET = (userId: string) => `user-cache-keys:${userId}`;
+const userGamesCacheKey = (username: string, platform: string, page: number, limit: number) =>
+  `user-games:${username}:${platform}:${page}:${limit}`;
+const userGameAchCacheKey = (username: string, gameId: string, requestingUserId: string) =>
+  `user-game-ach:${username}:${gameId}:${requestingUserId}`;
+
+/**
+ * Invalida toda la caché pública del usuario (juegos y logros de sus juegos).
+ * Llamar tras un sync exitoso o al cambiar la visibilidad del perfil.
+ */
+export async function invalidateUserPublicCache(userId: string): Promise<void> {
+  const keys = await redis.smembers(USER_GAMES_KEYS_SET(userId));
+  if (keys.length > 0) {
+    await redis.del(...keys);
+  }
+  await redis.del(USER_GAMES_KEYS_SET(userId));
+}
 
 // XP necesario por nivel — cada 1000 XP sube un nivel, máximo nivel 100
 export const XP_PER_LEVEL = 1000;
@@ -284,6 +304,8 @@ export async function updateProfile(
     } else {
       await removeUserFromRankings(userId, platformList);
     }
+    // Visibilidad cambiada — invalidar caché pública para que los nuevos permisos surtan efecto
+    await invalidateUserPublicCache(userId);
   }
 
   return mapUser(dbUser);
@@ -759,7 +781,15 @@ export async function getUserGames(
 
   await checkProfileVisibility(dbUser, requestingUserId);
 
-  return getMyGames(dbUser.id, platform, page, limit);
+  // FRIENDS_ONLY: privacidad validada arriba; la caché es segura porque el check siempre corre primero
+  const cacheKey = userGamesCacheKey(username, platform ?? 'all', page, limit);
+  const cached = await redis.get(cacheKey);
+  if (cached) return JSON.parse(cached) as Awaited<ReturnType<typeof getMyGames>>;
+
+  const result = await getMyGames(dbUser.id, platform, page, limit);
+  await redis.set(cacheKey, JSON.stringify(result), 'EX', USER_GAMES_CACHE_TTL);
+  await redis.sadd(USER_GAMES_KEYS_SET(dbUser.id), cacheKey);
+  return result;
 }
 
 interface AchievementWithCompareStatus {
@@ -818,6 +848,13 @@ export async function getUserGameAchievements(
   });
   if (!game) throw new AppError('Juego no encontrado', 'GAME_NOT_FOUND', 404);
 
+  // isUnlockedByMe varía por solicitante — clave incluye requestingUserId para datos personalizados
+  const achCacheKey = userGameAchCacheKey(username, gameId, requestingUserId ?? 'anon');
+  const achCached = await redis.get(achCacheKey);
+  if (achCached) {
+    return JSON.parse(achCached) as Awaited<ReturnType<typeof getUserGameAchievements>>;
+  }
+
   const achievementRows = await prisma.achievement.findMany({
     where: { gameId },
     orderBy: [{ rarity: 'asc' }, { normalizedPoints: 'desc' }],
@@ -859,7 +896,7 @@ export async function getUserGameAchievements(
     isUnlockedByMe: canCompare ? myEarnedSet.has(a.id) : null,
   }));
 
-  return {
+  const result = {
     game: {
       id: game.id,
       title: game.title,
@@ -876,6 +913,10 @@ export async function getUserGameAchievements(
     earnedCount,
     totalCount: achievementRows.length,
   };
+
+  await redis.set(achCacheKey, JSON.stringify(result), 'EX', USER_GAMES_CACHE_TTL);
+  await redis.sadd(USER_GAMES_KEYS_SET(dbUser.id), achCacheKey);
+  return result;
 }
 
 /**

@@ -56,6 +56,17 @@ jest.mock('../services/ranking.service', () => ({
   removeUserFromRankings: jest.fn().mockResolvedValue(undefined),
 }));
 
+// Mock de Redis — getUserGames/getUserGameAchievements/invalidateUserPublicCache usan caché
+jest.mock('../lib/redis', () => ({
+  redis: {
+    get: jest.fn().mockResolvedValue(null),   // siempre cache miss en tests
+    set: jest.fn().mockResolvedValue('OK'),
+    sadd: jest.fn().mockResolvedValue(1),
+    smembers: jest.fn().mockResolvedValue([]),
+    del: jest.fn().mockResolvedValue(1),
+  },
+}));
+
 
 import { prisma } from '../lib/prisma';
 import { cloudinary } from '../lib/cloudinary';

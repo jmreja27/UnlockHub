@@ -99,6 +99,9 @@ model User {
   @@index([countryCode])
   @@index([deletedAt])
   @@index([role])
+  @@index([createdAt])
+  @@index([isPremium])
+  @@index([lastSyncAt])
 }
 
 // ─── Plataformas ──────────────────────────────────────────────────────────────
