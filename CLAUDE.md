@@ -1046,9 +1046,10 @@ Métricas disponibles:
 | Rechazar solicitud de amistad | ✅ Activo |
 | Eliminar amigo | ✅ Activo |
 | Bloquear usuario | ✅ Activo |
-| Feed de actividad | ✅ Activo |
+| Feed de actividad | ✅ Activo — cursor pagination (`id: { lt: cursor }`, `CursorPaginatedResponse<T>`, `useFeed` con `useInfiniteQuery`) |
 | Perfil público (sin email) | ✅ Activo |
 | Comparación de perfiles ("vs tú") | ✅ Activo |
+| Compartir perfil (URL OG) | ✅ Activo — share button en `profile/[username].tsx` comparte `https://unlockhub.app/u/{username}` |
 
 ### Notificaciones
 
@@ -1109,6 +1110,7 @@ Métricas disponibles:
 | País (countryCode) | ✅ Activo |
 | Idioma ES/EN persistente | ✅ Activo |
 | Tema (oscuro y claro) | ✅ Activo |
+| Versión de app en perfil | ✅ Activo — `expo-constants` al pie de Ajustes, i18n `profile.app_version` |
 | Estadísticas avanzadas premium | 🚩 Gateado |
 | Privacidad de perfil (PUBLIC/FRIENDS_ONLY/PRIVATE) | ✅ Activo |
 
@@ -1127,6 +1129,7 @@ Métricas disponibles:
 | Socket.io multi-instancia (redis-adapter) | ✅ Activo |
 | Sync progress Socket.io | ✅ Activo |
 | Activity feed Socket.io | ✅ Activo |
+| OG profiles (`GET /api/v1/users/:username/og`) | ✅ Activo — HTML Open Graph por perfil público; PRIVATE → 404 |
 | Rate limiting global (500 req/15min) | ✅ Activo |
 | Rate limiting auth (10 req/15min) | ✅ Activo |
 | Rate limiting search (60 req/min) | ✅ Activo |
@@ -1151,7 +1154,7 @@ Ver [docs/DECISIONS.md](docs/DECISIONS.md)
 | **Fase 1 — MVP** | Monorepo, auth, Steam + RA, logros, rankings, perfil, i18n, AdMob | ✅ Completa |
 | **Fase 2 — Social** | Amigos, feed, retos, puntos, racha, push notifications, Wrapped, perfil público, búsqueda | ✅ Completa |
 | **Fase 3 — Producción** | Railway, Sentry, GDPR, escudo de racha, notificaciones, Wrapped mensual, canje puntos, stats, guías UGC, dashboard admin, tests k6, Play Store, premium diferido a Fase 4 | 🔄 En progreso |
-| **Fase 4 — Avanzado** | Torneos internos, App Store iOS, Xbox, OG profiles | 🔲 Futuro |
+| **Fase 4 — Avanzado** | Torneos internos, App Store iOS, Xbox | 🔲 Futuro |
 
 > **Aviso legal Fase 4**: Torneos con recompensas económicas pueden clasificarse como juegos de azar en España (Ley 13/2011). Solo recompensas en puntos/días premium hasta consultar con abogado.
 
@@ -1194,6 +1197,8 @@ Ver [docs/BACKLOG.md](docs/BACKLOG.md)
 ---
 
 ## Última revisión de código
+
+**Fecha**: 2026-06-07 (sesión 64) — F28, F10, T4 implementados en rama `feat/f28-f10-t4`. **F28**: versión de app al pie de ajustes en `profile.tsx` — `expo-constants` + i18n `profile.app_version`. **F10**: `GET /api/v1/users/:username/og` devuelve HTML con Open Graph meta tags; `getOgProfileData()` en `user.service.ts`; PRIVATE → 404; share button en `profile/[username].tsx` comparte `https://unlockhub.app/u/{username}`. **T4**: `getFriendsFeed` reemplaza offset por cursor (`id: { lt: cursor }`); respuesta `CursorPaginatedResponse<T>` en `@unlockhub/types`; `useFeed` migrado a `useInfiniteQuery` con `pageParam` como cursor + Socket.io prepend intacto. API: 597/597 tests ✅. Mobile: 364/364 tests ✅. 0 errores TS/lint.
 
 **Fecha**: 2026-06-05 (sesión 63) — T54 refactor completado. BUILD_LOCAL.md duplicado eliminado (raíz obsoleto vs docs/ actualizado). API: `createUploadMiddleware(field)` factory en upload.middleware.ts (T45); `makeUploadHandler(serviceMethod)` en user.controller.ts (T44). Mobile: `lib/queryKeys.ts` con 30+ claves tipadas — actualizados 15 hooks + 12 screens (T46); `hooks/useDebounce.ts` que reemplaza el patrón timerRef duplicado en useSearch/useSearchAchievements (T47); `lib/adUnits.ts` `ADMOB_TEST_IDS` centraliza los 3 IDs de test AdMob (T48). Fix colateral: `profile.tsx` invalidaba `['my-stats']` (no-op) — corregido a `queryKeys.userStats()`. API: 593/593 tests ✅. Mobile: 364/364 tests ✅. 0 errores TS/lint.
 

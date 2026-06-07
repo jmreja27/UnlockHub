@@ -45,7 +45,7 @@
 | T1 | Paginación biblioteca | ✅ |
 | T2 | Reconexión Socket.io | ✅ |
 | T3 | Background sync scheduler | ✅ |
-| T4 | Paginación cursor en feed | 🔲 Cuando el volumen lo justifique |
+| T4 | ✅ Paginación cursor en feed | ✅ Cursor-based: `getFriendsFeed(userId, limit, cursor?)` devuelve `CursorPaginatedResponse<ActivityEvent>` con `nextCursor`. `useFeed` usa `useInfiniteQuery` con `pageParam` como cursor. |
 | T5 | Tests de carga k6 | ✅ |
 | T6 | Tests unitarios nuevos servicios | ✅ |
 | T7 | Reescribir FeedScreen.test.tsx | ✅ Reescrito correctamente — mockea `useMyGames`; 9 tests pasando |
@@ -113,7 +113,7 @@
 | F7 | Guías UGC de logros | ✅ |
 | F8 | Avatar upload | ✅ Backend Cloudinary + mobile expo-image-picker — activo en prod (`CLOUDINARY_URL` configurada en Railway ✅) |
 | F9 | Dashboard admin | ✅ |
-| F10 | OG profiles | 🟢 Largo plazo — Fase 4 |
+| F10 | ✅ OG profiles | ✅ `GET /api/v1/users/:username/og` devuelve HTML con meta tags Open Graph (title, description, image, url). PRIVATE → 404. Share button en `profile/[username].tsx` comparte `https://unlockhub.app/u/{username}`. |
 | F11 | Búsqueda de logros con filtro de plataforma | 🔲 Eliminado del Search tab en sesión 37 — hook `useSearchAchievements` y endpoint `GET /api/v1/search?type=achievements` intactos para uso futuro (T27) |
 | F12 | SyncStatusBar — feedback de sync en biblioteca | ✅ Botón sync, syncs restantes (free), cooldown countdown, última sync, próximo auto sync |
 | F13 | Activar premium + RevenueCat | 🟡 Alta — Fase 4. Código 100% intacto. Pasos: (1) completar B18/B19/B20 · (2) `FEATURES.premium = true` en `featureFlags.ts` · (3) `FEATURES.pointsRedeem = true` · (4) `FEATURES.advancedStats = true`. `react-native-purchases` v10, `usePremiumPlans`, `useSubscription`, `useRevenueCat`, `premium.tsx`, webhook backend — todo listo. |
@@ -131,7 +131,7 @@
 | F25 | Xbox — vinculación y sync | 🔵 Cuando el volumen lo justifique — Fase 4. `xbox.adapter.ts` implementado y gateado. Requiere OAuth2 Microsoft Identity Platform + verificación de empresa + `XBOX_CLIENT_ID`/`XBOX_CLIENT_SECRET` en Railway. |
 | F26 | App Store iOS | 🟢 Largo plazo — Fase 4. Apple Developer Program $99/año (V4). Requiere cuenta + certificados + TestFlight + listing App Store. |
 | F27 | Torneos internos | 🟢 Largo plazo — Fase 4. Consultar abogado antes de implementar (Ley 13/2011 — juegos de azar España). Solo recompensas en puntos/días premium. |
-| F28 | Mostrar versión de la app en perfil | 🔲 Fase 4 — Añadir el número de versión de la app (ej: v1.0.0 (5)) en pequeño en la pantalla de perfil, típicamente al pie de la sección de ajustes. Usar expo-constants (Constants.expoConfig?.version + Constants.expoConfig?.android?.versionCode) para obtener la versión en tiempo de ejecución. |
+| F28 | ✅ Mostrar versión de la app en perfil | ✅ `expo-constants` — texto "Versión {{version}} ({{build}})" al pie de la sección de ajustes en `profile.tsx`. i18n ES/EN. `testID="app-version"`. |
 | F29 | ✅ Privacidad de perfil (3 niveles) | ✅ Implementado sesión 60. Prisma: `ProfileVisibility` enum + `User.profileVisibility @default(PUBLIC)` + migración. Backend: `getPublicProfile` (PRIVATE→404, FRIENDS_ONLY→403 si no es amigo), `compareProfiles` respeta visibilidad, `updateProfile` sincroniza Redis al cambiar, `upsertUserScore` omite zadd si no PUBLIC, `authenticateOptional` en `GET /users/:username`. Mobile: selector inline 3 opciones en ajustes de perfil, perfil público diferencia 403 vs 404. i18n ES/EN. 575/575 API · 355/355 mobile · 0 errores TS/lint. |
 
 ### 🔶 Post-lanzamiento — Verificaciones pendientes
