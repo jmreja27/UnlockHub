@@ -616,7 +616,7 @@ export interface PlatformAdapter {
 
 `background-sync.scheduler.ts` — ✅ Implementado.
 - Cron: `03:00 UTC` diariamente.
-- Sincroniza usuarios con `lastSyncAt > 24h` y actividad reciente (login en últimos 7 días).
+- Sincroniza usuarios cuyo `lastSyncAt` es `null` o lleva más de 24h sin actualizarse.
 - Respeta contador Steam: pausa si `steam:api:calls:<date>` supera el 80% del límite.
 - Concurrencia máxima: 5 usuarios en paralelo.
 
@@ -1198,6 +1198,8 @@ Ver [docs/BACKLOG.md](docs/BACKLOG.md)
 ---
 
 ## Última revisión de código
+
+**Fecha**: 2026-06-07 (sesión 67) — Revisión completa del proyecto (backend + mobile + packages). Backlog actualizado: F20 ✅ (ad units Rankings/Friends + EAS secrets configurados), PL14 ✅ (edge-to-edge Android 15 validado en dispositivo físico), PL19 ⚙️ añadido (smoke tests finales antes de promover a Producción). CLAUDE.md corregido: descripción `background-sync.scheduler.ts` eliminaba referencia a "login en últimos 7 días" que no existe en código ni schema (no hay campo `lastLoginAt`). Sin bugs críticos encontrados — código limpio en los ~30 archivos revisados. Tests: 610 API + 368 mobile ✅. 0 errores TS/lint.
 
 **Fecha**: 2026-06-07 (sesión 66) — Optimizaciones pre-producción. **PL16**: 3 índices PostgreSQL en `User` (`createdAt`, `isPremium`, `lastSyncAt`) + migración `20260607000000_add_user_performance_indexes`. **PL17**: caché Redis TTL 5 min en `getUserGames` y `getUserGameAchievements`; `invalidateUserPublicCache()` llamada desde sync.worker y updateProfile (cambio de profileVisibility). **PL18**: 11 archivos migrados a imports directos `@expo/vector-icons/Ionicons` — elimina glyph maps no usados. Tests: 610 API + 368 mobile ✅. 0 errores TS/lint.
 
