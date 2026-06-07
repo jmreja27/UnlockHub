@@ -55,6 +55,10 @@ interface Guide {
   createdAt: string;
 }
 
+interface FetchAchievementsResult {
+  achievementsAdded: number;
+}
+
 interface GuidesResponse {
   data: Guide[];
   total: number;
@@ -324,6 +328,15 @@ export default function GameDetailScreen() {
     onError: () => Alert.alert(t('common.error_generic')),
   });
 
+  const fetchAchievementsMutation = useMutation({
+    mutationFn: () =>
+      api.post<FetchAchievementsResult>(`/api/v1/games/${id ?? ''}/fetch-achievements`),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.game(id ?? null) });
+    },
+    onError: () => Alert.alert(t('common.error_generic')),
+  });
+
   // ── Callbacks ────────────────────────────────────────────────────────────────
 
   const handleShare = useCallback(
@@ -458,15 +471,37 @@ export default function GameDetailScreen() {
             }}
           />
         ) : game && filteredAchievements.length === 0 ? (
-          <Text className="text-sm text-center mt-12 px-8" style={{ color: colors.textMuted }}>
-            {filter === 'all'
-              ? t('game.no_achievements')
-              : filter === 'earned' && !isAuthenticated
-              ? t('game.link_platform_to_see_progress', {
-                  platform: PLATFORM_LABEL[game.platform] ?? game.platform,
-                })
-              : t('game.no_filtered_achievements')}
-          </Text>
+          <View className="items-center mt-12 px-8">
+            <Text className="text-sm text-center" style={{ color: colors.textMuted }}>
+              {filter === 'all'
+                ? t('game.no_achievements')
+                : filter === 'earned' && !isAuthenticated
+                ? t('game.link_platform_to_see_progress', {
+                    platform: PLATFORM_LABEL[game.platform] ?? game.platform,
+                  })
+                : t('game.no_filtered_achievements')}
+            </Text>
+            {filter === 'all' && game.totalAchievements === 0 && isAuthenticated && (
+              <Pressable
+                testID="fetch-achievements-button"
+                onPress={() => { if (!fetchAchievementsMutation.isPending) fetchAchievementsMutation.mutate(); }}
+                disabled={fetchAchievementsMutation.isPending}
+                className="mt-4 px-6 py-3 rounded-xl bg-primary items-center"
+                accessibilityRole="button"
+                accessibilityLabel={t('game.fetch_achievements')}
+                accessibilityState={{ busy: fetchAchievementsMutation.isPending }}
+                style={{ minWidth: 180 }}
+              >
+                {fetchAchievementsMutation.isPending ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text className="text-white text-sm font-semibold">
+                    {t('game.fetch_achievements')}
+                  </Text>
+                )}
+              </Pressable>
+            )}
+          </View>
         ) : null}
       </View>
 

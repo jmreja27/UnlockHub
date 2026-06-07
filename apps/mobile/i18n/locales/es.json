@@ -139,6 +139,7 @@
   "game": {
     "rarity": "{{pct}}% lo tienen",
     "no_achievements": "Este juego aún no tiene logros registrados",
+    "fetch_achievements": "Cargar logros",
     "no_filtered_achievements": "Sin logros para este filtro",
     "link_platform_to_see_progress": "Vincula tu cuenta de {{platform}} para ver tu progreso",
     "earned_progress": "{{earned}}/{{total}} logros · {{pct}}%",

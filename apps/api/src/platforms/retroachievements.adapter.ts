@@ -309,6 +309,63 @@ async function processRaGame(
   return { gamesUpdated: 1, achievementsSynced };
 }
 
+// ─── Fetch de definiciones de logros sin progreso de usuario ─────────────────
+
+export interface RaAchievementDefinition {
+  externalId: string;
+  title: string;
+  description: string | null;
+  iconUrl: string | null;
+  rawValue: number | null;
+  normalizedPoints: number;
+}
+
+/**
+ * Obtiene las definiciones de logros de un juego de RA usando las credenciales del sistema.
+ * No incluye progreso del usuario — solo metadatos de los logros.
+ * Usa caché resiliente (normal + stale) igual que el sync.
+ */
+export async function fetchRaAchievementDefinitions(
+  gameExternalId: string,
+): Promise<RaAchievementDefinition[]> {
+  if (!RA_SYSTEM_KEY) {
+    throw new AppError(
+      'Credenciales del sistema de RetroAchievements no configuradas.',
+      'RA_SYSTEM_NOT_CONFIGURED',
+      503,
+    );
+  }
+
+  const cacheKey = `ra:game:${gameExternalId}:${RA_SYSTEM_USER}`;
+
+  let gameProgress: RaGameProgress | null = null;
+  try {
+    const url = `${RA_API_BASE}/API_GetGameInfoAndUserProgress.php`;
+    const response = await axios.get<RaGameProgress>(url, {
+      params: { z: RA_SYSTEM_USER, y: RA_SYSTEM_KEY, g: gameExternalId, u: RA_SYSTEM_USER },
+      timeout: 10_000,
+    });
+    gameProgress = response.data;
+    await setResilientCache(cacheKey, gameProgress, CACHE_TTL_GAME_PROGRESS);
+  } catch {
+    gameProgress = await getStaleCache<RaGameProgress>(cacheKey);
+  }
+
+  if (!gameProgress?.Achievements) return [];
+
+  return Object.entries(gameProgress.Achievements).map(([achId, ach]) => {
+    const externalId = String(ach.ID ?? achId);
+    return {
+      externalId,
+      title: ach.Title,
+      description: ach.Description ?? null,
+      iconUrl: buildBadgeUrl(ach.BadgeName),
+      rawValue: ach.Points ?? null,
+      normalizedPoints: normalizePoints(ach.Points),
+    };
+  });
+}
+
 // ─── Adapter ──────────────────────────────────────────────────────────────────
 
 export const retroAchievementsAdapter: PlatformAdapter = {

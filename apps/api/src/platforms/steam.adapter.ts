@@ -597,3 +597,88 @@ export class SteamAdapter implements PlatformAdapter {
 
 // Exportar instancia singleton del adapter
 export const steamAdapter = new SteamAdapter();
+
+// ─── Fetch de definiciones de logros sin progreso de usuario ─────────────────
+
+export interface SteamAchievementDefinition {
+  externalId: string;
+  title: string;
+  description: string | null;
+  iconUrl: string | null;
+  rarity: number | null;
+  normalizedPoints: number;
+}
+
+/**
+ * Obtiene las definiciones de logros de un juego de Steam sin requerir un usuario vinculado.
+ * Usa GetSchemaForGame + GetGlobalAchievementPercentagesForApp con la API key del sistema.
+ * Lanza STEAM_SYSTEM_NOT_CONFIGURED (503) si STEAM_API_KEY no está configurada.
+ */
+export async function fetchSteamAchievementDefinitions(
+  appId: string,
+): Promise<SteamAchievementDefinition[]> {
+  const apiKey = process.env['STEAM_API_KEY'] ?? '';
+  if (!apiKey) {
+    throw new AppError(
+      'Steam API key del sistema no configurada.',
+      'STEAM_SYSTEM_NOT_CONFIGURED',
+      503,
+    );
+  }
+
+  const schemaRaw = await cachedFetch<SteamSchemaAchievement[]>(
+    `steam:schema:${appId}:es`,
+    TTL_SCHEMA,
+    async () => {
+      const url = `${STEAM_API_BASE}/ISteamUserStats/GetSchemaForGame/v2/`;
+      try {
+        const response = await axios.get<{
+          game?: { availableGameStats?: { achievements?: SteamSchemaAchievement[] } };
+        }>(url, {
+          params: { key: apiKey, appid: appId, l: 'spanish', format: 'json' },
+        });
+        return response.data.game?.availableGameStats?.achievements ?? [];
+      } catch {
+        return [];
+      }
+    },
+  );
+
+  if (schemaRaw.length === 0) return [];
+
+  const rarityRaw = await cachedFetch<SteamGlobalAchievementPercentage[]>(
+    `steam:rarity:${appId}`,
+    TTL_RARITY,
+    async () => {
+      const url = `${STEAM_API_BASE}/ISteamUserStats/GetGlobalAchievementPercentagesForApp/v0002/`;
+      try {
+        const response = await axios.get<{
+          achievementpercentages?: { achievements?: SteamGlobalAchievementPercentage[] };
+        }>(url, { params: { gameid: appId, format: 'json' } });
+        return response.data.achievementpercentages?.achievements ?? [];
+      } catch {
+        return [];
+      }
+    },
+  );
+
+  const rarityMap = new Map(rarityRaw.map((e) => [e.name, e.percent]));
+
+  return schemaRaw.map((ach) => {
+    const rawRarity = rarityMap.get(ach.name) ?? 100;
+    const rarityValue = parseFloat(String(rawRarity));
+    const rarityPercent = isNaN(rarityValue) ? 100 : rarityValue;
+    return {
+      externalId: ach.name,
+      title: ach.displayName,
+      description: ach.description ?? null,
+      iconUrl: ach.icon
+        ? ach.icon.startsWith('http')
+          ? ach.icon
+          : `${STEAM_STORE_CDN}/${appId}/${ach.icon}.jpg`
+        : null,
+      rarity: isNaN(rarityValue) ? null : rarityValue,
+      normalizedPoints: normalizePoints(rarityPercent),
+    };
+  });
+}
