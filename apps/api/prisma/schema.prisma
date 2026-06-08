@@ -47,6 +47,12 @@ enum StoreProvider {
   INTERNAL
 }
 
+enum ProfileVisibility {
+  PUBLIC
+  FRIENDS_ONLY
+  PRIVATE
+}
+
 // ─── Usuarios ─────────────────────────────────────────────────────────────────
 
 model User {
@@ -64,10 +70,11 @@ model User {
   streakShields Int       @default(0)
   countryCode   String?
   role          UserRole  @default(USER)
-  isPremium     Boolean   @default(false)
-  premiumUntil  DateTime?
-  lastSyncAt    DateTime?
-  deletedAt     DateTime?
+  isPremium         Boolean           @default(false)
+  premiumUntil      DateTime?
+  lastSyncAt        DateTime?
+  profileVisibility ProfileVisibility @default(PUBLIC)
+  deletedAt         DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -92,6 +99,9 @@ model User {
   @@index([countryCode])
   @@index([deletedAt])
   @@index([role])
+  @@index([createdAt])
+  @@index([isPremium])
+  @@index([lastSyncAt])
 }
 
 // ─── Plataformas ──────────────────────────────────────────────────────────────

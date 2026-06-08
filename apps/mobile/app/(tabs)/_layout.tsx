@@ -1,5 +1,5 @@
 import { Tabs, Redirect } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import type { PaginatedResponse, Friendship } from '@unlockhub/types';
@@ -8,6 +8,7 @@ import { api } from '../../lib/api';
 import { useSessionStore } from '../../stores/sessionStore';
 import { NotificationBell } from '../../components/NotificationBell';
 import { FEATURES } from '../../lib/featureFlags';
+import { queryKeys } from '../../lib/queryKeys';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -35,7 +36,7 @@ export default function TabsLayout() {
   // Se llama aquí (antes del guard) para respetar React Rules of Hooks — nunca
   // puede haber un return condicional entre llamadas a hooks.
   const { data: pendingData } = useQuery({
-    queryKey: ['friends', 'pending'],
+    queryKey: queryKeys.friendsPending(),
     queryFn: () => api.get<PaginatedResponse<Friendship>>('/api/v1/friends/pending?limit=1'),
     enabled: isAuthenticated,
     staleTime: 1000 * 60 * 2,

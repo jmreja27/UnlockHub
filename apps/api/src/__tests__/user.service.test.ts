@@ -40,6 +40,12 @@ jest.mock('../lib/prisma', () => ({
     refreshToken: {
       updateMany: jest.fn(),
     },
+    friendship: {
+      findFirst: jest.fn(),
+    },
+    game: {
+      findUnique: jest.fn(),
+    },
     $transaction: jest.fn(),
   },
 }));
@@ -50,12 +56,25 @@ jest.mock('../services/ranking.service', () => ({
   removeUserFromRankings: jest.fn().mockResolvedValue(undefined),
 }));
 
+// Mock de Redis — getUserGames/getUserGameAchievements/invalidateUserPublicCache usan caché
+jest.mock('../lib/redis', () => ({
+  redis: {
+    get: jest.fn().mockResolvedValue(null),   // siempre cache miss en tests
+    set: jest.fn().mockResolvedValue('OK'),
+    sadd: jest.fn().mockResolvedValue(1),
+    smembers: jest.fn().mockResolvedValue([]),
+    del: jest.fn().mockResolvedValue(1),
+  },
+}));
+
+
 import { prisma } from '../lib/prisma';
 import { cloudinary } from '../lib/cloudinary';
-import { upsertUserScore } from '../services/ranking.service';
+import { upsertUserScore, removeUserFromRankings } from '../services/ranking.service';
 
 const mockPrisma = prisma as jest.Mocked<typeof prisma>;
 const mockUpsertUserScore = upsertUserScore as jest.Mock;
+const mockRemoveUserFromRankings = removeUserFromRankings as jest.Mock;
 
 // Usuario base para los tests
 const baseUser = {
@@ -73,6 +92,7 @@ const baseUser = {
   isPremium: false,
   premiumUntil: null,
   lastSyncAt: null,
+  profileVisibility: 'PUBLIC' as const,
   createdAt: new Date('2024-01-01T00:00:00.000Z'),
   updatedAt: new Date('2024-01-01T00:00:00.000Z'),
 };
@@ -203,6 +223,63 @@ describe('userService.getPublicProfile', () => {
       }),
     );
   });
+
+  // F29: privacidad de perfil
+  it('F29: perfil PRIVATE devuelve USER_NOT_FOUND 404', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({
+      ...baseUser,
+      profileVisibility: 'PRIVATE',
+      platformAccounts: [],
+    });
+
+    await expect(userService.getPublicProfile('testuser')).rejects.toMatchObject({
+      code: 'USER_NOT_FOUND',
+      statusCode: 404,
+    });
+  });
+
+  it('F29: perfil FRIENDS_ONLY sin requestingUserId devuelve PROFILE_FRIENDS_ONLY 403', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({
+      ...baseUser,
+      profileVisibility: 'FRIENDS_ONLY',
+      platformAccounts: [],
+    });
+
+    await expect(userService.getPublicProfile('testuser', undefined)).rejects.toMatchObject({
+      code: 'PROFILE_FRIENDS_ONLY',
+      statusCode: 403,
+    });
+  });
+
+  it('F29: perfil FRIENDS_ONLY sin amistad aceptada devuelve PROFILE_FRIENDS_ONLY 403', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({
+      ...baseUser,
+      id: 'user-target',
+      profileVisibility: 'FRIENDS_ONLY',
+      platformAccounts: [],
+    });
+    (mockPrisma.friendship.findFirst as jest.Mock).mockResolvedValue(null);
+
+    await expect(userService.getPublicProfile('testuser', 'user-requester')).rejects.toMatchObject({
+      code: 'PROFILE_FRIENDS_ONLY',
+      statusCode: 403,
+    });
+  });
+
+  it('F29: perfil FRIENDS_ONLY con amistad ACCEPTED devuelve el perfil', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({
+      ...baseUser,
+      id: 'user-target',
+      profileVisibility: 'FRIENDS_ONLY',
+      platformAccounts: [],
+    });
+    (mockPrisma.friendship.findFirst as jest.Mock).mockResolvedValue({ id: 'fs-1' });
+
+    const profile = await userService.getPublicProfile('testuser', 'user-requester');
+
+    expect(profile.username).toBe('testuser');
+    expect(profile.profileVisibility).toBe('FRIENDS_ONLY');
+  });
 });
 
 // ─── updateProfile ────────────────────────────────────────────────────────────
@@ -231,6 +308,28 @@ describe('userService.updateProfile', () => {
     const result = await userService.updateProfile('user-1', { bio: 'Solo bio' });
 
     expect(result.bio).toBe('Solo bio');
+  });
+
+  it('F29: cambiar a PRIVATE llama a removeUserFromRankings', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({ xp: 500, profileVisibility: 'PUBLIC' });
+    (mockPrisma.user.update as jest.Mock).mockResolvedValue({ ...baseUser, profileVisibility: 'PRIVATE' });
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([{ platform: 'STEAM' }]);
+
+    await userService.updateProfile('user-1', { profileVisibility: 'PRIVATE' });
+
+    expect(mockRemoveUserFromRankings).toHaveBeenCalledWith('user-1', ['STEAM']);
+    expect(mockUpsertUserScore).not.toHaveBeenCalled();
+  });
+
+  it('F29: cambiar a PUBLIC llama a upsertUserScore', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({ xp: 500, profileVisibility: 'PRIVATE' });
+    (mockPrisma.user.update as jest.Mock).mockResolvedValue({ ...baseUser, xp: 500, profileVisibility: 'PUBLIC' });
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([{ platform: 'STEAM' }]);
+
+    await userService.updateProfile('user-1', { profileVisibility: 'PUBLIC' });
+
+    expect(mockUpsertUserScore).toHaveBeenCalledWith('user-1', 500, ['STEAM'], 'PUBLIC');
+    expect(mockRemoveUserFromRankings).not.toHaveBeenCalled();
   });
 });
 
@@ -292,7 +391,7 @@ describe('userService.addXp', () => {
 
     await userService.addXp('user-1', 200, 'CHALLENGE');
 
-    expect(mockUpsertUserScore).toHaveBeenCalledWith('user-1', 200, ['STEAM']);
+    expect(mockUpsertUserScore).toHaveBeenCalledWith('user-1', 200, ['STEAM'], 'PUBLIC');
   });
 
   it('lanza USER_NOT_FOUND si el usuario no existe', async () => {
@@ -789,6 +888,162 @@ describe('userService.getMyGameAchievements', () => {
 
     expect(result[0]?.achievementId).toBe('ach-first');
     expect(result[1]?.achievementId).toBe('ach-second');
+  });
+});
+
+// ─── getUserGames (F21) ───────────────────────────────────────────────────────
+
+describe('userService.getUserGames', () => {
+  const publicUser = { id: 'u-target', profileVisibility: 'PUBLIC', deletedAt: null };
+
+  const makeUA = (gameId: string, title: string) => ({
+    achievementId: `ach-${gameId}`,
+    unlockedAt: new Date('2024-01-01'),
+    achievement: {
+      gameId,
+      platform: 'STEAM',
+      normalizedPoints: 50,
+      game: { id: gameId, title, platform: 'STEAM', iconUrl: null, totalAchievements: 5 },
+    },
+  });
+
+  it('devuelve juegos del usuario visitado cuando el perfil es PUBLIC', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(publicUser);
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([makeUA('g1', 'Portal')]);
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
+    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([]);
+
+    const result = await userService.getUserGames('targetuser');
+
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0]?.title).toBe('Portal');
+  });
+
+  it('lanza USER_NOT_FOUND si el username no existe', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+
+    await expect(userService.getUserGames('noexiste')).rejects.toMatchObject({
+      code: 'USER_NOT_FOUND',
+      statusCode: 404,
+    });
+  });
+
+  it('lanza USER_NOT_FOUND si el perfil es PRIVATE', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'u-target', profileVisibility: 'PRIVATE' });
+
+    await expect(userService.getUserGames('secretuser')).rejects.toMatchObject({
+      code: 'USER_NOT_FOUND',
+      statusCode: 404,
+    });
+  });
+
+  it('lanza PROFILE_FRIENDS_ONLY si el perfil es FRIENDS_ONLY y no hay sesión', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'u-target', profileVisibility: 'FRIENDS_ONLY' });
+
+    await expect(userService.getUserGames('friendsonly', undefined)).rejects.toMatchObject({
+      code: 'PROFILE_FRIENDS_ONLY',
+      statusCode: 403,
+    });
+  });
+
+  it('lanza PROFILE_FRIENDS_ONLY si el perfil es FRIENDS_ONLY y no son amigos', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'u-target', profileVisibility: 'FRIENDS_ONLY' });
+    (mockPrisma.friendship.findFirst as jest.Mock).mockResolvedValue(null);
+
+    await expect(userService.getUserGames('friendsonly', 'u-requester')).rejects.toMatchObject({
+      code: 'PROFILE_FRIENDS_ONLY',
+      statusCode: 403,
+    });
+  });
+
+  it('permite acceso FRIENDS_ONLY cuando hay amistad ACCEPTED', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'u-target', profileVisibility: 'FRIENDS_ONLY' });
+    (mockPrisma.friendship.findFirst as jest.Mock).mockResolvedValue({ id: 'fs-1' });
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([]);
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
+    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([]);
+
+    const result = await userService.getUserGames('friendsonly', 'u-requester');
+
+    expect(result.data).toHaveLength(0);
+  });
+});
+
+// ─── getUserGameAchievements (F21) ───────────────────────────────────────────
+
+describe('userService.getUserGameAchievements', () => {
+  const publicUser = { id: 'u-target', profileVisibility: 'PUBLIC' };
+  const baseGame = { id: 'game-1', title: 'Portal', iconUrl: null, platform: 'STEAM', totalAchievements: 2 };
+  const baseAchievements = [
+    { id: 'ach-1', title: 'Logro A', description: null, iconUrl: null, rarity: 0.5, normalizedPoints: 50, platform: 'STEAM', externalId: 'ACH_A', externalUrl: null },
+    { id: 'ach-2', title: 'Logro B', description: null, iconUrl: null, rarity: 0.9, normalizedPoints: 10, platform: 'STEAM', externalId: 'ACH_B', externalUrl: null },
+  ];
+
+  it('devuelve achievements con isUnlocked del usuario visitado', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(publicUser);
+    (mockPrisma.game.findUnique as jest.Mock).mockResolvedValue(baseGame);
+    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue(baseAchievements);
+    // El usuario visitado tiene desbloqueado ach-1 pero no ach-2
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValueOnce([
+      { achievementId: 'ach-1', unlockedAt: new Date('2024-01-01') },
+    ]);
+
+    const result = await userService.getUserGameAchievements('targetuser', 'game-1');
+
+    expect(result.achievements).toHaveLength(2);
+    expect(result.achievements[0]?.isUnlocked).toBe(true);
+    expect(result.achievements[1]?.isUnlocked).toBe(false);
+    expect(result.earnedCount).toBe(1);
+    expect(result.game.completionPct).toBe(50);
+  });
+
+  it('isUnlockedByMe=null cuando no hay sesión activa', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(publicUser);
+    (mockPrisma.game.findUnique as jest.Mock).mockResolvedValue(baseGame);
+    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue(baseAchievements);
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([]);
+
+    const result = await userService.getUserGameAchievements('targetuser', 'game-1');
+
+    expect(result.achievements[0]?.isUnlockedByMe).toBeNull();
+  });
+
+  it('isUnlockedByMe refleja el estado del solicitante cuando hay sesión', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(publicUser);
+    (mockPrisma.game.findUnique as jest.Mock).mockResolvedValue(baseGame);
+    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue(baseAchievements);
+    // Primera llamada: logros del target (ach-1 desbloqueado)
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValueOnce([
+      { achievementId: 'ach-1', unlockedAt: new Date() },
+    ]);
+    // Segunda llamada: logros del requester (ach-2 desbloqueado)
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValueOnce([
+      { achievementId: 'ach-2' },
+    ]);
+
+    const result = await userService.getUserGameAchievements('targetuser', 'game-1', 'u-requester');
+
+    expect(result.achievements[0]?.isUnlockedByMe).toBe(false); // ach-1 desbloqueado por target, no por me
+    expect(result.achievements[1]?.isUnlockedByMe).toBe(true);  // ach-2 desbloqueado por me, no por target
+  });
+
+  it('lanza GAME_NOT_FOUND si el juego no existe', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(publicUser);
+    (mockPrisma.game.findUnique as jest.Mock).mockResolvedValue(null);
+
+    await expect(userService.getUserGameAchievements('targetuser', 'juego-inexistente')).rejects.toMatchObject({
+      code: 'GAME_NOT_FOUND',
+      statusCode: 404,
+    });
+  });
+
+  it('lanza USER_NOT_FOUND si el perfil es PRIVATE', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'u-target', profileVisibility: 'PRIVATE' });
+
+    await expect(userService.getUserGameAchievements('private', 'game-1')).rejects.toMatchObject({
+      code: 'USER_NOT_FOUND',
+      statusCode: 404,
+    });
   });
 });
 

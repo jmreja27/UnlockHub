@@ -43,6 +43,7 @@ const baseUser: User = {
   isPremium: false,
   premiumUntil: null,
   lastSyncAt: null,
+  profileVisibility: 'PUBLIC',
   createdAt: '2024-01-01T00:00:00.000Z',
 };
 
@@ -271,7 +272,7 @@ describe('ProfileScreen', () => {
       await waitFor(() => expect(queryByTestId('psn-private-badge')).toBeNull());
     });
 
-    it('tras desvincular exitosamente, invalida my-games y my-stats', async () => {
+    it('tras desvincular exitosamente, invalida my-games y user-stats', async () => {
       const apiGet = jest.fn(() => Promise.resolve([steamAccount]));
       const apiDelete = jest.fn(() =>
         Promise.resolve({ ok: true, deletedAchievements: 12 }),
@@ -302,7 +303,7 @@ describe('ProfileScreen', () => {
           (call) => (call[0] as { queryKey?: string[] })?.queryKey?.[0],
         );
         expect(keys).toContain('my-games');
-        expect(keys).toContain('my-stats');
+        expect(keys).toContain('user-stats');
       });
     });
 
@@ -337,6 +338,38 @@ describe('ProfileScreen', () => {
         );
         expect(keys).toContain('sync-summary');
       });
+    });
+
+    it('F29: muestra el selector de privacidad de perfil en ajustes', async () => {
+      const { getByTestId } = renderProfile();
+      await waitFor(() => expect(getByTestId('privacy-selector')).toBeTruthy());
+    });
+
+    it('F29: el selector muestra opción PUBLIC como seleccionada por defecto', async () => {
+      const { getByTestId } = renderProfile();
+      await waitFor(() => {
+        const publicBtn = getByTestId('privacy-option-public');
+        expect(publicBtn.props.accessibilityState?.selected).toBe(true);
+      });
+    });
+
+    it('F29: pulsar PRIVATE llama a api.patch con profileVisibility=PRIVATE', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { api } = require('../../lib/api') as { api: { get: jest.Mock; patch: jest.Mock } };
+      const patchSpy = jest.fn(() => Promise.resolve({ profileVisibility: 'PRIVATE' }));
+      api.patch = patchSpy;
+
+      const apiGet = jest.fn(() => Promise.resolve([]));
+      const { getByTestId } = renderProfile(apiGet);
+      await waitFor(() => getByTestId('privacy-option-private'));
+      fireEvent.press(getByTestId('privacy-option-private'));
+
+      await waitFor(() =>
+        expect(patchSpy).toHaveBeenCalledWith(
+          '/api/v1/users/me',
+          { profileVisibility: 'PRIVATE' },
+        ),
+      );
     });
   });
 });

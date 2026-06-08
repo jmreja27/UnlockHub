@@ -5,6 +5,8 @@
  */
 export type Platform = 'STEAM' | 'RA' | 'XBOX' | 'PSN';
 
+export type ProfileVisibility = 'PUBLIC' | 'FRIENDS_ONLY' | 'PRIVATE';
+
 export type PointReason = 'CHALLENGE' | 'STREAK' | 'ACHIEVEMENT' | 'REDEEM' | 'REWARDED_AD';
 
 /** POINTS_REDEEM es el plan creado por canje de puntos — no es una compra en tienda. */
@@ -34,6 +36,7 @@ export interface User {
   isPremium: boolean;
   premiumUntil: string | null;
   lastSyncAt: string | null;
+  profileVisibility: ProfileVisibility;
   createdAt: string;
 }
 
@@ -52,6 +55,7 @@ export interface PublicUser {
   xp: number;
   streakDays: number;
   countryCode: string | null;
+  profileVisibility: ProfileVisibility;
   createdAt: string;
 }
 
@@ -128,6 +132,12 @@ export interface PaginatedResponse<T> {
   total: number;
   page: number;
   limit: number;
+}
+
+/** Respuesta paginada por cursor — para feeds con scroll infinito hacia atrás en el tiempo. */
+export interface CursorPaginatedResponse<T> {
+  data: T[];
+  nextCursor: string | null;
 }
 
 /** Estructura de error HTTP consistente en toda la API. Formato: { error, code, details? } */

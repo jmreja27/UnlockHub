@@ -139,6 +139,7 @@
   "game": {
     "rarity": "{{pct}}% lo tienen",
     "no_achievements": "Este juego aún no tiene logros registrados",
+    "fetch_achievements": "Cargar logros",
     "no_filtered_achievements": "Sin logros para este filtro",
     "link_platform_to_see_progress": "Vincula tu cuenta de {{platform}} para ver tu progreso",
     "earned_progress": "{{earned}}/{{total}} logros · {{pct}}%",
@@ -333,6 +334,8 @@
   "public_profile": {
     "error_title": "Perfil no encontrado",
     "error_message": "Este usuario no existe o ha sido eliminado.",
+    "friends_only_title": "Perfil privado",
+    "friends_only_message": "Este perfil solo es visible para los amigos del usuario.",
     "avatar_label": "Avatar de {{username}}",
     "level": "Nivel {{level}}",
     "platforms": "Plataformas vinculadas",
@@ -341,7 +344,18 @@
     "compare_title": "Comparación",
     "compare_shared_achievements": "Logros en común",
     "compare_shared_games": "Juegos en común",
-    "compare_xp_label": "Diferencia XP"
+    "compare_xp_label": "Diferencia XP",
+    "games_section": "Biblioteca de juegos",
+    "no_games": "Este usuario no tiene juegos aún.",
+    "share_label": "Compartir perfil"
+  },
+  "user_game": {
+    "their_achievements": "Sus logros",
+    "compare": "Comparar",
+    "you": "Tú",
+    "them": "Ellos",
+    "unlocked": "desbloqueado",
+    "locked": "bloqueado"
   },
   "rankings": {
     "title": "Rankings",
@@ -438,6 +452,17 @@
     "settings_language": "Idioma",
     "settings_theme": "Tema",
     "theme_dark": "Oscuro",
+    "theme_light": "Claro",
+    "privacy_title": "Privacidad del perfil",
+    "privacy_public": "Público",
+    "privacy_public_desc": "Visible para todos y aparece en rankings",
+    "privacy_friends": "Amigos",
+    "privacy_friends_desc": "Solo tus amigos pueden ver tu perfil y logros",
+    "privacy_private": "Privado",
+    "privacy_private_desc": "Tu perfil no es visible para nadie",
+    "privacy_saving": "Guardando...",
+    "settings_theme": "Tema",
+    "theme_dark": "Oscuro",
     "theme_system": "Sistema",
     "sync_prefix": "Sync:",
     "platforms_empty": "No tienes plataformas vinculadas todavía.\nVincúlalas desde los ajustes para sincronizar tus logros.",
@@ -470,7 +495,8 @@
     "stats_best_streak": "Mejor racha",
     "stats_favorite_platform": "Plataforma favorita",
     "stats_rarest_achievement": "Logro más raro",
-    "stats_rarity_pct": "{{pct}}% lo tienen"
+    "stats_rarity_pct": "{{pct}}% lo tienen",
+    "app_version": "Versión {{version}} ({{build}})"
   },
   "premium": {
     "title": "UnlockHub Premium",

@@ -1,13 +1,14 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { io, type Socket } from 'socket.io-client';
-import type { ActivityEvent, PaginatedResponse } from '@unlockhub/types';
+import type { ActivityEvent, CursorPaginatedResponse } from '@unlockhub/types';
 
 import { api } from '../lib/api';
 import { useSessionStore } from '../stores/sessionStore';
 
 const API_URL = process.env['EXPO_PUBLIC_API_URL'] ?? 'http://localhost:3000';
 const FEED_KEY = ['feed'] as const;
+const FEED_LIMIT = 20;
 const MAX_RECONNECT_DELAY_MS = 30_000;
 const BASE_RECONNECT_DELAY_MS = 1_000;
 
@@ -19,9 +20,17 @@ export function useFeed() {
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const query = useQuery({
+  const query = useInfiniteQuery<CursorPaginatedResponse<ActivityEvent>>({
     queryKey: FEED_KEY,
-    queryFn: () => api.get<PaginatedResponse<ActivityEvent>>('/api/v1/activity/feed?limit=30'),
+    queryFn: ({ pageParam }) => {
+      const cursor = pageParam as string | undefined;
+      const url = cursor
+        ? `/api/v1/activity/feed?limit=${FEED_LIMIT}&cursor=${encodeURIComponent(cursor)}`
+        : `/api/v1/activity/feed?limit=${FEED_LIMIT}`;
+      return api.get<CursorPaginatedResponse<ActivityEvent>>(url);
+    },
+    initialPageParam: undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     staleTime: 30_000,
     enabled: isAuthenticated,
   });
@@ -43,14 +52,21 @@ export function useFeed() {
     });
 
     socket.on('new_activity', (event: ActivityEvent) => {
-      queryClient.setQueryData<PaginatedResponse<ActivityEvent>>(FEED_KEY, (prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          data: [event, ...prev.data].slice(0, 30),
-          total: prev.total + 1,
-        };
-      });
+      queryClient.setQueryData<{ pages: CursorPaginatedResponse<ActivityEvent>[]; pageParams: unknown[] }>(
+        FEED_KEY,
+        (prev) => {
+          if (!prev) return prev;
+          const firstPage = prev.pages[0];
+          if (!firstPage) return prev;
+          return {
+            ...prev,
+            pages: [
+              { ...firstPage, data: [event, ...firstPage.data].slice(0, FEED_LIMIT) },
+              ...prev.pages.slice(1),
+            ],
+          };
+        },
+      );
     });
 
     socket.on('connect_error', () => {
@@ -93,10 +109,15 @@ export function useFeed() {
     };
   }, [isAuthenticated, connect]);
 
+  const events = query.data?.pages.flatMap((p) => p.data) ?? [];
+
   return {
-    events: query.data?.data ?? [],
+    events,
     isLoading: query.isLoading,
     isError: query.isError,
     refetch: query.refetch,
+    fetchNextPage: query.fetchNextPage,
+    hasNextPage: query.hasNextPage,
+    isFetchingNextPage: query.isFetchingNextPage,
   };
 }

@@ -10,12 +10,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { PlatformAccount } from '@unlockhub/types';
 
 import { api, ApiRequestError } from '../../lib/api';
+import { queryKeys } from '../../lib/queryKeys';
 
 function PrivacyGuide() {
   const { t } = useTranslation();
@@ -75,10 +76,10 @@ export default function LinkPsnScreen() {
       api.post<PlatformAccount>('/api/v1/platforms/psn/link', { username: psnUsername }),
     onSuccess: () => {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      void queryClient.invalidateQueries({ queryKey: ['linkedPlatforms'] });
-      void queryClient.invalidateQueries({ queryKey: ['platforms'] });
-      void queryClient.invalidateQueries({ queryKey: ['sync-summary'] });
-      void queryClient.invalidateQueries({ queryKey: ['my-games'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.linkedPlatforms() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.platformsBase() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.syncSummaryBase() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.myGames() });
       router.back();
     },
     onError: (err) => {

@@ -52,22 +52,65 @@ describe('getFriendsFeed', () => {
   it('incluye eventos propios y de amigos', async () => {
     mockFriendIds.mockResolvedValue(['u2', 'u3']);
     mockFindMany.mockResolvedValue([makeRow()]);
-    mockCount.mockResolvedValue(1);
 
-    const result = await getFriendsFeed('u1', 1, 20);
+    const result = await getFriendsFeed('u1', 20);
 
     expect(mockFindMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { userId: { in: ['u2', 'u3', 'u1'] } } }),
     );
-    expect(result.total).toBe(1);
     expect(result.data).toHaveLength(1);
   });
 
   it('devuelve feed vacío si no hay amigos ni eventos propios', async () => {
     mockFriendIds.mockResolvedValue([]);
-    const result = await getFriendsFeed('u1', 1, 20);
+    const result = await getFriendsFeed('u1', 20);
     expect(result.data).toHaveLength(0);
-    expect(result.total).toBe(0);
+    expect(result.nextCursor).toBeNull();
+  });
+
+  it('devuelve nextCursor igual al id del último evento cuando hay página completa', async () => {
+    const rows = Array.from({ length: 20 }, (_, i) => makeRow({ id: `e${i + 1}` }));
+    mockFriendIds.mockResolvedValue([]);
+    mockFindMany.mockResolvedValue(rows);
+
+    const result = await getFriendsFeed('u1', 20);
+
+    expect(result.nextCursor).toBe('e20');
+  });
+
+  it('devuelve nextCursor null cuando hay menos eventos que el límite', async () => {
+    mockFriendIds.mockResolvedValue([]);
+    mockFindMany.mockResolvedValue([makeRow()]);
+
+    const result = await getFriendsFeed('u1', 20);
+
+    expect(result.nextCursor).toBeNull();
+  });
+
+  it('pasa el cursor como filtro id lt al hacer paginación', async () => {
+    mockFriendIds.mockResolvedValue([]);
+    mockFindMany.mockResolvedValue([]);
+
+    await getFriendsFeed('u1', 20, 'cursor123');
+
+    expect(mockFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: { lt: 'cursor123' } }),
+      }),
+    );
+  });
+
+  it('no incluye filtro id cuando no se pasa cursor', async () => {
+    mockFriendIds.mockResolvedValue([]);
+    mockFindMany.mockResolvedValue([]);
+
+    await getFriendsFeed('u1', 20);
+
+    expect(mockFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.not.objectContaining({ id: expect.anything() }),
+      }),
+    );
   });
 });
 

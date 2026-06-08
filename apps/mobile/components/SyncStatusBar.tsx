@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, ActivityIndicator } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { useSessionStore } from '../stores/sessionStore';
 import { useSyncAll } from '../hooks/useSyncAll';
 import { useSyncStatus } from '../hooks/useSyncStatus';
 import { useSyncProgress } from '../hooks/useSyncProgress';
+import { useTheme } from '../hooks/useTheme';
+import { queryKeys } from '../lib/queryKeys';
 
 // Formatea segundos a string legible (misma lógica que useSyncStatus.formatDuration)
 function formatCountdown(secs: number, t: (key: string, opts?: Record<string, unknown>) => string): string {
@@ -22,6 +24,7 @@ function formatCountdown(secs: number, t: (key: string, opts?: Record<string, un
 
 export function SyncStatusBar() {
   const { t } = useTranslation();
+  const colors = useTheme();
   const queryClient = useQueryClient();
   const user = useSessionStore((s) => s.user);
   const userId = user?.id;
@@ -79,7 +82,7 @@ export function SyncStatusBar() {
   // Cuando el countdown llega a 0: el cooldown ha expirado — refrescar el estado
   useEffect(() => {
     if (countdownSecs === 0) {
-      void queryClient.invalidateQueries({ queryKey: ['sync-summary'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.syncSummaryBase() });
     }
   }, [countdownSecs, queryClient]);
 
@@ -140,8 +143,7 @@ export function SyncStatusBar() {
         accessibilityRole="button"
         accessibilityLabel={buttonA11y}
         accessibilityState={{ disabled: buttonDisabled, busy: activeSyncRunning }}
-        style={{ minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center' }}
-        className="flex-row items-center gap-1 bg-surface-elevated rounded-lg px-3 py-1"
+        style={{ minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 4, flexDirection: 'row', gap: 4 }}
       >
         {activeSyncRunning ? (
           <ActivityIndicator
@@ -153,18 +155,19 @@ export function SyncStatusBar() {
           <Ionicons
             name="refresh"
             size={14}
-            color={buttonDisabled ? '#64748b' : '#818cf8'}
+            color={buttonDisabled ? colors.textMuted : colors.primary}
           />
         )}
         <Text
-          className={`text-xs font-medium ${buttonDisabled ? 'text-gray-500' : 'text-primary'}`}
+          className="text-xs font-medium"
+          style={{ color: buttonDisabled ? colors.textMuted : colors.primary }}
         >
           {buttonLabel}
         </Text>
       </Pressable>
 
       {/* Separador */}
-      <View className="h-3 w-px bg-gray-700" />
+      <View style={{ width: 1, height: 12, backgroundColor: colors.border }} />
 
       {/* Aviso de sync largo — visible cuando lleva >30s en progreso */}
       {showLongSyncWarning ? (
@@ -181,7 +184,8 @@ export function SyncStatusBar() {
           {lastSyncRelative !== null && (
             <Text
               testID="sync-status-last"
-              className="text-xs text-gray-500"
+              className="text-xs"
+              style={{ color: colors.textMuted }}
               numberOfLines={1}
             >
               {t('library.sync_last', { time: lastSyncRelative })}
@@ -191,10 +195,11 @@ export function SyncStatusBar() {
           {/* Próximo auto sync */}
           {timeUntilNextAutoSync !== null && !activeSyncRunning && (
             <>
-              <View className="h-3 w-px bg-gray-700" />
+              <View style={{ width: 1, height: 12, backgroundColor: colors.border }} />
               <Text
                 testID="sync-status-next-auto"
-                className="text-xs text-gray-500"
+                className="text-xs"
+                style={{ color: colors.textMuted }}
                 numberOfLines={1}
               >
                 {isPremium
@@ -207,10 +212,11 @@ export function SyncStatusBar() {
           {/* Syncs restantes (solo si hay límite — tier free) */}
           {syncsLabel !== null && (
             <>
-              <View className="h-3 w-px bg-gray-700" />
+              <View style={{ width: 1, height: 12, backgroundColor: colors.border }} />
               <Text
                 testID="sync-status-remaining"
-                className={`text-xs ${syncsRemaining === 0 ? 'text-red-400' : 'text-gray-500'}`}
+                className="text-xs"
+                style={{ color: syncsRemaining === 0 ? '#f87171' : colors.textMuted }}
                 numberOfLines={1}
               >
                 {syncsLabel}

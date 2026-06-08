@@ -1,13 +1,16 @@
 import { Router } from 'express';
 
-import { authenticate } from '../middleware/authenticate';
+import { authenticate, authenticateOptional } from '../middleware/authenticate';
 import {
   getMeHandler,
   updateMeHandler,
   getPublicProfileHandler,
+  getOgProfileHandler,
   getStreakMilestoneHandler,
   getMyGamesHandler,
   getMyGameAchievementsHandler,
+  getUserGamesHandler,
+  getUserGameAchievementsHandler,
   compareProfilesHandler,
   deleteAccountHandler,
   uploadAvatarHandler,
@@ -29,10 +32,18 @@ router.get('/me/streak-milestone', authenticate, getStreakMilestoneHandler);
 router.get('/me/stats', authenticate, getMyStatsHandler);
 router.delete('/me', authenticate, deleteAccountHandler);
 
+// Ruta pública — HTML Open Graph para compartir perfiles en redes sociales
+router.get('/:username/og', getOgProfileHandler);
+
 // Ruta pública — perfil de cualquier usuario por username
-router.get('/:username', getPublicProfileHandler);
+// authenticateOptional: si hay token, extrae el userId para respetar FRIENDS_ONLY
+router.get('/:username', authenticateOptional, getPublicProfileHandler);
 
 // Ruta privada — comparar perfil autenticado con otro usuario
 router.get('/:username/compare', authenticate, compareProfilesHandler);
+
+// Rutas públicas F21 — biblioteca y logros de un usuario público
+router.get('/:username/games', authenticateOptional, getUserGamesHandler);
+router.get('/:username/games/:gameId/achievements', authenticateOptional, getUserGameAchievementsHandler);
 
 export default router;

@@ -1,5 +1,5 @@
 import { Pressable, View, Text } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../lib/api';
 import { useSessionStore } from '../stores/sessionStore';
 import { FEATURES } from '../lib/featureFlags';
+import { queryKeys } from '../lib/queryKeys';
 
 interface UnreadCountResponse {
   count: number;
@@ -17,7 +18,7 @@ export function NotificationBell() {
   const isAuthenticated = useSessionStore((s) => s.isAuthenticated);
 
   const { data } = useQuery({
-    queryKey: ['notifications', 'unread-count'],
+    queryKey: queryKeys.notificationsUnreadCount(),
     queryFn: () => api.get<UnreadCountResponse>('/api/v1/notifications/me/unread-count'),
     enabled: isAuthenticated && FEATURES.notifications,
     staleTime: 1000 * 60,

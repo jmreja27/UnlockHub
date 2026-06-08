@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { LibraryGame } from '../hooks/useMyGames';
 import { getPlatformColor } from '../lib/platformColors';
+import { useTheme } from '../hooks/useTheme';
 
 const PLATFORM_LABEL: Record<string, string> = {
   STEAM: 'Steam',
@@ -15,7 +16,7 @@ const PLATFORM_LABEL: Record<string, string> = {
 
 function ProgressBar({ pct, color }: { pct: number; color: string }) {
   return (
-    <View className="h-1.5 bg-surface rounded-full overflow-hidden mt-1.5" accessibilityElementsHidden>
+    <View className="h-1.5 rounded-full overflow-hidden mt-1.5" style={{ backgroundColor: '#334155' }} accessibilityElementsHidden>
       <View style={{ width: `${pct}%`, backgroundColor: color, height: '100%', borderRadius: 9999 }} />
     </View>
   );
@@ -27,6 +28,7 @@ interface Props {
 
 export function LibraryGameCard({ game }: Props) {
   const { t } = useTranslation();
+  const colors = useTheme();
   const platformLabel = PLATFORM_LABEL[game.platform] ?? game.platform;
   const platformColor = getPlatformColor(game.platform);
 
@@ -45,7 +47,8 @@ export function LibraryGameCard({ game }: Props) {
   return (
     <Pressable
       onPress={() => router.push(`/game/${game.id}`)}
-      className="bg-surface-card rounded-xl mb-2 px-4 py-3 active:opacity-70"
+      className="rounded-xl mb-2 px-4 py-3 active:opacity-70"
+      style={{ backgroundColor: colors.surfaceCard }}
       accessibilityRole="button"
       accessibilityLabel={t('library.game_label', {
         title: game.title,
@@ -57,13 +60,13 @@ export function LibraryGameCard({ game }: Props) {
       <View className="flex-row items-center">
         <Image
           source={game.iconUrl ?? require('../assets/images/icon.png')}
-          style={{ width: 44, height: 44, borderRadius: 8, backgroundColor: '#1e293b' }}
+          style={{ width: 44, height: 44, borderRadius: 8, backgroundColor: colors.surface }}
           contentFit="contain"
           accessibilityElementsHidden
         />
         <View className="flex-1 ml-3">
           <View className="flex-row items-center justify-between">
-            <Text className="text-white font-semibold text-sm flex-1 mr-2" numberOfLines={1}>
+            <Text className="font-semibold text-sm flex-1 mr-2" style={{ color: colors.text }} numberOfLines={1}>
               {game.title}
             </Text>
             <View className="flex-row items-center gap-1.5">
@@ -91,7 +94,7 @@ export function LibraryGameCard({ game }: Props) {
           </View>
 
           <View className="flex-row items-center justify-between mt-0.5">
-            <Text className="text-gray-400 text-xs">
+            <Text className="text-xs" style={{ color: colors.textSecondary }}>
               {game.earnedAchievements}/{game.totalAchievements} {t('library.achievements_short')}
             </Text>
             <Text

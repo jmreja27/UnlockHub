@@ -19,6 +19,7 @@ import {
 } from 'expo-auth-session';
 import type { PlatformAccount } from '@unlockhub/types';
 
+import { queryKeys } from '../../lib/queryKeys';
 import { api, ApiRequestError } from '../../lib/api';
 
 // Requerido para completar el flujo OAuth2 en mobile correctamente
@@ -55,7 +56,7 @@ export default function LinkXboxScreen() {
       api.post<PlatformAccount>('/api/v1/platforms/xbox/link', params),
     onSuccess: () => {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      void queryClient.invalidateQueries({ queryKey: ['linkedPlatforms'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.linkedPlatforms() });
       Alert.alert(t('link_platform.xbox.success'), '', [
         { text: 'OK', onPress: () => router.back() },
       ]);

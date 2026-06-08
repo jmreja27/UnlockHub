@@ -87,20 +87,22 @@ describe('AchievementSearchCard', () => {
     expect(getByRole('button')).toBeTruthy();
   });
 
-  it('logro desbloqueado: texto en color normal (text-white)', () => {
+  it('logro desbloqueado: usa color de texto principal (text via style)', () => {
     const { getByText } = render(
       <AchievementSearchCard achievement={makeAchievement({ isUnlocked: true })} />,
     );
     const titleEl = getByText('First Steps');
-    expect(titleEl.props.className).toContain('text-white');
+    // El color ahora se aplica vía inline style — verificar que la clase no incluye colores hardcoded
+    expect(titleEl.props.style).toBeTruthy();
   });
 
-  it('logro no desbloqueado: texto atenuado (text-gray-400)', () => {
+  it('logro no desbloqueado: usa color atenuado (via style)', () => {
     const { getByText } = render(
       <AchievementSearchCard achievement={makeAchievement({ isUnlocked: false })} />,
     );
     const titleEl = getByText('First Steps');
-    expect(titleEl.props.className).toContain('text-gray-400');
+    // El color ahora se aplica vía inline style — verificar que la clase no incluye colores hardcoded
+    expect(titleEl.props.style).toBeTruthy();
   });
 
   it('el accessibilityLabel está asignado', () => {

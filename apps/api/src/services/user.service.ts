@@ -1,10 +1,31 @@
-import type { User, PublicUser, PlatformAccount, PointReason, Platform } from '@unlockhub/types';
+import type { User, PublicUser, PlatformAccount, PointReason, Platform, ProfileVisibility } from '@unlockhub/types';
+import type { ProfileVisibility as PrismaProfileVisibility } from '@prisma/client';
 
 import { AppError } from '../middleware/errorHandler';
 import { prisma } from '../lib/prisma';
+import { redis } from '../lib/redis';
 import { cloudinary } from '../lib/cloudinary';
 
 import { upsertUserScore, removeUserFromRankings } from './ranking.service';
+
+const USER_GAMES_CACHE_TTL = 300; // 5 minutos
+const USER_GAMES_KEYS_SET = (userId: string) => `user-cache-keys:${userId}`;
+const userGamesCacheKey = (username: string, platform: string, page: number, limit: number) =>
+  `user-games:${username}:${platform}:${page}:${limit}`;
+const userGameAchCacheKey = (username: string, gameId: string, requestingUserId: string) =>
+  `user-game-ach:${username}:${gameId}:${requestingUserId}`;
+
+/**
+ * Invalida toda la caché pública del usuario (juegos y logros de sus juegos).
+ * Llamar tras un sync exitoso o al cambiar la visibilidad del perfil.
+ */
+export async function invalidateUserPublicCache(userId: string): Promise<void> {
+  const keys = await redis.smembers(USER_GAMES_KEYS_SET(userId));
+  if (keys.length > 0) {
+    await redis.del(...keys);
+  }
+  await redis.del(USER_GAMES_KEYS_SET(userId));
+}
 
 // XP necesario por nivel — cada 1000 XP sube un nivel, máximo nivel 100
 export const XP_PER_LEVEL = 1000;
@@ -33,6 +54,7 @@ function mapPublicUser(dbUser: {
   xp: number;
   streakDays: number;
   countryCode: string | null;
+  profileVisibility: string;
   createdAt: Date;
 }): PublicUser {
   return {
@@ -45,6 +67,7 @@ function mapPublicUser(dbUser: {
     xp: dbUser.xp,
     streakDays: dbUser.streakDays,
     countryCode: dbUser.countryCode,
+    profileVisibility: dbUser.profileVisibility as ProfileVisibility,
     createdAt: dbUser.createdAt.toISOString(),
   };
 }
@@ -67,6 +90,7 @@ function mapUser(dbUser: {
   isPremium: boolean;
   premiumUntil: Date | null;
   lastSyncAt: Date | null;
+  profileVisibility: string;
   createdAt: Date;
 }): User {
   return {
@@ -83,6 +107,7 @@ function mapUser(dbUser: {
     isPremium: dbUser.isPremium,
     premiumUntil: dbUser.premiumUntil?.toISOString() ?? null,
     lastSyncAt: dbUser.lastSyncAt?.toISOString() ?? null,
+    profileVisibility: dbUser.profileVisibility as ProfileVisibility,
     createdAt: dbUser.createdAt.toISOString(),
   };
 }
@@ -153,10 +178,15 @@ export async function getProfile(
  * Obtiene el perfil público de un usuario por su username.
  * Usa mapPublicUser para excluir email y campos privados — seguro para respuestas no autenticadas.
  * Filtra usuarios con soft delete (deletedAt !== null) para cumplir GDPR.
- * @throws {AppError} USER_NOT_FOUND (404) si el username no existe o el usuario está eliminado.
+ * Respeta la configuración de privacidad del perfil:
+ * - PRIVATE → 404 (indistinguible de "no existe" por privacidad)
+ * - FRIENDS_ONLY → 403 si el solicitante no es amigo aceptado
+ * @throws {AppError} USER_NOT_FOUND (404) si el username no existe, está eliminado, o el perfil es PRIVATE.
+ * @throws {AppError} PROFILE_FRIENDS_ONLY (403) si el perfil es FRIENDS_ONLY y el solicitante no es amigo.
  */
 export async function getPublicProfile(
   username: string,
+  requestingUserId?: string,
 ): Promise<PublicUser & { platformAccounts: PlatformAccount[] }> {
   const dbUser = await prisma.user.findUnique({
     where: { username, deletedAt: null },
@@ -180,6 +210,35 @@ export async function getPublicProfile(
     throw new AppError('Usuario no encontrado', 'USER_NOT_FOUND', 404);
   }
 
+  // No devolver 404 vs 403 por perfil privado — mismo mensaje que "no existe" para no filtrar info
+  if (dbUser.profileVisibility === 'PRIVATE') {
+    throw new AppError('Usuario no encontrado', 'USER_NOT_FOUND', 404);
+  }
+
+  if (dbUser.profileVisibility === 'FRIENDS_ONLY') {
+    if (!requestingUserId || requestingUserId === dbUser.id) {
+      // Permite al propio usuario ver su perfil; visitantes no autenticados reciben 403
+      if (!requestingUserId) {
+        throw new AppError('Este perfil solo es visible para amigos', 'PROFILE_FRIENDS_ONLY', 403);
+      }
+    } else {
+      // Verificar que existe amistad ACCEPTED entre los dos usuarios
+      const friendship = await prisma.friendship.findFirst({
+        where: {
+          OR: [
+            { senderId: requestingUserId, receiverId: dbUser.id },
+            { senderId: dbUser.id, receiverId: requestingUserId },
+          ],
+          status: 'ACCEPTED',
+        },
+        select: { id: true },
+      });
+      if (!friendship) {
+        throw new AppError('Este perfil solo es visible para amigos', 'PROFILE_FRIENDS_ONLY', 403);
+      }
+    }
+  }
+
   return {
     ...mapPublicUser(dbUser),
     platformAccounts: dbUser.platformAccounts.map(mapPlatformAccount),
@@ -187,17 +246,67 @@ export async function getPublicProfile(
 }
 
 /**
- * Actualiza campos editables del perfil del usuario (bio, avatar, banner, countryCode).
- * El countryCode afecta la entrada del usuario en los sorted sets de ranking por país en Redis.
+ * Obtiene los datos mínimos necesarios para generar el HTML Open Graph de un perfil.
+ * Devuelve null si el usuario no existe, está eliminado (soft delete) o su perfil es PRIVATE.
+ * Los perfiles FRIENDS_ONLY exponen datos básicos — el OG tag es para crawlers de redes sociales.
+ */
+export async function getOgProfileData(username: string): Promise<{
+  username: string;
+  level: number;
+  xp: number;
+  avatar: string | null;
+  totalAchievements: number;
+} | null> {
+  const dbUser = await prisma.user.findUnique({
+    where: { username, deletedAt: null },
+    select: { id: true, username: true, level: true, xp: true, avatar: true, profileVisibility: true },
+  });
+
+  if (!dbUser || dbUser.profileVisibility === 'PRIVATE') return null;
+
+  const totalAchievements = await prisma.userAchievement.count({ where: { userId: dbUser.id } });
+
+  return { username: dbUser.username, level: dbUser.level, xp: dbUser.xp, avatar: dbUser.avatar, totalAchievements };
+}
+
+/**
+ * Actualiza campos editables del perfil del usuario (bio, avatar, banner, countryCode, profileVisibility).
+ * Cuando profileVisibility cambia, sincroniza los sorted sets de Redis en consecuencia:
+ * - A no-PUBLIC → removeUserFromRankings (el usuario deja de aparecer en rankings)
+ * - A PUBLIC → upsertUserScore (el usuario vuelve a los rankings)
  */
 export async function updateProfile(
   userId: string,
-  data: { bio?: string; avatar?: string; banner?: string; countryCode?: string },
+  data: { bio?: string; avatar?: string; banner?: string; countryCode?: string; profileVisibility?: PrismaProfileVisibility },
 ): Promise<User> {
+  const previousUser = data.profileVisibility !== undefined
+    ? await prisma.user.findUnique({
+        where: { id: userId },
+        select: { xp: true, profileVisibility: true },
+      })
+    : null;
+
   const dbUser = await prisma.user.update({
     where: { id: userId },
     data,
   });
+
+  // Sincronizar rankings Redis si cambió la visibilidad del perfil
+  if (data.profileVisibility !== undefined && previousUser && data.profileVisibility !== previousUser.profileVisibility) {
+    const platforms = await prisma.platformAccount.findMany({
+      where: { userId },
+      select: { platform: true },
+    });
+    const platformList = platforms.map((p) => p.platform);
+
+    if (data.profileVisibility === 'PUBLIC') {
+      await upsertUserScore(userId, dbUser.xp, platformList, 'PUBLIC');
+    } else {
+      await removeUserFromRankings(userId, platformList);
+    }
+    // Visibilidad cambiada — invalidar caché pública para que los nuevos permisos surtan efecto
+    await invalidateUserPublicCache(userId);
+  }
 
   return mapUser(dbUser);
 }
@@ -216,7 +325,12 @@ export async function addXp(
   amount: number,
   reason: PointReason,
 ): Promise<{ newXp: number; newLevel: number; leveledUp: boolean }> {
-  const dbUser = await prisma.user.findUnique({ where: { id: userId } });
+  const dbUser = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      level: true, xp: true, profileVisibility: true,
+    },
+  });
 
   if (!dbUser) {
     throw new AppError('Usuario no encontrado', 'USER_NOT_FOUND', 404);
@@ -242,7 +356,7 @@ export async function addXp(
     }),
   ]);
 
-  // Actualizar el ranking en Redis tras el cambio de XP
+  // Actualizar el ranking en Redis tras el cambio de XP (respeta visibilidad del perfil)
   const platforms = await prisma.platformAccount.findMany({
     where: { userId },
     select: { platform: true },
@@ -252,6 +366,7 @@ export async function addXp(
     userId,
     newXp,
     platforms.map((p) => p.platform),
+    dbUser.profileVisibility,
   );
 
   return { newXp, newLevel, leveledUp };
@@ -483,9 +598,29 @@ export async function compareProfiles(
 }> {
   const targetUser = await prisma.user.findUnique({
     where: { username: targetUsername, deletedAt: null },
-    select: { id: true, username: true, level: true, xp: true, avatar: true },
+    select: { id: true, username: true, level: true, xp: true, avatar: true, profileVisibility: true },
   });
   if (!targetUser) throw new AppError('Usuario no encontrado', 'USER_NOT_FOUND', 404);
+
+  // Respetar la privacidad del perfil objetivo
+  if (targetUser.profileVisibility === 'PRIVATE') {
+    throw new AppError('Usuario no encontrado', 'USER_NOT_FOUND', 404);
+  }
+  if (targetUser.profileVisibility === 'FRIENDS_ONLY') {
+    const friendship = await prisma.friendship.findFirst({
+      where: {
+        OR: [
+          { senderId: myUserId, receiverId: targetUser.id },
+          { senderId: targetUser.id, receiverId: myUserId },
+        ],
+        status: 'ACCEPTED',
+      },
+      select: { id: true },
+    });
+    if (!friendship) {
+      throw new AppError('Este perfil solo es visible para amigos', 'PROFILE_FRIENDS_ONLY', 403);
+    }
+  }
 
   const myUser = await prisma.user.findUnique({
     where: { id: myUserId },
@@ -591,6 +726,197 @@ export async function uploadAvatar(userId: string, fileBuffer: Buffer, mimetype:
   });
 
   return mapUser(updated);
+}
+
+// Verifica que el solicitante puede acceder al perfil según su visibilidad.
+// Comportamiento espejo de getPublicProfile — no lanza si el usuario visita su propio perfil.
+async function checkProfileVisibility(
+  dbUser: { id: string; profileVisibility: string },
+  requestingUserId?: string,
+): Promise<void> {
+  if (dbUser.profileVisibility === 'PRIVATE') {
+    throw new AppError('Usuario no encontrado', 'USER_NOT_FOUND', 404);
+  }
+  if (dbUser.profileVisibility === 'FRIENDS_ONLY') {
+    if (!requestingUserId) {
+      throw new AppError('Este perfil solo es visible para amigos', 'PROFILE_FRIENDS_ONLY', 403);
+    }
+    if (requestingUserId !== dbUser.id) {
+      const friendship = await prisma.friendship.findFirst({
+        where: {
+          OR: [
+            { senderId: requestingUserId, receiverId: dbUser.id },
+            { senderId: dbUser.id, receiverId: requestingUserId },
+          ],
+          status: 'ACCEPTED',
+        },
+        select: { id: true },
+      });
+      if (!friendship) {
+        throw new AppError('Este perfil solo es visible para amigos', 'PROFILE_FRIENDS_ONLY', 403);
+      }
+    }
+  }
+}
+
+/**
+ * Devuelve la biblioteca de juegos de un usuario público con privacidad respetada.
+ * Comportamiento equivalente a getMyGames, pero resuelve username → userId y aplica
+ * los mismos checks de visibilidad que getPublicProfile.
+ * @throws {AppError} USER_NOT_FOUND (404) si el usuario no existe, está eliminado o su perfil es PRIVATE.
+ * @throws {AppError} PROFILE_FRIENDS_ONLY (403) si el perfil es FRIENDS_ONLY y no hay amistad.
+ */
+export async function getUserGames(
+  username: string,
+  requestingUserId?: string,
+  platform?: Platform,
+  page = 1,
+  limit = 20,
+): ReturnType<typeof getMyGames> {
+  const dbUser = await prisma.user.findUnique({
+    where: { username, deletedAt: null },
+    select: { id: true, profileVisibility: true },
+  });
+  if (!dbUser) throw new AppError('Usuario no encontrado', 'USER_NOT_FOUND', 404);
+
+  await checkProfileVisibility(dbUser, requestingUserId);
+
+  // FRIENDS_ONLY: privacidad validada arriba; la caché es segura porque el check siempre corre primero
+  const cacheKey = userGamesCacheKey(username, platform ?? 'all', page, limit);
+  const cached = await redis.get(cacheKey);
+  if (cached) return JSON.parse(cached) as Awaited<ReturnType<typeof getMyGames>>;
+
+  const result = await getMyGames(dbUser.id, platform, page, limit);
+  await redis.set(cacheKey, JSON.stringify(result), 'EX', USER_GAMES_CACHE_TTL);
+  await redis.sadd(USER_GAMES_KEYS_SET(dbUser.id), cacheKey);
+  return result;
+}
+
+interface AchievementWithCompareStatus {
+  id: string;
+  title: string;
+  description: string | null;
+  iconUrl: string | null;
+  rarity: number | null;
+  normalizedPoints: number;
+  platform: string;
+  externalId: string;
+  externalUrl: string | null;
+  isUnlocked: boolean;
+  unlockedAt: string | null;
+  // null cuando el solicitante no está autenticado o es el mismo usuario visitado
+  isUnlockedByMe: boolean | null;
+}
+
+/**
+ * Devuelve los logros de un juego concreto para un usuario público.
+ * Incluye isUnlocked (estado del usuario visitado) e isUnlockedByMe (estado del solicitante).
+ * Respeta la misma lógica de privacidad que getUserGames/getPublicProfile.
+ * @throws {AppError} USER_NOT_FOUND (404) si el usuario no existe, está eliminado o es PRIVATE.
+ * @throws {AppError} PROFILE_FRIENDS_ONLY (403) si el perfil es FRIENDS_ONLY y no hay amistad.
+ * @throws {AppError} GAME_NOT_FOUND (404) si el juego no existe en la BD.
+ */
+export async function getUserGameAchievements(
+  username: string,
+  gameId: string,
+  requestingUserId?: string,
+): Promise<{
+  game: {
+    id: string;
+    title: string;
+    iconUrl: string | null;
+    platform: string;
+    totalAchievements: number;
+    earnedAchievements: number;
+    completionPct: number;
+  };
+  achievements: AchievementWithCompareStatus[];
+  earnedCount: number;
+  totalCount: number;
+}> {
+  const dbUser = await prisma.user.findUnique({
+    where: { username, deletedAt: null },
+    select: { id: true, profileVisibility: true },
+  });
+  if (!dbUser) throw new AppError('Usuario no encontrado', 'USER_NOT_FOUND', 404);
+
+  await checkProfileVisibility(dbUser, requestingUserId);
+
+  const game = await prisma.game.findUnique({
+    where: { id: gameId },
+    select: { id: true, title: true, iconUrl: true, platform: true, totalAchievements: true },
+  });
+  if (!game) throw new AppError('Juego no encontrado', 'GAME_NOT_FOUND', 404);
+
+  // isUnlockedByMe varía por solicitante — clave incluye requestingUserId para datos personalizados
+  const achCacheKey = userGameAchCacheKey(username, gameId, requestingUserId ?? 'anon');
+  const achCached = await redis.get(achCacheKey);
+  if (achCached) {
+    return JSON.parse(achCached) as Awaited<ReturnType<typeof getUserGameAchievements>>;
+  }
+
+  const achievementRows = await prisma.achievement.findMany({
+    where: { gameId },
+    orderBy: [{ rarity: 'asc' }, { normalizedPoints: 'desc' }],
+  });
+
+  const targetEarnedMap = new Map<string, string>();
+  if (achievementRows.length > 0) {
+    const targetEarned = await prisma.userAchievement.findMany({
+      where: { userId: dbUser.id, achievementId: { in: achievementRows.map((a) => a.id) } },
+      select: { achievementId: true, unlockedAt: true },
+    });
+    targetEarned.forEach((e) => targetEarnedMap.set(e.achievementId, e.unlockedAt.toISOString()));
+  }
+
+  // Logros del solicitante — solo si hay sesión activa y no es el mismo usuario visitado
+  const myEarnedSet = new Set<string>();
+  const canCompare = !!requestingUserId && requestingUserId !== dbUser.id;
+  if (canCompare && achievementRows.length > 0) {
+    const myEarned = await prisma.userAchievement.findMany({
+      where: { userId: requestingUserId, achievementId: { in: achievementRows.map((a) => a.id) } },
+      select: { achievementId: true },
+    });
+    myEarned.forEach((e) => myEarnedSet.add(e.achievementId));
+  }
+
+  const earnedCount = targetEarnedMap.size;
+  const achievements: AchievementWithCompareStatus[] = achievementRows.map((a) => ({
+    id: a.id,
+    title: a.title,
+    description: a.description,
+    iconUrl: a.iconUrl,
+    rarity: a.rarity,
+    normalizedPoints: a.normalizedPoints,
+    platform: a.platform as string,
+    externalId: a.externalId,
+    externalUrl: a.externalUrl,
+    isUnlocked: targetEarnedMap.has(a.id),
+    unlockedAt: targetEarnedMap.get(a.id) ?? null,
+    isUnlockedByMe: canCompare ? myEarnedSet.has(a.id) : null,
+  }));
+
+  const result = {
+    game: {
+      id: game.id,
+      title: game.title,
+      iconUrl: game.iconUrl,
+      platform: game.platform as string,
+      totalAchievements: game.totalAchievements,
+      earnedAchievements: earnedCount,
+      completionPct:
+        game.totalAchievements > 0
+          ? Math.round((earnedCount / game.totalAchievements) * 100)
+          : 0,
+    },
+    achievements,
+    earnedCount,
+    totalCount: achievementRows.length,
+  };
+
+  await redis.set(achCacheKey, JSON.stringify(result), 'EX', USER_GAMES_CACHE_TTL);
+  await redis.sadd(USER_GAMES_KEYS_SET(dbUser.id), achCacheKey);
+  return result;
 }
 
 /**

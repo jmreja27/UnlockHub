@@ -3,6 +3,8 @@ import { View, Text, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import type { RankingEntry } from '@unlockhub/types';
 
+import { useTheme } from '../hooks/useTheme';
+
 // Placeholder blurhash para avatares mientras cargan
 const AVATAR_BLURHASH = 'L6PZfSi_.AyE_3t7t7R**0o#DgR4';
 
@@ -21,12 +23,9 @@ function getMedalColor(rank: number): string {
 }
 
 export function RankingItem({ entry, isCurrentUser = false, onPress }: RankingItemProps) {
+  const colors = useTheme();
   const medalColor = getMedalColor(entry.rank);
   const isTopThree = entry.rank <= 3;
-
-  const containerClasses = isCurrentUser
-    ? 'flex-row items-center px-4 py-3 bg-primary/20 border border-primary/40 rounded-xl mb-2'
-    : 'flex-row items-center px-4 py-3 bg-surface-elevated rounded-xl mb-2';
 
   const accessibilityLabel = isCurrentUser
     ? `Tú: posición ${entry.rank}, ${entry.username}, ${entry.xp.toLocaleString()} XP`
@@ -34,12 +33,12 @@ export function RankingItem({ entry, isCurrentUser = false, onPress }: RankingIt
 
   return (
     <Pressable
-      className={containerClasses}
+      className={`flex-row items-center px-4 py-3 rounded-xl mb-2 ${isCurrentUser ? 'bg-primary/20 border border-primary/40' : ''}`}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       accessibilityHint={onPress ? 'Pulsa para ver el perfil de este jugador' : undefined}
-      style={{ minHeight: 60 }}
+      style={{ minHeight: 60, backgroundColor: isCurrentUser ? undefined : colors.surface }}
     >
       {/* Número de posición */}
       <View
@@ -52,7 +51,7 @@ export function RankingItem({ entry, isCurrentUser = false, onPress }: RankingIt
             {entry.rank === 1 ? '🥇' : entry.rank === 2 ? '🥈' : '🥉'}
           </Text>
         ) : (
-          <Text className="text-gray-400 font-semibold text-sm">#{entry.rank}</Text>
+          <Text className="font-semibold text-sm" style={{ color: colors.textSecondary }}>#{entry.rank}</Text>
         )}
       </View>
 
@@ -70,25 +69,27 @@ export function RankingItem({ entry, isCurrentUser = false, onPress }: RankingIt
       {/* Nombre de usuario */}
       <View className="flex-1">
         <Text
-          className={`font-semibold text-base ${isCurrentUser ? 'text-primary-light' : 'text-white'}`}
+          className="font-semibold text-base"
+          style={{ color: isCurrentUser ? colors.primary : colors.text }}
           numberOfLines={1}
         >
           {entry.username}
           {isCurrentUser && ' (Tú)'}
         </Text>
         {entry.countryCode && (
-          <Text className="text-gray-500 text-xs mt-0.5">{entry.countryCode}</Text>
+          <Text className="text-xs mt-0.5" style={{ color: colors.textMuted }}>{entry.countryCode}</Text>
         )}
       </View>
 
       {/* XP total */}
       <View className="items-end">
         <Text
-          className={`font-bold text-base ${isCurrentUser ? 'text-primary-light' : 'text-white'}`}
+          className="font-bold text-base"
+          style={{ color: isCurrentUser ? colors.primary : colors.text }}
         >
           {entry.xp.toLocaleString()}
         </Text>
-        <Text className="text-gray-500 text-xs">XP</Text>
+        <Text className="text-xs" style={{ color: colors.textMuted }}>XP</Text>
       </View>
     </Pressable>
   );

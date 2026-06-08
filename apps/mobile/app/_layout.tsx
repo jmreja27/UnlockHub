@@ -115,7 +115,7 @@ function PreferencesInit() {
   }, [loadPreferences]);
 
   useEffect(() => {
-    setColorScheme(theme === 'system' ? 'system' : 'dark');
+    setColorScheme(theme === 'light' ? 'light' : 'dark');
   }, [theme, setColorScheme]);
 
   return null;

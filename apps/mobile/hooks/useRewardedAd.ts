@@ -2,11 +2,10 @@ import { useEffect, useRef, useCallback } from 'react';
 
 import { api } from '../lib/api';
 import { useSessionStore } from '../stores/sessionStore';
-
-const TEST_REWARDED_ID = 'ca-app-pub-3940256099942544/5224354917';
+import { ADMOB_TEST_IDS } from '../lib/adUnits';
 
 const AD_UNIT_ID =
-  process.env['EXPO_PUBLIC_ADMOB_REWARDED_ID'] ?? TEST_REWARDED_ID;
+  process.env['EXPO_PUBLIC_ADMOB_REWARDED_ID'] ?? ADMOB_TEST_IDS.REWARDED;
 
 type RewardedAdInstance = {
   load: () => void;

@@ -2,6 +2,7 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 
 import { api } from '../lib/api';
 import { useSessionStore } from '../stores/sessionStore';
+import { queryKeys } from '../lib/queryKeys';
 
 export interface LibraryGame {
   id: string;
@@ -47,7 +48,7 @@ export function useMyGames(platform?: string) {
   const { isAuthenticated } = useSessionStore();
 
   const query = useInfiniteQuery({
-    queryKey: ['my-games', platform ?? 'all'],
+    queryKey: queryKeys.myGamesByPlatform(platform),
     queryFn: ({ pageParam }) => {
       const params = new URLSearchParams({ page: String(pageParam), limit: String(LIMIT) });
       if (platform) params.set('platform', platform);

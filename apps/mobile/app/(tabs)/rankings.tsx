@@ -10,9 +10,11 @@ import type { RankingEntry } from '@unlockhub/types';
 import { useGlobalRankings, usePlatformRanking, useMyRanking } from '../../hooks/useRankings';
 import { useSessionStore } from '../../stores/sessionStore';
 import { ApiRequestError } from '../../lib/api';
+import { queryKeys } from '../../lib/queryKeys';
 import { RankingItem } from '../../components/RankingItem';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { AdBanner } from '../../components/AdBanner';
+import { useTheme } from '../../hooks/useTheme';
 
 type RankingFilter = 'global' | 'STEAM' | 'RA' | 'PSN';
 
@@ -69,6 +71,7 @@ function RankingList({
   onPressUser: (username: string) => void;
 }) {
   const { t } = useTranslation();
+  const colors = useTheme();
   const queryClient = useQueryClient();
   const [isManualRefreshing, setIsManualRefreshing] = useState(false);
 
@@ -82,7 +85,7 @@ function RankingList({
   async function handleRefresh(): Promise<void> {
     setIsManualRefreshing(true);
     try {
-      await queryClient.invalidateQueries({ queryKey: ['rankings'] });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.rankings() });
     } finally {
       setIsManualRefreshing(false);
     }
@@ -111,7 +114,7 @@ function RankingList({
         accessibilityRole="alert"
       >
         <Text className="text-red-400 text-lg font-semibold mb-2">{t('rankings.error_title')}</Text>
-        <Text className="text-gray-400 text-sm text-center mb-6">
+        <Text className="text-sm text-center mb-6" style={{ color: colors.textSecondary }}>
           {errorType === 'network'
             ? t('rankings.error_network')
             : errorType === 'auth'
@@ -150,7 +153,7 @@ function RankingList({
       }
       ListEmptyComponent={
         <View className="items-center justify-center py-8" accessible accessibilityLiveRegion="polite">
-          <Text className="text-gray-400 text-base text-center">{t('rankings.empty')}</Text>
+          <Text className="text-base text-center" style={{ color: colors.textSecondary }}>{t('rankings.empty')}</Text>
         </View>
       }
       ListFooterComponent={<View className="h-4" />}
@@ -160,6 +163,7 @@ function RankingList({
 
 export default function RankingsScreen() {
   const { t } = useTranslation();
+  const colors = useTheme();
   const router = useRouter();
   const { user } = useSessionStore();
   const [activeFilter, setActiveFilter] = useState<RankingFilter>('global');
@@ -176,9 +180,9 @@ export default function RankingsScreen() {
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-surface" edges={['left', 'right']}>
+    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.background }} edges={['left', 'right']}>
       <View className="px-4 pt-1 pb-2">
-        <Text className="text-white text-2xl font-bold" accessibilityRole="header">
+        <Text className="text-2xl font-bold" style={{ color: colors.text }} accessibilityRole="header">
           {t('rankings.title')}
         </Text>
       </View>
@@ -196,12 +200,13 @@ export default function RankingsScreen() {
           <Pressable
             key={key}
             onPress={() => setActiveFilter(key)}
-            className={`px-4 py-2 rounded-full ${activeFilter === key ? 'bg-primary' : 'bg-surface-2'}`}
+            className="px-4 py-2 rounded-full"
+            style={{ backgroundColor: activeFilter === key ? colors.primary : colors.surface }}
             accessibilityRole="tab"
             accessibilityState={{ selected: activeFilter === key }}
             accessibilityLabel={t(labelKey)}
           >
-            <Text className={`font-semibold text-sm ${activeFilter === key ? 'text-white' : 'text-gray-400'}`}>
+            <Text className="font-semibold text-sm" style={{ color: activeFilter === key ? '#ffffff' : colors.textSecondary }}>
               {t(labelKey)}
             </Text>
           </Pressable>
@@ -219,12 +224,12 @@ export default function RankingsScreen() {
               : t('rankings.my_position_unranked_aria', { xp: (myRanking.xp ?? 0).toLocaleString() })
           }
         >
-          <Text className="text-gray-400 text-xs mb-1">{t('rankings.my_position_label')}</Text>
+          <Text className="text-xs mb-1" style={{ color: colors.textSecondary }}>{t('rankings.my_position_label')}</Text>
           <View className="flex-row items-center justify-between">
             <Text className="text-primary-light font-bold text-lg">
               {myRanking.rank ? `#${myRanking.rank}` : '—'}
             </Text>
-            <Text className="text-white font-semibold">
+            <Text className="font-semibold" style={{ color: colors.text }}>
               {(myRanking.xp ?? 0).toLocaleString()} XP
             </Text>
           </View>

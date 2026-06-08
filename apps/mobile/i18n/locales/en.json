@@ -139,6 +139,7 @@
   "game": {
     "rarity": "{{pct}}% have it",
     "no_achievements": "This game has no achievements registered yet",
+    "fetch_achievements": "Load achievements",
     "no_filtered_achievements": "No achievements for this filter",
     "link_platform_to_see_progress": "Link your {{platform}} account to see your progress",
     "earned_progress": "{{earned}}/{{total}} achievements · {{pct}}%",
@@ -333,6 +334,8 @@
   "public_profile": {
     "error_title": "Profile not found",
     "error_message": "This user does not exist or has been removed.",
+    "friends_only_title": "Private profile",
+    "friends_only_message": "This profile is only visible to the user's friends.",
     "avatar_label": "{{username}}'s avatar",
     "level": "Level {{level}}",
     "platforms": "Linked platforms",
@@ -341,7 +344,18 @@
     "compare_title": "Comparison",
     "compare_shared_achievements": "Achievements in common",
     "compare_shared_games": "Games in common",
-    "compare_xp_label": "XP difference"
+    "compare_xp_label": "XP difference",
+    "games_section": "Game Library",
+    "no_games": "This user has no games yet.",
+    "share_label": "Share profile"
+  },
+  "user_game": {
+    "their_achievements": "Their achievements",
+    "compare": "Compare",
+    "you": "You",
+    "them": "Them",
+    "unlocked": "unlocked",
+    "locked": "locked"
   },
   "rankings": {
     "title": "Rankings",
@@ -438,6 +452,17 @@
     "settings_language": "Language",
     "settings_theme": "Theme",
     "theme_dark": "Dark",
+    "theme_light": "Light",
+    "privacy_title": "Profile privacy",
+    "privacy_public": "Public",
+    "privacy_public_desc": "Visible to everyone and appears in rankings",
+    "privacy_friends": "Friends",
+    "privacy_friends_desc": "Only your friends can see your profile and achievements",
+    "privacy_private": "Private",
+    "privacy_private_desc": "Your profile is not visible to anyone",
+    "privacy_saving": "Saving...",
+    "settings_theme": "Theme",
+    "theme_dark": "Dark",
     "theme_system": "System",
     "sync_prefix": "Sync:",
     "platforms_empty": "You have no linked platforms yet.\nLink them from settings to sync your achievements.",
@@ -470,7 +495,8 @@
     "stats_best_streak": "Best Streak",
     "stats_favorite_platform": "Favorite Platform",
     "stats_rarest_achievement": "Rarest Achievement",
-    "stats_rarity_pct": "{{pct}}% have it"
+    "stats_rarity_pct": "{{pct}}% have it",
+    "app_version": "Version {{version}} ({{build}})"
   },
   "premium": {
     "title": "UnlockHub Premium",

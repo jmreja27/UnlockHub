@@ -3,6 +3,7 @@ import type { WeeklyChallenge, UserChallenge } from '@unlockhub/types';
 
 import { api } from '../lib/api';
 import { useSessionStore } from '../stores/sessionStore';
+import { queryKeys } from '../lib/queryKeys';
 
 interface ActiveChallengeResponse {
   challenge: WeeklyChallenge | null;
@@ -16,13 +17,13 @@ export function useChallenges() {
   const isAuthenticated = useSessionStore((s) => s.isAuthenticated);
 
   const challengeQuery = useQuery({
-    queryKey: ['challenge', 'active'] as const,
+    queryKey: queryKeys.challengeActive(),
     queryFn: () => api.get<ActiveChallengeResponse>('/api/v1/challenges/active'),
     staleTime: 60_000,
   });
 
   const statusQuery = useQuery({
-    queryKey: ['challenge', 'me'] as const,
+    queryKey: queryKeys.challengeMe(),
     queryFn: () => api.get<ChallengeStatusResponse>('/api/v1/challenges/me'),
     staleTime: 30_000,
     enabled: isAuthenticated,

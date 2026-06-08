@@ -4,6 +4,8 @@ import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
 import type { ActivityEvent } from '@unlockhub/types';
 
+import { useTheme } from '../hooks/useTheme';
+
 interface ActivityCardProps {
   event: ActivityEvent;
 }
@@ -38,6 +40,7 @@ function eventLabel(event: ActivityEvent, t: ReturnType<typeof useTranslation>['
 
 export function ActivityCard({ event }: ActivityCardProps) {
   const { t } = useTranslation();
+  const colors = useTheme();
   const label = eventLabel(event, t);
   const time = relativeTime(event.createdAt, t);
 
@@ -50,7 +53,8 @@ export function ActivityCard({ event }: ActivityCardProps) {
       onPress={handlePress}
       accessibilityLabel={`${label}. ${time}`}
       accessibilityRole="button"
-      className="flex-row items-center px-4 py-3 border-b border-gray-800"
+      className="flex-row items-center px-4 py-3"
+      style={{ borderBottomWidth: 1, borderBottomColor: colors.separator }}
     >
       <Image
         source={event.user?.avatar ?? null}
@@ -61,13 +65,14 @@ export function ActivityCard({ event }: ActivityCardProps) {
       />
       <View className="flex-1 ml-3">
         <Text
-          className="text-white text-sm leading-5"
+          className="text-sm leading-5"
+          style={{ color: colors.text }}
           accessibilityElementsHidden
           numberOfLines={2}
         >
           {label}
         </Text>
-        <Text className="text-gray-500 text-xs mt-1" accessibilityElementsHidden>
+        <Text className="text-xs mt-1" style={{ color: colors.textMuted }} accessibilityElementsHidden>
           {time}
         </Text>
       </View>

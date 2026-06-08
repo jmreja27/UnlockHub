@@ -13,6 +13,7 @@ import { ApiRequestError } from '../../lib/api';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { EmptyState } from '../../components/EmptyState';
 import { AdBanner } from '../../components/AdBanner';
+import { useTheme } from '../../hooks/useTheme';
 
 type Tab = 'friends' | 'pending';
 
@@ -40,6 +41,7 @@ function FriendItem({
   onPress: (username: string) => void;
 }) {
   const { t } = useTranslation();
+  const colors = useTheme();
   const friend = item.senderId === currentUserId ? item.receiver : item.sender;
   if (!friend) return null;
 
@@ -61,20 +63,21 @@ function FriendItem({
   return (
     <TouchableOpacity
       onPress={() => onPress(friend.username)}
-      className="flex-row items-center bg-surface-2 mx-4 mb-2 px-4 py-3 rounded-xl"
+      className="flex-row items-center mx-4 mb-2 px-4 py-3 rounded-xl"
+      style={{ backgroundColor: colors.surface }}
       accessible
       accessibilityRole="button"
       accessibilityLabel={`${friend.username}, ${t('friends.level_short')} ${friend.level}, ${friend.xp} ${t('friends.xp_short')}`}
       accessibilityHint={t('friends.view_profile_hint')}
     >
       <View className="w-10 h-10 rounded-full bg-primary items-center justify-center mr-3">
-        <Text className="text-white font-bold text-base">
+        <Text className="font-bold text-base" style={{ color: '#ffffff' }}>
           {friend.username.charAt(0).toUpperCase()}
         </Text>
       </View>
       <View className="flex-1">
-        <Text className="text-white font-semibold text-base">{friend.username}</Text>
-        <Text className="text-gray-400 text-xs">
+        <Text className="font-semibold text-base" style={{ color: colors.text }}>{friend.username}</Text>
+        <Text className="text-xs" style={{ color: colors.textSecondary }}>
           {t('friends.level_short')} {friend.level} · {friend.xp} {t('friends.xp_short')}
         </Text>
       </View>
@@ -106,23 +109,25 @@ function PendingItem({
   isRejecting: boolean;
 }) {
   const { t } = useTranslation();
+  const colors = useTheme();
   const sender = item.sender;
   if (!sender) return null;
 
   return (
     <View
-      className="flex-row items-center bg-surface-2 mx-4 mb-2 px-4 py-3 rounded-xl"
+      className="flex-row items-center mx-4 mb-2 px-4 py-3 rounded-xl"
+      style={{ backgroundColor: colors.surface }}
       accessible
       accessibilityLabel={t('friends.pending_item_label', { username: sender.username })}
     >
       <View className="w-10 h-10 rounded-full bg-primary items-center justify-center mr-3">
-        <Text className="text-white font-bold text-base">
+        <Text className="font-bold text-base" style={{ color: '#ffffff' }}>
           {sender.username.charAt(0).toUpperCase()}
         </Text>
       </View>
       <View className="flex-1">
-        <Text className="text-white font-semibold text-base">{sender.username}</Text>
-        <Text className="text-gray-400 text-xs">
+        <Text className="font-semibold text-base" style={{ color: colors.text }}>{sender.username}</Text>
+        <Text className="text-xs" style={{ color: colors.textSecondary }}>
           {t('friends.level_short')} {sender.level} · {sender.xp} {t('friends.xp_short')}
         </Text>
       </View>
@@ -154,6 +159,7 @@ function PendingItem({
 
 export default function FriendsScreen() {
   const { t } = useTranslation();
+  const colors = useTheme();
   const router = useRouter();
   const { user, isAuthenticated } = useSessionStore();
   const [activeTab, setActiveTab] = useState<Tab>('friends');
@@ -186,9 +192,9 @@ export default function FriendsScreen() {
 
   if (!isAuthenticated) {
     return (
-      <SafeAreaView className="flex-1 bg-surface" edges={['left', 'right']}>
+      <SafeAreaView className="flex-1" style={{ backgroundColor: colors.background }} edges={['left', 'right']}>
         <View className="px-4 pt-1 pb-2">
-          <Text className="text-white text-2xl font-bold" accessibilityRole="header">
+          <Text className="text-2xl font-bold" style={{ color: colors.text }} accessibilityRole="header">
             {t('friends.title')}
           </Text>
         </View>
@@ -204,25 +210,26 @@ export default function FriendsScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-surface">
+    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.background }}>
       {/* Header */}
       <View className="px-4 pt-1 pb-2">
-        <Text className="text-white text-2xl font-bold" accessibilityRole="header">
+        <Text className="text-2xl font-bold" style={{ color: colors.text }} accessibilityRole="header">
           {t('friends.title')}
         </Text>
       </View>
 
       {/* Tabs */}
-      <View className="flex-row mx-4 mb-3 bg-surface-2 rounded-xl p-1">
+      <View className="flex-row mx-4 mb-3 rounded-xl p-1" style={{ backgroundColor: colors.surface }}>
         {(['friends', 'pending'] as Tab[]).map((tab) => (
           <TouchableOpacity
             key={tab}
             onPress={() => setActiveTab(tab)}
-            className={`flex-1 py-2 rounded-lg items-center ${activeTab === tab ? 'bg-primary' : ''}`}
+            className="flex-1 py-2 rounded-lg items-center"
+            style={{ backgroundColor: activeTab === tab ? colors.primary : 'transparent' }}
             accessibilityRole="tab"
             accessibilityState={{ selected: activeTab === tab }}
           >
-            <Text className={`font-semibold text-sm ${activeTab === tab ? 'text-white' : 'text-gray-400'}`}>
+            <Text className="font-semibold text-sm" style={{ color: activeTab === tab ? '#ffffff' : colors.textSecondary }}>
               {t(`friends.tab_${tab}`)}
               {tab === 'pending' && pendingTotal > 0 ? ` (${pendingTotal})` : ''}
             </Text>
@@ -239,9 +246,10 @@ export default function FriendsScreen() {
             value={search}
             onChangeText={setSearch}
             placeholder={t('friends.search_placeholder')}
-            placeholderTextColor="#6b7280"
+            placeholderTextColor={colors.textMuted}
             accessibilityLabel={t('friends.search_label')}
-            className="bg-surface-2 text-white px-4 py-3 rounded-xl text-base"
+            className="px-4 py-3 rounded-xl text-base"
+            style={{ backgroundColor: colors.surface, color: colors.text }}
           />
         </View>
       )}
@@ -257,10 +265,10 @@ export default function FriendsScreen() {
             accessibilityLiveRegion="polite"
             accessibilityRole="alert"
           >
-            <Text className="text-white text-lg font-bold text-center mb-2">
+            <Text className="text-lg font-bold text-center mb-2" style={{ color: colors.text }}>
               {t('friends.error_title')}
             </Text>
-            <Text className="text-gray-400 text-sm text-center mb-6">
+            <Text className="text-sm text-center mb-6" style={{ color: colors.textSecondary }}>
               {classifyError(friendsError) === 'network'
                 ? t('friends.error_network')
                 : classifyError(friendsError) === 'auth'

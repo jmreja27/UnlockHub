@@ -1,7 +1,8 @@
 // Tests de integración HTTP para GET /api/v1/games/:id/achievements
-// Mockea el service para aislar la capa de controlador+rutas
+// y POST /api/v1/games/:id/fetch-achievements
 
 jest.mock('../services/search.service');
+jest.mock('../services/games.service');
 jest.mock('../lib/redis', () => ({ redis: { on: jest.fn() } }));
 jest.mock('../middleware/rateLimiter', () => ({
   globalRateLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),
@@ -11,8 +12,11 @@ jest.mock('../middleware/rateLimiter', () => ({
 import request from 'supertest';
 
 import * as searchService from '../services/search.service';
+import * as gamesService from '../services/games.service';
 import app from '../app';
 import { signAccessToken } from '../lib/jwt';
+
+const mockGamesService = gamesService as jest.Mocked<typeof gamesService>;
 
 const mockSearchService = searchService as jest.Mocked<typeof searchService>;
 
@@ -79,6 +83,67 @@ describe('GET /api/v1/games/:id/achievements — sin JWT', () => {
 
     expect(res.status).toBe(404);
     expect(res.body.code).toBe('GAME_NOT_FOUND');
+  });
+});
+
+describe('POST /api/v1/games/:id/fetch-achievements', () => {
+  const validToken = () =>
+    signAccessToken({ sub: 'user-1', email: 'test@example.com', isPremium: false });
+
+  it('401 sin token', async () => {
+    const res = await request(app).post('/api/v1/games/g1/fetch-achievements');
+    expect(res.status).toBe(401);
+  });
+
+  it('200 con { achievementsAdded } cuando el service resuelve correctamente', async () => {
+    mockGamesService.fetchAndUpsertGameAchievements.mockResolvedValue({ achievementsAdded: 42 });
+
+    const res = await request(app)
+      .post('/api/v1/games/g1/fetch-achievements')
+      .set('Authorization', `Bearer ${validToken()}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.achievementsAdded).toBe(42);
+    expect(mockGamesService.fetchAndUpsertGameAchievements).toHaveBeenCalledWith('g1');
+  });
+
+  it('200 con achievementsAdded: 0 cuando el juego ya tiene logros (guard)', async () => {
+    mockGamesService.fetchAndUpsertGameAchievements.mockResolvedValue({ achievementsAdded: 0 });
+
+    const res = await request(app)
+      .post('/api/v1/games/g1/fetch-achievements')
+      .set('Authorization', `Bearer ${validToken()}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.achievementsAdded).toBe(0);
+  });
+
+  it('404 si el service lanza GAME_NOT_FOUND', async () => {
+    const { AppError } = jest.requireActual<typeof import('../middleware/errorHandler')>('../middleware/errorHandler');
+    mockGamesService.fetchAndUpsertGameAchievements.mockRejectedValue(
+      new AppError('Juego no encontrado', 'GAME_NOT_FOUND', 404),
+    );
+
+    const res = await request(app)
+      .post('/api/v1/games/no-existe/fetch-achievements')
+      .set('Authorization', `Bearer ${validToken()}`);
+
+    expect(res.status).toBe(404);
+    expect(res.body.code).toBe('GAME_NOT_FOUND');
+  });
+
+  it('400 si el service lanza PLATFORM_NOT_SUPPORTED (Xbox)', async () => {
+    const { AppError } = jest.requireActual<typeof import('../middleware/errorHandler')>('../middleware/errorHandler');
+    mockGamesService.fetchAndUpsertGameAchievements.mockRejectedValue(
+      new AppError('Xbox no soportado', 'PLATFORM_NOT_SUPPORTED', 400),
+    );
+
+    const res = await request(app)
+      .post('/api/v1/games/xbox-game/fetch-achievements')
+      .set('Authorization', `Bearer ${validToken()}`);
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('PLATFORM_NOT_SUPPORTED');
   });
 });
 

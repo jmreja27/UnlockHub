@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 
 import { api } from '../lib/api';
+import { queryKeys } from '../lib/queryKeys';
 
 interface AggregateSyncStatus {
   lastSyncAt: string | null;
@@ -62,7 +63,7 @@ export function useSyncStatus(userId: string | undefined): SyncStatusResult {
   const { t } = useTranslation();
 
   const { data } = useQuery<AggregateSyncStatus>({
-    queryKey: ['sync-summary', userId],
+    queryKey: queryKeys.syncSummary(userId ?? ''),
     queryFn: () => api.get<AggregateSyncStatus>('/api/v1/sync/my-summary'),
     enabled: !!userId,
     staleTime: 30_000,

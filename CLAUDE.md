@@ -243,6 +243,9 @@ Usar siempre estos en lugar de recrear funcionalidad equivalente.
 | `ActivityCard` | `components/ActivityCard.tsx` | ✅ | Evento del feed de actividad. |
 | `NotificationBell` | `components/NotificationBell.tsx` | ✅ | Campana en header con badge de no leídas. |
 | `AchievementSearchCard` | `components/AchievementSearchCard.tsx` | ✅ | Tarjeta de logro en resultados de búsqueda — estado locked/unlocked, XP, rareza, badge de plataforma. |
+| `useDebounce` | `hooks/useDebounce.ts` | ✅ | Hook genérico de debounce `useDebounce<T>(value, delay)` — usar siempre en lugar de implementar timerRef manualmente. |
+| `queryKeys` | `lib/queryKeys.ts` | ✅ | QueryKeys centralizadas de TanStack Query — usar siempre, nunca strings literales inline en queryKey. |
+| `ADMOB_TEST_IDS` | `lib/adUnits.ts` | ✅ | IDs de test AdMob centralizados (BANNER, INTERSTITIAL, REWARDED) — usar en lugar de hardcodear strings. |
 
 ---
 
@@ -613,7 +616,7 @@ export interface PlatformAdapter {
 
 `background-sync.scheduler.ts` — ✅ Implementado.
 - Cron: `03:00 UTC` diariamente.
-- Sincroniza usuarios con `lastSyncAt > 24h` y actividad reciente (login en últimos 7 días).
+- Sincroniza usuarios cuyo `lastSyncAt` es `null` o lleva más de 24h sin actualizarse.
 - Respeta contador Steam: pausa si `steam:api:calls:<date>` supera el 80% del límite.
 - Concurrencia máxima: 5 usuarios en paralelo.
 
@@ -810,11 +813,21 @@ io.adapter(createAdapter(pubClient, subClient));
 
 ### Estrategia de branching
 
-- `main` — producción. Solo merges desde `develop` tras smoke tests.
-- `develop` — integración. Base para todas las features.
-- `feat/nombre-feature` — una rama por feature, sale de `develop`.
-- `fix/descripcion` — hotfixes, pueden salir de `main` si es urgente.
-- Merge siempre con `--no-ff` y PR revisada. CI debe pasar antes del merge.
+- `main` — producción. Solo recibe merges desde `develop` en el momento de una release.
+- `develop` — integración. Base para todas las features y fixes.
+- `feat/nombre-feature` — una rama por feature, sale de `develop`, se mergea de vuelta a `develop`.
+- `fix/descripcion` — una rama por fix, sale de `develop`, se mergea de vuelta a `develop`.
+- `hotfix/descripcion` — fix urgente en producción, sale de `main`, se mergea a `main` Y a `develop`.
+
+**Flujo estándar:**
+1. `git checkout develop && git pull origin develop`
+2. `git checkout -b feat/nombre-feature`
+3. Implementar + tests + lint
+4. `git push origin feat/nombre-feature`
+5. PR → `develop` con `--no-ff`
+6. Cuando hay release: `develop` → `main` con `--no-ff` + `git tag vX.Y.Z`
+
+**Nunca** commitear directamente en `main` ni en `develop` — siempre desde rama.
 
 ---
 
@@ -928,7 +941,7 @@ Métricas disponibles:
 ### Preferencias de usuario
 
 - **Idioma**: ES / EN — cambiable desde Profile → Ajustes
-- **Tema**: Solo "Oscuro" activo — modo claro pendiente (todos los componentes usan `text-white` hardcoded)
+- **Tema**: Oscuro y Claro — cambiable desde Profile → Ajustes (selector 🌙/☀️). Colores dinámicos vía `lib/colors.ts` + `hooks/useTheme.ts`. `preferencesStore.theme: 'dark' | 'light'` con persistencia AsyncStorage.
 - **Onboarding**: `preferencesStore.onboardingCompleted`
 
 ---
@@ -1005,9 +1018,11 @@ Métricas disponibles:
 | XP y rareza en logros | ✅ Activo |
 | Detalle de juego con progreso (X/Y · Z%) | ✅ Activo |
 | Filtros en detalle (All/Unlocked/Pending) | ✅ Activo |
+| Fetch achievements on-demand (juego sin logros) | ✅ Activo |
 | Guías UGC de logros (crear + ver) | ✅ Activo |
 | Retar amigo en logro | ⚙️ Parcial |
 | Compartir logro | ✅ Activo |
+| Ver logros de otros usuarios (Sus logros + Comparar) | ✅ Activo |
 
 ### Rankings
 
@@ -1032,9 +1047,10 @@ Métricas disponibles:
 | Rechazar solicitud de amistad | ✅ Activo |
 | Eliminar amigo | ✅ Activo |
 | Bloquear usuario | ✅ Activo |
-| Feed de actividad | ✅ Activo |
+| Feed de actividad | ✅ Activo — cursor pagination (`id: { lt: cursor }`, `CursorPaginatedResponse<T>`, `useFeed` con `useInfiniteQuery`) |
 | Perfil público (sin email) | ✅ Activo |
 | Comparación de perfiles ("vs tú") | ✅ Activo |
+| Compartir perfil (URL OG) | ✅ Activo — share button en `profile/[username].tsx` comparte `https://unlockhub.app/u/{username}` |
 
 ### Notificaciones
 
@@ -1094,8 +1110,10 @@ Métricas disponibles:
 | Upload de banner (Cloudinary) | ✅ Activo |
 | País (countryCode) | ✅ Activo |
 | Idioma ES/EN persistente | ✅ Activo |
-| Tema (solo oscuro activo) | ⚙️ Parcial |
+| Tema (oscuro y claro) | ✅ Activo |
+| Versión de app en perfil | ✅ Activo — `expo-constants` al pie de Ajustes, i18n `profile.app_version` |
 | Estadísticas avanzadas premium | 🚩 Gateado |
+| Privacidad de perfil (PUBLIC/FRIENDS_ONLY/PRIVATE) | ✅ Activo |
 
 ### Infraestructura y operaciones
 
@@ -1112,6 +1130,7 @@ Métricas disponibles:
 | Socket.io multi-instancia (redis-adapter) | ✅ Activo |
 | Sync progress Socket.io | ✅ Activo |
 | Activity feed Socket.io | ✅ Activo |
+| OG profiles (`GET /api/v1/users/:username/og`) | ✅ Activo — HTML Open Graph por perfil público; PRIVATE → 404 |
 | Rate limiting global (500 req/15min) | ✅ Activo |
 | Rate limiting auth (10 req/15min) | ✅ Activo |
 | Rate limiting search (60 req/min) | ✅ Activo |
@@ -1136,7 +1155,7 @@ Ver [docs/DECISIONS.md](docs/DECISIONS.md)
 | **Fase 1 — MVP** | Monorepo, auth, Steam + RA, logros, rankings, perfil, i18n, AdMob | ✅ Completa |
 | **Fase 2 — Social** | Amigos, feed, retos, puntos, racha, push notifications, Wrapped, perfil público, búsqueda | ✅ Completa |
 | **Fase 3 — Producción** | Railway, Sentry, GDPR, escudo de racha, notificaciones, Wrapped mensual, canje puntos, stats, guías UGC, dashboard admin, tests k6, Play Store, premium diferido a Fase 4 | 🔄 En progreso |
-| **Fase 4 — Avanzado** | Torneos internos, App Store iOS, Xbox, OG profiles | 🔲 Futuro |
+| **Fase 4 — Avanzado** | Torneos internos, App Store iOS, Xbox | 🔲 Futuro |
 
 > **Aviso legal Fase 4**: Torneos con recompensas económicas pueden clasificarse como juegos de azar en España (Ley 13/2011). Solo recompensas en puntos/días premium hasta consultar con abogado.
 
@@ -1179,6 +1198,18 @@ Ver [docs/BACKLOG.md](docs/BACKLOG.md)
 ---
 
 ## Última revisión de código
+
+**Fecha**: 2026-06-07 (sesión 67) — Revisión completa del proyecto (backend + mobile + packages). Backlog actualizado: F20 ✅ (ad units Rankings/Friends + EAS secrets configurados), PL14 ✅ (edge-to-edge Android 15 validado en dispositivo físico), PL19 ⚙️ añadido (smoke tests finales antes de promover a Producción). CLAUDE.md corregido: descripción `background-sync.scheduler.ts` eliminaba referencia a "login en últimos 7 días" que no existe en código ni schema (no hay campo `lastLoginAt`). Sin bugs críticos encontrados — código limpio en los ~30 archivos revisados. Tests: 610 API + 368 mobile ✅. 0 errores TS/lint.
+
+**Fecha**: 2026-06-07 (sesión 66) — Optimizaciones pre-producción. **PL16**: 3 índices PostgreSQL en `User` (`createdAt`, `isPremium`, `lastSyncAt`) + migración `20260607000000_add_user_performance_indexes`. **PL17**: caché Redis TTL 5 min en `getUserGames` y `getUserGameAchievements`; `invalidateUserPublicCache()` llamada desde sync.worker y updateProfile (cambio de profileVisibility). **PL18**: 11 archivos migrados a imports directos `@expo/vector-icons/Ionicons` — elimina glyph maps no usados. Tests: 610 API + 368 mobile ✅. 0 errores TS/lint.
+
+**Fecha**: 2026-06-07 (sesión 65) — T13, T14, T27 resueltos en rama `feat/t13-t14-t27`. T13 (parallel RA) y T14 (desnormalización) diferidos con análisis documentado en BACKLOG. T27 (✅): `POST /api/v1/games/:id/fetch-achievements` con guard 24h; `fetchSteamAchievementDefinitions` y `fetchRaAchievementDefinitions` exportadas; nuevo `games.service.ts`; botón "Cargar logros" en `game/[id].tsx` con `useMutation` + invalidación caché; i18n ES/EN. API: 610/610 tests ✅. Mobile: 368/368 tests ✅. 0 errores TS/lint.
+
+**Fecha**: 2026-06-07 (sesión 64) — F28, F10, T4 implementados en rama `feat/f28-f10-t4`. **F28**: versión de app al pie de ajustes en `profile.tsx` — `expo-constants` + i18n `profile.app_version`. **F10**: `GET /api/v1/users/:username/og` devuelve HTML con Open Graph meta tags; `getOgProfileData()` en `user.service.ts`; PRIVATE → 404; share button en `profile/[username].tsx` comparte `https://unlockhub.app/u/{username}`. **T4**: `getFriendsFeed` reemplaza offset por cursor (`id: { lt: cursor }`); respuesta `CursorPaginatedResponse<T>` en `@unlockhub/types`; `useFeed` migrado a `useInfiniteQuery` con `pageParam` como cursor + Socket.io prepend intacto. API: 597/597 tests ✅. Mobile: 364/364 tests ✅. 0 errores TS/lint.
+
+**Fecha**: 2026-06-05 (sesión 63) — T54 refactor completado. BUILD_LOCAL.md duplicado eliminado (raíz obsoleto vs docs/ actualizado). API: `createUploadMiddleware(field)` factory en upload.middleware.ts (T45); `makeUploadHandler(serviceMethod)` en user.controller.ts (T44). Mobile: `lib/queryKeys.ts` con 30+ claves tipadas — actualizados 15 hooks + 12 screens (T46); `hooks/useDebounce.ts` que reemplaza el patrón timerRef duplicado en useSearch/useSearchAchievements (T47); `lib/adUnits.ts` `ADMOB_TEST_IDS` centraliza los 3 IDs de test AdMob (T48). Fix colateral: `profile.tsx` invalidaba `['my-stats']` (no-op) — corregido a `queryKeys.userStats()`. API: 593/593 tests ✅. Mobile: 364/364 tests ✅. 0 errores TS/lint.
+
+**Fecha**: 2026-06-05 (sesión 62) — T57 modo claro implementado. `lib/colors.ts` con tokens `darkColors`/`lightColors`. `hooks/useTheme.ts` devuelve colores según tema activo. `preferencesStore.theme: 'dark'|'light'`. Selector activado en `profile.tsx` (🌙/☀️). 22 archivos actualizados — NativeWind para layout, inline styles para colores. i18n ES/EN. Tests: 364/364 ✅.
 
 **Fecha**: 2026-06-04 (sesión 59) — PL13 script limpieza BD + merge develop→main + tag v1.0.0+ limpieza ejecutada en producción. Script `scripts/cleanup-test-users.ts` creado y ejecutado: 7 usuarios de prueba eliminados, TestUser99 y Sovelyss preservados, catálogo intacto (**2.878 juegos + 134.928 logros**). Script ampliado a múltiples `--preserve-username` (Prisma `notIn`). Merge develop → main `--no-ff`. Tag `v1.0.0` en GitHub. PL13 ✅, PL15 ✅.
 
