@@ -23,7 +23,7 @@ jest.mock('../lib/redis', () => ({
 
 jest.mock('../lib/prisma', () => ({
   prisma: {
-    platformAccount: { findUnique: jest.fn(), update: jest.fn(), findMany: jest.fn() },
+    platformAccount: { findUnique: jest.fn(), upsert: jest.fn(), findMany: jest.fn() },
     userAchievement: { findMany: jest.fn() },
     user: { update: jest.fn(), findUnique: jest.fn() },
   },
@@ -105,7 +105,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockGetIO.mockReturnValue(mockIO);
   mockPrisma.platformAccount.findUnique.mockResolvedValue(account);
-  mockPrisma.platformAccount.update.mockResolvedValue(account);
+  mockPrisma.platformAccount.upsert.mockResolvedValue(account);
   mockPrisma.user.update.mockResolvedValue({ id: 'user-1' } as never);
   mockPrisma.userAchievement.findMany.mockResolvedValue([]);
 });
@@ -230,8 +230,8 @@ describe('syncService.triggerExpressSync', () => {
     await syncService.triggerExpressSync('user-1', 'STEAM');
 
     expect(mockSteamAdapter.syncUserExpress).toHaveBeenCalledWith(account);
-    expect(mockPrisma.platformAccount.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ lastSyncedAt: expect.any(Date) }) }),
+    expect(mockPrisma.platformAccount.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ update: expect.objectContaining({ lastSyncedAt: expect.any(Date) }) }),
     );
   });
 

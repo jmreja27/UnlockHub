@@ -532,9 +532,17 @@ export const retroAchievementsAdapter: PlatformAdapter = {
       }
     }
 
-    await prisma.platformAccount.update({
-      where: { id: account.id },
-      data: { lastSyncedAt: new Date() },
+    await prisma.platformAccount.upsert({
+      where: { userId_platform: { userId: account.userId, platform: account.platform } },
+      update: { lastSyncedAt: new Date() },
+      create: {
+        userId: account.userId,
+        platform: account.platform,
+        externalId: account.externalId,
+        username: account.username,
+        encryptedToken: account.encryptedToken,
+        lastSyncedAt: new Date(),
+      },
     });
 
     return { platform: 'RA', achievementsSynced, gamesUpdated, syncedAt: new Date().toISOString() };
@@ -610,9 +618,17 @@ export const retroAchievementsAdapter: PlatformAdapter = {
       await onBatch({ processed, total, newGamesCount: batchGames, newAchievementsCount: batchAchievements });
     }
 
-    await prisma.platformAccount.update({
-      where: { id: account.id },
-      data: { lastSyncedAt: new Date() },
+    await prisma.platformAccount.upsert({
+      where: { userId_platform: { userId: account.userId, platform: account.platform } },
+      update: { lastSyncedAt: new Date() },
+      create: {
+        userId: account.userId,
+        platform: account.platform,
+        externalId: account.externalId,
+        username: account.username,
+        encryptedToken: account.encryptedToken,
+        lastSyncedAt: new Date(),
+      },
     });
 
     return { platform: 'RA', achievementsSynced, gamesUpdated, syncedAt: new Date().toISOString() };
