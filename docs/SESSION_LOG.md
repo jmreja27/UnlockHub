@@ -2,6 +2,8 @@
 
 > Movido desde CLAUDE.md. La entrada más reciente va primero.
 
+**Fecha**: 2026-06-05 (sesión 68) — T16 backfill RA XP ejecutado en producción. 48.865 logros RA procesados — 29.419 actualizados (fórmula vieja `min(100, max(1, points))` → correcta `max(5, round(points/5))`), 28.583 saltados (ya correctos), 0 errores. XP de usuarios se corregirá gradualmente en próximo sync automático.
+
 ## Última revisión de código
 
 **Fecha**: 2026-06-07 (sesión 67) — Revisión completa del proyecto (backend + mobile + packages). ~30 archivos revisados: middleware, routes, controllers, services, repositories, jobs, sockets, lib, config, validators, componentes y hooks mobile. Sin bugs críticos encontrados. Corrección menor en CLAUDE.md: eliminada referencia a "login en últimos 7 días" del background-sync.scheduler que no existe en código ni schema (no hay campo `lastLoginAt` en el modelo User). Backlog actualizado: F20 ✅ (EAS secrets Rankings/Friends), PL14 ✅ (edge-to-edge validado en dispositivo físico), PL19 ⚙️ añadido (smoke tests finales antes de promover). Inventario CLAUDE.md verificado — todos los endpoints nuevos (F10, F21, T27, T4) presentes. Tests: 610/610 API ✅ + 368/368 mobile ✅. 0 errores TS/lint.
