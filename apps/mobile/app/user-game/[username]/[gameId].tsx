@@ -131,6 +131,8 @@ export default function UserGameScreen() {
     gameId ?? '',
   );
 
+  if (!username || !gameId) return null;
+
   const platformColor = data ? getPlatformColor(data.game.platform) : '#6366f1';
 
   return (

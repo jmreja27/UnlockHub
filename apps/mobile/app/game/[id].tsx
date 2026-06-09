@@ -355,6 +355,16 @@ export default function GameDetailScreen() {
     setWriteGuideAchievementId(achievementId);
   }, []);
 
+  if (!id) {
+    return (
+      <SafeAreaView className="flex-1" style={{ backgroundColor: colors.background }}>
+        <View className="flex-1 items-center justify-center px-6">
+          <Text className="text-red-400 text-base">{t('search.game_not_found')}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.background }}>
       <View className="flex-1">

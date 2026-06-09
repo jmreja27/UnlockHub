@@ -16,17 +16,23 @@ interface PreferencesState {
 
 const STORAGE_KEY = '@unlockhub_preferences';
 
-/** Persiste el snapshot actual del store en AsyncStorage. Usa getState() sincrónico para evitar race conditions. */
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Persiste el snapshot actual del store en AsyncStorage con debounce de 100ms para evitar escrituras redundantes en cambios rápidos. */
 function persistCurrent(): void {
-  const s = usePreferencesStore.getState();
-  void AsyncStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify({
-      theme: s.theme,
-      onboardingCompleted: s.onboardingCompleted,
-      librarySortOrder: s.librarySortOrder,
-    }),
-  );
+  if (persistTimer) clearTimeout(persistTimer);
+  persistTimer = setTimeout(() => {
+    persistTimer = null;
+    const s = usePreferencesStore.getState();
+    void AsyncStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        theme: s.theme,
+        onboardingCompleted: s.onboardingCompleted,
+        librarySortOrder: s.librarySortOrder,
+      }),
+    );
+  }, 100);
 }
 
 export const usePreferencesStore = create<PreferencesState>((set) => ({

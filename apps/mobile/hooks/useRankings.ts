@@ -16,7 +16,7 @@ const RANKING_KEYS = {
   me: ['rankings', 'me'] as const,
 };
 
-const RANKING_STALE = 1000 * 60 * 2;
+const RANKING_STALE = 5 * 60 * 1000;
 const RANKING_GC = 1000 * 60 * 15;
 
 export function useGlobalRankings(page: number = 1, limit: number = 50) {

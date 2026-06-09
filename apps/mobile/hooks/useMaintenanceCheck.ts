@@ -12,13 +12,17 @@ export function useMaintenanceCheck() {
   const [isMaintenance, setIsMaintenance] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const abortTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const check = useCallback(async () => {
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000);
+      abortTimeoutRef.current = setTimeout(() => controller.abort(), 5000);
       const res = await fetch(`${API_URL}/health`, { signal: controller.signal });
-      clearTimeout(timeout);
+      if (abortTimeoutRef.current) {
+        clearTimeout(abortTimeoutRef.current);
+        abortTimeoutRef.current = null;
+      }
       const data = (await res.json()) as HealthResponse;
       setIsMaintenance(data.maintenance === true);
     } catch {
@@ -30,9 +34,15 @@ export function useMaintenanceCheck() {
     }
   }, []);
 
-  // Comprobación inicial al arrancar
+  // Comprobación inicial al arrancar; cancela el timeout de abort pendiente al desmontar
   useEffect(() => {
     void check();
+    return () => {
+      if (abortTimeoutRef.current) {
+        clearTimeout(abortTimeoutRef.current);
+        abortTimeoutRef.current = null;
+      }
+    };
   }, [check]);
 
   // Polling automático cada 30s mientras está en mantenimiento
