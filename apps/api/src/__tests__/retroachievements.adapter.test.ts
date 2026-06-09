@@ -10,7 +10,7 @@ jest.mock('../lib/prisma', () => ({
     game: { upsert: jest.fn() },
     achievement: { upsert: jest.fn() },
     userAchievement: { upsert: jest.fn() },
-    platformAccount: { update: jest.fn() },
+    platformAccount: { upsert: jest.fn() },
   },
 }));
 
@@ -76,7 +76,7 @@ beforeEach(() => {
   (mockPrisma.game.upsert as jest.Mock).mockResolvedValue({ id: 'game-1' });
   (mockPrisma.achievement.upsert as jest.Mock).mockResolvedValue({ id: 'ach-db-1' });
   (mockPrisma.userAchievement.upsert as jest.Mock).mockResolvedValue({});
-  (mockPrisma.platformAccount.update as jest.Mock).mockResolvedValue({});
+  (mockPrisma.platformAccount.upsert as jest.Mock).mockResolvedValue({});
 });
 
 describe('retroAchievementsAdapter.syncUserExpress', () => {

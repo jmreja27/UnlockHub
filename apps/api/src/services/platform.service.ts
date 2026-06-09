@@ -6,7 +6,7 @@ import { encrypt } from '../lib/crypto';
 import { scheduleAutoSync, cancelAutoSync } from '../jobs/sync.scheduler';
 
 import { removeUserFromRankings, upsertUserScore } from './ranking.service';
-import { calculateLevel } from './user.service';
+import { calculateLevel, invalidateUserPublicCache } from './user.service';
 
 // Transforma una cuenta de plataforma de Prisma al tipo compartido (sin token cifrado)
 function mapPlatformAccount(dbAccount: {
@@ -196,6 +196,9 @@ export async function unlinkPlatform(
 
   // Cancelar el sync automático para esta plataforma
   await cancelAutoSync(userId, platform);
+
+  // Invalidar caché pública para que otros usuarios no vean los juegos de esta plataforma
+  await invalidateUserPublicCache(userId);
 
   // Eliminar al usuario del ranking de esta plataforma y actualizar su puntuación global
   await removeUserFromRankings(userId, [platform]);

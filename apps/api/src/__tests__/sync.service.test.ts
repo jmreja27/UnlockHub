@@ -15,7 +15,7 @@ jest.mock('../lib/redis', () => ({
 
 jest.mock('../lib/prisma', () => ({
   prisma: {
-    platformAccount: { findUnique: jest.fn(), findMany: jest.fn(), update: jest.fn() },
+    platformAccount: { findUnique: jest.fn(), findMany: jest.fn(), upsert: jest.fn() },
     user: { update: jest.fn() },
   },
 }));

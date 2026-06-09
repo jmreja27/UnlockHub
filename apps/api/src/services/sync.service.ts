@@ -303,9 +303,17 @@ export async function triggerExpressSync(
 
   try {
     await adapter.syncUserExpress(account);
-    await prisma.platformAccount.update({
-      where: { id: account.id },
-      data: { lastSyncedAt: new Date() },
+    await prisma.platformAccount.upsert({
+      where: { userId_platform: { userId: account.userId, platform: account.platform } },
+      update: { lastSyncedAt: new Date() },
+      create: {
+        userId: account.userId,
+        platform: account.platform,
+        externalId: account.externalId,
+        username: account.username,
+        encryptedToken: account.encryptedToken,
+        lastSyncedAt: new Date(),
+      },
     });
     logger.info({ userId, platform }, '[SyncService] Express sync completado');
   } catch (err) {

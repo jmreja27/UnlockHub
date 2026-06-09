@@ -1,5 +1,5 @@
 // Pantalla de perfil de usuario: avatar, stats, plataformas y logout
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { View, Text, Pressable, ScrollView, RefreshControl, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -7,6 +7,7 @@ import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import Constants from 'expo-constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { PlatformAccount, ProfileVisibility } from '@unlockhub/types';
@@ -16,6 +17,7 @@ import { useSessionStore } from '../../stores/sessionStore';
 import { useAuth } from '../../hooks/useAuth';
 import { useLanguage } from '../../hooks/useLanguage';
 import { useTheme } from '../../hooks/useTheme';
+import { useRewardedAd } from '../../hooks/useRewardedAd';
 import { usePreferencesStore, type ThemePreference } from '../../stores/preferencesStore';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { PremiumBanner } from '../../components/PremiumBanner';
@@ -95,12 +97,17 @@ function ProfileSkeleton() {
 const APP_VERSION = Constants.expoConfig?.version ?? '—';
 const APP_BUILD = String(Constants.expoConfig?.android?.versionCode ?? '—');
 
+const REWARDED_COOLDOWN_KEY = 'admob:rewarded_ad:last_claimed';
+const REWARDED_COOLDOWN_MS = 3 * 60 * 60 * 1000;
+
 export default function ProfileScreen() {
   const { t } = useTranslation();
   const colors = useTheme();
   const { user, isAuthenticated } = useSessionStore();
   const { logout, isLoggingOut } = useAuth();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [rewardedCooldownEnd, setRewardedCooldownEnd] = useState<number>(0);
+  const [isWatchingAd, setIsWatchingAd] = useState(false);
 
   // Obtiene las plataformas vinculadas del usuario
   const queryClient = useQueryClient();
@@ -126,6 +133,38 @@ export default function ProfileScreen() {
     enabled: isAuthenticated,
     staleTime: 1000 * 60 * 5,
   });
+
+  const {
+    data: pointsData,
+    isLoading: pointsLoading,
+    refetch: refetchPoints,
+  } = useQuery({
+    queryKey: queryKeys.myPointsTotal(),
+    queryFn: () => api.get<{ total: number }>('/api/v1/users/me/points/total'),
+    enabled: isAuthenticated,
+    staleTime: 1000 * 60 * 2,
+  });
+  const pointsBalance = pointsData?.total ?? 0;
+
+  const { showForReward } = useRewardedAd();
+  const isOnCooldown = rewardedCooldownEnd > Date.now();
+  const cooldownHoursLeft = isOnCooldown
+    ? Math.ceil((rewardedCooldownEnd - Date.now()) / (1000 * 60 * 60))
+    : 0;
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(REWARDED_COOLDOWN_KEY);
+        if (raw !== null) {
+          const lastClaimed = parseInt(raw, 10);
+          setRewardedCooldownEnd(lastClaimed + REWARDED_COOLDOWN_MS);
+        }
+      } catch {
+        // AsyncStorage no disponible — ignorar
+      }
+    })();
+  }, []);
 
   const unlinkMutation = useMutation({
     mutationFn: (platform: string) =>
@@ -246,11 +285,11 @@ export default function ProfileScreen() {
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      await refetchPlatforms();
+      await Promise.all([refetchPlatforms(), refetchPoints()]);
     } finally {
       setIsRefreshing(false);
     }
-  }, [refetchPlatforms]);
+  }, [refetchPlatforms, refetchPoints]);
 
   const privacyMutation = useMutation({
     mutationFn: (visibility: ProfileVisibility) =>
@@ -290,6 +329,26 @@ export default function ProfileScreen() {
       ],
       { cancelable: true },
     );
+  }
+
+  async function handleWatchAd() {
+    setIsWatchingAd(true);
+    try {
+      const pts = await showForReward();
+      if (pts !== null) {
+        const now = Date.now();
+        await AsyncStorage.setItem(REWARDED_COOLDOWN_KEY, String(now));
+        setRewardedCooldownEnd(now + REWARDED_COOLDOWN_MS);
+        void queryClient.invalidateQueries({ queryKey: queryKeys.myPointsTotal() });
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Alert.alert(
+          t('profile.points_rewarded_success_title'),
+          t('profile.points_rewarded_success_body', { pts }),
+        );
+      }
+    } finally {
+      setIsWatchingAd(false);
+    }
   }
 
   function handleLogout() {
@@ -355,7 +414,7 @@ export default function ProfileScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.background }}>
+    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.background }} edges={['left', 'right']}>
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 32 }}
@@ -650,6 +709,83 @@ export default function ProfileScreen() {
               </View>
             );
           })()}
+        </View>
+
+        {/* Sección de puntos — F36: saldo visible para todos · F37: rewarded ad para usuarios free */}
+        <View className="px-6 mb-6" testID="points-section">
+          <Text className="text-sm font-semibold mb-3 uppercase tracking-wider" style={{ color: colors.textSecondary }}>
+            {t('profile.points_section')}
+          </Text>
+
+          <View className="rounded-2xl px-5 py-4" style={{ backgroundColor: colors.surface }}>
+            {/* Saldo de puntos */}
+            <View className="flex-row items-center mb-1">
+              <Ionicons name="star" size={20} color="#f59e0b" accessibilityElementsHidden />
+              <View className="ml-3 flex-1">
+                {pointsLoading ? (
+                  <View style={{ height: 28, justifyContent: 'center' }}>
+                    <View style={{ height: 20, width: 80, borderRadius: 4, backgroundColor: colors.surfaceCard }} />
+                  </View>
+                ) : (
+                  <Text
+                    className="text-2xl font-bold"
+                    style={{ color: colors.text }}
+                    accessibilityLabel={`${pointsBalance} ${t('profile.points_label')}`}
+                    testID="points-balance"
+                  >
+                    {new Intl.NumberFormat().format(pointsBalance)}
+                    {'  '}
+                    <Text className="text-sm font-normal" style={{ color: colors.textSecondary }}>
+                      {t('profile.points_label')}
+                    </Text>
+                  </Text>
+                )}
+              </View>
+            </View>
+
+            {/* Texto secundario */}
+            <Text className="text-xs mt-2 mb-4" style={{ color: colors.textSecondary }}>
+              {t('profile.points_coming_soon')}
+            </Text>
+
+            {/* Botón rewarded ad — solo para usuarios free */}
+            {!user.isPremium && (
+              <Pressable
+                onPress={() => { void handleWatchAd(); }}
+                disabled={isOnCooldown || isWatchingAd}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  isOnCooldown
+                    ? t('profile.points_rewarded_cooldown', { hours: cooldownHoursLeft })
+                    : t('profile.points_watch_ad')
+                }
+                accessibilityState={{ disabled: isOnCooldown || isWatchingAd, busy: isWatchingAd }}
+                testID="watch-ad-button"
+                style={{
+                  minHeight: 44,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: isOnCooldown ? colors.border : colors.primary + '99',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: isOnCooldown ? 0.6 : 1,
+                }}
+              >
+                {isWatchingAd ? (
+                  <ActivityIndicator color={colors.primary} accessibilityLabel={t('common.loading')} />
+                ) : (
+                  <Text
+                    className="text-sm font-semibold"
+                    style={{ color: isOnCooldown ? colors.textMuted : colors.primary }}
+                  >
+                    {isOnCooldown
+                      ? t('profile.points_rewarded_cooldown', { hours: cooldownHoursLeft })
+                      : t('profile.points_watch_ad')}
+                  </Text>
+                )}
+              </Pressable>
+            )}
+          </View>
         </View>
 
         {/* Banner de suscripción premium — visible solo cuando FEATURES.premium está activo */}

@@ -22,7 +22,7 @@ jest.mock('../lib/prisma', () => ({
       upsert: jest.fn(),
     },
     platformAccount: {
-      update: jest.fn(),
+      upsert: jest.fn(),
     },
   },
 }));
@@ -403,7 +403,7 @@ describe('retroAchievementsAdapter.syncUser', () => {
     mockPrisma.game.upsert.mockResolvedValue(mockDbGame as never);
     mockPrisma.achievement.upsert.mockResolvedValue(mockDbAchievement as never);
     mockPrisma.userAchievement.upsert.mockResolvedValue({} as never);
-    mockPrisma.platformAccount.update.mockResolvedValue({} as never);
+    mockPrisma.platformAccount.upsert.mockResolvedValue({} as never);
   });
 
   it('sincroniza correctamente y devuelve SyncResult', async () => {
@@ -429,10 +429,10 @@ describe('retroAchievementsAdapter.syncUser', () => {
 
     await retroAchievementsAdapter.syncUser(mockPlatformAccount);
 
-    expect(mockPrisma.platformAccount.update).toHaveBeenCalledWith(
+    expect(mockPrisma.platformAccount.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: mockPlatformAccount.id },
-        data: expect.objectContaining({ lastSyncedAt: expect.any(Date) }),
+        where: { userId_platform: { userId: mockPlatformAccount.userId, platform: mockPlatformAccount.platform } },
+        update: expect.objectContaining({ lastSyncedAt: expect.any(Date) }),
       }),
     );
   });

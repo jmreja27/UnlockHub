@@ -13,7 +13,7 @@ jest.mock('../lib/prisma', () => ({
     game: { upsert: jest.fn() },
     achievement: { upsert: jest.fn() },
     userAchievement: { upsert: jest.fn() },
-    platformAccount: { update: jest.fn() },
+    platformAccount: { upsert: jest.fn() },
   },
 }));
 jest.mock('../lib/crypto', () => ({
@@ -211,7 +211,7 @@ describe('XboxAdapter.syncUser', () => {
     (mockedPrisma.game.upsert as jest.Mock).mockResolvedValue({ id: 'db-game-xbox-1' });
     (mockedPrisma.achievement.upsert as jest.Mock).mockResolvedValue({ id: 'db-ach-xbox-1' });
     (mockedPrisma.userAchievement.upsert as jest.Mock).mockResolvedValue({});
-    (mockedPrisma.platformAccount.update as jest.Mock).mockResolvedValue({});
+    (mockedPrisma.platformAccount.upsert as jest.Mock).mockResolvedValue({});
   });
 
   it('sincroniza logros y juegos de Xbox correctamente', async () => {
@@ -253,8 +253,8 @@ describe('XboxAdapter.syncUser', () => {
 
     await adapter.syncUser(expiredAccount);
 
-    expect(mockedPrisma.platformAccount.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'acct-xbox-1' } }),
+    expect(mockedPrisma.platformAccount.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId_platform: { userId: 'user-1', platform: 'XBOX' } } }),
     );
   });
 
@@ -267,7 +267,7 @@ describe('XboxAdapter.syncUser', () => {
       String(c[0]).includes('microsoftonline.com'),
     );
     expect(msPosts).toHaveLength(0);
-    expect(mockedPrisma.platformAccount.update).not.toHaveBeenCalled();
+    expect(mockedPrisma.platformAccount.upsert).not.toHaveBeenCalled();
   });
 
   it('invalida la caché de Redis antes de sincronizar', async () => {
@@ -305,7 +305,7 @@ describe('normalizePoints (via logros de Xbox)', () => {
     (mockedPrisma.game.upsert as jest.Mock).mockResolvedValue({ id: 'db-game-1' });
     (mockedPrisma.achievement.upsert as jest.Mock).mockResolvedValue({ id: 'db-ach-1' });
     (mockedPrisma.userAchievement.upsert as jest.Mock).mockResolvedValue({});
-    (mockedPrisma.platformAccount.update as jest.Mock).mockResolvedValue({});
+    (mockedPrisma.platformAccount.upsert as jest.Mock).mockResolvedValue({});
   });
 
   it('normaliza Gamerscore 0 a mínimo de 1 punto', async () => {

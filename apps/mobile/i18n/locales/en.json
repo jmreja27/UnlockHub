@@ -496,7 +496,14 @@
     "stats_favorite_platform": "Favorite Platform",
     "stats_rarest_achievement": "Rarest Achievement",
     "stats_rarity_pct": "{{pct}}% have it",
-    "app_version": "Version {{version}} ({{build}})"
+    "app_version": "Version {{version}} ({{build}})",
+    "points_section": "Points",
+    "points_label": "pts",
+    "points_coming_soon": "Soon you'll be able to redeem your points for exclusive rewards",
+    "points_watch_ad": "Watch ad (+10 pts)",
+    "points_rewarded_cooldown": "Come back in {{hours}} h",
+    "points_rewarded_success_title": "Points earned!",
+    "points_rewarded_success_body": "+{{pts}} points added to your balance"
   },
   "premium": {
     "title": "UnlockHub Premium",

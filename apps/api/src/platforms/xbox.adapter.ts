@@ -352,9 +352,16 @@ export class XboxAdapter implements PlatformAdapter {
     const { xstsToken, uhs, updatedEncryptedToken } = await this.buildXstsAuthWithRefresh(account);
 
     if (updatedEncryptedToken) {
-      await prisma.platformAccount.update({
-        where: { id: account.id },
-        data: { encryptedToken: updatedEncryptedToken },
+      await prisma.platformAccount.upsert({
+        where: { userId_platform: { userId: account.userId, platform: account.platform } },
+        update: { encryptedToken: updatedEncryptedToken },
+        create: {
+          userId: account.userId,
+          platform: account.platform,
+          externalId: account.externalId,
+          username: account.username,
+          encryptedToken: updatedEncryptedToken,
+        },
       });
     }
 

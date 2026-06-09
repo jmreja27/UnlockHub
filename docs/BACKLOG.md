@@ -99,6 +99,13 @@
 | T55 | ✅ Fix edge-to-edge Android 15 — contenido desplazado hacia arriba | Sesión 54 — todos los tabs cambiados a `edges={['left', 'right']}` en `SafeAreaView`; el header de React Navigation gestiona el inset superior y el tab bar el inferior. Sin el fix, `targetSdkVersion=35` contaba el safe area inset del status bar dos veces. |
 | T56 | ✅ Fixes de seguridad sesión 53 | ✅ En develop — `xbox.adapter.ts`: doble cifrado AES-256-GCM eliminado · `search.service.ts`: filtro `deletedAt: null` añadido en `searchUsers` · `user.service.ts`: revocación `RefreshToken`s añadida a transacción de borrado de cuenta |
 | T57 | ✅ Modo claro UI | ✅ Implementado en rama `feat/t57-light-mode` — `lib/colors.ts` (darkColors/lightColors), `hooks/useTheme.ts`, `preferencesStore.theme: 'dark'|'light'`, selector de tema en profile.tsx (🌙/☀️ activo). 22 ficheros actualizados: 9 componentes globales + 5 tabs + 3 pantallas. Inline styles reemplazan clases NativeWind hardcoded. 364/364 tests ✅, 0 errores TS/lint. |
+| T58 | ✅ Fix `platformAccount.update` → `upsert` (race condition P2025) | Sesión 69 — 6 ocurrencias en `retroachievements.adapter.ts`, `sync.service.ts`, `xbox.adapter.ts` y `sync.worker.ts`. Durante syncs concurrentes del mismo usuario, un `update` podía recibir error P2025 "Record to update not found" si otro job había borrado/recreado el registro en paralelo. El `upsert` es idempotente y resuelve la race condition. |
+| T59 | ✅ V3 — Workers BullMQ separados a `apps/worker` (proceso Railway dedicado) | Sesión 69 — nuevo `apps/worker/src/index.ts` arranca sync, streak, challenge, gdpr-cleanup, seed-catalog workers + schedulers con cierre limpio `SIGTERM`/`SIGINT`. `apps/api/src/index.ts` limpiado de workers. Servicio `unlockhub-worker` en Railway con 14 Shared Variables. Fallback: `getIOSafe()` desde worker devuelve null — Socket.io usa polling Redis. Para eventos en tiempo real: añadir `@socket.io/redis-emitter`. |
+| T60 | ✅ Fix worker Railway — Dockerfile propio + Config File Path | Sesión 70 — `apps/worker/Dockerfile` (build multi-stage, tsx runtime, WORKDIR /app). `apps/worker/railway.json` como Config File Path en Railway dashboard. `railway.json` raíz: `preDeployCommand` simplificado a `npx prisma migrate deploy` (sin `cd apps/api` — el Dockerfile raíz ya tiene `WORKDIR /app/apps/api`). package-lock.json regenerado con @unlockhub/worker@0.0.1. API: 10 migrations found, arrancada port 8080. Worker: todos los schedulers BullMQ activos, syncs procesándose. |
+| T61 | ✅ BUG-A fix unlinkPlatform — invalidar caché Redis pública tras desvincular | Sesión 70b — `invalidateUserPublicCache(userId)` añadido en `platform.service.ts` después de cancelAutoSync. Sin el fix, la caché `user-games:*` permanecía 5 min con juegos de la plataforma desvinculada. Test añadido en `platform.service.test.ts`. |
+| T62 | ✅ BUG-B fix edge-to-edge `app/user-game/[username]/[gameId].tsx` | Sesión 70b — `edges={['top','left','right']}` (antes solo `['left','right']`). Root layout tiene `headerShown: false`, sin header de React Navigation el contenido subía bajo el status bar. |
+| T63 | ✅ BUG-C fix edge-to-edge `app/(tabs)/profile.tsx` | Sesión 70b — `edges={['left','right']}` añadido al SafeAreaView principal (línea 358). Sin `edges`, el default incluye `top` duplicando el inset ya gestionado por el header del Tabs navigator. |
+| T64 | ✅ BUG-D fix orden biblioteca usuario público — lastActivityAt DESC | Sesión 70b — `getMyGames` ordena por `lastActivityAt DESC` (null last) en lugar de alfabético. La biblioteca propia re-ordena en cliente; la pública mostraba juegos en orden incorrecto. Test actualizado. |
 
 ### 🟢 Features
 
@@ -145,6 +152,50 @@
 | PL17 | ✅ Caché Redis para endpoints F21 (`/users/:username/games` y `/users/:username/games/:gameId/achievements`) | TTL 5 min, invalidación en sync completion + cambio de profileVisibility. `invalidateUserPublicCache()` exportada. |
 | PL18 | ✅ Bundle optimization: @expo/vector-icons imports directos | 11 archivos migrados de barrel `{ Ionicons } from '@expo/vector-icons'` a `Ionicons from '@expo/vector-icons/Ionicons'` — elimina glyph maps de FontAwesome (96 menciones), MaterialIcons, AntDesign, Feather, etc. Sentry @sentry-internal/replay+feedback: incluidos por @sentry/browser, no eliminables sin upgrade de SDK — revisar en Fase 4. |
 | PL15 | ✅ Merge develop → main antes de promover a Producción | ✅ Completado sesión 59 — `git merge --no-ff develop` + `git tag v1.0.0` + push. main refleja exactamente el código de producción. |
-| PL19 | ⚙️ Smoke tests finales antes de promover a Producción | Verificar justo antes de promover (~2 semanas): login + registro + sync Steam/RA/PSN + biblioteca + rankings + perfil público + Wrapped. Confirmar que no hay errores 5xx en Railway logs. Validar banners AdMob activos. |
+| PL19 | ⚙️ Smoke tests realizados — 4 bugs detectados y corregidos (T61-T64). Re-verificar con nueva build antes de promover a Producción. | Bugs corregidos: BUG-A (caché Redis tras unlink), BUG-B (edge-to-edge user-game), BUG-C (edge-to-edge profile tab), BUG-D (orden biblioteca usuario público). Pendiente: build nueva + re-verificar login + registro + sync Steam/RA/PSN + biblioteca + rankings + perfil público + Wrapped. Confirmar que no hay errores 5xx en Railway logs. |
+
+### 🎨 Sistema de cosméticos y economía de puntos
+
+> Diseño aprobado en sesión 70. Implementar en Fase 3/4 cuando el sistema de puntos tenga utilidad real.
+
+**Estado general**: 🔲 Pendiente de implementación
+
+**Decisiones de diseño tomadas:**
+- Duración de todos los cosméticos: 90 días
+- Puntos por retos semanales: Fácil 100 pts · Medio 200 pts · Difícil 400 pts
+- Apuestas: cooldown 1 vez/día por usuario concreto + máx 3 cada 3 días en total · máximo 50 pts apostables
+- Hitos de racha: 7 días → 50 pts · 30 días → 200 pts · 100 días → 500 pts · 365 días → 1.500 pts
+- Multiplicador de puntos: descartado
+
+**Cosméticos y costes:**
+
+Marcos de avatar (90 días):
+- Bronce: 200 pts
+- Plata: 500 pts
+- Oro: 1.000 pts
+- Platino: 2.000 pts
+
+Colores de nombre (90 días):
+- Comunes (azul, verde, amarillo): 200 pts
+- Poco comunes (naranja, morado): 500 pts
+- Raros (rojo, cyan): 800 pts
+- Legendario (degradado dorado): 1.500 pts
+
+Títulos (90 días) — lista provisional, revisar antes de implementar:
+- Comunes (150 pts): "Cazador de Logros", "Empezando el Viaje", "Coleccionista", "Sin Vida Social", "Jugador Casual"
+- Poco comunes (400 pts): "Completista", "Retro Gamer", "Trofeo Adicto", "Achievement Hunter", "Imparable", "Madrugador"
+- Raros (800 pts): "Leyenda", "El Platino o Nada", "100% o Nada", "Maestro Retro", "No Tengo Vida", "Top 1", "Dios de los Logros"
+
+**Features a implementar:**
+| # | Feature | Estado |
+|---|---|---|
+| F30 | Marcos de avatar con duración 90 días (Bronce/Plata/Oro/Platino) | 🔲 |
+| F31 | Títulos de perfil con duración 90 días — lista provisional, revisar antes de implementar | 🔲 |
+| F32 | Color de nombre con duración 90 días (Común/Poco común/Raro/Legendario) | 🔲 |
+| F33 | Boost de racha — hitos 7/30/100/365 días con bonus de puntos | 🔲 |
+| F34 | Apuestas 1vs1 de puntos en retos — cooldown por usuario + global | 🔲 |
+| F35 | Ranking de puntos separado del ranking de XP | 🔲 |
+| F36 | Saldo de puntos visible en perfil (actualmente solo en premium.tsx gateado) | ✅ |
+| F37 | Rewarded ad accesible desde perfil (actualmente solo en premium.tsx gateado) | ✅ |
 
 ---

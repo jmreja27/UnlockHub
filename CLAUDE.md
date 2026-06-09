@@ -65,7 +65,7 @@ Esta sección lista todo lo que **el desarrollador debe hacer manualmente** ante
 |---|---|---|---|---|
 | V1 | Migrar imágenes a **Cloudflare Images** | cloudflare.com | ~5€/mes | Con 5.000+ usuarios |
 | V2 | Activar **read replica** en Neon | console.neon.tech | ~20€/mes adicional | Cuando queries de ranking superen 500ms |
-| V3 | Separar workers BullMQ a proceso dedicado en Railway | `apps/worker` en el monorepo, nuevo service en Railway | ~5€/mes | Cuando sync afecte latencia de la API |
+| ~~V3~~ | ✅ **Separar workers BullMQ a proceso dedicado en Railway** | `apps/worker` en el monorepo — servicio `unlockhub-worker` en Railway. 14 Shared Variables. | ~5€/mes | ✅ Completado sesión 69 |
 | V4 | Apple Developer Program para iOS | developer.apple.com | $99/año | Fase 4 — App Store iOS |
 
 ---
@@ -131,7 +131,8 @@ Aplicación móvil (iOS + Android) para tracking unificado de logros de videojue
 | PostgreSQL (Railway) | Base de datos principal | ✅ Activo — backups verificados ✅ (B5) |
 | Redis (Railway) | Rankings + caché + BullMQ | ✅ Activo — persistencia verificada ✅ (B6) |
 | Cloudinary | Avatares y banners | ✅ Activo — `CLOUDINARY_URL` configurada en Railway |
-| Railway | Deploy API | ✅ Activo — https://unlockhub-production.up.railway.app |
+| Railway (API) | Deploy API HTTP + Socket.io | ✅ Activo — https://unlockhub-production.up.railway.app |
+| Railway (Worker) | Deploy workers BullMQ — proceso dedicado | ✅ Activo — `unlockhub-worker`. 14 Shared Variables compartidas con la API. Socket.io desde worker requiere `@socket.io/redis-emitter` para eventos en tiempo real — fallback polling Redis activo. Dockerfile propio en `apps/worker/Dockerfile` — build multi-stage con tsx runtime, WORKDIR /app. Railway Config File Path: `apps/worker/railway.json` configurado en dashboard. |
 | AdMob | Anuncios usuarios free | ⚙️ Pendiente cuenta AdMob (B8) — IDs producción ✅ (B9) — código integrado (B10 ✅) |
 | GitHub Actions | CI/CD | ✅ Configurado |
 | Sentry | Crash reporting móvil + API | ✅ DSNs configurados — código integrado |
@@ -166,25 +167,29 @@ unlockhub/
 │   │   ├── i18n/                    # ES / EN
 │   │   └── __tests__/
 │   │
-│   └── api/
-│       ├── src/
-│       │   ├── routes/
-│       │   ├── controllers/
-│       │   ├── services/
-│       │   ├── repositories/
-│       │   ├── jobs/                # BullMQ workers
-│       │   ├── sockets/             # Socket.io + redis-adapter ✅
-│       │   ├── middleware/          # auth, rate-limit, roles, errores
-│       │   ├── admin/               # Dashboard ✅ — protegido por ADMIN_SECRET bearer
-│       │   └── platforms/
-│       │       ├── platform.interface.ts
-│       │       ├── steam.adapter.ts
-│       │       ├── retroachievements.adapter.ts
-│       │       ├── psn.adapter.ts
-│       │       └── xbox.adapter.ts  # 🚩 gateado hasta Fase 4
-│       └── prisma/
-│           ├── schema.prisma
-│           └── migrations/
+│   ├── api/
+│   │   ├── src/
+│   │   │   ├── routes/
+│   │   │   ├── controllers/
+│   │   │   ├── services/
+│   │   │   ├── repositories/
+│   │   │   ├── jobs/                # BullMQ queues, workers y schedulers (compartidos con apps/worker)
+│   │   │   ├── sockets/             # Socket.io + redis-adapter ✅
+│   │   │   ├── middleware/          # auth, rate-limit, roles, errores
+│   │   │   ├── admin/               # Dashboard ✅ — protegido por ADMIN_SECRET bearer
+│   │   │   └── platforms/
+│   │   │       ├── platform.interface.ts
+│   │   │       ├── steam.adapter.ts
+│   │   │       ├── retroachievements.adapter.ts
+│   │   │       ├── psn.adapter.ts
+│   │   │       └── xbox.adapter.ts  # 🚩 gateado hasta Fase 4
+│   │   └── prisma/
+│   │       ├── schema.prisma
+│   │       └── migrations/
+│   │
+│   └── worker/                      # Proceso Railway dedicado — solo workers BullMQ, sin HTTP
+│       └── src/
+│           └── index.ts             # Arranca sync, streak, challenge, gdpr-cleanup, seed-catalog workers + schedulers
 │
 ├── packages/
 │   ├── types/
@@ -865,8 +870,10 @@ Cuenta de prueba: `demo@unlockhub.test` / `Demo1234!`
 ### Producción — Railway
 
 - **API**: https://unlockhub-production.up.railway.app
+- **Worker**: `unlockhub-worker` — servicio Railway independiente con workers BullMQ y schedulers. `startCommand: npx tsx apps/worker/src/index.ts` (vía Dockerfile CMD). Dockerfile: `apps/worker/Dockerfile`. Socket.io desde worker usa fallback polling Redis (para eventos en tiempo real añadir `@socket.io/redis-emitter`).
 - **DB**: Railway PostgreSQL — `DATABASE_URL` (interna) + `DIRECT_URL` (proxy pública)
 - **Redis**: Railway Redis — `REDIS_URL` (interna)
+- **Shared Variables**: 14 variables configuradas a nivel de proyecto en Railway — compartidas entre `unlockhub-api` y `unlockhub-worker` sin duplicarlas.
 - **Health check**: `GET /health` ✅ — configurado en `railway.json` (`healthcheckPath`)
 - **Migraciones**: ✅ Automáticas en cada deploy — `npx prisma migrate deploy` en `startCommand`
 - **Mínimo 2 réplicas**: pendiente (N3) — redis-adapter ya listo
@@ -1198,6 +1205,12 @@ Ver [docs/BACKLOG.md](docs/BACKLOG.md)
 ---
 
 ## Última revisión de código
+
+**Fecha**: 2026-06-09 (sesión 70b) — BUG-A: fix unlinkPlatform — `invalidateUserPublicCache(userId)` añadido tras desvincular para que la caché Redis pública no sirva juegos de la plataforma desvinculada (+ test). BUG-B: fix edge-to-edge en `app/user-game/[username]/[gameId].tsx` — `edges=['top','left','right']` porque la pantalla no tiene header de React Navigation (root layout `headerShown: false`). BUG-C: fix edge-to-edge en `profile.tsx` — `edges=['left','right']` en el SafeAreaView principal (sin edges por defecto incluía top duplicando el inset del header de Tabs). BUG-D: fix orden biblioteca usuario público — `getMyGames` ahora ordena por `lastActivityAt DESC` en lugar de alfabético (la biblioteca propia re-ordena en cliente; la pública mostraba orden incorrecto). Tests: 611 API + 368 mobile. 0 errores TS/lint.
+
+**Fecha**: 2026-06-09 (sesión 70) — Fix worker Railway: Dockerfile propio en `apps/worker/Dockerfile` (build multi-stage, tsx runtime, WORKDIR /app). Config File Path `apps/worker/railway.json` configurado en Railway dashboard. preDeployCommand corregido a solo `npx prisma migrate deploy` (sin `cd apps/api` — el Dockerfile raíz ya tiene WORKDIR /app/apps/api). package-lock.json regenerado con @unlockhub/worker@0.0.1. API: 10 migrations found, API arrancada port 8080. Worker: todos los schedulers BullMQ activos, syncs procesándose.
+
+**Fecha**: 2026-06-09 (sesión 69) — Fix platformAccount.update → upsert en 6 ocurrencias (race condition P2025 durante sync en `retroachievements.adapter.ts`, `sync.service.ts`, `xbox.adapter.ts`, `sync.worker.ts`). V3: nuevo `apps/worker/` con 5 workers + schedulers, cierre limpio SIGTERM/SIGINT. `apps/api/src/index.ts` limpiado de workers. Trade-off documentado: Socket.io desde worker requiere `@socket.io/redis-emitter` — fallback polling Redis activo. Worker desplegado en Railway como servicio `unlockhub-worker`. Shared Variables configuradas en Railway (14 variables compartidas entre API y worker). Tests: 610 API + 368 mobile. 0 errores TS/lint.
 
 **Fecha**: 2026-06-07 (sesión 67) — Revisión completa del proyecto (backend + mobile + packages). Backlog actualizado: F20 ✅ (ad units Rankings/Friends + EAS secrets configurados), PL14 ✅ (edge-to-edge Android 15 validado en dispositivo físico), PL19 ⚙️ añadido (smoke tests finales antes de promover a Producción). CLAUDE.md corregido: descripción `background-sync.scheduler.ts` eliminaba referencia a "login en últimos 7 días" que no existe en código ni schema (no hay campo `lastLoginAt`). Sin bugs críticos encontrados — código limpio en los ~30 archivos revisados. Tests: 610 API + 368 mobile ✅. 0 errores TS/lint.
 
