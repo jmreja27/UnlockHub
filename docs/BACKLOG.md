@@ -154,4 +154,48 @@
 | PL15 | ✅ Merge develop → main antes de promover a Producción | ✅ Completado sesión 59 — `git merge --no-ff develop` + `git tag v1.0.0` + push. main refleja exactamente el código de producción. |
 | PL19 | ⚙️ Smoke tests realizados — 4 bugs detectados y corregidos (T61-T64). Re-verificar con nueva build antes de promover a Producción. | Bugs corregidos: BUG-A (caché Redis tras unlink), BUG-B (edge-to-edge user-game), BUG-C (edge-to-edge profile tab), BUG-D (orden biblioteca usuario público). Pendiente: build nueva + re-verificar login + registro + sync Steam/RA/PSN + biblioteca + rankings + perfil público + Wrapped. Confirmar que no hay errores 5xx en Railway logs. |
 
+### 🎨 Sistema de cosméticos y economía de puntos
+
+> Diseño aprobado en sesión 70. Implementar en Fase 3/4 cuando el sistema de puntos tenga utilidad real.
+
+**Estado general**: 🔲 Pendiente de implementación
+
+**Decisiones de diseño tomadas:**
+- Duración de todos los cosméticos: 90 días
+- Puntos por retos semanales: Fácil 100 pts · Medio 200 pts · Difícil 400 pts
+- Apuestas: cooldown 1 vez/día por usuario concreto + máx 3 cada 3 días en total · máximo 50 pts apostables
+- Hitos de racha: 7 días → 50 pts · 30 días → 200 pts · 100 días → 500 pts · 365 días → 1.500 pts
+- Multiplicador de puntos: descartado
+
+**Cosméticos y costes:**
+
+Marcos de avatar (90 días):
+- Bronce: 200 pts
+- Plata: 500 pts
+- Oro: 1.000 pts
+- Platino: 2.000 pts
+
+Colores de nombre (90 días):
+- Comunes (azul, verde, amarillo): 200 pts
+- Poco comunes (naranja, morado): 500 pts
+- Raros (rojo, cyan): 800 pts
+- Legendario (degradado dorado): 1.500 pts
+
+Títulos (90 días) — lista provisional, revisar antes de implementar:
+- Comunes (150 pts): "Cazador de Logros", "Empezando el Viaje", "Coleccionista", "Sin Vida Social", "Jugador Casual"
+- Poco comunes (400 pts): "Completista", "Retro Gamer", "Trofeo Adicto", "Achievement Hunter", "Imparable", "Madrugador"
+- Raros (800 pts): "Leyenda", "El Platino o Nada", "100% o Nada", "Maestro Retro", "No Tengo Vida", "Top 1", "Dios de los Logros"
+
+**Features a implementar:**
+| # | Feature | Estado |
+|---|---|---|
+| F30 | Marcos de avatar con duración 90 días (Bronce/Plata/Oro/Platino) | 🔲 |
+| F31 | Títulos de perfil con duración 90 días — lista provisional, revisar antes de implementar | 🔲 |
+| F32 | Color de nombre con duración 90 días (Común/Poco común/Raro/Legendario) | 🔲 |
+| F33 | Boost de racha — hitos 7/30/100/365 días con bonus de puntos | 🔲 |
+| F34 | Apuestas 1vs1 de puntos en retos — cooldown por usuario + global | 🔲 |
+| F35 | Ranking de puntos separado del ranking de XP | 🔲 |
+| F36 | Saldo de puntos visible en perfil (actualmente solo en premium.tsx gateado) | 🔲 |
+| F37 | Rewarded ad accesible desde perfil (actualmente solo en premium.tsx gateado) | 🔲 |
+
 ---
