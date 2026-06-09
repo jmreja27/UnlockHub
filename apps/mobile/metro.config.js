@@ -22,4 +22,7 @@ config.resolver.extraNodeModules = {
   '@unlockhub/validators': path.resolve(workspaceRoot, 'packages/validators/src'),
 };
 
-module.exports = withNativeWind(config, { input: './global.css' });
+module.exports = withNativeWind(config, {
+  input: './global.css',
+  configPath: path.resolve(projectRoot, 'tailwind.config.js'),
+});
