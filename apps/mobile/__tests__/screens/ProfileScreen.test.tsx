@@ -13,6 +13,12 @@ jest.mock('../../hooks/useAuth');
 jest.mock('../../hooks/useFeed', () => ({
   useFeed: () => ({ events: [], isLoading: false, isError: false, refetch: jest.fn() }),
 }));
+jest.mock('../../hooks/useRewardedAd', () => ({
+  useRewardedAd: () => ({
+    showForReward: jest.fn().mockResolvedValue(10),
+    isReady: true,
+  }),
+}));
 jest.mock('expo-image-picker', () => ({
   requestMediaLibraryPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
   launchImageLibraryAsync: jest.fn().mockResolvedValue({ canceled: true }),
@@ -80,13 +86,16 @@ const psnAccountPrivate: PlatformAccount = {
   psnProfilePrivate: true,
 };
 
-function renderProfile(mockApiGet?: jest.Mock, mockApiDelete?: jest.Mock) {
+function renderProfile(mockApiGet?: jest.Mock, mockApiDelete?: jest.Mock, pointsBalance = 0) {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { api } = require('../../lib/api') as { api: { get: jest.Mock; delete: jest.Mock } };
   api.get = mockApiGet ?? jest.fn(() => Promise.resolve([]));
   api.delete = mockApiDelete ?? jest.fn(() => Promise.resolve({ ok: true, deletedAchievements: 0 }));
 
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  // Pre-poblar caché de puntos para evitar llamadas reales a la API
+  client.setQueryData(['my-points-total'], { total: pointsBalance });
+
   const rendered = render(
     <QueryClientProvider client={client}>
       <ProfileScreen />
@@ -370,6 +379,71 @@ describe('ProfileScreen', () => {
           { profileVisibility: 'PRIVATE' },
         ),
       );
+    });
+
+    it('F36: muestra la sección de puntos cuando el usuario está autenticado', async () => {
+      const { getByTestId } = renderProfile();
+      await waitFor(() => expect(getByTestId('points-section')).toBeTruthy());
+    });
+
+    it('F36: muestra el saldo de puntos del usuario', async () => {
+      const { getByTestId } = renderProfile(undefined, undefined, 150);
+      await waitFor(() => {
+        const el = getByTestId('points-balance');
+        expect(el).toBeTruthy();
+      });
+    });
+
+    it('F37: muestra el botón "Ver anuncio" para usuarios free', async () => {
+      const { getByTestId } = renderProfile();
+      await waitFor(() => expect(getByTestId('watch-ad-button')).toBeTruthy());
+    });
+
+    it('F37: no muestra el botón "Ver anuncio" para usuarios premium', async () => {
+      mockUseSessionStore.mockReturnValue({
+        user: { ...baseUser, isPremium: true },
+        isAuthenticated: true,
+      });
+      const { queryByTestId } = renderProfile();
+      await waitFor(() => expect(queryByTestId('watch-ad-button')).toBeNull());
+    });
+
+    it('F37: el botón "Ver anuncio" está habilitado cuando no hay cooldown activo', async () => {
+      const { getByTestId } = renderProfile();
+      await waitFor(() => {
+        const btn = getByTestId('watch-ad-button');
+        expect(btn.props.accessibilityState?.disabled).toBe(false);
+      });
+    });
+
+    it('F37: el botón "Ver anuncio" está deshabilitado cuando el cooldown está activo', async () => {
+      // AsyncStorage devuelve un timestamp reciente → cooldown de 3h activo
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const AsyncStorageMock = require('@react-native-async-storage/async-storage') as {
+        getItem: jest.Mock;
+      };
+      AsyncStorageMock.getItem.mockResolvedValueOnce(String(Date.now() - 1000));
+
+      const { getByTestId } = renderProfile();
+      await waitFor(() => {
+        const btn = getByTestId('watch-ad-button');
+        expect(btn.props.accessibilityState?.disabled).toBe(true);
+      });
+    });
+
+    it('F37: al ver un anuncio con éxito llama a invalidateQueries en my-points-total', async () => {
+      const { client, getByTestId } = renderProfile();
+      const invalidateSpy = jest.spyOn(client, 'invalidateQueries');
+
+      await waitFor(() => getByTestId('watch-ad-button'));
+      fireEvent.press(getByTestId('watch-ad-button'));
+
+      await waitFor(() => {
+        const keys = invalidateSpy.mock.calls.map(
+          (call) => (call[0] as { queryKey?: string[] })?.queryKey?.[0],
+        );
+        expect(keys).toContain('my-points-total');
+      });
     });
   });
 });

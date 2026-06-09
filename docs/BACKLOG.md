@@ -195,7 +195,7 @@ Títulos (90 días) — lista provisional, revisar antes de implementar:
 | F33 | Boost de racha — hitos 7/30/100/365 días con bonus de puntos | 🔲 |
 | F34 | Apuestas 1vs1 de puntos en retos — cooldown por usuario + global | 🔲 |
 | F35 | Ranking de puntos separado del ranking de XP | 🔲 |
-| F36 | Saldo de puntos visible en perfil (actualmente solo en premium.tsx gateado) | 🔲 |
-| F37 | Rewarded ad accesible desde perfil (actualmente solo en premium.tsx gateado) | 🔲 |
+| F36 | Saldo de puntos visible en perfil (actualmente solo en premium.tsx gateado) | ✅ |
+| F37 | Rewarded ad accesible desde perfil (actualmente solo en premium.tsx gateado) | ✅ |
 
 ---
