@@ -131,7 +131,8 @@ Aplicación móvil (iOS + Android) para tracking unificado de logros de videojue
 | PostgreSQL (Railway) | Base de datos principal | ✅ Activo — backups verificados ✅ (B5) |
 | Redis (Railway) | Rankings + caché + BullMQ | ✅ Activo — persistencia verificada ✅ (B6) |
 | Cloudinary | Avatares y banners | ✅ Activo — `CLOUDINARY_URL` configurada en Railway |
-| Railway | Deploy API | ✅ Activo — https://unlockhub-production.up.railway.app |
+| Railway (API) | Deploy API HTTP + Socket.io | ✅ Activo — https://unlockhub-production.up.railway.app |
+| Railway (Worker) | Deploy workers BullMQ — proceso dedicado | ⚙️ Crear segundo servicio en Railway. Start: `npm run start --workspace=apps/worker`. Mismas env vars que la API. Ver `apps/worker/railway.json` y `docs/DECISIONS.md`. |
 | AdMob | Anuncios usuarios free | ⚙️ Pendiente cuenta AdMob (B8) — IDs producción ✅ (B9) — código integrado (B10 ✅) |
 | GitHub Actions | CI/CD | ✅ Configurado |
 | Sentry | Crash reporting móvil + API | ✅ DSNs configurados — código integrado |
@@ -166,25 +167,29 @@ unlockhub/
 │   │   ├── i18n/                    # ES / EN
 │   │   └── __tests__/
 │   │
-│   └── api/
-│       ├── src/
-│       │   ├── routes/
-│       │   ├── controllers/
-│       │   ├── services/
-│       │   ├── repositories/
-│       │   ├── jobs/                # BullMQ workers
-│       │   ├── sockets/             # Socket.io + redis-adapter ✅
-│       │   ├── middleware/          # auth, rate-limit, roles, errores
-│       │   ├── admin/               # Dashboard ✅ — protegido por ADMIN_SECRET bearer
-│       │   └── platforms/
-│       │       ├── platform.interface.ts
-│       │       ├── steam.adapter.ts
-│       │       ├── retroachievements.adapter.ts
-│       │       ├── psn.adapter.ts
-│       │       └── xbox.adapter.ts  # 🚩 gateado hasta Fase 4
-│       └── prisma/
-│           ├── schema.prisma
-│           └── migrations/
+│   ├── api/
+│   │   ├── src/
+│   │   │   ├── routes/
+│   │   │   ├── controllers/
+│   │   │   ├── services/
+│   │   │   ├── repositories/
+│   │   │   ├── jobs/                # BullMQ queues, workers y schedulers (compartidos con apps/worker)
+│   │   │   ├── sockets/             # Socket.io + redis-adapter ✅
+│   │   │   ├── middleware/          # auth, rate-limit, roles, errores
+│   │   │   ├── admin/               # Dashboard ✅ — protegido por ADMIN_SECRET bearer
+│   │   │   └── platforms/
+│   │   │       ├── platform.interface.ts
+│   │   │       ├── steam.adapter.ts
+│   │   │       ├── retroachievements.adapter.ts
+│   │   │       ├── psn.adapter.ts
+│   │   │       └── xbox.adapter.ts  # 🚩 gateado hasta Fase 4
+│   │   └── prisma/
+│   │       ├── schema.prisma
+│   │       └── migrations/
+│   │
+│   └── worker/                      # Proceso Railway dedicado — solo workers BullMQ, sin HTTP
+│       └── src/
+│           └── index.ts             # Arranca sync, streak, challenge, gdpr-cleanup, seed-catalog workers + schedulers
 │
 ├── packages/
 │   ├── types/
