@@ -135,9 +135,17 @@ export function startSyncWorker() {
         }
       } catch (err) {
         if (err instanceof AppError && err.code === 'PSN_REFRESH_TOKEN_EXPIRED') {
-          await prisma.platformAccount.update({
-            where: { id: platformAccountId },
-            data: { requiresReauth: true },
+          await prisma.platformAccount.upsert({
+            where: { userId_platform: { userId: account.userId, platform: account.platform } },
+            update: { requiresReauth: true },
+            create: {
+              userId: account.userId,
+              platform: account.platform,
+              externalId: account.externalId,
+              username: account.username,
+              encryptedToken: account.encryptedToken,
+              requiresReauth: true,
+            },
           });
           await createNotification({
             userId,
@@ -147,9 +155,17 @@ export function startSyncWorker() {
           });
           logger.warn({ userId, platform }, '[SyncWorker] Refresh token PSN expirado — requiresReauth marcado');
         } else if (err instanceof AppError && err.code === 'PSN_PROFILE_PRIVATE') {
-          await prisma.platformAccount.update({
-            where: { id: platformAccountId },
-            data: { psnProfilePrivate: true },
+          await prisma.platformAccount.upsert({
+            where: { userId_platform: { userId: account.userId, platform: account.platform } },
+            update: { psnProfilePrivate: true },
+            create: {
+              userId: account.userId,
+              platform: account.platform,
+              externalId: account.externalId,
+              username: account.username,
+              encryptedToken: account.encryptedToken,
+              psnProfilePrivate: true,
+            },
           });
           logger.warn({ userId, platform }, '[SyncWorker] Perfil PSN privado — psnProfilePrivate marcado');
         }
@@ -164,9 +180,17 @@ export function startSyncWorker() {
         throw err;
       }
 
-      await prisma.platformAccount.update({
-        where: { id: platformAccountId },
-        data: { lastSyncedAt: new Date(), requiresReauth: false, psnProfilePrivate: false },
+      await prisma.platformAccount.upsert({
+        where: { userId_platform: { userId: account.userId, platform: account.platform } },
+        update: { lastSyncedAt: new Date(), requiresReauth: false, psnProfilePrivate: false },
+        create: {
+          userId: account.userId,
+          platform: account.platform,
+          externalId: account.externalId,
+          username: account.username,
+          encryptedToken: account.encryptedToken,
+          lastSyncedAt: new Date(),
+        },
       });
 
       await prisma.user.update({
