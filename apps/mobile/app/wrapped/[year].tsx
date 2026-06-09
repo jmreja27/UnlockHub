@@ -71,7 +71,7 @@ function buildShareText(wrapped: GamingWrapped, t: (key: string, opts?: Record<s
   }
   if (wrapped.rarestAchievement) {
     lines.push(
-      `💎 ${t('wrapped.rarest')}: ${wrapped.rarestAchievement.title} (${wrapped.rarestAchievement.rarity.toFixed(1)}%)`,
+      `💎 ${t('wrapped.rarest')}: ${wrapped.rarestAchievement.title} (${wrapped.rarestAchievement.rarity?.toFixed(1) ?? '?'}%)`,
     );
   }
   if (wrapped.bestStreak > 0) {
@@ -111,14 +111,14 @@ export default function WrappedScreen() {
   const { year, month, isMonthly } = parsePeriod(periodParam ?? '');
   const { t, i18n } = useTranslation();
 
-  const period = isMonthly ? `${year}-${String(month!).padStart(2, '0')}` : String(year);
+  const period = isMonthly ? `${year}-${String(month ?? 1).padStart(2, '0')}` : String(year);
   const { data: wrapped, isLoading, isError } = useWrapped(isMonthly ? period : year);
 
   useWrappedInterstitial();
 
   const monthNames = MONTH_NAMES[i18n.language] ?? MONTH_NAMES['en']!;
   const periodLabel = isMonthly
-    ? `${monthNames[month! - 1]} ${year}`
+    ? `${monthNames[(month ?? 1) - 1]} ${year}`
     : String(year);
 
   function handleShare() {
@@ -322,7 +322,7 @@ export default function WrappedScreen() {
               entering={FadeInDown.delay(400).duration(400)}
               className="bg-surface-elevated rounded-2xl p-4 mt-3"
               accessible
-              accessibilityLabel={`${t('wrapped.rarest')}: ${wrapped.rarestAchievement.title}, ${wrapped.rarestAchievement.rarity.toFixed(1)}% de jugadores`}
+              accessibilityLabel={`${t('wrapped.rarest')}: ${wrapped.rarestAchievement.title}, ${wrapped.rarestAchievement.rarity?.toFixed(1) ?? '?'}% de jugadores`}
             >
               <Text className="text-gray-400 text-xs uppercase tracking-wider mb-2">
                 {t('wrapped.rarest')}
@@ -349,7 +349,7 @@ export default function WrappedScreen() {
                     {wrapped.rarestAchievement.title}
                   </Text>
                   <Text className="text-yellow-400 text-sm mt-0.5">
-                    {wrapped.rarestAchievement.rarity.toFixed(2)}% {t('wrapped.rarity_players')}
+                    {wrapped.rarestAchievement.rarity?.toFixed(2) ?? '?'}% {t('wrapped.rarity_players')}
                   </Text>
                   <Text className="text-gray-500 text-xs mt-0.5" numberOfLines={1}>
                     {wrapped.rarestAchievement.gameName}

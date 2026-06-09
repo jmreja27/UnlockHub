@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef } from 'react';
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { io, type Socket } from 'socket.io-client';
 import type { ActivityEvent, CursorPaginatedResponse } from '@unlockhub/types';
@@ -35,79 +35,96 @@ export function useFeed() {
     enabled: isAuthenticated,
   });
 
-  const connect = useCallback(() => {
-    if (socketRef.current?.connected) return;
+  useEffect(() => {
+    if (!isAuthenticated) return;
 
-    const socket = io(`${API_URL}/activity`, {
-      transports: ['websocket'],
-      auth: { token: accessToken },
-      // Desactivar reconexión automática de socket.io — la gestionamos manualmente
-      // para aplicar exponential backoff propio
-      reconnection: false,
-    });
-    socketRef.current = socket;
+    function doConnect() {
+      if (socketRef.current?.connected) return;
 
-    socket.on('connect', () => {
-      reconnectAttemptsRef.current = 0;
-    });
+      const socket = io(`${API_URL}/activity`, {
+        transports: ['websocket'],
+        auth: { token: accessToken },
+        // Reconexión manual con exponential backoff en vez de la automática de socket.io
+        reconnection: false,
+      });
+      socketRef.current = socket;
 
-    socket.on('new_activity', (event: ActivityEvent) => {
-      queryClient.setQueryData<{ pages: CursorPaginatedResponse<ActivityEvent>[]; pageParams: unknown[] }>(
-        FEED_KEY,
-        (prev) => {
-          if (!prev) return prev;
-          const firstPage = prev.pages[0];
-          if (!firstPage) return prev;
-          return {
-            ...prev,
-            pages: [
-              { ...firstPage, data: [event, ...firstPage.data].slice(0, FEED_LIMIT) },
-              ...prev.pages.slice(1),
-            ],
-          };
-        },
-      );
-    });
+      function handleConnect() {
+        reconnectAttemptsRef.current = 0;
+      }
 
-    socket.on('connect_error', () => {
-      socket.disconnect();
-      reconnectAttemptsRef.current += 1;
-      const delay = Math.min(
-        BASE_RECONNECT_DELAY_MS * 2 ** reconnectAttemptsRef.current,
-        MAX_RECONNECT_DELAY_MS,
-      );
-      reconnectTimerRef.current = setTimeout(() => {
-        connect();
-      }, delay);
-    });
+      function handleNewActivity(event: ActivityEvent) {
+        queryClient.setQueryData<{ pages: CursorPaginatedResponse<ActivityEvent>[]; pageParams: unknown[] }>(
+          FEED_KEY,
+          (prev) => {
+            if (!prev) return prev;
+            const firstPage = prev.pages[0];
+            if (!firstPage) return prev;
+            return {
+              ...prev,
+              pages: [
+                { ...firstPage, data: [event, ...firstPage.data].slice(0, FEED_LIMIT) },
+                ...prev.pages.slice(1),
+              ],
+            };
+          },
+        );
+      }
 
-    socket.on('disconnect', (reason) => {
-      // Solo reconectar si la desconexión no fue iniciada por el cliente
-      if (reason !== 'io client disconnect') {
+      function handleConnectError() {
+        socket.off('connect', handleConnect);
+        socket.off('new_activity', handleNewActivity);
+        socket.off('connect_error', handleConnectError);
+        socket.off('disconnect', handleDisconnect);
+        socket.disconnect();
         reconnectAttemptsRef.current += 1;
         const delay = Math.min(
           BASE_RECONNECT_DELAY_MS * 2 ** reconnectAttemptsRef.current,
           MAX_RECONNECT_DELAY_MS,
         );
-        reconnectTimerRef.current = setTimeout(() => {
-          connect();
-        }, delay);
+        reconnectTimerRef.current = setTimeout(doConnect, delay);
       }
-    });
-  }, [accessToken, queryClient]);
 
-  useEffect(() => {
-    if (!isAuthenticated) return;
+      function handleDisconnect(reason: string) {
+        // Solo reconectar si la desconexión no fue iniciada por el cliente
+        if (reason !== 'io client disconnect') {
+          socket.off('connect', handleConnect);
+          socket.off('new_activity', handleNewActivity);
+          socket.off('connect_error', handleConnectError);
+          socket.off('disconnect', handleDisconnect);
+          reconnectAttemptsRef.current += 1;
+          const delay = Math.min(
+            BASE_RECONNECT_DELAY_MS * 2 ** reconnectAttemptsRef.current,
+            MAX_RECONNECT_DELAY_MS,
+          );
+          reconnectTimerRef.current = setTimeout(doConnect, delay);
+        }
+      }
 
-    connect();
+      socket.on('connect', handleConnect);
+      socket.on('new_activity', handleNewActivity);
+      socket.on('connect_error', handleConnectError);
+      socket.on('disconnect', handleDisconnect);
+    }
+
+    doConnect();
 
     return () => {
-      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
-      socketRef.current?.disconnect();
-      socketRef.current = null;
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+      if (socketRef.current) {
+        socketRef.current.off('connect');
+        socketRef.current.off('new_activity');
+        socketRef.current.off('connect_error');
+        socketRef.current.off('disconnect');
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
       reconnectAttemptsRef.current = 0;
     };
-  }, [isAuthenticated, connect]);
+  }, [isAuthenticated, accessToken, queryClient]);
 
   const events = query.data?.pages.flatMap((p) => p.data) ?? [];
 

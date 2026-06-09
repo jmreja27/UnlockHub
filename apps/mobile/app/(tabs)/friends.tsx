@@ -210,7 +210,7 @@ export default function FriendsScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.background }}>
+    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.background }} edges={['left', 'right']}>
       {/* Header */}
       <View className="px-4 pt-1 pb-2">
         <Text className="text-2xl font-bold" style={{ color: colors.text }} accessibilityRole="header">

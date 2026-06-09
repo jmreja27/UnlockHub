@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
 import { api } from '../lib/api';
@@ -64,12 +65,14 @@ export function useMyGames(platform?: string) {
     gcTime: 1000 * 60 * 15,
   });
 
-  const seen = new Set<string>();
-  const allGames = (query.data?.pages.flatMap((p) => p.data) ?? []).filter((g) => {
-    if (seen.has(g.id)) return false;
-    seen.add(g.id);
-    return true;
-  });
+  const allGames = useMemo(() => {
+    const seen = new Set<string>();
+    return (query.data?.pages.flatMap((p) => p.data) ?? []).filter((g) => {
+      if (seen.has(g.id)) return false;
+      seen.add(g.id);
+      return true;
+    });
+  }, [query.data?.pages]);
   const total = query.data?.pages[0]?.total ?? 0;
   // Los aggregate stats vienen de la primera página y cubren TODOS los juegos (pre-paginación)
   const totalEarnedAchievements = query.data?.pages[0]?.totalEarnedAchievements ?? 0;

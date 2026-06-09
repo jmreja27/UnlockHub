@@ -18,7 +18,7 @@ type AdmobModule = {
     createForAdRequest: (unitId: string) => RewardedAdInstance;
   };
   AdEventType: { LOADED: string; CLOSED: string };
-  RewardedAdEventType: { LOADED: string; CLOSED: string; EARNED_REWARD: string };
+  RewardedAdEventType: { LOADED: string; EARNED_REWARD: string };
 };
 
 let admobModule: AdmobModule | null = null;
@@ -48,7 +48,7 @@ export function useRewardedAd() {
     const unsubLoaded = ad.addAdEventListener(admobModule.RewardedAdEventType.LOADED, () => {
       loadedRef.current = true;
     });
-    const unsubClosed = ad.addAdEventListener(admobModule.RewardedAdEventType.CLOSED, () => {
+    const unsubClosed = ad.addAdEventListener(admobModule.AdEventType.CLOSED, () => {
       loadedRef.current = false;
       ad.load();
     });
@@ -79,7 +79,7 @@ export function useRewardedAd() {
         },
       );
 
-      const unsubClosed = ad.addAdEventListener(admobModule!.RewardedAdEventType.CLOSED, () => {
+      const unsubClosed = ad.addAdEventListener(admobModule!.AdEventType.CLOSED, () => {
         unsubReward();
         unsubClosed();
 

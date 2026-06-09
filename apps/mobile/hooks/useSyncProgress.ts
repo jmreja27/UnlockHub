@@ -52,6 +52,7 @@ export function useSyncProgress(onComplete?: SyncCompleteCallback): UseSyncProgr
   // Timestamp del último evento Socket.io recibido — para detectar si el socket está recibiendo datos
   const lastSocketEventRef = useRef<number>(0);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const gracePollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Timestamp del último invalidateQueries desde hydrateFromApi — throttle para no saturar la API
   const lastInvalidateRef = useRef<number>(0);
 
@@ -181,7 +182,7 @@ export function useSyncProgress(onComplete?: SyncCompleteCallback): UseSyncProgr
     // activar polling de fallback vía Redis para no dejar la barra stuckeada.
     // En modo socketSilent=true, hydrateFromApi reconstruye el map desde cero,
     // eliminando plataformas que terminaron mientras el socket estuvo desconectado.
-    const gracePollTimer = setInterval(() => {
+    gracePollTimerRef.current = setInterval(() => {
       const silenceDuration = Date.now() - lastSocketEventRef.current;
       setActiveSyncs((current) => {
         if (current.size > 0 && silenceDuration > SOCKET_GRACE_MS) {
@@ -201,7 +202,10 @@ export function useSyncProgress(onComplete?: SyncCompleteCallback): UseSyncProgr
       socket.off('sync:progress', onSyncProgress);
       socket.off('sync:complete', onSyncComplete);
       socket.off('sync:error', onSyncError);
-      clearInterval(gracePollTimer);
+      if (gracePollTimerRef.current) {
+        clearInterval(gracePollTimerRef.current);
+        gracePollTimerRef.current = null;
+      }
       stopPolling();
     };
   }, [isAuthenticated, accessToken, queryClient, hydrateFromApi, stopPolling]);

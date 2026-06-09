@@ -6,7 +6,7 @@
   "expo": {
     "name": "UnlockHub",
     "slug": "unlockhub",
-    "version": "1.2.2",
+    "version": "1.2.3",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "unlockhub",
@@ -29,7 +29,7 @@
         "backgroundColor": "#1a1a2e"
       },
       "package": "com.unlockhub.app",
-      "versionCode": 7,
+      "versionCode": 8,
       "permissions": [
         "android.permission.INTERNET",
         "android.permission.VIBRATE",

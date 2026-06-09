@@ -83,6 +83,8 @@ export default function PublicProfileScreen() {
     analytics.profileShared();
   }
 
+  if (!username) return null;
+
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.background }}>
       <View className="flex-row items-center justify-between px-4 pt-2 pb-1">
@@ -257,7 +259,7 @@ export default function PublicProfileScreen() {
                   return (
                     <Pressable
                       key={game.id}
-                      onPress={() => router.push(`/user-game/${profile.username}/${game.id}` as never)}
+                      onPress={() => router.push(`/user-game/${profile?.username ?? ''}/${game.id}` as never)}
                       className="rounded-xl mb-2 px-4 py-3 active:opacity-70"
                       style={{ backgroundColor: colors.surfaceCard }}
                       accessibilityRole="button"
