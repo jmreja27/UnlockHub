@@ -549,7 +549,13 @@ export async function getMyGames(
   const totalGames = allGames.length;
   const totalCompletedGames = allGames.filter((g) => g.isCompleted).length;
 
-  const sorted = allGames.sort((a, b) => a.title.localeCompare(b.title));
+  // Orden por defecto: actividad más reciente primero (MAX unlockedAt del juego).
+  // La biblioteca propia re-ordena en cliente; la pública muestra este orden directamente.
+  const sorted = allGames.sort((a, b) => {
+    const aDate = a.lastActivityAt ? new Date(a.lastActivityAt).getTime() : 0;
+    const bDate = b.lastActivityAt ? new Date(b.lastActivityAt).getTime() : 0;
+    return bDate - aDate;
+  });
 
   const total = sorted.length;
   const start = (page - 1) * limit;

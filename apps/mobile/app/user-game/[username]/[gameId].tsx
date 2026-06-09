@@ -134,7 +134,7 @@ export default function UserGameScreen() {
   const platformColor = data ? getPlatformColor(data.game.platform) : '#6366f1';
 
   return (
-    <SafeAreaView className="flex-1 bg-surface" edges={['left', 'right']}>
+    <SafeAreaView className="flex-1 bg-surface" edges={['top', 'left', 'right']}>
       {/* Back */}
       <Pressable
         onPress={() => router.back()}

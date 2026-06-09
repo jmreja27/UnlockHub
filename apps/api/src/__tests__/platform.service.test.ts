@@ -40,15 +40,17 @@ jest.mock('../services/ranking.service', () => ({
   upsertUserScore: jest.fn().mockResolvedValue(undefined),
 }));
 
-// Mock de user.service — solo la función exportada que usa platform.service
+// Mock de user.service — solo las funciones exportadas que usa platform.service
 jest.mock('../services/user.service', () => ({
   calculateLevel: jest.fn((xp: number) => Math.min(Math.floor(xp / 1000) + 1, 100)),
+  invalidateUserPublicCache: jest.fn().mockResolvedValue(undefined),
 }));
 
 import { prisma } from '../lib/prisma';
 import { encrypt } from '../lib/crypto';
 import { scheduleAutoSync, cancelAutoSync } from '../jobs/sync.scheduler';
 import { removeUserFromRankings, upsertUserScore } from '../services/ranking.service';
+import { invalidateUserPublicCache } from '../services/user.service';
 
 const mockPrisma = prisma as jest.Mocked<typeof prisma>;
 const mockEncrypt = encrypt as jest.Mock;
@@ -56,6 +58,7 @@ const mockScheduleAutoSync = scheduleAutoSync as jest.Mock;
 const mockCancelAutoSync = cancelAutoSync as jest.Mock;
 const mockRemoveUserFromRankings = removeUserFromRankings as jest.Mock;
 const mockUpsertUserScore = upsertUserScore as jest.Mock;
+const mockInvalidateUserPublicCache = invalidateUserPublicCache as jest.Mock;
 
 // Usuario base para los tests
 const baseUser = {
@@ -401,6 +404,20 @@ describe('platformService.unlinkPlatform', () => {
     // Debe usar IDs — no debe tener relation filter achievement.platform
     expect(deleteCall.where.id).toEqual({ in: ['ua-1', 'ua-2'] });
     expect(deleteCall.where.achievement).toBeUndefined();
+  });
+
+  it('invalida la caché pública del usuario tras desvincular (BUG-A)', async () => {
+    (mockPrisma.platformAccount.findFirst as jest.Mock).mockResolvedValue(basePlatformAccount);
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([]);
+    (mockPrisma.userAchievement.deleteMany as jest.Mock).mockResolvedValue({ count: 0 });
+    (mockPrisma.platformAccount.delete as jest.Mock).mockResolvedValue(basePlatformAccount);
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(baseUserWithXp);
+    (mockPrisma.user.update as jest.Mock).mockResolvedValue({});
+
+    await platformService.unlinkPlatform('user-1', 'STEAM');
+
+    // La caché pública debe invalidarse para que otros usuarios no vean juegos stale
+    expect(mockInvalidateUserPublicCache).toHaveBeenCalledWith('user-1');
   });
 
   it('lanza PLATFORM_NOT_LINKED si la plataforma no está vinculada', async () => {

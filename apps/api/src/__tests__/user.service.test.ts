@@ -529,20 +529,22 @@ describe('userService.getMyGames', () => {
     expect(result.data[0]?.lastSyncedAt).toBeNull();
   });
 
-  it('devuelve juegos ordenados alfabéticamente', async () => {
+  it('devuelve juegos ordenados por lastActivityAt DESC (BUG-D)', async () => {
     const makeGame = (id: string, title: string) => ({
       id, title, platform: 'STEAM', iconUrl: null, totalAchievements: 1,
     });
+    // Hollow Knight: logro más reciente (2024-06-03), Elden Ring: 2024-06-02, Zelda: 2024-06-01
     (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
-      makeUserAchievement('g3', makeGame('g3', 'Zelda')),
-      makeUserAchievement('g1', makeGame('g1', 'Elden Ring')),
-      makeUserAchievement('g2', makeGame('g2', 'Hollow Knight')),
+      { ...makeUserAchievement('g3', makeGame('g3', 'Zelda')), unlockedAt: new Date('2024-06-01') },
+      { ...makeUserAchievement('g1', makeGame('g1', 'Elden Ring')), unlockedAt: new Date('2024-06-02') },
+      { ...makeUserAchievement('g2', makeGame('g2', 'Hollow Knight')), unlockedAt: new Date('2024-06-03') },
     ]);
     (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
     (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([]);
 
     const result = await userService.getMyGames('user-1');
-    expect(result.data.map((g) => g.title)).toEqual(['Elden Ring', 'Hollow Knight', 'Zelda']);
+    // Más reciente primero
+    expect(result.data.map((g) => g.title)).toEqual(['Hollow Knight', 'Elden Ring', 'Zelda']);
   });
 
   // ─── BUG-10: aggregate stats ─────────────────────────────────────────────────
