@@ -132,7 +132,7 @@ Aplicación móvil (iOS + Android) para tracking unificado de logros de videojue
 | Redis (Railway) | Rankings + caché + BullMQ | ✅ Activo — persistencia verificada ✅ (B6) |
 | Cloudinary | Avatares y banners | ✅ Activo — `CLOUDINARY_URL` configurada en Railway |
 | Railway (API) | Deploy API HTTP + Socket.io | ✅ Activo — https://unlockhub-production.up.railway.app |
-| Railway (Worker) | Deploy workers BullMQ — proceso dedicado | ✅ Activo — `unlockhub-worker`. 14 Shared Variables compartidas con la API. Socket.io desde worker requiere `@socket.io/redis-emitter` para eventos en tiempo real — fallback polling Redis activo. |
+| Railway (Worker) | Deploy workers BullMQ — proceso dedicado | ✅ Activo — `unlockhub-worker`. 14 Shared Variables compartidas con la API. Socket.io desde worker requiere `@socket.io/redis-emitter` para eventos en tiempo real — fallback polling Redis activo. Dockerfile propio en `apps/worker/Dockerfile` — build multi-stage con tsx runtime, WORKDIR /app. Railway Config File Path: `apps/worker/railway.json` configurado en dashboard. |
 | AdMob | Anuncios usuarios free | ⚙️ Pendiente cuenta AdMob (B8) — IDs producción ✅ (B9) — código integrado (B10 ✅) |
 | GitHub Actions | CI/CD | ✅ Configurado |
 | Sentry | Crash reporting móvil + API | ✅ DSNs configurados — código integrado |
@@ -870,7 +870,7 @@ Cuenta de prueba: `demo@unlockhub.test` / `Demo1234!`
 ### Producción — Railway
 
 - **API**: https://unlockhub-production.up.railway.app
-- **Worker**: `unlockhub-worker` — servicio Railway independiente con workers BullMQ y schedulers. `startCommand: npm run start --workspace=apps/worker`. Socket.io desde worker usa fallback polling Redis (para eventos en tiempo real añadir `@socket.io/redis-emitter`).
+- **Worker**: `unlockhub-worker` — servicio Railway independiente con workers BullMQ y schedulers. `startCommand: npx tsx apps/worker/src/index.ts` (vía Dockerfile CMD). Dockerfile: `apps/worker/Dockerfile`. Socket.io desde worker usa fallback polling Redis (para eventos en tiempo real añadir `@socket.io/redis-emitter`).
 - **DB**: Railway PostgreSQL — `DATABASE_URL` (interna) + `DIRECT_URL` (proxy pública)
 - **Redis**: Railway Redis — `REDIS_URL` (interna)
 - **Shared Variables**: 14 variables configuradas a nivel de proyecto en Railway — compartidas entre `unlockhub-api` y `unlockhub-worker` sin duplicarlas.
@@ -1205,6 +1205,8 @@ Ver [docs/BACKLOG.md](docs/BACKLOG.md)
 ---
 
 ## Última revisión de código
+
+**Fecha**: 2026-06-09 (sesión 70) — Fix worker Railway: Dockerfile propio en `apps/worker/Dockerfile` (build multi-stage, tsx runtime, WORKDIR /app). Config File Path `apps/worker/railway.json` configurado en Railway dashboard. preDeployCommand corregido a solo `npx prisma migrate deploy` (sin `cd apps/api` — el Dockerfile raíz ya tiene WORKDIR /app/apps/api). package-lock.json regenerado con @unlockhub/worker@0.0.1. API: 10 migrations found, API arrancada port 8080. Worker: todos los schedulers BullMQ activos, syncs procesándose.
 
 **Fecha**: 2026-06-09 (sesión 69) — Fix platformAccount.update → upsert en 6 ocurrencias (race condition P2025 durante sync en `retroachievements.adapter.ts`, `sync.service.ts`, `xbox.adapter.ts`, `sync.worker.ts`). V3: nuevo `apps/worker/` con 5 workers + schedulers, cierre limpio SIGTERM/SIGINT. `apps/api/src/index.ts` limpiado de workers. Trade-off documentado: Socket.io desde worker requiere `@socket.io/redis-emitter` — fallback polling Redis activo. Worker desplegado en Railway como servicio `unlockhub-worker`. Shared Variables configuradas en Railway (14 variables compartidas entre API y worker). Tests: 610 API + 368 mobile. 0 errores TS/lint.
 
