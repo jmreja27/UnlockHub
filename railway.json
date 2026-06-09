@@ -4,7 +4,7 @@
     "builder": "RAILPACK"
   },
   "deploy": {
-    "startCommand": "cd apps/api && npx prisma migrate deploy && npm run start --workspace=apps/api",
+    "startCommand": "${RAILPACK_START_COMMAND:-cd apps/api && npx prisma migrate deploy && npm run start --workspace=apps/api}",
     "healthcheckPath": "/health",
     "healthcheckTimeout": 30,
     "restartPolicyType": "ON_FAILURE"
