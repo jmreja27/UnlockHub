@@ -4,7 +4,6 @@
     "builder": "RAILPACK"
   },
   "deploy": {
-    "preDeployCommand": "${RAILPACK_PRE_DEPLOY_COMMAND:-}",
     "startCommand": "${RAILPACK_START_COMMAND:-npm run start --workspace=apps/api}",
     "healthcheckPath": "/health",
     "healthcheckTimeout": 30,
