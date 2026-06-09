@@ -64,8 +64,9 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
   const url = `${API_URL}${path}`;
   const token = getAccessToken();
+  const isFormData = fetchOptions.body instanceof FormData;
   const defaultHeaders: Record<string, string> = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 
