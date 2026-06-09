@@ -374,10 +374,10 @@ export default function ProfileScreen() {
     );
   }
 
-  // Estado no autenticado
-  if (!isAuthenticated || !user) {
-    return (
-      <SafeAreaView className="flex-1" style={{ backgroundColor: colors.background }} edges={['left', 'right']}>
+  return (
+    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.background }} edges={['left', 'right']}>
+      {/* Estado no autenticado */}
+      {(!isAuthenticated || !user) ? (
         <View className="flex-1 items-center justify-center px-6">
           <Text
             className="text-2xl font-bold mb-3 text-center"
@@ -400,21 +400,10 @@ export default function ProfileScreen() {
             <Text className="font-semibold text-base" style={{ color: '#ffffff' }}>{t('profile.login')}</Text>
           </Pressable>
         </View>
-      </SafeAreaView>
-    );
-  }
-
-  // Estado de carga inicial
-  if (isLoadingPlatforms && !platforms) {
-    return (
-      <SafeAreaView className="flex-1" style={{ backgroundColor: colors.background }} edges={['left', 'right']}>
+      ) : (isLoadingPlatforms && !platforms) ? (
+        /* Estado de carga inicial */
         <ProfileSkeleton />
-      </SafeAreaView>
-    );
-  }
-
-  return (
-    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.background }} edges={['left', 'right']}>
+      ) : (
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 32 }}
@@ -1177,6 +1166,7 @@ export default function ProfileScreen() {
           </Pressable>
         </View>
       </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
