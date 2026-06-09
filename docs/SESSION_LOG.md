@@ -2,6 +2,8 @@
 
 > Movido desde CLAUDE.md. La entrada más reciente va primero.
 
+**Fecha**: 2026-06-09 (sesión 69) — Fix platformAccount.update → upsert (race condition P2025) + V3 worker BullMQ separado. **Fix P2025**: `platformAccount.update` en 6 ocurrencias (`retroachievements.adapter.ts`, `sync.service.ts`, `xbox.adapter.ts`, `sync.worker.ts`) reemplazado por `platformAccount.upsert` — durante syncs concurrentes del mismo usuario la BD podía recibir un `update` sobre un registro que otro job acababa de borrar/recrear, causando error P2025 "Record to update not found". **V3 worker**: nuevo `apps/worker/` con proceso Railway independiente que arranca sync, streak, challenge, gdpr-cleanup y seed-catalog workers + schedulers; cierre limpio `SIGTERM`/`SIGINT`; `apps/api/src/index.ts` limpiado de workers. Trade-off: `getIOSafe()` desde el worker devuelve null — eventos Socket.io (`sync:progress`, `sync:complete`) no se emiten desde el worker; el cliente usa fallback polling Redis vía `GET /api/v1/sync/status`. Para restaurar eventos en tiempo real desde el worker: añadir `@socket.io/redis-emitter`. Railway: servicio `unlockhub-worker` creado con `startCommand: npm run start --workspace=apps/worker`; 14 Shared Variables configuradas a nivel de proyecto compartidas entre API y worker. Tests: 610 API + 368 mobile. 0 errores TS/lint.
+
 **Fecha**: 2026-06-05 (sesión 68) — T16 backfill RA XP ejecutado en producción. 48.865 logros RA procesados — 29.419 actualizados (fórmula vieja `min(100, max(1, points))` → correcta `max(5, round(points/5))`), 28.583 saltados (ya correctos), 0 errores. XP de usuarios se corregirá gradualmente en próximo sync automático.
 
 ## Última revisión de código

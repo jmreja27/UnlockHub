@@ -65,7 +65,7 @@ Esta sección lista todo lo que **el desarrollador debe hacer manualmente** ante
 |---|---|---|---|---|
 | V1 | Migrar imágenes a **Cloudflare Images** | cloudflare.com | ~5€/mes | Con 5.000+ usuarios |
 | V2 | Activar **read replica** en Neon | console.neon.tech | ~20€/mes adicional | Cuando queries de ranking superen 500ms |
-| V3 | Separar workers BullMQ a proceso dedicado en Railway | `apps/worker` en el monorepo, nuevo service en Railway | ~5€/mes | Cuando sync afecte latencia de la API |
+| ~~V3~~ | ✅ **Separar workers BullMQ a proceso dedicado en Railway** | `apps/worker` en el monorepo — servicio `unlockhub-worker` en Railway. 14 Shared Variables. | ~5€/mes | ✅ Completado sesión 69 |
 | V4 | Apple Developer Program para iOS | developer.apple.com | $99/año | Fase 4 — App Store iOS |
 
 ---
@@ -132,7 +132,7 @@ Aplicación móvil (iOS + Android) para tracking unificado de logros de videojue
 | Redis (Railway) | Rankings + caché + BullMQ | ✅ Activo — persistencia verificada ✅ (B6) |
 | Cloudinary | Avatares y banners | ✅ Activo — `CLOUDINARY_URL` configurada en Railway |
 | Railway (API) | Deploy API HTTP + Socket.io | ✅ Activo — https://unlockhub-production.up.railway.app |
-| Railway (Worker) | Deploy workers BullMQ — proceso dedicado | ⚙️ Crear segundo servicio en Railway. Start: `npm run start --workspace=apps/worker`. Mismas env vars que la API. Ver `apps/worker/railway.json` y `docs/DECISIONS.md`. |
+| Railway (Worker) | Deploy workers BullMQ — proceso dedicado | ✅ Activo — `unlockhub-worker`. 14 Shared Variables compartidas con la API. Socket.io desde worker requiere `@socket.io/redis-emitter` para eventos en tiempo real — fallback polling Redis activo. |
 | AdMob | Anuncios usuarios free | ⚙️ Pendiente cuenta AdMob (B8) — IDs producción ✅ (B9) — código integrado (B10 ✅) |
 | GitHub Actions | CI/CD | ✅ Configurado |
 | Sentry | Crash reporting móvil + API | ✅ DSNs configurados — código integrado |
@@ -870,8 +870,10 @@ Cuenta de prueba: `demo@unlockhub.test` / `Demo1234!`
 ### Producción — Railway
 
 - **API**: https://unlockhub-production.up.railway.app
+- **Worker**: `unlockhub-worker` — servicio Railway independiente con workers BullMQ y schedulers. `startCommand: npm run start --workspace=apps/worker`. Socket.io desde worker usa fallback polling Redis (para eventos en tiempo real añadir `@socket.io/redis-emitter`).
 - **DB**: Railway PostgreSQL — `DATABASE_URL` (interna) + `DIRECT_URL` (proxy pública)
 - **Redis**: Railway Redis — `REDIS_URL` (interna)
+- **Shared Variables**: 14 variables configuradas a nivel de proyecto en Railway — compartidas entre `unlockhub-api` y `unlockhub-worker` sin duplicarlas.
 - **Health check**: `GET /health` ✅ — configurado en `railway.json` (`healthcheckPath`)
 - **Migraciones**: ✅ Automáticas en cada deploy — `npx prisma migrate deploy` en `startCommand`
 - **Mínimo 2 réplicas**: pendiente (N3) — redis-adapter ya listo
@@ -1203,6 +1205,8 @@ Ver [docs/BACKLOG.md](docs/BACKLOG.md)
 ---
 
 ## Última revisión de código
+
+**Fecha**: 2026-06-09 (sesión 69) — Fix platformAccount.update → upsert en 6 ocurrencias (race condition P2025 durante sync en `retroachievements.adapter.ts`, `sync.service.ts`, `xbox.adapter.ts`, `sync.worker.ts`). V3: nuevo `apps/worker/` con 5 workers + schedulers, cierre limpio SIGTERM/SIGINT. `apps/api/src/index.ts` limpiado de workers. Trade-off documentado: Socket.io desde worker requiere `@socket.io/redis-emitter` — fallback polling Redis activo. Worker desplegado en Railway como servicio `unlockhub-worker`. Shared Variables configuradas en Railway (14 variables compartidas entre API y worker). Tests: 610 API + 368 mobile. 0 errores TS/lint.
 
 **Fecha**: 2026-06-07 (sesión 67) — Revisión completa del proyecto (backend + mobile + packages). Backlog actualizado: F20 ✅ (ad units Rankings/Friends + EAS secrets configurados), PL14 ✅ (edge-to-edge Android 15 validado en dispositivo físico), PL19 ⚙️ añadido (smoke tests finales antes de promover a Producción). CLAUDE.md corregido: descripción `background-sync.scheduler.ts` eliminaba referencia a "login en últimos 7 días" que no existe en código ni schema (no hay campo `lastLoginAt`). Sin bugs críticos encontrados — código limpio en los ~30 archivos revisados. Tests: 610 API + 368 mobile ✅. 0 errores TS/lint.
 
