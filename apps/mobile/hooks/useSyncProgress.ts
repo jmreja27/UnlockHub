@@ -182,13 +182,15 @@ export function useSyncProgress(onComplete?: SyncCompleteCallback): UseSyncProgr
     // activar polling de fallback vía Redis para no dejar la barra stuckeada.
     // En modo socketSilent=true, hydrateFromApi reconstruye el map desde cero,
     // eliminando plataformas que terminaron mientras el socket estuvo desconectado.
+    let unmounted = false;
+
     gracePollTimerRef.current = setInterval(() => {
       const silenceDuration = Date.now() - lastSocketEventRef.current;
       setActiveSyncs((current) => {
         if (current.size > 0 && silenceDuration > SOCKET_GRACE_MS) {
           void hydrateFromApi(true);
-          // Iniciar polling continuo si aún hay syncs activos
-          if (!pollTimerRef.current) {
+          // Iniciar polling continuo solo si el componente sigue montado
+          if (!pollTimerRef.current && !unmounted) {
             pollTimerRef.current = setInterval(() => void hydrateFromApi(true), POLL_INTERVAL_MS);
           }
         } else if (current.size === 0) {
@@ -199,6 +201,7 @@ export function useSyncProgress(onComplete?: SyncCompleteCallback): UseSyncProgr
     }, SOCKET_GRACE_MS);
 
     return () => {
+      unmounted = true;
       socket.off('sync:progress', onSyncProgress);
       socket.off('sync:complete', onSyncComplete);
       socket.off('sync:error', onSyncError);

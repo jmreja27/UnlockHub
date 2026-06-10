@@ -57,9 +57,10 @@ export function useInterstitialAd() {
     };
   }, [user?.isPremium]);
 
-  const show = useCallback(() => {
-    if (!loadedRef.current || !adRef.current || user?.isPremium) return;
+  const show = useCallback((): boolean => {
+    if (!loadedRef.current || !adRef.current || user?.isPremium) return false;
     adRef.current.show();
+    return true;
   }, [user?.isPremium]);
 
   return { show };

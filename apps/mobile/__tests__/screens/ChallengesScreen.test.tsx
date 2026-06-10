@@ -7,6 +7,18 @@ import ChallengesScreen from '../../app/(tabs)/challenges';
 import { useChallenges } from '../../hooks/useChallenges';
 
 jest.mock('../../hooks/useChallenges');
+// Por defecto los tests asumen challenges activo — la feature está gateada en producción
+jest.mock('../../lib/featureFlags', () => ({
+  FEATURES: {
+    premium: false,
+    challenges: true,
+    wrapped: true,
+    pointsRedeem: false,
+    advancedStats: false,
+    ugcGuides: true,
+    notifications: true,
+  },
+}));
 
 const mockUseChallenges = useChallenges as jest.Mock;
 

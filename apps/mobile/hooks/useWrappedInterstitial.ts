@@ -18,11 +18,10 @@ export function useWrappedInterstitial() {
   const { user } = useSessionStore();
   const { show } = useInterstitialAd();
   const shownRef = useRef(false);
+  const timeoutIdRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     if (user?.isPremium || shownRef.current) return;
-
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
     void (async () => {
       try {
@@ -31,15 +30,22 @@ export function useWrappedInterstitial() {
         if (Date.now() - lastShown < COOLDOWN_MS) return;
 
         shownRef.current = true;
-        await AsyncStorage.setItem(COOLDOWN_KEY, String(Date.now()));
-        timeoutId = setTimeout(() => show(), SHOW_DELAY_MS);
+        timeoutIdRef.current = setTimeout(() => {
+          const shown = show();
+          if (shown) {
+            void AsyncStorage.setItem(COOLDOWN_KEY, String(Date.now()));
+          }
+        }, SHOW_DELAY_MS);
       } catch {
         // AsyncStorage no disponible — continuar sin mostrar el ad
       }
     })();
 
     return () => {
-      if (timeoutId !== undefined) clearTimeout(timeoutId);
+      if (timeoutIdRef.current !== undefined) {
+        clearTimeout(timeoutIdRef.current);
+        timeoutIdRef.current = undefined;
+      }
     };
   }, [show, user?.isPremium]);
 }

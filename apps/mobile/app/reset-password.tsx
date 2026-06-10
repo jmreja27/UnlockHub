@@ -47,6 +47,26 @@ export default function ResetPasswordScreen() {
     mutation.mutate(password);
   }
 
+  if (!token) {
+    return (
+      <SafeAreaView className="flex-1 bg-surface">
+        <View className="flex-1 px-8 justify-center items-center">
+          <Text className="text-red-400 text-base text-center">
+            {t('auth.reset_password.error_invalid_token')}
+          </Text>
+          <Pressable
+            className="mt-6 bg-primary rounded-xl py-3 px-8 items-center"
+            onPress={() => router.replace('/(auth)/login')}
+            accessibilityRole="button"
+            style={{ minHeight: 48 }}
+          >
+            <Text className="text-white font-semibold">{t('auth.forgot_password.back_to_login')}</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (done) {
     return (
       <SafeAreaView className="flex-1 bg-surface">
@@ -68,26 +88,6 @@ export default function ResetPasswordScreen() {
             <Text className="text-white font-semibold text-base">
               {t('auth.forgot_password.back_to_login')}
             </Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (!token) {
-    return (
-      <SafeAreaView className="flex-1 bg-surface">
-        <View className="flex-1 px-8 justify-center items-center">
-          <Text className="text-red-400 text-base text-center">
-            {t('auth.reset_password.error_invalid_token')}
-          </Text>
-          <Pressable
-            className="mt-6 bg-primary rounded-xl py-3 px-8 items-center"
-            onPress={() => router.replace('/(auth)/login')}
-            accessibilityRole="button"
-            style={{ minHeight: 48 }}
-          >
-            <Text className="text-white font-semibold">{t('auth.forgot_password.back_to_login')}</Text>
           </Pressable>
         </View>
       </SafeAreaView>

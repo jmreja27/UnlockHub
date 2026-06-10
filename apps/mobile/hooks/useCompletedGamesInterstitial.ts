@@ -28,25 +28,30 @@ export function useCompletedGamesInterstitial(games: LibraryGame[]) {
     if (completedNow.length === 0) return;
 
     checkedRef.current = true;
+    let cancelled = false;
 
     void (async () => {
       try {
         const raw = await AsyncStorage.getItem(STORAGE_KEY);
+        if (cancelled) return;
+
         const knownIds: string[] = raw !== null ? (JSON.parse(raw) as string[]) : [];
         const knownSet = new Set(knownIds);
 
         const newlyCompleted = completedNow.filter((id) => !knownSet.has(id));
         if (newlyCompleted.length === 0) return;
 
-        // Guardar todos los IDs completados (nuevos + previos), limitando el tamaño
-        const updated = [...knownIds, ...newlyCompleted].slice(-MAX_IDS);
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-
-        // Mostrar interstitial por el primer juego recién completado
-        show();
+        // Mostrar interstitial por el primer juego recién completado; guardar IDs solo si se mostró
+        const shown = show();
+        if (shown) {
+          const updated = [...knownIds, ...newlyCompleted].slice(-MAX_IDS);
+          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        }
       } catch {
         // AsyncStorage no disponible — continuar sin mostrar el ad
       }
     })();
+
+    return () => { cancelled = true; };
   }, [games, show, user?.isPremium]);
 }

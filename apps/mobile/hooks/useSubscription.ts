@@ -60,10 +60,12 @@ export function useSubscription(): UseSubscriptionResult {
   // Cargar CustomerInfo al montar — fuente de verdad para el estado premium en UI
   useEffect(() => {
     if (!rcApiKey) return;
+    let cancelled = false;
     void Purchases.getCustomerInfo()
-      .then(setCustomerInfo)
+      .then((info) => { if (!cancelled) setCustomerInfo(info); })
       .catch(() => {})
-      .finally(() => { setIsLoadingStatus(false); });
+      .finally(() => { if (!cancelled) setIsLoadingStatus(false); });
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

@@ -532,7 +532,12 @@
     "banner_hint": "Open subscription plans",
     "banner_action": "See plans",
     "active_monthly": "Premium active ✓",
-    "active_expires": "Expires on {{date}}"
+    "active_expires": "Expires on {{date}}",
+    "active_lifetime": "Lifetime Premium ✓",
+    "active_lifetime_desc": "Unlimited lifetime access",
+    "active_lifetime_aria": "Lifetime premium subscription active",
+    "active_monthly_aria": "Premium subscription active, expires on {{date}}",
+    "active_aria": "Premium subscription active"
   },
   "maintenance": {
     "title": "Under maintenance",

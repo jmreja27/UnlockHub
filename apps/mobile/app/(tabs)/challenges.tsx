@@ -7,6 +7,8 @@ import { useChallenges } from '../../hooks/useChallenges';
 import { ApiRequestError } from '../../lib/api';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { EmptyState } from '../../components/EmptyState';
+import { ComingSoon } from '../../components/ComingSoon';
+import { FEATURES } from '../../lib/featureFlags';
 
 function classifyError(err: Error | null): 'network' | 'auth' | 'server' {
   if (!err) return 'server';
@@ -60,7 +62,11 @@ function ChallengeSkeleton() {
 
 export default function ChallengesScreen() {
   const { t, i18n } = useTranslation();
-  const { challenge, status, progressPct, isLoading, isError, error, refetch } = useChallenges();
+  const challengeData = useChallenges();
+
+  if (!FEATURES.challenges) return <ComingSoon edges={['left', 'right']} />;
+
+  const { challenge, status, progressPct, isLoading, isError, error, refetch } = challengeData;
 
   const isCompleted = !!status?.completedAt;
 
