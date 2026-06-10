@@ -37,8 +37,10 @@ export function useFeed() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
+    let unmounted = false;
 
     function doConnect() {
+      if (unmounted) return;
       if (socketRef.current?.connected) return;
 
       const socket = io(`${API_URL}/activity`, {
@@ -110,6 +112,7 @@ export function useFeed() {
     doConnect();
 
     return () => {
+      unmounted = true;
       if (reconnectTimerRef.current) {
         clearTimeout(reconnectTimerRef.current);
         reconnectTimerRef.current = null;

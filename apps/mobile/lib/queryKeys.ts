@@ -26,7 +26,11 @@ export const queryKeys = {
   syncSummaryBase: () => ['sync-summary'] as const,
 
   rankings: () => ['rankings'] as const,
-  myRanking: (platform: string) => ['rankings', 'me', platform] as const,
+  rankingsGlobal: (page: number, limit: number) => ['rankings', 'global', page, limit] as const,
+  rankingsPlatform: (platform: string, page: number, limit: number) =>
+    ['rankings', 'platform', platform, page, limit] as const,
+  myRanking: (platform?: string) =>
+    platform ? (['rankings', 'me', platform] as const) : (['rankings', 'me'] as const),
 
   userStats: () => ['user-stats'] as const,
 

@@ -1,14 +1,14 @@
 import { View, Text, Pressable } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
-export function ComingSoon() {
+export function ComingSoon({ edges }: { edges?: Edge[] }) {
   const { t } = useTranslation();
 
   return (
-    <SafeAreaView className="flex-1 bg-surface">
+    <SafeAreaView className="flex-1 bg-surface" edges={edges}>
       <View className="flex-1 items-center justify-center px-8">
         <Ionicons name="rocket-outline" size={64} color="#818cf8" accessibilityElementsHidden />
         <Text

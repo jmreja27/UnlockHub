@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 
 import { api } from '../lib/api';
 import { useSessionStore } from '../stores/sessionStore';
@@ -37,7 +37,13 @@ interface RewardResult {
 export function useRewardedAd() {
   const { user } = useSessionStore();
   const adRef = useRef<RewardedAdInstance | null>(null);
-  const loadedRef = useRef(false);
+  const [isReady, setIsReady] = useState(false);
+  // Ref paralelo para uso dentro de callbacks sin stale closure
+  const isReadyRef = useRef(false);
+  // Limpia el listener CLOSED registrado por showForReward si el componente se desmonta en vuelo
+  const showForRewardUnsubRef = useRef<(() => void) | null>(null);
+  // Evita doble llamada simultánea a showForReward
+  const inFlightRef = useRef(false);
 
   useEffect(() => {
     if (user?.isPremium || !admobModule) return;
@@ -46,10 +52,12 @@ export function useRewardedAd() {
     adRef.current = ad;
 
     const unsubLoaded = ad.addAdEventListener(admobModule.RewardedAdEventType.LOADED, () => {
-      loadedRef.current = true;
+      isReadyRef.current = true;
+      setIsReady(true);
     });
     const unsubClosed = ad.addAdEventListener(admobModule.AdEventType.CLOSED, () => {
-      loadedRef.current = false;
+      isReadyRef.current = false;
+      setIsReady(false);
       ad.load();
     });
 
@@ -58,20 +66,27 @@ export function useRewardedAd() {
     return () => {
       unsubLoaded();
       unsubClosed();
+      // Limpiar el listener de showForReward si estaba registrado al desmontarse
+      showForRewardUnsubRef.current?.();
+      showForRewardUnsubRef.current = null;
     };
   }, [user?.isPremium]);
 
   // Muestra el anuncio y, si el usuario lo completa, otorga 10 puntos via backend.
-  // Retorna los puntos ganados o null si no aplica (premium, ad no cargado, cooldown).
+  // Retorna los puntos ganados o null si no aplica (premium, ad no cargado, cooldown, en vuelo).
   const showForReward = useCallback(async (): Promise<number | null> => {
-    if (!loadedRef.current || !adRef.current || !admobModule || user?.isPremium) {
+    if (!isReadyRef.current || !adRef.current || !admobModule || user?.isPremium || inFlightRef.current) {
       return null;
     }
+
+    inFlightRef.current = true;
 
     return new Promise<number | null>((resolve) => {
       const ad = adRef.current!;
 
       const unsubClosed = ad.addAdEventListener(admobModule!.AdEventType.CLOSED, () => {
+        showForRewardUnsubRef.current = null;
+        inFlightRef.current = false;
         unsubClosed();
 
         // Otorgar puntos al cerrar, independientemente de si EARNED_REWARD se disparó
@@ -81,9 +96,10 @@ export function useRewardedAd() {
           .catch(() => resolve(null));
       });
 
+      showForRewardUnsubRef.current = unsubClosed;
       ad.show();
     });
   }, [user?.isPremium]);
 
-  return { showForReward, isReady: loadedRef.current };
+  return { showForReward, isReady };
 }

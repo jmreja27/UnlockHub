@@ -532,7 +532,12 @@
     "banner_hint": "Abre los planes de suscripción",
     "banner_action": "Ver planes",
     "active_monthly": "Premium activo ✓",
-    "active_expires": "Vence el {{date}}"
+    "active_expires": "Vence el {{date}}",
+    "active_lifetime": "Premium de por vida ✓",
+    "active_lifetime_desc": "Acceso ilimitado de por vida",
+    "active_lifetime_aria": "Suscripción premium de por vida activa",
+    "active_monthly_aria": "Suscripción premium activa, vence el {{date}}",
+    "active_aria": "Suscripción premium activa"
   },
   "maintenance": {
     "title": "En mantenimiento",

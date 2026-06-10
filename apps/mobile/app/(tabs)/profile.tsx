@@ -1,6 +1,6 @@
 // Pantalla de perfil de usuario: avatar, stats, plataformas y logout
 import { useState, useCallback, useEffect } from 'react';
-import { View, Text, Pressable, ScrollView, RefreshControl, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, ScrollView, RefreshControl, Alert, ActivityIndicator, AppState } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
@@ -152,18 +152,25 @@ export default function ProfileScreen() {
     ? Math.ceil((rewardedCooldownEnd - Date.now()) / (1000 * 60 * 60))
     : 0;
 
-  useEffect(() => {
-    void (async () => {
-      try {
-        const raw = await AsyncStorage.getItem(REWARDED_COOLDOWN_KEY);
-        if (raw !== null) {
-          const lastClaimed = parseInt(raw, 10);
-          setRewardedCooldownEnd(lastClaimed + REWARDED_COOLDOWN_MS);
-        }
-      } catch {
-        // AsyncStorage no disponible — ignorar
+  async function readRewardedCooldown() {
+    try {
+      const raw = await AsyncStorage.getItem(REWARDED_COOLDOWN_KEY);
+      if (raw !== null) {
+        const lastClaimed = parseInt(raw, 10);
+        setRewardedCooldownEnd(lastClaimed + REWARDED_COOLDOWN_MS);
       }
-    })();
+    } catch {
+      // AsyncStorage no disponible — ignorar
+    }
+  }
+
+  useEffect(() => {
+    void readRewardedCooldown();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void readRewardedCooldown();
+    });
+    return () => sub.remove();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const unlinkMutation = useMutation({
@@ -228,10 +235,13 @@ export default function ProfileScreen() {
     },
     onSuccess: (data) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.profile() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.me() });
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      const current = useSessionStore.getState().user;
-      if (current) {
-        useSessionStore.getState().setUser({ ...current, avatar: data.avatar });
+      if (data?.avatar) {
+        const current = useSessionStore.getState().user;
+        if (current) {
+          useSessionStore.getState().setUser({ ...current, avatar: data.avatar });
+        }
       }
     },
     onError: () => {

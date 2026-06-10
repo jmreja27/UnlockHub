@@ -8,7 +8,8 @@ import { useSessionStore } from '../stores/sessionStore';
 import { PLAN_PRICES } from '../lib/iap';
 import { FEATURES } from '../lib/featureFlags';
 
-function formatExpiryDate(isoDate: string): string {
+function formatExpiryDate(isoDate: string | null): string {
+  if (!isoDate) return '';
   return new Date(isoDate).toLocaleDateString('es-ES', {
     day: 'numeric',
     month: 'long',
