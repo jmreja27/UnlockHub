@@ -18,7 +18,7 @@ type AdmobModule = {
     createForAdRequest: (unitId: string) => RewardedAdInstance;
   };
   AdEventType: { LOADED: string; CLOSED: string };
-  RewardedAdEventType: { LOADED: string; EARNED_REWARD: string };
+  RewardedAdEventType: { LOADED: string };
 };
 
 let admobModule: AdmobModule | null = null;
@@ -70,25 +70,11 @@ export function useRewardedAd() {
 
     return new Promise<number | null>((resolve) => {
       const ad = adRef.current!;
-      let earned = false;
-
-      const unsubReward = ad.addAdEventListener(
-        admobModule!.RewardedAdEventType.EARNED_REWARD,
-        () => {
-          earned = true;
-        },
-      );
 
       const unsubClosed = ad.addAdEventListener(admobModule!.AdEventType.CLOSED, () => {
-        unsubReward();
         unsubClosed();
 
-        if (!earned) {
-          resolve(null);
-          return;
-        }
-
-        // El usuario completó el anuncio — llamar al backend para registrar la recompensa
+        // Otorgar puntos al cerrar, independientemente de si EARNED_REWARD se disparó
         api
           .post<RewardResult>('/api/v1/points/rewarded-ad')
           .then((data) => resolve(data.pointsEarned))

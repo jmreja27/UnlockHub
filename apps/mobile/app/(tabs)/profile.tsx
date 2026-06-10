@@ -204,9 +204,7 @@ export default function ProfileScreen() {
       const form = new FormData();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       form.append('banner', { uri, name: filename, type } as any);
-      return api.post('/api/v1/users/me/banner', form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      return api.post('/api/v1/users/me/banner', form);
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.profile() });
@@ -226,9 +224,7 @@ export default function ProfileScreen() {
       const type = mimeMap[ext] ?? 'image/jpeg';
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       form.append('avatar', { uri, name: filename, type } as any);
-      return api.post<{ avatar: string }>('/api/v1/users/me/avatar', form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      return api.post<{ avatar: string }>('/api/v1/users/me/avatar', form);
     },
     onSuccess: (data) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.profile() });
