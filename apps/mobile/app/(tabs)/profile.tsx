@@ -24,7 +24,7 @@ import { PremiumBanner } from '../../components/PremiumBanner';
 import { ActivityCard } from '../../components/ActivityCard';
 import { AvatarPlaceholder } from '../../components/AvatarPlaceholder';
 import { FEATURES } from '../../lib/featureFlags';
-import { api } from '../../lib/api';
+import { api, uploadFile, getAccessToken } from '../../lib/api';
 import { useFeed } from '../../hooks/useFeed';
 import { queryKeys } from '../../lib/queryKeys';
 
@@ -196,6 +196,7 @@ export default function ProfileScreen() {
         Alert.alert(t('profile.avatar_permission_title'), t('profile.avatar_permission_message'));
         return;
       }
+      console.log('[BANNER] abriendo picker');
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
@@ -204,6 +205,7 @@ export default function ProfileScreen() {
       });
       if (result.canceled || !result.assets[0]) return;
       const uri = result.assets[0].uri;
+      console.log('[BANNER] uri obtenida:', uri);
       const filename = uri.split('/').pop() ?? 'banner.jpg';
       const ext = filename.split('.').pop()?.toLowerCase() ?? 'jpg';
       const mimeMap: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
@@ -211,13 +213,15 @@ export default function ProfileScreen() {
       const form = new FormData();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       form.append('banner', { uri, name: filename, type } as any);
-      return api.post('/api/v1/users/me/banner', form);
+      console.log('[BANNER] enviando FormData', { uri, filename, type });
+      return uploadFile('/api/v1/users/me/banner', form, getAccessToken());
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.profile() });
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     },
-    onError: () => {
+    onError: (error) => {
+      console.error('[BANNER] error:', error);
       Alert.alert(t('profile.banner_error_title'), t('profile.banner_error_message'));
     },
   });
@@ -231,7 +235,7 @@ export default function ProfileScreen() {
       const type = mimeMap[ext] ?? 'image/jpeg';
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       form.append('avatar', { uri, name: filename, type } as any);
-      return api.post<{ avatar: string }>('/api/v1/users/me/avatar', form);
+      return uploadFile<{ avatar: string }>('/api/v1/users/me/avatar', form, getAccessToken());
     },
     onSuccess: (data) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.profile() });
