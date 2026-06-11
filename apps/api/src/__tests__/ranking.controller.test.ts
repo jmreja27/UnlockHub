@@ -170,4 +170,14 @@ describe('GET /api/v1/rankings/me', () => {
     expect(res.body.rank).toBeNull();
     expect(res.body.xp).toBe(0);
   });
+
+  it('rechaza plataforma desconocida con 400 VALIDATION_ERROR', async () => {
+    const res = await request(app)
+      .get('/api/v1/rankings/me?platform=INVALID_PLATFORM')
+      .set('Authorization', `Bearer ${makeToken()}`);
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('VALIDATION_ERROR');
+    expect(mockGetUserRank).not.toHaveBeenCalled();
+  });
 });

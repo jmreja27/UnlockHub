@@ -21,7 +21,7 @@ server.listen(env.PORT, () => {
 });
 
 process.on('SIGTERM', async () => {
-  io.close();
+  await io.close();
   await prisma.$disconnect();
   await redis.quit();
   server.close(() => {

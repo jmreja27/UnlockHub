@@ -182,5 +182,27 @@ describe('revenueCatWebhookHandler', () => {
 
       expect(statusMock).toHaveBeenCalledWith(401);
     });
+
+    it('rechaza token que es prefijo del secret real (constant-time no hace short-circuit)', async () => {
+      const { res, statusMock } = buildRes();
+
+      await revenueCatWebhookHandler(
+        buildReq(INITIAL_PURCHASE_PAYLOAD, 'Bearer test-secret') as Request,
+        res as Response,
+      );
+
+      expect(statusMock).toHaveBeenCalledWith(401);
+    });
+
+    it('rechaza token que extiende el secret real con sufijo extra', async () => {
+      const { res, statusMock } = buildRes();
+
+      await revenueCatWebhookHandler(
+        buildReq(INITIAL_PURCHASE_PAYLOAD, 'Bearer test-secret-abc-extra') as Request,
+        res as Response,
+      );
+
+      expect(statusMock).toHaveBeenCalledWith(401);
+    });
   });
 });

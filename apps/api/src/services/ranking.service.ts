@@ -160,7 +160,7 @@ export async function takeRankingSnapshot() {
  */
 export async function seedRankingsFromDb() {
   const users = await prisma.user.findMany({
-    where: { profileVisibility: 'PUBLIC' },
+    where: { profileVisibility: 'PUBLIC', deletedAt: null },
     select: { id: true, xp: true, platformAccounts: { select: { platform: true } } },
   });
 

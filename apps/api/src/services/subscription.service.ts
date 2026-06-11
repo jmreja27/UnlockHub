@@ -31,7 +31,7 @@ export async function createOrUpdateSubscription(
   userId: string,
   data: CreateOrUpdateSubscriptionData,
 ): Promise<void> {
-  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const user = await prisma.user.findUnique({ where: { id: userId, deletedAt: null } });
 
   if (!user) {
     throw new AppError('Usuario no encontrado', 'USER_NOT_FOUND', 404);
@@ -81,7 +81,7 @@ export async function createOrUpdateSubscription(
 
 // Cancela la suscripción activa del usuario y revoca su estado premium.
 export async function cancelSubscription(userId: string): Promise<void> {
-  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const user = await prisma.user.findUnique({ where: { id: userId, deletedAt: null } });
 
   if (!user) {
     throw new AppError('Usuario no encontrado', 'USER_NOT_FOUND', 404);
@@ -124,7 +124,7 @@ export async function cancelSubscription(userId: string): Promise<void> {
 // Devuelve el estado de suscripción del usuario autenticado.
 export async function getSubscriptionStatus(userId: string): Promise<SubscriptionStatus> {
   const user = await prisma.user.findUnique({
-    where: { id: userId },
+    where: { id: userId, deletedAt: null },
     select: { isPremium: true, premiumUntil: true },
   });
 
@@ -169,7 +169,7 @@ export async function redeemPointsForPremium(
   pointsToRedeem: number,
 ): Promise<RedeemPointsResult> {
   const user = await prisma.user.findUnique({
-    where: { id: userId },
+    where: { id: userId, deletedAt: null },
     select: { id: true, isPremium: true, premiumUntil: true },
   });
 
@@ -256,10 +256,10 @@ export async function expireSubscriptionFromWebhook(
   storeTransactionId: string,
 ): Promise<void> {
   const user = await prisma.user.findUnique({
-    where: { id: userId },
+    where: { id: userId, deletedAt: null },
     select: { id: true },
   });
-  if (!user) return; // userId desconocido — ignorar silenciosamente
+  if (!user) return; // userId desconocido o cuenta eliminada — ignorar silenciosamente
 
   // Marcar la suscripción concreta como expirada si existe
   await prisma.subscription.updateMany({

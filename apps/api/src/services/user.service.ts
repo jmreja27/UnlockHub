@@ -147,7 +147,7 @@ export async function getProfile(
   userId: string,
 ): Promise<User & { platformAccounts: PlatformAccount[] }> {
   const dbUser = await prisma.user.findUnique({
-    where: { id: userId },
+    where: { id: userId, deletedAt: null },
     include: {
       platformAccounts: {
         select: {

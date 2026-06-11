@@ -4,6 +4,7 @@ import { ZodError } from 'zod';
 import { AppError, errorHandler } from '../middleware/errorHandler';
 import { authenticate } from '../middleware/authenticate';
 import { adminAuth } from '../middleware/adminAuth';
+import { validateFileMagicBytes } from '../middleware/upload.middleware';
 import { signAccessToken } from '../lib/jwt';
 
 jest.mock('../lib/prisma', () => ({
@@ -241,5 +242,57 @@ describe('adminAuth', () => {
     adminAuth(req, res, next);
 
     expect(res.statusCode).toBe(401);
+  });
+});
+
+// ─── validateFileMagicBytes ────────────────────────────────────────────────────
+
+function buildFileReq(buffer: Buffer, mimetype: string): Request {
+  return { file: { buffer, mimetype } } as unknown as Request;
+}
+
+// Buffers con magic bytes reales de cada formato
+const JPEG_BUFFER = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
+const PNG_BUFFER = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00]);
+const WEBP_BUFFER = Buffer.from([0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50, 0x56]);
+// Cabecera MZ (EXE Windows) — contenido malicioso con MIME declarado como imagen
+const EXE_BUFFER = Buffer.from([0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00]);
+
+describe('validateFileMagicBytes', () => {
+  it('acepta JPEG con magic bytes correctos', () => {
+    const next = jest.fn();
+    validateFileMagicBytes(buildFileReq(JPEG_BUFFER, 'image/jpeg'), mockRes(), next);
+    expect(next).toHaveBeenCalledWith();
+  });
+
+  it('acepta PNG con magic bytes correctos', () => {
+    const next = jest.fn();
+    validateFileMagicBytes(buildFileReq(PNG_BUFFER, 'image/png'), mockRes(), next);
+    expect(next).toHaveBeenCalledWith();
+  });
+
+  it('acepta WebP con magic bytes correctos', () => {
+    const next = jest.fn();
+    validateFileMagicBytes(buildFileReq(WEBP_BUFFER, 'image/webp'), mockRes(), next);
+    expect(next).toHaveBeenCalledWith();
+  });
+
+  it('rechaza EXE con Content-Type falsificado como image/jpeg (INVALID_FILE_CONTENT)', () => {
+    const next = jest.fn();
+    validateFileMagicBytes(buildFileReq(EXE_BUFFER, 'image/jpeg'), mockRes(), next);
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ code: 'INVALID_FILE_CONTENT' }));
+  });
+
+  it('rechaza buffer demasiado corto (menos de 4 bytes)', () => {
+    const next = jest.fn();
+    validateFileMagicBytes(buildFileReq(Buffer.from([0xff, 0xd8]), 'image/jpeg'), mockRes(), next);
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ code: 'INVALID_FILE_CONTENT' }));
+  });
+
+  it('pasa sin error si no hay req.file (sin adjunto)', () => {
+    const next = jest.fn();
+    const req = { file: undefined } as unknown as Request;
+    validateFileMagicBytes(req, mockRes(), next);
+    expect(next).toHaveBeenCalledWith();
   });
 });

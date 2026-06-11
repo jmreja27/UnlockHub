@@ -229,6 +229,10 @@ describe('GET /api/v1/users/:username', () => {
   });
 });
 
+// Buffers con magic bytes reales para pasar la validación de upload.middleware.ts
+const JPEG_MAGIC = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
+const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00]);
+
 // ─── POST /me/avatar ──────────────────────────────────────────────────────────
 
 describe('POST /api/v1/users/me/avatar', () => {
@@ -265,7 +269,7 @@ describe('POST /api/v1/users/me/avatar', () => {
     const res = await request(app)
       .post('/api/v1/users/me/avatar')
       .set('Authorization', `Bearer ${validToken}`)
-      .attach('avatar', Buffer.from('fake-png'), { filename: 'avatar.png', contentType: 'image/png' });
+      .attach('avatar', PNG_MAGIC, { filename: 'avatar.png', contentType: 'image/png' });
 
     expect(res.status).toBe(200);
     expect(res.body.avatar).toBe(updatedProfile.avatar);
@@ -279,7 +283,7 @@ describe('POST /api/v1/users/me/avatar', () => {
     const res = await request(app)
       .post('/api/v1/users/me/avatar')
       .set('Authorization', `Bearer ${validToken}`)
-      .attach('avatar', Buffer.from('fake-png'), { filename: 'avatar.png', contentType: 'image/png' });
+      .attach('avatar', JPEG_MAGIC, { filename: 'avatar.jpg', contentType: 'image/jpeg' });
 
     expect(res.status).toBe(500);
     expect(res.body.code).toBe('UPLOAD_ERROR');
@@ -322,7 +326,7 @@ describe('POST /api/v1/users/me/banner', () => {
     const res = await request(app)
       .post('/api/v1/users/me/banner')
       .set('Authorization', `Bearer ${validToken}`)
-      .attach('banner', Buffer.from('fake-png'), { filename: 'banner.png', contentType: 'image/png' });
+      .attach('banner', PNG_MAGIC, { filename: 'banner.png', contentType: 'image/png' });
 
     expect(res.status).toBe(200);
     expect(res.body.banner).toBe(updatedProfile.banner);
@@ -336,7 +340,7 @@ describe('POST /api/v1/users/me/banner', () => {
     const res = await request(app)
       .post('/api/v1/users/me/banner')
       .set('Authorization', `Bearer ${validToken}`)
-      .attach('banner', Buffer.from('fake-png'), { filename: 'banner.png', contentType: 'image/png' });
+      .attach('banner', JPEG_MAGIC, { filename: 'banner.jpg', contentType: 'image/jpeg' });
 
     expect(res.status).toBe(500);
     expect(res.body.code).toBe('UPLOAD_ERROR');

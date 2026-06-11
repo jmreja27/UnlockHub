@@ -253,7 +253,7 @@ async function computeExtendedStats(
 }
 
 export async function getWrapped(userId: string, year: number): Promise<GamingWrapped> {
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, streakDays: true } });
+  const user = await prisma.user.findUnique({ where: { id: userId, deletedAt: null }, select: { id: true, streakDays: true } });
   if (!user) throw new AppError('Usuario no encontrado.', 'USER_NOT_FOUND', 404);
 
   const currentYear = new Date().getFullYear();
@@ -311,7 +311,7 @@ export async function getMonthlyWrapped(
   month: number,
 ): Promise<GamingWrapped> {
   const user = await prisma.user.findUnique({
-    where: { id: userId },
+    where: { id: userId, deletedAt: null },
     select: { id: true, streakDays: true },
   });
   if (!user) throw new AppError('Usuario no encontrado.', 'USER_NOT_FOUND', 404);

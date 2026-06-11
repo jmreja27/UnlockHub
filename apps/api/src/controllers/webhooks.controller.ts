@@ -1,3 +1,5 @@
+import { createHash, timingSafeEqual } from 'crypto';
+
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 
@@ -43,7 +45,15 @@ export async function revenueCatWebhookHandler(req: Request, res: Response): Pro
     if (secret) {
       const authHeader = req.headers.authorization;
       const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-      if (token !== secret) {
+      // Comparación constant-time sobre hashes SHA-256 para evitar timing side-channel.
+      // Hashear primero garantiza buffers de igual longitud sin filtrar la longitud del secret.
+      const valid =
+        token !== null &&
+        timingSafeEqual(
+          createHash('sha256').update(token).digest(),
+          createHash('sha256').update(secret).digest(),
+        );
+      if (!valid) {
         logger.warn({ path: req.path }, 'Webhook RevenueCat: firma inválida');
         res.status(401).json({ error: 'Unauthorized' });
         return;

@@ -31,7 +31,7 @@ export async function getMyRankHandler(req: Request, res: Response, next: NextFu
     // Filtro de plataforma opcional: ?platform=PSN → XP del sorted set de PSN
     const platform =
       typeof req.query['platform'] === 'string'
-        ? req.query['platform'].toUpperCase()
+        ? platformSchema.parse(req.query['platform'].toUpperCase())
         : undefined;
     const result = await rankingService.getUserRank(userId, platform);
     res.json(result);

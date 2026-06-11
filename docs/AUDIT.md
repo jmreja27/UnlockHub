@@ -19,19 +19,28 @@
 
 | ID | Área | Sev | Descripción | Archivo(s) | Estado | Sesión |
 |---|---|---|---|---|---|---|
-| A1 | Seguridad API | 🟠 | CVE `ws` GHSA-58qx-3vcg-4xpx — uninitialized memory disclosure. Versión vulnerable: `ws 8.0.0–8.20.0` vía `engine.io` + `socket.io-adapter`. Runtime activo. Fix: `npm audit fix`. | `engine.io`, `socket.io-adapter` (transitivas) | 🔲 | S1 |
-| A2 | Seguridad API | 🟠 | CVE `tar` (5 CVEs HIGH: GHSA-34x7, GHSA-8qq5, GHSA-83g3, GHSA-qffp, GHSA-9ppj) — path traversal / arbitrary file write/read en node-tar ≤7.5.10. Solo se usa en `npm install` (no runtime), pero `npm audit` bloquea CI. Fix: upgrade transitivo vía `npm audit fix`. | `tar` (transitiva de herramientas) | 🔲 | S1 |
-| A3 | Seguridad API | 🟡 | `webhooks.controller.ts:46` — comparación `token !== secret` no es constant-time. Un atacante con acceso de red y alta resolución temporal podría usar timing side-channel para inferir `REVENUECAT_WEBHOOK_SECRET`. Fix: `crypto.timingSafeEqual()`. | `apps/api/src/controllers/webhooks.controller.ts:46` | 🔲 | S1 |
-| A4 | Seguridad API | 🟡 | `authenticate` middleware: el bloque `.catch()` (línea 56-63) silencia errores de BD y autoriza la request con los datos del JWT, saltándose la verificación de soft-delete GDPR. Durante un outage de PostgreSQL, cuentas eliminadas podrían seguir autenticándose. Trade-off deliberado documentado pero sin comentario en el código. | `apps/api/src/middleware/authenticate.ts:56` | 🔲 | S1 |
-| A5 | Seguridad API | 🟡 | Upload de fichero (`createUploadMiddleware`): el MIME type se valida solo desde el header `Content-Type` enviado por el cliente (`file.mimetype`), no por inspección de magic bytes del fichero real. Un cliente malicioso puede subir un EXE o script renombrándolo como `.jpg`. Fix: usar `file-type` para inspeccionar los primeros bytes. | `apps/api/src/middleware/upload.middleware.ts:12-14` | 🔲 | S1 |
-| A6 | Seguridad API | 🟡 | `getMyRankHandler`: `req.query['platform']` se usa directamente (`.toUpperCase()`) sin pasar por `platformSchema.parse()`. Cualquier string arbitrario llega al key Redis `ranking:platform:<value>`, pudiendo devolver datos vacíos o de claves inesperadas. Los demás handlers de ranking sí usan `platformSchema`. | `apps/api/src/controllers/ranking.controller.ts:33-35` | 🔲 | S1 |
-| A7 | Calidad / ESLint | 🟡 | `no-floating-promises` y `no-misused-promises` no configurados en ESLint. Requieren `parserOptions.project` (tsconfig). Sin ellos, promesas implícitamente ignoradas en route handlers y schedulers no generan error de build. | `.eslintrc.js` | 🔲 | S1 |
-| A8 | Dependencias | 🟡 | 23 vulnerabilidades moderate en el ecosistema socket.io / express: `qs` en `express`, `ws` en cadena engine.io. `npm audit fix` resuelve la mayoría sin breaking changes. | `package-lock.json` | 🔲 | S1 |
-| A9 | Móvil / ESLint | 🔵 | `useWrapped.ts:15` — `security/detect-unsafe-regex` sobre `/^\d{4}(-\d{2})?$/`. Falso positivo: no hay cuantificadores anidados ni backtracking exponencial posible. Silenciar con `// eslint-disable-next-line`. | `apps/mobile/hooks/useWrapped.ts:15` | 🔲 | S6 |
-| A10 | Limpieza | 🔵 | 7 `console.log/error` de debug dejados en código de producción mobile: `useRewardedAd.ts` (×4), `apps/mobile/app/(tabs)/profile.tsx` (×1 error), `apps/mobile/lib/api.ts` (×1 error). La regla `no-console` los marca como warnings pero no falla la build. | `apps/mobile/hooks/useRewardedAd.ts`, `apps/mobile/app/(tabs)/profile.tsx:228`, `apps/mobile/lib/api.ts:180` | 🔲 | S6 |
-| A11 | Dependencias | 🔵 | `@unlockhub/validators` declarada en `apps/mobile/package.json` pero sin ningún import en código fuente mobile (0 ocurrencias). ✅ **Eliminada en esta sesión** (chore: dead dep). | `apps/mobile/package.json` | ✅ | S0 |
-| A12 | Dependencias | 🔵 | `pino-pretty` marcada como unused por depcheck en `apps/api` pero sí se usa en `apps/api/src/lib/logger.ts` como transport de pino en modo desarrollo. Falso positivo — depcheck no analiza strings de config dinámicos. | `apps/api/src/lib/logger.ts` | 🔲 | S6 |
-| A13 | Dependencias | 🔵 | `apps/worker` muestra en depcheck muchas dependencias como "unused" (ej. `@prisma/client`, `bullmq`, `socket.io`). Falso positivo: el worker no declara sus propias deps — las importa del workspace `apps/api` via paths relativos. El Dockerfile multi-stage las incluye correctamente. | `apps/worker/package.json` | 🔲 | S6 |
+| A1 | Seguridad API | 🟠 | CVE `ws` GHSA-58qx-3vcg-4xpx — uninitialized memory disclosure. `engine.io` 6.6.7→6.6.8, `socket.io-adapter` 2.5.6→2.5.7, `ws` (ambas instancias runtime) 8.x→8.20.1. 611 tests en verde post-fix. | `engine.io`, `socket.io-adapter` (transitivas) | ✅ S1 | S1 |
+| A2 | Seguridad API | 🟠 | CVE `tar` (5 CVEs HIGH) — solo en herramientas de build, no runtime. `npm audit fix` no puede resolverlo sin `--force` (breaking). **Trade-off documentado**: `tar` solo se ejecuta en `npm install` en CI/dev; no hay superficie de ataque en producción. | `tar` (transitiva de `@mapbox/node-pre-gyp`) | 🔲 S1 | S1 |
+| A3 | Seguridad API | 🟡 | `webhooks.controller.ts:46` — comparación `token !== secret` no constant-time. **Arreglado**: `crypto.timingSafeEqual()` sobre hashes SHA-256 de ambos strings (longitud fija, sin filtrar longitud del secret). Tests: prefijo-corto y sufijo-largo añadidos. | `apps/api/src/controllers/webhooks.controller.ts:46` | ✅ S1 | S1 |
+| A4 | Seguridad API | 🟡 | `authenticate` middleware `.catch()` (línea 56): error de BD silenciado → request autorizada con datos del JWT sin comprobar soft-delete GDPR. Trade-off deliberado (disponibilidad vs seguridad en outage de BD). Mitigado por `deletedAt: null` añadido en todos los services (A14–A19). No cambiar sin confirmar — afecta flujo de auth. | `apps/api/src/middleware/authenticate.ts:56` | 🔲 Confirmar | S1 |
+| A5 | Seguridad API | 🟡 | Upload: validación de MIME solo por `Content-Type` declarado. **Arreglado**: `validateFileMagicBytes` middleware con magic bytes manuales (JPEG `FF D8 FF`, PNG `89 50 4E 47...`, WebP RIFF/WEBP). Se ejecuta tras multer cuando el buffer está disponible. Sin deps externas nuevas. 6 tests añadidos. | `apps/api/src/middleware/upload.middleware.ts` | ✅ S1 | S1 |
+| A6 | Seguridad API | 🟡 | `getMyRankHandler`: `req.query['platform']` sin validar Zod → strings arbitrarios podían llegar a Redis. **Arreglado**: `platformSchema.parse()` + test de plataforma inválida → 400. | `apps/api/src/controllers/ranking.controller.ts:33` | ✅ S1 | S1 |
+| A7 | Calidad / ESLint | 🟡 | `no-floating-promises`/`no-misused-promises` no activos. **Arreglado**: `apps/api/.eslintrc.js` + `tsconfig.eslint.json` (incluye tests). Un floating promise real encontrado: `io.close()` (devuelve `Promise<void>` en socket.io 4.8.3) → convertido a `await io.close()` en SIGTERM handler (bug de shutdown: Redis/Prisma se desconectaban antes de que Socket.io cerrase). | `apps/api/src/index.ts:24` | ✅ S1 | S1 |
+| A8 | Dependencias | 🟡 | 23 vulnerabilidades moderate resueltas con `npm audit fix` junto con A1. `express` 4.22.1→4.22.2 (fix `qs`), `brace-expansion` 5.0.5→5.0.6. | `package-lock.json` | ✅ S1 | S1 |
+| A9 | Móvil / ESLint | 🔵 | `security/detect-unsafe-regex` sobre `/^\d{4}(-\d{2})?$/` en `useWrapped.ts:15` — falso positivo (sin backtracking exponencial). | `apps/mobile/hooks/useWrapped.ts:15` | 🔲 S6 | S6 |
+| A10 | Limpieza | 🔵 | 7 `console.log/error` de debug en producción mobile. | `apps/mobile/hooks/useRewardedAd.ts`, `profile.tsx:228`, `api.ts:180` | 🔲 S6 | S6 |
+| A11 | Dependencias | 🔵 | `@unlockhub/validators` dead dep en mobile. ✅ Eliminada en S0. | `apps/mobile/package.json` | ✅ | S0 |
+| A12 | Dependencias | 🔵 | `pino-pretty` falso positivo en depcheck — sí se usa en `logger.ts`. | `apps/api/src/lib/logger.ts` | 🔲 S6 | S6 |
+| A13 | Dependencias | 🔵 | `apps/worker` deps "unused" en depcheck — falso positivo, importa desde workspace. | `apps/worker/package.json` | 🔲 S6 | S6 |
+| A14 | GDPR / AuthZ | 🟡 | `subscription.service.ts` (5 funciones): `prisma.user.findUnique({ where: { id: userId } })` sin `deletedAt: null`. Usuario soft-deleted con JWT válido + DB error en authenticate podría activar/cancelar subscripciones. **Arreglado**: `deletedAt: null` en las 5 queries. | `apps/api/src/services/subscription.service.ts:34,84,126,171,258` | ✅ S1 | S1 |
+| A15 | GDPR / Rankings | 🟡 | `seedRankingsFromDb()`: `findMany` sin `deletedAt: null` → usuarios eliminados podrían reconstituirse en Redis rankings tras disaster recovery. **Arreglado**: `deletedAt: null` añadido. | `apps/api/src/services/ranking.service.ts:163` | ✅ S1 | S1 |
+| A16 | GDPR / Puntos | 🟡 | `awardPoints()`: `findUnique` sin `deletedAt: null`. **Arreglado**: defense-in-depth para ruta webhook. | `apps/api/src/services/points.service.ts:24` | ✅ S1 | S1 |
+| A17 | GDPR / Wrapped | 🟡 | `getWrapped()` y `getMonthlyWrapped()`: `findUnique` sin `deletedAt: null`. **Arreglado**. | `apps/api/src/services/wrapped.service.ts:256,313` | ✅ S1 | S1 |
+| A18 | GDPR / Stats | 🟡 | `getMyStats()`: `findUnique` sin `deletedAt: null`. **Arreglado**. | `apps/api/src/services/stats.service.ts:54` | ✅ S1 | S1 |
+| A19 | GDPR / Profile | 🟡 | `getProfile()` (endpoint `/me`): `findUnique` sin `deletedAt: null` — usuario soft-deleted podría recibir su propio perfil durante DB outage en auth. **Arreglado**. | `apps/api/src/services/user.service.ts:149` | ✅ S1 | S1 |
+| A20 | Seguridad API | 🟡 | `forgotPassword`: diferencia de latencia según email exista o no (user enumeration timing). Mitigado por `authRateLimiter` (10 req/15min). **Propuesta**: min-delay de 500ms constante en todos los casos para normalizar tiempo de respuesta. Dejar para revisar — añade latencia a todos los usuarios. | `apps/api/src/services/auth.service.ts:106` | 🔲 Revisar | S1 |
+| A21 | Rate limiting | 🔵 | `POST /sync/:platform` solo tiene `globalRateLimiter` (500/15min por IP). Application-level cooldown via Redis SET NX + contador diario ya existe y mitiga el riesgo. **Propuesta**: añadir `rateLimit` por userId (ej. 20 req/min) como capa HTTP adicional. Bajo riesgo actual. | `apps/api/src/routes/sync.routes.ts:20` | 🔲 Revisar | S1 |
+| A22 | Sync / Lógica | 🔵 | `triggerExpressSync()`: si el lock Redis no se adquiere (otro sync en curso), el express sync se descarta silenciosamente sin encolar full sync. Impacto: usuario que vincula 2 plataformas en <25s podría no ver los logros de la segunda hasta el sync automático. No es vulnerabilidad de seguridad — UX. **Propuesta**: fallback a `queueInitialSync()` cuando el lock falla. | `apps/api/src/services/sync.service.ts:299` | 🔲 Revisar | S1 |
 
 ---
 
@@ -50,6 +59,16 @@
 
 > Las 2 vulnerabilidades HIGH (raíz, api, worker) son `tar` path traversal y `ws` uninitialized memory.  
 > Las 19 moderate de mobile son ws/engine.io-client (mismo paquete, distinto hoisting).
+
+### npm audit — post S1
+
+| Workspace | Crítico | Alto | Moderado | Bajo | Total | Cambio |
+|---|---|---|---|---|---|---|
+| Raíz (hoisted) | 0 | 1 | 0 | 0 | ~18 | ws/qs/express resueltos ✅ |
+| `apps/api` | 0 | 1 | 0 | 0 | ~4 | ws runtime 8.x→8.20.1 ✅ |
+| Residual HIGH | — | `tar` | — | — | — | Solo herramienta build, no runtime |
+
+> `ws` runtime (`engine.io` + `socket.io-adapter`) en 8.20.1 — fuera del rango CVE (8.0.0–8.20.0).
 
 ### Ciclos de import
 
@@ -72,10 +91,17 @@ npx madge --circular --extensions ts,tsx apps/
 
 | Workspace | Tests | Resultado |
 |---|---|---|
-| `apps/api` | 611 | ✅ |
-| `apps/mobile` | 387 | ✅ |
+| `apps/api` | 611 | ✅ (línea base pre-S1) |
+| `apps/mobile` | 387 | ✅ (línea base pre-S1) |
 
 > Ambas suites finalizan con "Force exiting Jest" por timers/sockets abiertos — no afecta a los resultados. Pendiente investigar (A14, S6).
+
+### Tests — post S1
+
+| Workspace | Tests | Resultado | Tests nuevos |
+|---|---|---|---|
+| `apps/api` | 620 | ✅ | webhook ×2, magic-bytes ×6, ranking ×1 = +9 |
+| `apps/mobile` | 387 | ✅ | 0 |
 
 ### ESLint (antes de esta sesión)
 
@@ -90,6 +116,12 @@ npx madge --circular --extensions ts,tsx apps/
 |---|---|---|
 | `apps/api/src` | 0 | 1 (`security/detect-possible-timing-attacks` en webhooks.controller.ts — ver A3) |
 | `apps/mobile` (app/hooks/lib) | 0 | 1 (`security/detect-unsafe-regex` en useWrapped.ts — falso positivo, ver A9) |
+
+### ESLint — post S1 (con no-floating-promises activo en apps/api)
+
+| Área | Errores | Warnings |
+|---|---|---|
+| `apps/api/src` | 0 | 0 |
 
 ### console.log en producción
 
@@ -121,14 +153,31 @@ como palabra, no como marcador de tarea). 0 FIXME. No hay deuda pendiente de có
 | `apps/api` | `pino-pretty` (falso positivo) | Sin acción |
 | `apps/worker` | Múltiples (falsos positivos — imports de api workspace) | Sin acción |
 
+### Seguridad — resultados barrido S1
+
+| Check | Resultado |
+|---|---|
+| IDOR / ownership check en friendship | ✅ Correcto — senderId/receiverId verificados |
+| IDOR / notifications | ✅ Correcto — `notification.userId !== userId` → 403 |
+| IDOR / guides | ✅ Correcto — autor verificado en update/delete |
+| authenticateOptional misuse | ✅ No detectado — solo en rutas públicas con lógica de privacidad |
+| Zod en todas las mutaciones | ✅ Correcto — POST/PATCH/DELETE validan con parse() |
+| Exposición passwordHash/tokenHash | ✅ No expuesto — mapUser excluye campos sensibles |
+| CORS no permisivo | ✅ `origin: env var []` — rechaza todo si no hay CORS_ORIGIN |
+| Helmet | ✅ Activo |
+| Secretos en logs | ✅ Sin hallazgos |
+| Stack al cliente | ✅ errorHandler nunca expone stack |
+| Refresh token rotation | ✅ Correcto — revocación en cada refresh |
+| GDPR soft-delete en search | ✅ `deletedAt: null` presente |
+
 ---
 
 ## Plan de sesiones
 
 | Sesión | Foco | Hallazgos asignados |
 |---|---|---|
-| **S0** | Setup tooling + línea base (esta sesión) | A11 ✅ |
-| **S1** | Seguridad backend | A1, A2, A3, A4, A5, A6, A7, A8 |
+| **S0** | Setup tooling + línea base | A11 ✅ |
+| **S1** | Seguridad backend | A1 ✅, A2 🔲, A3 ✅, A4 🔲, A5 ✅, A6 ✅, A7 ✅, A8 ✅, A14–A19 ✅, A20–A22 🔲 |
 | **S2** | Sync / integraciones (PSN, Steam, RA, worker) | — (pendiente análisis profundo) |
 | **S3** | Performance backend (Redis, PostgreSQL, queries) | — (pendiente análisis profundo) |
 | **S4** | Mobile — memory leaks, fluidez, Socket.io | — (pendiente análisis profundo) |

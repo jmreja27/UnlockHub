@@ -21,7 +21,7 @@ export async function awardPoints(
   amount: number,
   reason: PointReason,
 ): Promise<void> {
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+  const user = await prisma.user.findUnique({ where: { id: userId, deletedAt: null }, select: { id: true } });
   if (!user) throw new AppError('Usuario no encontrado.', 'USER_NOT_FOUND', 404);
 
   await prisma.userPoint.create({ data: { userId, amount, reason } });
