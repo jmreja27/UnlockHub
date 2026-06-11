@@ -113,14 +113,15 @@
 | T72 | ✅ Fix bannerMutation — actualiza store sesión en tiempo real tras upload | Sesión 72 |
 | T73 | ✅ Fix loginHandler/meHandler — devuelven perfil completo con avatar, banner y todos los campos | Sesión 72 — commit 01e00f9 |
 | T74 | ✅ Fix banner no se actualizaba en tiempo real tras subida — bannerMutation.onSuccess ahora actualiza el store Zustand + invalida queryKeys.me(), simétrico a avatarMutation | Sesión 73 |
-| T75 | CVEs ws + tar — ejecutar `npm audit fix` en raíz y workspaces (A1/A2/A8) | 🔲 S1 — `ws` (GHSA-58qx) es runtime vía socket.io; `tar` es build-time. `npm audit fix` resuelve sin breaking changes. Verificar que socket.io sigue funcionando tras el upgrade. |
-| T76 | `webhooks.controller.ts:46` — `token !== secret` → `crypto.timingSafeEqual()` (A3) | 🔲 S1 — Timing side-channel en comparación de webhook secret. Fix de 3 líneas con `Buffer.from()` + `crypto.timingSafeEqual()`. |
-| T77 | `getMyRankHandler` — validar `platform` query con `platformSchema.parse()` (A6) | 🔲 S1 — El parámetro llega sin validación Zod, a diferencia del resto de handlers de ranking. Fix puntual de 2 líneas. |
-| T78 | Upload middleware — validación magic bytes además de MIME type (A5) | 🔲 S1 — `file.mimetype` es controlable por el cliente. Añadir inspección de primeros bytes con `file-type` npm antes de aceptar el buffer. |
-| T79 | `no-floating-promises` / `no-misused-promises` en ESLint (A7) | 🔲 S1 — Requiere `parserOptions.project` apuntando al tsconfig de cada workspace. Añadir configuración y corregir los warnings que genere. |
+| T75 | ✅ CVEs ws + tar — `npm audit fix` (A1/A8) | ✅ S1 — ws runtime 8.x→8.20.1 (engine.io 6.6.7→6.6.8, socket.io-adapter 2.5.6→2.5.7); express 4.22.1→4.22.2, qs y brace-expansion bumpeados. Socket.io verificado post-upgrade. tar (A2) no resuelto con --force — diferido a S6. |
+| T76 | ✅ `webhooks.controller.ts:46` — `token !== secret` → `crypto.timingSafeEqual()` (A3) | ✅ S1 — `Buffer.from(sha256(a))` vs `Buffer.from(sha256(b))` con `crypto.timingSafeEqual()`. Tests: prefijo-corto y sufijo-largo añadidos. |
+| T77 | ✅ `getMyRankHandler` — validar `platform` query con `platformSchema.parse()` (A6) | ✅ S1 — `platformSchema.parse(req.query['platform'])` + test plataforma inválida → 400. |
+| T78 | ✅ Upload middleware — validación magic bytes además de MIME type (A5) | ✅ S1 — `validateFileMagicBytes` con firmas manuales JPEG `FF D8 FF`, PNG `89 50 4E 47 0D 0A 1A 0A`, WebP `RIFF/WEBP`. Sin deps externas nuevas. 6 tests añadidos. |
+| T79 | ✅ `no-floating-promises` / `no-misused-promises` en ESLint (A7) | ✅ S1 — `apps/api/.eslintrc.js` + `tsconfig.eslint.json` (incluye tests). Fix real encontrado: `io.close()` (socket.io 4.8.3 devuelve `Promise<void>`) → `await io.close()` en SIGTERM handler. |
 | T80 | Eliminar 7 `console.log` debug de producción en móvil (A10) | 🔲 S6 — `useRewardedAd.ts` (×4), `profile.tsx` (×1), `api.ts` (×1). Usar `logger` (pino) o eliminar. |
 | T81 | Silenciar falso positivo `security/detect-unsafe-regex` en `useWrapped.ts:15` (A9) | 🔲 S6 — Añadir `// eslint-disable-next-line security/detect-unsafe-regex` con comentario de justificación. |
-| T82 | `authenticate` middleware: documentar el trade-off del catch bypass (A4) | 🔲 S1 — Añadir comentario explícito sobre el riesgo aceptado y considerar logging estructurado del evento para trazabilidad. |
+| T82 | `authenticate` middleware: documentar el trade-off del catch bypass (A4) | 🔲 S1 — Añadir comentario explícito sobre el riesgo aceptado y logging estructurado del evento para trazabilidad. |
+| T83 | ✅ Auditoría S1 — Seguridad backend completa | ✅ A1/A3/A5/A6/A7/A8/A14-A19 resueltos. A20 descartado (mitigado por authRateLimiter). A4/A21 ⚙️ pendientes de verificación. A2 diferido a S6. Ver `docs/AUDIT.md` para detalle completo. Tests: 620 API (+9) · 387 mobile · 0 TS/lint. |
 
 ### 🟢 Features
 

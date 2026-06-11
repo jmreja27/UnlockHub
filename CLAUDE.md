@@ -702,6 +702,10 @@ cd apps/api && npx ts-node ../../scripts/rotate-encryption-key.ts --old-key=<VIE
 - **CI**: `npm audit --audit-level=high` en cada PR.
 - **Verificación de edad**: en registro, validar que `birthDate` corresponde a mayores de 16 años.
 - **Rutas admin**: protegidas por `ADMIN_SECRET` bearer token (no por role en JWT — ver Decisiones tomadas).
+- **Magic bytes en uploads**: validar primeros bytes del buffer con `validateFileMagicBytes` (JPEG `FF D8 FF`, PNG `89 50 4E 47...`, WebP `RIFF/WEBP`) — nunca confiar solo en `Content-Type` declarado por el cliente.
+- **Comparación constant-time**: usar `crypto.timingSafeEqual()` sobre hashes SHA-256 para comparar secrets de webhooks o cualquier token secreto — nunca `===` ni `!==` directo.
+- **`deletedAt: null` en queries de lectura**: cualquier `findUnique` / `findMany` sobre `User` en un service debe incluir `deletedAt: null` en el `where` como defensa GDPR — no delegar la verificación exclusivamente al middleware `authenticate`.
+- **`no-floating-promises` activo en `apps/api`**: configurado en `.eslintrc.js` + `tsconfig.eslint.json`; toda promesa devuelta por Express handlers o lifecycle hooks (SIGTERM) debe ser awaited para evitar cierres desordenados.
 
 ---
 
