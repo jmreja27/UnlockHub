@@ -196,7 +196,6 @@ export default function ProfileScreen() {
         Alert.alert(t('profile.avatar_permission_title'), t('profile.avatar_permission_message'));
         return;
       }
-      console.log('[BANNER] abriendo picker');
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
@@ -205,7 +204,6 @@ export default function ProfileScreen() {
       });
       if (result.canceled || !result.assets[0]) return;
       const uri = result.assets[0].uri;
-      console.log('[BANNER] uri obtenida:', uri);
       const filename = uri.split('/').pop() ?? 'banner.jpg';
       const ext = filename.split('.').pop()?.toLowerCase() ?? 'jpg';
       const mimeMap: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
@@ -213,12 +211,18 @@ export default function ProfileScreen() {
       const form = new FormData();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       form.append('banner', { uri, name: filename, type } as any);
-      console.log('[BANNER] enviando FormData', { uri, filename, type });
-      return uploadFile('/api/v1/users/me/banner', form, getAccessToken());
+      return uploadFile<{ banner: string }>('/api/v1/users/me/banner', form, getAccessToken());
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.profile() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.me() });
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (data?.banner) {
+        const current = useSessionStore.getState().user;
+        if (current) {
+          useSessionStore.getState().setUser({ ...current, banner: data.banner });
+        }
+      }
     },
     onError: (error) => {
       console.error('[BANNER] error:', error);

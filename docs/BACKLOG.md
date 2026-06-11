@@ -112,6 +112,7 @@
 | T71 | ✅ Fix ruta rewarded-ad — '/api/v1/points/rewarded-ad' → '/api/v1/users/me/points/rewarded-ad' | Sesión 72 — commit 7023e7d |
 | T72 | ✅ Fix bannerMutation — actualiza store sesión en tiempo real tras upload | Sesión 72 |
 | T73 | ✅ Fix loginHandler/meHandler — devuelven perfil completo con avatar, banner y todos los campos | Sesión 72 — commit 01e00f9 |
+| T74 | ✅ Fix banner no se actualizaba en tiempo real tras subida — bannerMutation.onSuccess ahora actualiza el store Zustand + invalida queryKeys.me(), simétrico a avatarMutation | Sesión 73 |
 
 ### 🟢 Features
 

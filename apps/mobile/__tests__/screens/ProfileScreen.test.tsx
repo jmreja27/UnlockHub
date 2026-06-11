@@ -445,6 +445,66 @@ describe('ProfileScreen', () => {
         expect(keys).toContain('my-points-total');
       });
     });
+
+    describe('bannerMutation', () => {
+      const NEW_BANNER_URL = 'https://res.cloudinary.com/new-banner.jpg';
+
+      beforeEach(() => {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const ImagePickerMock = require('expo-image-picker') as {
+          requestMediaLibraryPermissionsAsync: jest.Mock;
+          launchImageLibraryAsync: jest.Mock;
+        };
+        ImagePickerMock.requestMediaLibraryPermissionsAsync.mockResolvedValue({ status: 'granted' });
+        ImagePickerMock.launchImageLibraryAsync.mockResolvedValue({
+          canceled: false,
+          assets: [{ uri: 'file:///tmp/banner.jpg' }],
+        });
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { uploadFile } = require('../../lib/api') as { uploadFile: jest.Mock };
+        uploadFile.mockResolvedValue({ banner: NEW_BANNER_URL });
+        // getState necesario para que onSuccess pueda actualizar el store sin lanzar
+        (useSessionStore as unknown as { getState: jest.Mock }).getState = jest.fn().mockReturnValue({
+          user: baseUser,
+          setUser: jest.fn(),
+        });
+      });
+
+      it('T74: onSuccess invalida queryKeys.me() igual que avatarMutation', async () => {
+        const { client, getByLabelText } = renderProfile();
+        const invalidateSpy = jest.spyOn(client, 'invalidateQueries');
+
+        await waitFor(() => getByLabelText('profile.change_banner'));
+        fireEvent.press(getByLabelText('profile.change_banner'));
+
+        await waitFor(() => {
+          const invalidatedKeys = invalidateSpy.mock.calls.map(
+            (call) => (call[0] as { queryKey?: string[] })?.queryKey?.[0],
+          );
+          expect(invalidatedKeys).toContain('me');
+        });
+      });
+
+      it('T74: onSuccess actualiza el store de Zustand con la URL del banner devuelta por el servidor', async () => {
+        const setUserMock = jest.fn();
+        // Sobreescribir el getState del beforeEach con un setUser espía
+        (useSessionStore as unknown as { getState: jest.Mock }).getState = jest.fn().mockReturnValue({
+          user: { ...baseUser, banner: 'https://old.banner.jpg' },
+          setUser: setUserMock,
+        });
+
+        const { getByLabelText } = renderProfile();
+
+        await waitFor(() => getByLabelText('profile.change_banner'));
+        fireEvent.press(getByLabelText('profile.change_banner'));
+
+        await waitFor(() => {
+          expect(setUserMock).toHaveBeenCalledWith(
+            expect.objectContaining({ banner: NEW_BANNER_URL }),
+          );
+        });
+      });
+    });
   });
 });
 
