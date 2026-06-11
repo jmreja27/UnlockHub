@@ -108,6 +108,10 @@
 | T64 | ✅ BUG-D fix orden biblioteca usuario público — lastActivityAt DESC | Sesión 70b — `getMyGames` ordena por `lastActivityAt DESC` (null last) en lugar de alfabético. La biblioteca propia re-ordena en cliente; la pública mostraba juegos en orden incorrecto. Test actualizado. |
 | T65 | ✅ Auditoría calidad apps/mobile — 17 fixes (socket leaks, i18n duplicados, param guards, AsyncStorage, queryKeys, SafeAreaView, AdMob events) | Sesión 70c — commit dea6cbd |
 | T69 | ✅ Segunda auditoría completa apps/mobile — 17 fixes AdMob lifecycle, i18n PremiumBanner, queryKeys rankings, socket guards, AsyncStorage timing | Sesión 71 — commit 0503d55 |
+| T70 | ✅ Fix uploadFile — XMLHttpRequest para multipart en React Native (avatar y banner) | Sesión 72 — commit uploadFile |
+| T71 | ✅ Fix ruta rewarded-ad — '/api/v1/points/rewarded-ad' → '/api/v1/users/me/points/rewarded-ad' | Sesión 72 — commit 7023e7d |
+| T72 | ✅ Fix bannerMutation — actualiza store sesión en tiempo real tras upload | Sesión 72 |
+| T73 | ✅ Fix loginHandler/meHandler — devuelven perfil completo con avatar, banner y todos los campos | Sesión 72 — commit 01e00f9 |
 
 ### 🟢 Features
 
@@ -154,7 +158,7 @@
 | PL17 | ✅ Caché Redis para endpoints F21 (`/users/:username/games` y `/users/:username/games/:gameId/achievements`) | TTL 5 min, invalidación en sync completion + cambio de profileVisibility. `invalidateUserPublicCache()` exportada. |
 | PL18 | ✅ Bundle optimization: @expo/vector-icons imports directos | 11 archivos migrados de barrel `{ Ionicons } from '@expo/vector-icons'` a `Ionicons from '@expo/vector-icons/Ionicons'` — elimina glyph maps de FontAwesome (96 menciones), MaterialIcons, AntDesign, Feather, etc. Sentry @sentry-internal/replay+feedback: incluidos por @sentry/browser, no eliminables sin upgrade de SDK — revisar en Fase 4. |
 | PL15 | ✅ Merge develop → main antes de promover a Producción | ✅ Completado sesión 59 — `git merge --no-ff develop` + `git tag v1.0.0` + push. main refleja exactamente el código de producción. |
-| PL19 | ⚙️ Smoke tests realizados — 4 bugs detectados y corregidos (T61-T64). Re-verificar con nueva build antes de promover a Producción. | Bugs corregidos: BUG-A (caché Redis tras unlink), BUG-B (edge-to-edge user-game), BUG-C (edge-to-edge profile tab), BUG-D (orden biblioteca usuario público). Pendiente: build nueva + re-verificar login + registro + sync Steam/RA/PSN + biblioteca + rankings + perfil público + Wrapped. Confirmar que no hay errores 5xx en Railway logs. Auditoría completa realizada sesión 70c — 23 issues detectados y corregidos. v1.2.4 en preparación — segunda auditoría completa aplicada, 0 errores TS/lint, 989/989 tests. Pendiente verificar: avatar/banner upload, rewarded ad puntos, edge-to-edge BUG-B user-game. |
+| PL19 | ⚙️ Smoke tests realizados — 4 bugs detectados y corregidos (T61-T64). Re-verificar con nueva build antes de promover a Producción. | Bugs corregidos: BUG-A (caché Redis tras unlink), BUG-B (edge-to-edge user-game), BUG-C (edge-to-edge profile tab), BUG-D (orden biblioteca usuario público). Pendiente: build nueva + re-verificar login + registro + sync Steam/RA/PSN + biblioteca + rankings + perfil público + Wrapped. Confirmar que no hay errores 5xx en Railway logs. Auditoría completa realizada sesión 70c — 23 issues detectados y corregidos. v1.2.4 en preparación — segunda auditoría completa aplicada, 0 errores TS/lint, 989/989 tests. Sesión 72: avatar upload ✅, banner upload ✅, rewarded ad puntos ✅ (ruta incorrecta corregida), login con avatar/banner ✅. Pendiente verificar en build de producción: edge-to-edge BUG-B user-game. |
 
 ### 🎨 Sistema de cosméticos y economía de puntos
 
