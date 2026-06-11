@@ -113,6 +113,14 @@
 | T72 | ✅ Fix bannerMutation — actualiza store sesión en tiempo real tras upload | Sesión 72 |
 | T73 | ✅ Fix loginHandler/meHandler — devuelven perfil completo con avatar, banner y todos los campos | Sesión 72 — commit 01e00f9 |
 | T74 | ✅ Fix banner no se actualizaba en tiempo real tras subida — bannerMutation.onSuccess ahora actualiza el store Zustand + invalida queryKeys.me(), simétrico a avatarMutation | Sesión 73 |
+| T75 | CVEs ws + tar — ejecutar `npm audit fix` en raíz y workspaces (A1/A2/A8) | 🔲 S1 — `ws` (GHSA-58qx) es runtime vía socket.io; `tar` es build-time. `npm audit fix` resuelve sin breaking changes. Verificar que socket.io sigue funcionando tras el upgrade. |
+| T76 | `webhooks.controller.ts:46` — `token !== secret` → `crypto.timingSafeEqual()` (A3) | 🔲 S1 — Timing side-channel en comparación de webhook secret. Fix de 3 líneas con `Buffer.from()` + `crypto.timingSafeEqual()`. |
+| T77 | `getMyRankHandler` — validar `platform` query con `platformSchema.parse()` (A6) | 🔲 S1 — El parámetro llega sin validación Zod, a diferencia del resto de handlers de ranking. Fix puntual de 2 líneas. |
+| T78 | Upload middleware — validación magic bytes además de MIME type (A5) | 🔲 S1 — `file.mimetype` es controlable por el cliente. Añadir inspección de primeros bytes con `file-type` npm antes de aceptar el buffer. |
+| T79 | `no-floating-promises` / `no-misused-promises` en ESLint (A7) | 🔲 S1 — Requiere `parserOptions.project` apuntando al tsconfig de cada workspace. Añadir configuración y corregir los warnings que genere. |
+| T80 | Eliminar 7 `console.log` debug de producción en móvil (A10) | 🔲 S6 — `useRewardedAd.ts` (×4), `profile.tsx` (×1), `api.ts` (×1). Usar `logger` (pino) o eliminar. |
+| T81 | Silenciar falso positivo `security/detect-unsafe-regex` en `useWrapped.ts:15` (A9) | 🔲 S6 — Añadir `// eslint-disable-next-line security/detect-unsafe-regex` con comentario de justificación. |
+| T82 | `authenticate` middleware: documentar el trade-off del catch bypass (A4) | 🔲 S1 — Añadir comentario explícito sobre el riesgo aceptado y considerar logging estructurado del evento para trazabilidad. |
 
 ### 🟢 Features
 

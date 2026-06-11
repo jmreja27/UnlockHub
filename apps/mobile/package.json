@@ -19,7 +19,6 @@
     "@shopify/flash-list": "2.0.2",
     "@tanstack/react-query": "^5.56.2",
     "@unlockhub/types": "*",
-    "@unlockhub/validators": "*",
     "expo": "^55",
     "expo-auth-session": "~55.0.16",
     "expo-build-properties": "~55.0.14",

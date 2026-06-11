@@ -1,7 +1,7 @@
 module.exports = {
   root: true,
   parser: '@typescript-eslint/parser',
-  plugins: ['@typescript-eslint', 'react', 'react-hooks', 'import'],
+  plugins: ['@typescript-eslint', 'react', 'react-hooks', 'import', 'security'],
   extends: [
     'eslint:recommended',
     'plugin:@typescript-eslint/recommended',
@@ -26,6 +26,9 @@ module.exports = {
     ],
     'react/react-in-jsx-scope': 'off',
     'no-console': ['warn', { allow: ['warn', 'error'] }],
+    'security/detect-unsafe-regex': 'warn',
+    'security/detect-possible-timing-attacks': 'warn',
+    'security/detect-child-process': 'warn',
   },
   settings: {
     react: {
