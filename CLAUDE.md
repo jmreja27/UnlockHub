@@ -1155,6 +1155,16 @@ Ver [docs/DECISIONS.md](docs/DECISIONS.md)
 
 ---
 
+## Flujo de trabajo con Claude
+
+- Proyecto de Claude 'UnlockHub' sincronizado con los docs del repo (CLAUDE.md, BACKLOG.md, DECISIONS.md) vía integración GitHub.
+- La sincronización NO es automática: pulsar 'Sync now' en el proyecto al inicio de cada sesión si se han pusheado cambios en los docs.
+- Prompts a Claude Code siempre empiezan con 'Lee el CLAUDE.md completo antes de hacer cualquier cambio.'
+- Flujo de release: develop → main con --no-ff + tag vX.Y.Z. EAS version source: remote (versionCode gestionado por EAS, ignora app.json).
+- Builds de diagnóstico: usar build local (docs/BUILD_LOCAL.md) para no consumir cuota EAS. Build local apunta a producción cambiando EXPO_PUBLIC_API_URL en .env.local.
+
+---
+
 ## Roadmap
 
 | Fase | Contenido | Estado |
@@ -1206,7 +1216,7 @@ Ver [docs/BACKLOG.md](docs/BACKLOG.md)
 
 ## Última revisión de código
 
-**Fecha**: 2026-06-11 (sesión 72) — Diagnóstico y fix de bugs en producción vía build local con logs. Fix uploadFile: XMLHttpRequest en lugar de fetch para multipart en React Native (avatar y banner). Fix ruta rewarded-ad: '/api/v1/points/rewarded-ad' → '/api/v1/users/me/points/rewarded-ad' (ruta incorrecta desde el inicio). Fix bannerMutation.onSuccess: actualiza store de sesión en tiempo real con nuevo banner. Fix loginHandler: añadidos avatar, banner, streakDays, streakShields, countryCode, profileVisibility, role a la respuesta. Fix meHandler: ahora devuelve perfil completo via userService.getProfile(). Tests: 385 mobile + 611 API. 0 errores TS/lint.
+**Fecha**: 2026-06-11 (sesión 72) — Diagnóstico y fix de bugs en producción vía build local con logs de Metro. Fix uploadFile: XMLHttpRequest en lugar de fetch para multipart en React Native (fetch no serializa {uri,name,type} correctamente). Fix ruta rewarded-ad: '/api/v1/points/rewarded-ad' → '/api/v1/users/me/points/rewarded-ad' (ruta incorrecta desde el inicio, causaba 404). Fix bannerMutation.onSuccess: actualiza store de sesión en tiempo real con nuevo banner (antes requería reiniciar app). Fix loginHandler: añadidos avatar, banner, streakDays, streakShields, countryCode, profileVisibility, role a la respuesta. Fix meHandler: ahora devuelve perfil completo via userService.getProfile() en lugar de solo {id,email,isPremium}. Causa raíz del banner/avatar perdido tras logout: la respuesta de login no incluía avatar/banner. Tests: 385 mobile + 611 API. 0 errores TS/lint.
 
 **Fecha**: 2026-06-10 (sesión 71) — Segunda auditoría completa apps/mobile en dos prompts. Prompt 1 (crashes): ALTO-1 useRewardedAd listener CLOSED leak en showForReward → showForRewardUnsubRef + inFlightRef guard doble llamada. ALTO-2 isReady como useState reactivo. MEDIO-1 useWrappedInterstitial cooldown guardado antes de show() → movido dentro del callback + useRef para timeout. MEDIO-2 useCompletedGamesInterstitial IDs guardados antes de show() → flag cancelled + solo guardar si show() devolvió true. BAJO-1 ComingSoon edges prop opcional. Prompt 2 (calidad): CRÍTICO 5 claves i18n faltantes en PremiumBanner (active_lifetime, active_lifetime_desc, _aria×3). ALTO useRankings queryKeys locales migradas a lib/queryKeys.ts. ALTO useFeed flag unmounted en doConnect. ALTO reset-password guard token. ALTO profile.tsx AppState listener cooldown rewarded + guard data?.avatar + invalida queryKeys.me(). ALTO PremiumBanner expiresAt null guard. MEDIO useInterstitialAd show() retorna boolean. MEDIO useSyncProgress flag unmounted en grace timer. BAJO useSubscription cancelled flag. BAJO ComingSoon challenges edges. Tests: 378 mobile + 611 API. 0 errores TS/lint.
 
