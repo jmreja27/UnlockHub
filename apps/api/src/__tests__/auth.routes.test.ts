@@ -2,6 +2,7 @@
 // Mockea los servicios para aislar la capa de controlador+rutas
 
 jest.mock('../services/auth.service');
+jest.mock('../services/user.service');
 jest.mock('../lib/redis', () => ({ redis: { on: jest.fn() } }));
 jest.mock('../middleware/rateLimiter', () => ({
   globalRateLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),
@@ -18,11 +19,13 @@ jest.mock('../lib/prisma', () => ({
 import request from 'supertest';
 
 import * as authService from '../services/auth.service';
+import * as userService from '../services/user.service';
 import app from '../app';
 import { signAccessToken } from '../lib/jwt';
 import { prisma } from '../lib/prisma';
 
 const mockAuthService = authService as jest.Mocked<typeof authService>;
+const mockUserService = userService as jest.Mocked<typeof userService>;
 const mockUserFindUnique = prisma.user.findUnique as jest.Mock;
 
 const baseUser = {
@@ -189,7 +192,27 @@ describe('GET /api/v1/auth/me', () => {
     expect(res.status).toBe(401);
   });
 
-  it('200 con el payload del usuario cuando el token es válido en Authorization header', async () => {
+  it('200 con el perfil completo cuando el token es válido en Authorization header', async () => {
+    mockUserService.getProfile.mockResolvedValue({
+      id: 'user-1',
+      username: 'testuser',
+      email: 'test@example.com',
+      isPremium: false,
+      level: 1,
+      xp: 0,
+      streakDays: 0,
+      streakShields: 0,
+      countryCode: null,
+      avatar: null,
+      banner: null,
+      bio: null,
+      premiumUntil: null,
+      lastSyncAt: null,
+      profileVisibility: 'PUBLIC',
+      createdAt: new Date().toISOString(),
+      platformAccounts: [],
+    } as never);
+
     const token = signAccessToken({ sub: 'user-1', email: 'test@example.com', isPremium: false });
 
     const res = await request(app)
@@ -197,7 +220,7 @@ describe('GET /api/v1/auth/me', () => {
       .set('Authorization', `Bearer ${token}`);
 
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ id: 'user-1', email: 'test@example.com' });
+    expect(res.body).toMatchObject({ id: 'user-1', email: 'test@example.com', platformAccounts: [] });
   });
 });
 
