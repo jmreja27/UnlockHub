@@ -176,13 +176,15 @@ export async function uploadFile<T = unknown>(
           body: xhr.responseText,
           retryAfter: xhr.getResponseHeader('Retry-After'),
         });
-      xhr.onerror = () =>
+      xhr.onerror = () => {
+        console.error('[UPLOAD] error:', JSON.stringify({ status: xhr.status, response: xhr.responseText }));
         reject(
           new ApiRequestError(
             { error: 'Error de red. Por favor, inténtalo de nuevo.', code: 'NETWORK_ERROR' },
             0,
           ),
         );
+      };
 
       xhr.send(formData);
     });
