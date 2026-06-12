@@ -766,7 +766,7 @@ cd apps/api && npx ts-node ../../scripts/rotate-encryption-key.ts --old-key=<VIE
 ### Backend
 - Rankings desde Redis Sorted Sets — nunca desde PostgreSQL en tiempo real.
 - Índices en PostgreSQL en todas las FK y columnas frecuentes en `WHERE`/`ORDER BY`.
-- **Índices nuevos en tablas grandes con `CONCURRENTLY`**: `prisma migrate` ejecuta en transacción y no soporta `CREATE INDEX CONCURRENTLY`. Para tablas grandes (`UserAchievement`, `ActivityEvent`, `Friendship`), crear una migración vacía y aplicar el índice manualmente en ventana de bajo tráfico con `CREATE INDEX CONCURRENTLY`; verificar con `EXPLAIN ANALYZE` antes y después. Nunca incluir `CONCURRENTLY` dentro de un archivo de migración Prisma — falla con error de transacción.
+- **Índices nuevos en tablas grandes con `CONCURRENTLY`** — patrón obligatorio (ver INC-01 en AUDIT.md): (1) Crear archivo de migración con la sentencia `CREATE INDEX CONCURRENTLY IF NOT EXISTS` como documentación, pero **no** ejecutarlo via `migrate deploy` — Prisma 5.x envuelve toda migración en `BEGIN…COMMIT` independientemente del número de sentencias; `CONCURRENTLY` lanza código 25001 dentro de transacción y deja la BD en P3009 (bloqueada). (2) Aplicar el índice fuera de transacción: `npx prisma db execute --file <migration.sql>` (desde `apps/api/`). (3) Verificar `indisvalid=true` en `pg_indexes` antes de continuar; si `indisvalid=false`, el índice es inútil — `DROP INDEX CONCURRENTLY` y reintentar. (4) Marcar sin ejecutar: `npx prisma migrate resolve --applied <nombre>` (desde `apps/api/`). (5) Verificar `npx prisma migrate status` → 0 pendientes antes de push/redeploy. Aplicar un índice por migración; crear los archivos de docs separados por índice.
 - **Paginación obligatoria** en todos los endpoints de listas.
 - Compresión gzip/brotli con `compression` middleware.
 - Caché Redis de respuestas de APIs externas con TTL apropiado.
@@ -907,6 +907,14 @@ railway up
 # Ver estado del servicio
 railway status
 ```
+
+### Railway MCP — política de permisos
+
+- **Lectura libre** (sin pedir confirmación): estado de servicios y deployments, logs de build/deploy, listar variables, métricas, dominios.
+- **Acciones que REQUIEREN confirmación explícita del usuario ANTES de ejecutar** (mostrar el comando exacto y esperar OK): redeploy, accept/reject deploy, crear/editar/borrar variables de entorno, cambiar dominios o settings del servicio, restart de servicio, y cualquier uso de railway-agent.
+- Antes de cualquier redeploy: confirmar que los cambios están pusheados a GitHub (Railway despliega el commit remoto, no los commits locales).
+- Nunca operar sobre la base de datos de producción vía el MCP de Railway; la cirugía de BD (prisma migrate resolve, SQL) va por separado y con confirmación explícita.
+- Alcance temporal: el MCP de Railway está conectado de forma provisional (~2 meses, fase de lanzamiento). Revisar si se mantiene tras ese periodo.
 
 ---
 
@@ -1228,6 +1236,8 @@ Ver [docs/BACKLOG.md](docs/BACKLOG.md)
 ---
 
 ## Última revisión de código
+
+**Fecha**: 2026-06-12 (incidente deploy INC-01 — solo documentación) — Migración `20260612000000_add_performance_indexes_s3` (índices A33-A36) bloqueó producción con P3018/P3009: `CREATE INDEX CONCURRENTLY` no puede ejecutarse dentro de la transacción que Prisma 5.x añade automáticamente a toda migración. Resolución: `migrate resolve --rolled-back` → 5 índices creados manualmente con `prisma db execute --file` (fuera de transacción) → `indisvalid=true` verificado en todos → cada migración marcada con `migrate resolve --applied` → deploy SUCCESS. Sin cambios de código; solo archivos de migración y documentación. Pendiente de seguridad: rotar contraseña Postgres en Railway (SEC-01, AUDIT.md). Convención CONCURRENTLY actualizada en este documento.
 
 **Fecha**: 2026-06-11 (auditoría S5) — Mobile, seguridad y datos. A44 thumbnails Cloudinary (5 puntos), A45 polling dinámico useSyncStatus, A46 Sentry beforeSend (redacta token/Authorization y body /auth/*), A48 401 en refresh → clearSession + redirección a login (antes sesión inválida sin redirigir), A10 completo (0 console.log en producción mobile). A49 (UMP consent) → S6a pre-lanzamiento. Tests: 395 mobile (+8) · 620 API · 0 TS/lint.
 
