@@ -2,7 +2,12 @@ import axios from 'axios';
 
 jest.mock('axios');
 jest.mock('../lib/redis', () => ({
-  redis: { get: jest.fn().mockResolvedValue(null), setex: jest.fn() },
+  redis: {
+    get: jest.fn().mockResolvedValue(null),
+    setex: jest.fn(),
+    incr: jest.fn().mockResolvedValue(1),
+    expire: jest.fn().mockResolvedValue(1),
+  },
 }));
 jest.mock('../lib/prisma', () => ({
   prisma: {

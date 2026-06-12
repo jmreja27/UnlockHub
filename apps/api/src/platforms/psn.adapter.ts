@@ -553,12 +553,13 @@ export class PsnAdapter implements PlatformAdapter {
     ]);
 
     // Indexar estado ganado por trophyId para merge O(1)
+    // ?? [] como defensa ante respuestas malformadas de PSN (tipo tipeado pero runtime puede diferir)
     const earnedMap = new Map<number, UserThinTrophy>();
-    for (const ut of earnedRes.trophies) {
+    for (const ut of (earnedRes.trophies ?? [])) {
       earnedMap.set(ut.trophyId, ut);
     }
 
-    return titleTrophiesRes.trophies.map((t) => {
+    return (titleTrophiesRes.trophies ?? []).map((t) => {
       const earned = earnedMap.get(t.trophyId);
       return {
         ...t,
