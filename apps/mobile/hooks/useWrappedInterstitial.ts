@@ -15,13 +15,13 @@ const SHOW_DELAY_MS = 1500;
  * Solo para usuarios free. Guardar timestamp en AsyncStorage para persistir entre sesiones.
  */
 export function useWrappedInterstitial() {
-  const { user } = useSessionStore();
+  const isPremium = useSessionStore((s) => s.user?.isPremium ?? false);
   const { show } = useInterstitialAd();
   const shownRef = useRef(false);
   const timeoutIdRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
-    if (user?.isPremium || shownRef.current) return;
+    if (isPremium || shownRef.current) return;
 
     void (async () => {
       try {
@@ -47,5 +47,5 @@ export function useWrappedInterstitial() {
         timeoutIdRef.current = undefined;
       }
     };
-  }, [show, user?.isPremium]);
+  }, [show, isPremium]);
 }

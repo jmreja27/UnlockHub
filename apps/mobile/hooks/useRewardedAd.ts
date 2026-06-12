@@ -35,7 +35,7 @@ interface RewardResult {
 }
 
 export function useRewardedAd() {
-  const { user } = useSessionStore();
+  const isPremium = useSessionStore((s) => s.user?.isPremium ?? false);
   const adRef = useRef<RewardedAdInstance | null>(null);
   const [isReady, setIsReady] = useState(false);
   // Ref paralelo para uso dentro de callbacks sin stale closure
@@ -46,7 +46,7 @@ export function useRewardedAd() {
   const inFlightRef = useRef(false);
 
   useEffect(() => {
-    if (user?.isPremium || !admobModule) return;
+    if (isPremium || !admobModule) return;
 
     const ad = admobModule.RewardedAd.createForAdRequest(AD_UNIT_ID);
     adRef.current = ad;
@@ -70,13 +70,12 @@ export function useRewardedAd() {
       showForRewardUnsubRef.current?.();
       showForRewardUnsubRef.current = null;
     };
-  }, [user?.isPremium]);
+  }, [isPremium]);
 
   // Muestra el anuncio y, si el usuario lo completa, otorga 10 puntos via backend.
   // Retorna los puntos ganados o null si no aplica (premium, ad no cargado, cooldown, en vuelo).
   const showForReward = useCallback(async (): Promise<number | null> => {
-    console.log('[REWARDED] llamado, loaded:', isReadyRef.current, 'inFlight:', inFlightRef.current);
-    if (!isReadyRef.current || !adRef.current || !admobModule || user?.isPremium || inFlightRef.current) {
+    if (!isReadyRef.current || !adRef.current || !admobModule || isPremium || inFlightRef.current) {
       return null;
     }
 
@@ -86,32 +85,20 @@ export function useRewardedAd() {
       const ad = adRef.current!;
 
       const unsubClosed = ad.addAdEventListener(admobModule!.AdEventType.CLOSED, () => {
-        console.log('[REWARDED] CLOSED disparado');
         showForRewardUnsubRef.current = null;
         inFlightRef.current = false;
         unsubClosed();
 
-        // Otorgar puntos al cerrar, independientemente de si EARNED_REWARD se disparó
-        console.log('[REWARDED] llamando backend');
         api
           .post<RewardResult>('/api/v1/users/me/points/rewarded-ad')
           .then((data) => resolve(data.pointsEarned))
-          .catch((e) => {
-            console.error('[REWARDED] error completo:', JSON.stringify({
-              message: e.message,
-              statusCode: e.statusCode,
-              apiError: e.apiError,
-              name: e.name
-            }));
-            resolve(null);
-          });
+          .catch(() => resolve(null));
       });
 
-      console.log('[REWARDED] listener CLOSED registrado');
       showForRewardUnsubRef.current = unsubClosed;
       ad.show();
     });
-  }, [user?.isPremium]);
+  }, [isPremium]);
 
   return { showForReward, isReady };
 }

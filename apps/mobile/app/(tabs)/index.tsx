@@ -369,7 +369,7 @@ export default function LibraryScreen() {
       </View>
 
       {/* Barra de sync — botón manual, última sync, próximo auto sync, syncs restantes */}
-      {!isLoading && !isError && totalGames > 0 && <SyncStatusBar />}
+      {!isLoading && !isError && totalGames > 0 && <SyncStatusBar isRunning={isRunning} />}
 
       {/* Buscador + botón ordenación */}
       <View className="mx-4 mb-2 flex-row gap-2">

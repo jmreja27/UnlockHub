@@ -46,7 +46,7 @@ const LIMIT = 20;
  * @param platform - Filtro opcional de plataforma ('STEAM' | 'RA' | 'PSN').
  */
 export function useMyGames(platform?: string) {
-  const { isAuthenticated } = useSessionStore();
+  const isAuthenticated = useSessionStore((s) => s.isAuthenticated);
 
   const query = useInfiniteQuery({
     queryKey: queryKeys.myGamesByPlatform(platform),

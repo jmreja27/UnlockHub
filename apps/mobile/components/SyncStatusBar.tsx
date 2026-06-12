@@ -7,7 +7,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useSessionStore } from '../stores/sessionStore';
 import { useSyncAll } from '../hooks/useSyncAll';
 import { useSyncStatus } from '../hooks/useSyncStatus';
-import { useSyncProgress } from '../hooks/useSyncProgress';
 import { useTheme } from '../hooks/useTheme';
 import { queryKeys } from '../lib/queryKeys';
 
@@ -22,7 +21,12 @@ function formatCountdown(secs: number, t: (key: string, opts?: Record<string, un
   return t('library.sync_duration_hm', { h: hours, min: mins });
 }
 
-export function SyncStatusBar() {
+interface SyncStatusBarProps {
+  /** Recibido desde LibraryScreen (que ya instancia useSyncProgress) para evitar un segundo set de listeners Socket.io y timers de polling. */
+  isRunning: boolean;
+}
+
+export function SyncStatusBar({ isRunning }: SyncStatusBarProps) {
   const { t } = useTranslation();
   const colors = useTheme();
   const queryClient = useQueryClient();
@@ -31,7 +35,6 @@ export function SyncStatusBar() {
   const isPremium = user?.isPremium ?? false;
 
   const { sync, isSyncing } = useSyncAll(userId);
-  const { isRunning } = useSyncProgress();
   const {
     canSyncNow,
     timeUntilNextAutoSync,

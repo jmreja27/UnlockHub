@@ -60,6 +60,10 @@
 | A39 | Perf / Select | 🔵 | `loadUserAchievements` en `wrapped.service.ts` usa `include: { achievement: { include: { game: true } } }` cargando todos los campos de `Achievement` y `Game`. De los ~12 campos de `Achievement`, 6 no se usan en `computeStats`/`computeExtendedStats` (externalId, description, rawValue, externalUrl, createdAt, updatedAt). Ídem para `Game`. Cambiar a `select` explícito requiere actualizar el tipo `UserAchievementFull` definido con `Prisma.UserAchievementGetPayload`. Diferido a S6 (baja prioridad — el resultado se cachea 1h). | `apps/api/src/services/wrapped.service.ts:7,30` | 🔲 S6 | S3 |
 | A40 | Perf / Redis | 🔵 | `sendAll` en `notification.service.ts` hace `prisma.deviceToken.findMany` sin límite — carga todos los tokens de todos los usuarios en memoria. Con 100k usuarios y múltiples dispositivos podría superar 10 MB de datos antes de procesar. Actualmente el batching de Expo (BATCH_SIZE=100) solo aplica al envío HTTP, no a la lectura de BD. `sendAll` es función de broadcast raramente usada (no hay llamadas actuales en el código), pero merece cursor-pagination para escala. Diferido a Fase 4. | `apps/api/src/services/notification.service.ts:104` | 🔲 S6 | S3 |
 | A41 | Docs / Steam | 🔵 | `CLAUDE.md` documenta dos umbrales para el contador `steam:api:calls`: 80 % (alerta, pausa del background-sync) y 90 % (pausa de syncs manuales). El código solo implementa el 80 % en `background-sync.scheduler.ts`; el 90 % nunca se implementó. Con el contador activo desde A24 (S2 ✅), la discrepancia puede inducir a error: un operador que lea la docs esperará una segunda protección que no existe. Opciones: implementar el 90 % en `triggerManualSync` o eliminar la referencia del 90 % en CLAUDE.md. | `apps/api/src/jobs/background-sync.scheduler.ts`, `CLAUDE.md` | 🔲 S6 | S2 |
+| A42 | Móvil / Fluidez | 🟡 | `SyncStatusBar` instanciaba `useSyncProgress()` de forma independiente cuando ya está renderizado dentro de `LibraryScreen`, que también instancia el mismo hook. Resultado: dos sets simultáneos de listeners Socket.io (`sync:progress`, `sync:complete`, `sync:error`) + dos timers de gracia + dos intervals de polling fallback cuando el socket está silencioso. Las invalidaciones de caché se duplicaban pero TanStack Query las deduplicaba. **Arreglado**: `useSyncProgress` eliminado de `SyncStatusBar`; el hook acepta ahora `isRunning: boolean` como prop; `LibraryScreen` pasa el valor que ya tenía. Tests actualizados. | `apps/mobile/components/SyncStatusBar.tsx`, `apps/mobile/app/(tabs)/index.tsx` | ✅ S4 | S4 |
+| A43 | Móvil / Zustand | 🔵 | 5 hooks usaban `useSessionStore()` sin selector (`useInterstitialAd`, `useRewardedAd`, `useCompletedGamesInterstitial`, `useWrappedInterstitial`, `useMyGames`). Sin selector, Zustand re-renderiza el componente en cada cambio de cualquier campo del store. El store solo tiene 3 campos (`user`, `accessToken`, `isAuthenticated`), pero `user` se actualiza después de cada sync (XP/nivel) causando re-renders innecesarios en los hooks de AdMob. **Arreglado**: selectores precisos (`(s) => s.user?.isPremium ?? false` o `(s) => s.isAuthenticated`) en los 5 hooks. | `apps/mobile/hooks/useInterstitialAd.ts`, `useRewardedAd.ts`, `useCompletedGamesInterstitial.ts`, `useWrappedInterstitial.ts`, `useMyGames.ts` | ✅ S4 | S4 |
+| A44 | Móvil / Cloudinary | 🔵 | Avatares y banners se sirven desde Cloudinary a resolución original (sin transformaciones). En la pantalla de perfil, el avatar se muestra a 96×96 pt (288×288 px en 3× screen); el banner a 100 % de ancho × 120 pt. Sin la transformación `c_fill,w_N,h_N,q_auto`, se descarga la imagen original que puede superar 500 KB por un thumbnail. `expo-image` la cachea tras la primera descarga, pero la descarga inicial es innecesariamente pesada para usuarios con conexiones lentas. **Propuesta**: añadir `getCloudinaryThumb(url, w, h)` en `lib/cloudinary.ts` que inyecte los parámetros de transformación en la URL antes de pasarla a `<Image source={{ uri }}>`. Coordinar que el backend devuelva la URL base sin crop, no la URL final. | `apps/mobile/app/(tabs)/profile.tsx`, `apps/mobile/components/LibraryGameCard.tsx` | 🔲 S6 | S4 |
+| A45 | Móvil / Calidad | 🔵 | `useSyncStatus` configura `refetchInterval: 60_000` siempre activo para cualquier usuario autenticado. Incluso en periodos de total inactividad (sin sync corriendo) la app hace 1 petición/min a `/api/v1/sync/my-summary`. Impacto acotado (sigue siendo solo 1 req/min), pero una mejora sería usar `refetchInterval` dinámico: `0` (disable) cuando no hay sync activo, `60_000` cuando sí. El estado de sync activo se conoce desde `useSyncProgress`; circular dependency si se importa directamente. **Propuesta**: el endpoint puede devolver un campo `nextCheckIn` (segundos) que el hook use como intervalo dinámico. Diferido. | `apps/mobile/hooks/useSyncStatus.ts` | 🔲 S6 | S4 |
 
 ---
 
@@ -135,6 +139,13 @@ npx madge --circular --extensions ts,tsx apps/
 |---|---|---|---|
 | `apps/api` | 620 | ✅ | 0 (mocks de redis y ranking actualizados: `expire` añadido, mocks `getPlatformXpMap` con `platform` incluido) |
 | `apps/mobile` | 387 | ✅ | 0 |
+
+### Tests — post S4
+
+| Workspace | Tests | Resultado | Tests nuevos |
+|---|---|---|---|
+| `apps/api` | 620 | ✅ | 0 |
+| `apps/mobile` | 387 | ✅ | 0 (SyncStatusBar tests adaptados a nueva firma con prop `isRunning`; mock `useSyncProgress` eliminado del test) |
 
 ### ESLint (antes de esta sesión)
 
@@ -213,6 +224,6 @@ como palabra, no como marcador de tarea). 0 FIXME. No hay deuda pendiente de có
 | **S1** | Seguridad backend | A1 ✅, A3 ✅, A4 ✅ verificado S2, A5 ✅, A6 ✅, A7 ✅, A8 ✅, A14–A19 ✅, A20 ✅ descartado, A21 ✅ verificado S2, A22 🔲 |
 | **S2** | Sync / integraciones (PSN, Steam, RA, worker) | A23 ✅, A24 ✅, A25 ✅, A26 ✅, A27 🔲 S6 |
 | **S3** | Performance backend (Redis, PostgreSQL, queries) | A28 ✅, A29 ✅, A30 ✅, A31 ✅, A32 ✅, A33 🔲, A34 🔲, A35 🔲, A36 🔲, A37 🔲 S6, A38 🔲 S6, A39 🔲 S6, A40 🔲 S6 |
-| **S4** | Mobile — memory leaks, fluidez, Socket.io | — (pendiente análisis profundo) |
+| **S4** | Mobile — memory leaks, fluidez, Socket.io | A42 ✅, A43 ✅, A10 ✅ (adelantado desde S6), A44 🔲, A45 🔲 |
 | **S5** | Mobile — seguridad de datos, almacenamiento | — (pendiente análisis profundo) |
-| **S6** | Limpieza general (console.log, dead code, docs) | A2, A9, A10, A12, A13, A27, A37–A40, A41 |
+| **S6** | Limpieza general (console.log, dead code, docs) | A2, A9, A12, A13, A27, A37–A40, A41, A44, A45 |
