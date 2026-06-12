@@ -102,6 +102,8 @@ model User {
   @@index([createdAt])
   @@index([isPremium])
   @@index([lastSyncAt])
+  // A36: seedRankingsFromDb y background-sync filtran por (profileVisibility, deletedAt)
+  @@index([profileVisibility, deletedAt])
 }
 
 // ─── Plataformas ──────────────────────────────────────────────────────────────
@@ -190,6 +192,8 @@ model UserAchievement {
   @@index([userId])
   @@index([achievementId])
   @@index([unlockedAt])
+  // A33: queries de wrapped/stats filtran por userId + rango de fecha (unlockedAt)
+  @@index([userId, unlockedAt])
 }
 
 // ─── Sistema de puntos ────────────────────────────────────────────────────────
@@ -288,6 +292,9 @@ model Friendship {
   @@index([senderId])
   @@index([receiverId])
   @@index([status])
+  // A35: findAcceptedFriendIds y findAcceptedFriends filtran siempre por (senderId/receiverId, status)
+  @@index([senderId, status])
+  @@index([receiverId, status])
 }
 
 // ─── Feed de actividad ────────────────────────────────────────────────────────
@@ -314,6 +321,8 @@ model ActivityEvent {
   @@index([userId])
   @@index([createdAt])
   @@index([type])
+  // A34: wrapped queries filtran por userId + type + createdAt (STREAK_MILESTONE)
+  @@index([userId, type, createdAt])
 }
 
 // ─── Retos semanales ──────────────────────────────────────────────────────────

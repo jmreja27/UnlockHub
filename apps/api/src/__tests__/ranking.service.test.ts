@@ -126,9 +126,9 @@ describe('rankingService.getUserRank', () => {
 describe('rankingService.upsertUserScore', () => {
   it('usa XP total para global y XP por plataforma para los sorted sets de plataforma', async () => {
     mockRedis.zadd.mockResolvedValue(1 as never);
-    // Steam: 200 XP en BD
+    // getPlatformXpMap: 1 sola query con platform incluido en cada logro
     (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValueOnce([
-      { achievement: { normalizedPoints: 200 } },
+      { achievement: { normalizedPoints: 200, platform: 'STEAM' } },
     ]);
 
     await rankingService.upsertUserScore('u1', 500, ['STEAM']);
@@ -140,9 +140,11 @@ describe('rankingService.upsertUserScore', () => {
 
   it('actualiza múltiples plataformas con su XP específico desde BD', async () => {
     mockRedis.zadd.mockResolvedValue(1 as never);
-    (mockPrisma.userAchievement.findMany as jest.Mock)
-      .mockResolvedValueOnce([{ achievement: { normalizedPoints: 100 } }])  // Steam 100 XP
-      .mockResolvedValueOnce([{ achievement: { normalizedPoints: 50 } }]);  // RA 50 XP
+    // getPlatformXpMap: 1 sola query para todas las plataformas (antes eran 2 queries)
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValueOnce([
+      { achievement: { normalizedPoints: 100, platform: 'STEAM' } },
+      { achievement: { normalizedPoints: 50,  platform: 'RA' } },
+    ]);
 
     await rankingService.upsertUserScore('u1', 150, ['STEAM', 'RA']);
 
@@ -186,7 +188,7 @@ describe('rankingService.upsertUserScore', () => {
   it('F29: profileVisibility=PUBLIC sí llama a zadd (comportamiento normal)', async () => {
     mockRedis.zadd.mockResolvedValue(1 as never);
     (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValueOnce([
-      { achievement: { normalizedPoints: 100 } },
+      { achievement: { normalizedPoints: 100, platform: 'STEAM' } },
     ]);
 
     await rankingService.upsertUserScore('u1', 500, ['STEAM'], 'PUBLIC');
@@ -286,9 +288,9 @@ describe('rankingService.seedRankingsFromDb', () => {
       { id: 'u2', xp: 200, platformAccounts: [] },
     ]);
     mockRedis.zadd.mockResolvedValue(1 as never);
-    // u1 tiene 300 XP de Steam
+    // u1 tiene 300 XP de Steam — getPlatformXpMap incluye platform en cada logro
     (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValueOnce([
-      { achievement: { normalizedPoints: 300 } },
+      { achievement: { normalizedPoints: 300, platform: 'STEAM' } },
     ]);
 
     await rankingService.seedRankingsFromDb();

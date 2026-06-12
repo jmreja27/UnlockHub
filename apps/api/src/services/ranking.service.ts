@@ -14,20 +14,29 @@ const KEYS = {
 // ─── Helpers internos ─────────────────────────────────────────────────────────
 
 /**
- * Calcula el XP total acumulado por un usuario en una plataforma específica.
- * Suma normalizedPoints de todos los UserAchievement del usuario para esa plataforma.
+ * Calcula el XP acumulado por plataforma para un usuario en una sola query.
+ * Agrupa normalizedPoints de UserAchievement por plataforma en memoria.
+ * Reemplaza el patrón anterior de N queries (una por plataforma) con 1 query.
  */
-async function getPlatformXp(userId: string, platform: string): Promise<number> {
+async function getPlatformXpMap(userId: string, platforms: string[]): Promise<Map<string, number>> {
+  if (platforms.length === 0) return new Map();
+
   const achievements = await prisma.userAchievement.findMany({
     where: {
       userId,
-      achievement: { platform: platform as Platform },
+      achievement: { platform: { in: platforms as Platform[] } },
     },
     select: {
-      achievement: { select: { normalizedPoints: true } },
+      achievement: { select: { normalizedPoints: true, platform: true } },
     },
   });
-  return achievements.reduce((sum, ua) => sum + ua.achievement.normalizedPoints, 0);
+
+  const xpMap = new Map<string, number>();
+  for (const ua of achievements) {
+    const p = ua.achievement.platform as string;
+    xpMap.set(p, (xpMap.get(p) ?? 0) + ua.achievement.normalizedPoints);
+  }
+  return xpMap;
 }
 
 // ─── Escritura ────────────────────────────────────────────────────────────────
@@ -35,9 +44,8 @@ async function getPlatformXp(userId: string, platform: string): Promise<number> 
 /**
  * Actualiza la puntuación del usuario en todos los sorted sets de Redis.
  * - ranking:global → totalXp del usuario
- * - ranking:platform:{p} → XP acumulado SOLO en esa plataforma (calculado con getPlatformXp)
+ * - ranking:platform:{p} → XP acumulado SOLO en esa plataforma (1 query para todas)
  * Si profileVisibility no es PUBLIC, se omite el upsert (el usuario no aparece en rankings).
- * Las queries de XP por plataforma se ejecutan en paralelo para minimizar latencia.
  */
 export async function upsertUserScore(
   userId: string,
@@ -53,11 +61,11 @@ export async function upsertUserScore(
   // Global: score = XP total del usuario
   await redis.zadd(KEYS.global, totalXp, userId);
 
-  // Plataformas: score = XP ganado SOLO en esa plataforma — queries en paralelo
+  // Plataformas: score = XP ganado SOLO en esa plataforma — 1 query para todas las plataformas
   if (platforms.length > 0) {
-    const platformXps = await Promise.all(platforms.map((p) => getPlatformXp(userId, p)));
+    const xpMap = await getPlatformXpMap(userId, platforms);
     await Promise.all(
-      platforms.map((p, i) => redis.zadd(KEYS.platform(p), platformXps[i] ?? 0, userId)),
+      platforms.map((p) => redis.zadd(KEYS.platform(p), xpMap.get(p) ?? 0, userId)),
     );
   }
 }

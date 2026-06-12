@@ -148,17 +148,15 @@ export async function getProfile(
 ): Promise<User & { platformAccounts: PlatformAccount[] }> {
   const dbUser = await prisma.user.findUnique({
     where: { id: userId, deletedAt: null },
-    include: {
+    select: {
+      id: true, username: true, email: true, avatar: true, banner: true, bio: true,
+      level: true, xp: true, streakDays: true, countryCode: true,
+      isPremium: true, premiumUntil: true, lastSyncAt: true,
+      profileVisibility: true, createdAt: true,
       platformAccounts: {
         select: {
-          id: true,
-          userId: true,
-          platform: true,
-          externalId: true,
-          username: true,
-          lastSyncedAt: true,
-          requiresReauth: true,
-          psnProfilePrivate: true,
+          id: true, userId: true, platform: true, externalId: true, username: true,
+          lastSyncedAt: true, requiresReauth: true, psnProfilePrivate: true,
         },
       },
     },
@@ -190,17 +188,14 @@ export async function getPublicProfile(
 ): Promise<PublicUser & { platformAccounts: PlatformAccount[] }> {
   const dbUser = await prisma.user.findUnique({
     where: { username, deletedAt: null },
-    include: {
+    select: {
+      id: true, username: true, avatar: true, banner: true, bio: true,
+      level: true, xp: true, streakDays: true, countryCode: true,
+      profileVisibility: true, createdAt: true,
       platformAccounts: {
         select: {
-          id: true,
-          userId: true,
-          platform: true,
-          externalId: true,
-          username: true,
-          lastSyncedAt: true,
-          requiresReauth: true,
-          psnProfilePrivate: true,
+          id: true, userId: true, platform: true, externalId: true, username: true,
+          lastSyncedAt: true, requiresReauth: true, psnProfilePrivate: true,
         },
       },
     },
@@ -708,7 +703,10 @@ export async function deleteAccount(userId: string): Promise<void> {
   });
 
   // Limpiar Redis fuera de la transacción (no admite operaciones externas)
-  await removeUserFromRankings(userId, platforms);
+  await Promise.all([
+    removeUserFromRankings(userId, platforms),
+    invalidateUserPublicCache(userId),
+  ]);
 }
 
 /**
@@ -795,6 +793,9 @@ export async function getUserGames(
   const result = await getMyGames(dbUser.id, platform, page, limit);
   await redis.set(cacheKey, JSON.stringify(result), 'EX', USER_GAMES_CACHE_TTL);
   await redis.sadd(USER_GAMES_KEYS_SET(dbUser.id), cacheKey);
+  // Rotar el TTL del set de tracking cada vez que se añade una clave nueva.
+  // El set puede llenarse de claves ya expiradas si nunca se invalida — este TTL limita su vida.
+  await redis.expire(USER_GAMES_KEYS_SET(dbUser.id), USER_GAMES_CACHE_TTL * 4);
   return result;
 }
 
@@ -864,6 +865,17 @@ export async function getUserGameAchievements(
   const achievementRows = await prisma.achievement.findMany({
     where: { gameId },
     orderBy: [{ rarity: 'asc' }, { normalizedPoints: 'desc' }],
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      iconUrl: true,
+      rarity: true,
+      normalizedPoints: true,
+      platform: true,
+      externalId: true,
+      externalUrl: true,
+    },
   });
 
   const targetEarnedMap = new Map<string, string>();
@@ -922,6 +934,7 @@ export async function getUserGameAchievements(
 
   await redis.set(achCacheKey, JSON.stringify(result), 'EX', USER_GAMES_CACHE_TTL);
   await redis.sadd(USER_GAMES_KEYS_SET(dbUser.id), achCacheKey);
+  await redis.expire(USER_GAMES_KEYS_SET(dbUser.id), USER_GAMES_CACHE_TTL * 4);
   return result;
 }
 
