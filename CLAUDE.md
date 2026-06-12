@@ -822,6 +822,8 @@ io.adapter(createAdapter(pubClient, subClient));
 - Tipos compartidos en `packages/types`, schemas Zod en `packages/validators`.
 - Logs con `pino` — nunca `console.log` en producción.
 - Analíticas con `lib/analytics.ts` — nunca llamar al SDK directamente.
+- **Un único propietario del estado de progreso de sync**: no instanciar `useSyncProgress` en más de un componente simultáneamente. El componente raíz de la pantalla (ej. `LibraryScreen`) es el propietario; pasa `isRunning: boolean` como prop a los hijos (`SyncStatusBar`). Instanciar el hook en varios componentes duplica listeners Socket.io, timers de gracia e intervals de polling fallback por cada instancia.
+- **Selectores Zustand siempre precisos**: usar `useStore((s) => s.campo)` en lugar de `useStore()` sin selector. Sin selector, cualquier cambio en el store (XP o nivel tras sync) re-renderiza el componente completo aunque el campo que usa no haya cambiado.
 - **Actualizar el backlog** al final de cada sesión marcando ítems completados con ✅.
 
 ### Estrategia de branching
