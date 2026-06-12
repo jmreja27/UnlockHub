@@ -27,6 +27,7 @@ import { FEATURES } from '../../lib/featureFlags';
 import { api, uploadFile, getAccessToken } from '../../lib/api';
 import { useFeed } from '../../hooks/useFeed';
 import { queryKeys } from '../../lib/queryKeys';
+import { getCloudinaryThumb } from '../../lib/cloudinary';
 
 interface UserStats {
   xpByWeek: { week: string; xp: number }[];
@@ -224,8 +225,7 @@ export default function ProfileScreen() {
         }
       }
     },
-    onError: (error) => {
-      console.error('[BANNER] error:', error);
+    onError: () => {
       Alert.alert(t('profile.banner_error_title'), t('profile.banner_error_message'));
     },
   });
@@ -440,7 +440,7 @@ export default function ProfileScreen() {
         >
           {user.banner ? (
             <Image
-              source={{ uri: user.banner }}
+              source={{ uri: getCloudinaryThumb(user.banner, 800, 240) }}
               style={{ width: '100%', height: 120 }}
               contentFit="cover"
               accessibilityElementsHidden
@@ -485,7 +485,7 @@ export default function ProfileScreen() {
           >
             {user.avatar ? (
               <Image
-                source={{ uri: user.avatar }}
+                source={{ uri: getCloudinaryThumb(user.avatar, 192, 192) }}
                 placeholder={AVATAR_BLURHASH}
                 style={{ width: 96, height: 96, borderRadius: 48 }}
                 contentFit="cover"

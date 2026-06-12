@@ -27,6 +27,24 @@ Sentry.init({
   environment: __DEV__ ? 'development' : 'production',
   enabled: !__DEV__ && !!process.env['EXPO_PUBLIC_SENTRY_DSN'],
   tracesSampleRate: 0.1,
+  beforeSend(event) {
+    // Eliminar Authorization header para no enviar access tokens a Sentry
+    if (event.request?.headers) {
+      const headers = { ...event.request.headers } as Record<string, string>;
+      delete headers['Authorization'];
+      delete headers['authorization'];
+      event.request.headers = headers;
+    }
+    // Eliminar body de requests de autenticación (login, register, reset-password)
+    if (event.request?.data && typeof event.request.data === 'string') {
+      const authPaths = ['/auth/login', '/auth/register', '/auth/reset-password', '/auth/refresh'];
+      const url = event.request?.url ?? '';
+      if (authPaths.some((p) => url.includes(p))) {
+        event.request.data = '[redacted]';
+      }
+    }
+    return event;
+  },
 });
 
 SplashScreen.preventAutoHideAsync();

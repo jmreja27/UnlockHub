@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import type { RankingEntry } from '@unlockhub/types';
 
 import { useTheme } from '../hooks/useTheme';
+import { getCloudinaryThumb } from '../lib/cloudinary';
 
 // Placeholder blurhash para avatares mientras cargan
 const AVATAR_BLURHASH = 'L6PZfSi_.AyE_3t7t7R**0o#DgR4';
@@ -57,7 +58,7 @@ export function RankingItem({ entry, isCurrentUser = false, onPress }: RankingIt
 
       {/* Avatar del usuario */}
       <Image
-        source={entry.avatar ?? undefined}
+        source={getCloudinaryThumb(entry.avatar, 80, 80) ?? undefined}
         placeholder={AVATAR_BLURHASH}
         style={{ width: 40, height: 40, borderRadius: 20, marginRight: 12 }}
         contentFit="cover"

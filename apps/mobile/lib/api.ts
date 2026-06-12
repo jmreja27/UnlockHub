@@ -48,7 +48,16 @@ export async function refreshAccessToken(): Promise<void> {
     body: JSON.stringify({ refreshToken }),
   });
 
-  if (!response.ok) throw new Error('Sesión expirada. Por favor, inicia sesión de nuevo.');
+  if (!response.ok) {
+    // Refresh token expirado — limpiar sesión para que el guard del layout redirija a login
+    if (response.status === 401) {
+      await deleteRefreshToken();
+      // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/consistent-type-imports
+      const { useSessionStore } = require('../stores/sessionStore') as typeof import('../stores/sessionStore');
+      useSessionStore.getState().clearSession();
+    }
+    throw new Error('Sesión expirada. Por favor, inicia sesión de nuevo.');
+  }
 
   const data = (await response.json()) as RefreshResponse;
   setAccessToken(data.accessToken);
@@ -177,7 +186,6 @@ export async function uploadFile<T = unknown>(
           retryAfter: xhr.getResponseHeader('Retry-After'),
         });
       xhr.onerror = () => {
-        console.error('[UPLOAD] error:', JSON.stringify({ status: xhr.status, response: xhr.responseText }));
         reject(
           new ApiRequestError(
             { error: 'Error de red. Por favor, inténtalo de nuevo.', code: 'NETWORK_ERROR' },
