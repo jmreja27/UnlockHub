@@ -706,6 +706,8 @@ cd apps/api && npx ts-node ../../scripts/rotate-encryption-key.ts --old-key=<VIE
 - **Comparación constant-time**: usar `crypto.timingSafeEqual()` sobre hashes SHA-256 para comparar secrets de webhooks o cualquier token secreto — nunca `===` ni `!==` directo.
 - **`deletedAt: null` en queries de lectura**: cualquier `findUnique` / `findMany` sobre `User` en un service debe incluir `deletedAt: null` en el `where` como defensa GDPR — no delegar la verificación exclusivamente al middleware `authenticate`.
 - **`no-floating-promises` activo en `apps/api`**: configurado en `.eslintrc.js` + `tsconfig.eslint.json`; toda promesa devuelta por Express handlers o lifecycle hooks (SIGTERM) debe ser awaited para evitar cierres desordenados.
+- **Timeout obligatorio en todas las llamadas HTTP a APIs externas**: toda llamada `axios.get`/`axios.post` a Steam, PSN, RA, Xbox, Cloudinary, Resend o cualquier servicio externo debe incluir `timeout: N` (10 000 ms para llamadas de datos, 15 000 ms para token exchanges). Sin timeout, un cuelgue de la API externa bloquea un slot de worker BullMQ hasta `lockDuration` (5 min), impidiendo que otros usuarios sincronicen.
+- **Contadores de rate-limit por adapter**: cualquier adapter que llame a una API con límite diario (actualmente solo Steam — 100 000 req/día) debe incrementar su contador Redis (`redis.incr`) en cada llamada real (cache miss). El contador se usa para el umbral de pausa del scheduler y el dashboard de admin — leerlo sin escribirlo lo deja permanentemente en 0, haciendo la protección inoperante. Clave: `<plataforma>:api:calls:<YYYY-MM-DD>` con TTL 25 h (un día + margen de midnight boundary).
 
 ---
 
