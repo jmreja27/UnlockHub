@@ -587,7 +587,8 @@ export interface PlatformAdapter {
 - Rate limit: **100.000 req/día** por API key. Estrategia obligatoria:
   - Caché Redis de metadatos de juego: TTL 6h.
   - BullMQ concurrencia máxima de llamadas a Steam: 5 simultáneas.
-  - Contador diario en Redis (`steam:api:calls:<date>`): alerta al 80%, pausar syncs al 90%.
+  - Contador diario en Redis (`steam:api:calls:<date>`): **80 %** → background-sync scheduler pausa (`background-sync.scheduler.ts`); **90 %** → `triggerManualSync` bloquea o omite Steam (multi-plataforma → `skippedByQuota: true` 200; solo Steam → `STEAM_QUOTA_EXCEEDED` 429). Constantes centralizadas en `apps/api/src/config/steamQuota.ts`.
+  - **Tope por intento** (A51): `STEAM_MAX_GAMES_PER_SYNC = 100` en `steamQuota.ts`. En `syncUser` y `syncUserBatched`, los juegos elegibles se ordenan por `rtime_last_played` desc (señal primaria — último timestamp de juego retornado por GetOwnedGames con `include_appinfo=true`) + `playtime_forever` como desempate; se procesan solo los primeros 100. Los omitidos se recuperan en el siguiente sync nocturno o manual. Ajustable tras observar volumen real en producción. Implementación mínima de T90 (sin cursor de reanudación — diferido a Fase 4).
 - Requisito: perfil del usuario **público** en Steam.
 
 ### RetroAchievements API
@@ -702,6 +703,16 @@ cd apps/api && npx ts-node ../../scripts/rotate-encryption-key.ts --old-key=<VIE
 - **CI**: `npm audit --audit-level=high` en cada PR.
 - **Verificación de edad**: en registro, validar que `birthDate` corresponde a mayores de 16 años.
 - **Rutas admin**: protegidas por `ADMIN_SECRET` bearer token (no por role en JWT — ver Decisiones tomadas).
+- **Magic bytes en uploads**: validar primeros bytes del buffer con `validateFileMagicBytes` (JPEG `FF D8 FF`, PNG `89 50 4E 47...`, WebP `RIFF/WEBP`) — nunca confiar solo en `Content-Type` declarado por el cliente.
+- **Comparación constant-time**: usar `crypto.timingSafeEqual()` sobre hashes SHA-256 para comparar secrets de webhooks o cualquier token secreto — nunca `===` ni `!==` directo.
+- **`deletedAt: null` en queries de lectura**: cualquier `findUnique` / `findMany` sobre `User` en un service debe incluir `deletedAt: null` en el `where` como defensa GDPR — no delegar la verificación exclusivamente al middleware `authenticate`.
+- **`select` explícito en endpoints que devuelven datos de usuario**: nunca usar `include` sin `select` ni carga implícita de todos los campos del modelo `User`. Siempre listar explícitamente los campos necesarios. Previene filtración de `passwordHash`, `birthDate`, `role`, `deletedAt` si los mappers evolucionan o se añaden nuevas rutas sin auditoría. Aplica también a modelos relacionados — el hecho de que el mapper no use el campo no es suficiente; si el campo está en memoria, es filtrable con errores futuros.
+- **`no-floating-promises` activo en `apps/api`**: configurado en `.eslintrc.js` + `tsconfig.eslint.json`; toda promesa devuelta por Express handlers o lifecycle hooks (SIGTERM) debe ser awaited para evitar cierres desordenados.
+- **Timeout obligatorio en todas las llamadas HTTP a APIs externas**: toda llamada `axios.get`/`axios.post` a Steam, PSN, RA, Xbox, Cloudinary, Resend o cualquier servicio externo debe incluir `timeout: N` (10 000 ms para llamadas de datos, 15 000 ms para token exchanges). Sin timeout, un cuelgue de la API externa bloquea un slot de worker BullMQ hasta `lockDuration` (5 min), impidiendo que otros usuarios sincronicen.
+- **Contadores de rate-limit por adapter**: cualquier adapter que llame a una API con límite diario (actualmente solo Steam — 100 000 req/día) debe incrementar su contador Redis (`redis.incr`) en cada llamada real (cache miss). El contador se usa para el umbral de pausa del scheduler y el dashboard de admin — leerlo sin escribirlo lo deja permanentemente en 0, haciendo la protección inoperante. Clave: `<plataforma>:api:calls:<YYYY-MM-DD>` con TTL 25 h (un día + margen de midnight boundary).
+- **Sentry `beforeSend` obligatorio**: `Sentry.init` (mobile y API) debe incluir `beforeSend` que elimine `Authorization`/`authorization` de `event.request.headers`, redacte el body en rutas de autenticación (`/auth/*`), y verifique también `event.request.url`, query strings y breadcrumbs. Sin este filtro, credenciales y tokens pueden llegar a Sentry en texto plano.
+- **Un 401 en refresh limpia sesión y redirige**: `refreshAccessToken()` debe detectar `response.status === 401` → llamar `deleteRefreshToken()` + `clearSession()` antes de propagar el error. Nunca dejar el store de sesión con `isAuthenticated: true` cuando el refresh token ha expirado — el guard de layout gestiona la redirección automáticamente al login.
+- **Imágenes Cloudinary siempre vía `getCloudinaryThumb`**: toda imagen servida desde Cloudinary debe pasar por `lib/cloudinary.ts` — `getCloudinaryThumb(url, w, h)` inyecta `w_N,h_N,c_fill,q_auto,f_auto` en la URL. Nunca usar la URL original de Cloudinary directamente en componentes — se sirve la imagen a resolución original (hasta 4 MB) en lugar del tamaño exacto de render.
 
 ---
 
@@ -756,6 +767,7 @@ cd apps/api && npx ts-node ../../scripts/rotate-encryption-key.ts --old-key=<VIE
 ### Backend
 - Rankings desde Redis Sorted Sets — nunca desde PostgreSQL en tiempo real.
 - Índices en PostgreSQL en todas las FK y columnas frecuentes en `WHERE`/`ORDER BY`.
+- **Índices nuevos en tablas grandes con `CONCURRENTLY`** — patrón obligatorio (ver INC-01 en AUDIT.md): (1) Crear archivo de migración con la sentencia `CREATE INDEX CONCURRENTLY IF NOT EXISTS` como documentación, pero **no** ejecutarlo via `migrate deploy` — Prisma 5.x envuelve toda migración en `BEGIN…COMMIT` independientemente del número de sentencias; `CONCURRENTLY` lanza código 25001 dentro de transacción y deja la BD en P3009 (bloqueada). (2) Aplicar el índice fuera de transacción: `npx prisma db execute --file <migration.sql>` (desde `apps/api/`). (3) Verificar `indisvalid=true` en `pg_indexes` antes de continuar; si `indisvalid=false`, el índice es inútil — `DROP INDEX CONCURRENTLY` y reintentar. (4) Marcar sin ejecutar: `npx prisma migrate resolve --applied <nombre>` (desde `apps/api/`). (5) Verificar `npx prisma migrate status` → 0 pendientes antes de push/redeploy. Aplicar un índice por migración; crear los archivos de docs separados por índice.
 - **Paginación obligatoria** en todos los endpoints de listas.
 - Compresión gzip/brotli con `compression` middleware.
 - Caché Redis de respuestas de APIs externas con TTL apropiado.
@@ -814,6 +826,8 @@ io.adapter(createAdapter(pubClient, subClient));
 - Tipos compartidos en `packages/types`, schemas Zod en `packages/validators`.
 - Logs con `pino` — nunca `console.log` en producción.
 - Analíticas con `lib/analytics.ts` — nunca llamar al SDK directamente.
+- **Un único propietario del estado de progreso de sync**: no instanciar `useSyncProgress` en más de un componente simultáneamente. El componente raíz de la pantalla (ej. `LibraryScreen`) es el propietario; pasa `isRunning: boolean` como prop a los hijos (`SyncStatusBar`). Instanciar el hook en varios componentes duplica listeners Socket.io, timers de gracia e intervals de polling fallback por cada instancia.
+- **Selectores Zustand siempre precisos**: usar `useStore((s) => s.campo)` en lugar de `useStore()` sin selector. Sin selector, cualquier cambio en el store (XP o nivel tras sync) re-renderiza el componente completo aunque el campo que usa no haya cambiado.
 - **Actualizar el backlog** al final de cada sesión marcando ítems completados con ✅.
 
 ### Estrategia de branching
@@ -894,6 +908,14 @@ railway up
 # Ver estado del servicio
 railway status
 ```
+
+### Railway MCP — política de permisos
+
+- **Lectura libre** (sin pedir confirmación): estado de servicios y deployments, logs de build/deploy, listar variables, métricas, dominios.
+- **Acciones que REQUIEREN confirmación explícita del usuario ANTES de ejecutar** (mostrar el comando exacto y esperar OK): redeploy, accept/reject deploy, crear/editar/borrar variables de entorno, cambiar dominios o settings del servicio, restart de servicio, y cualquier uso de railway-agent.
+- Antes de cualquier redeploy: confirmar que los cambios están pusheados a GitHub (Railway despliega el commit remoto, no los commits locales).
+- Nunca operar sobre la base de datos de producción vía el MCP de Railway; la cirugía de BD (prisma migrate resolve, SQL) va por separado y con confirmación explícita.
+- Alcance temporal: el MCP de Railway está conectado de forma provisional (~2 meses, fase de lanzamiento). Revisar si se mantiene tras ese periodo.
 
 ---
 
@@ -1054,7 +1076,8 @@ Métricas disponibles:
 | Rechazar solicitud de amistad | ✅ Activo |
 | Eliminar amigo | ✅ Activo |
 | Bloquear usuario | ✅ Activo |
-| Feed de actividad | ✅ Activo — cursor pagination (`id: { lt: cursor }`, `CursorPaginatedResponse<T>`, `useFeed` con `useInfiniteQuery`) |
+| Feed de actividad (amigos) | ✅ Activo — cursor pagination (`id: { lt: cursor }`, `CursorPaginatedResponse<T>`, `useFeed` con `useInfiniteQuery`) |
+| Feed de actividad (público) | ✅ Activo — cursor pagination idéntica a feed de amigos: `usePublicFeed` + `queryKeys.publicFeed()`. Sin `count()` ni `skip`. |
 | Perfil público (sin email) | ✅ Activo |
 | Comparación de perfiles ("vs tú") | ✅ Activo |
 | Compartir perfil (URL OG) | ✅ Activo — share button en `profile/[username].tsx` comparte `https://unlockhub.app/u/{username}` |
@@ -1155,6 +1178,16 @@ Ver [docs/DECISIONS.md](docs/DECISIONS.md)
 
 ---
 
+## Flujo de trabajo con Claude
+
+- Proyecto de Claude 'UnlockHub' sincronizado con los docs del repo (CLAUDE.md, BACKLOG.md, DECISIONS.md) vía integración GitHub.
+- La sincronización NO es automática: pulsar 'Sync now' en el proyecto al inicio de cada sesión si se han pusheado cambios en los docs.
+- Prompts a Claude Code siempre empiezan con 'Lee el CLAUDE.md completo antes de hacer cualquier cambio.'
+- Flujo de release: develop → main con --no-ff + tag vX.Y.Z. EAS version source: remote (versionCode gestionado por EAS, ignora app.json).
+- Builds de diagnóstico: usar build local (docs/BUILD_LOCAL.md) para no consumir cuota EAS. Build local apunta a producción cambiando EXPO_PUBLIC_API_URL en .env.local.
+
+---
+
 ## Roadmap
 
 | Fase | Contenido | Estado |
@@ -1205,6 +1238,28 @@ Ver [docs/BACKLOG.md](docs/BACKLOG.md)
 ---
 
 ## Última revisión de código
+
+**Fecha**: 2026-06-13 (analítica de retención pre-lanzamiento) — Instrumentación PostHog mínima para medir retención y activación. `lib/analytics.ts`: extendido con `identify(userId, properties)`, `reset()`, `appOpen()` y `syncCompleted(platform)`. `hooks/useAuth.ts`: `analytics.identify` en login/register `onSuccess`; `analytics.reset()` en ambas ramas de logout. `app/_layout.tsx` (`SessionRestorer`): `analytics.appOpen()` en cada cold start; `analytics.identify` tras restaurar sesión exitosamente. Eventos tipados conectados: `onboarding_completed` en `onboarding.tsx`, `platform_linked` en las 3 pantallas de vinculación (Steam/RA/PSN), `wrapped_shared` en `wrapped/[year].tsx`, `sync_completed` en `useSyncProgress.ts:onSyncComplete`. `.env.example` actualizado con `EXPO_PUBLIC_POSTHOG_API_KEY` (placeholder). Estado EAS secret: verificar en expo.dev → Secrets antes de la próxima build. Tests: 4 nuevos en `__tests__/hooks/useAuth.test.ts` (identify en login/register, reset en logout exitoso y fallido). Tests: **411 mobile (+4) · 632 API · 0 TS/lint**.
+
+**Fecha**: 2026-06-13 (auditoría S7 — A51 tope de juegos Steam por sync) — Control de costes pre-lanzamiento. `STEAM_MAX_GAMES_PER_SYNC = 100` en `steamQuota.ts`. `steam.adapter.ts`: `rtime_last_played` en `SteamOwnedGame`; método privado `sortEligibleByActivity` (rtime_last_played desc + playtime_forever desempate); tope aplicado en `syncUser` y `syncUserBatched` antes de `processGames`; log pino cuando hay omisiones; `total` del progreso refleja solo juegos procesados. Coherencia A24: contador Redis solo incrementa en juegos procesados. `syncUserExpress` sin cambios (tope propio 20). `gamesSkipped` no propagado al socket/mobile (coste alto — log/no-op documentado). 3 tests: ≤100 todos procesados, >100 exactamente los 100 más recientes, contador Redis 301 (no 451). Tests: **632 API (+3) · 407 mobile · 0 TS/lint**.
+
+**Fecha**: 2026-06-13 (auditoría S6b — cierre limpieza) — Sesión de cierre de la limpieza post-lanzamiento. **A22**: `triggerExpressSync` ahora llama `queueInitialSync` cuando el lock Redis no está disponible — el trabajo nunca se pierde silenciosamente; sin doble encolado cuando sí adquiere el lock. 2 tests nuevos. **A39**: `loadUserAchievements` en `wrapped.service.ts` migrado a `select` explícito — solo los 5 campos de achievement y 4 de game realmente usados en `computeStats`/`computeExtendedStats`; tipo `UserAchievementFull` actualizado. **A9**: `eslint-disable-next-line security/detect-unsafe-regex` con justificación en `useWrapped.ts:15`. **A12/A13**: `.depcheckrc` en `apps/api/` y `apps/worker/` documentando falsos positivos de depcheck. Barrido: madge 0 ciclos (375 archivos) · i18n ES=EN 627 claves 0 diff · 0 queryKeys literales en producción · `usePublicFeed` hook huérfano (sin pantalla consumidora — T93). **Reconciliación nomenclatura**: S6a (A49, A41, A2) + S6b (A9, A12, A13, A22, A37, A39, barrido) — etiquetas S6c/S6d absorbidas. A38/A40 formalizados como 🔲 Fase 4. Tests: **629 API (+2) · 407 mobile · 0 TS/lint**.
+
+**Fecha**: 2026-06-13 (auditoría S6d — A37) — `getPublicFeed` migrado de offset pagination a cursor-based. Firma nueva: `getPublicFeed(limit, cursor?)` → `CursorPaginatedResponse<ActivityEvent>` — sin `count()`, sin `skip`, filtro `id: { lt: cursor }`. Controller usa `feedQuerySchema` existente (eliminado import `paginationSchema`). Mobile: `hooks/usePublicFeed.ts` + `queryKeys.publicFeed()`. Cutover limpio confirmado con grep — no había consumidor activo. Decisión de compatibilidad y orden de despliegue documentados en SESSION_LOG. Tests: 627 API (+4) · 407 mobile (+5) · 0 TS/lint.
+
+**Fecha**: 2026-06-13 (auditoría S6c — A2) — Cierre CVE tar: override imposible sin `--force`. `@mapbox/node-pre-gyp@1.0.11` declara `tar@^6.1.11`; npm 11.12.1 no aplica overrides que crucen major-version boundaries (probadas 4 variantes — plana, anidada, con y sin lock file). `npm audit fix --force` descartado. **Riesgo aceptado**: tar solo se ejecuta en `npm install` (extracción binario precompilado de bcrypt), no en el runtime del servidor. Superficie real: atacante debe comprometer npm registry bajo HTTPS+SHA-512. **Alternativa futura**: `bcrypt@5→6` (usa `node-gyp-build`, elimina `@mapbox/node-pre-gyp` + `tar`) — diferida a auditoría post-lanzamiento. Sin cambios de código. Tests: 623 API · 402 mobile · 0 TS/lint.
+
+**Fecha**: 2026-06-13 (auditoría S6b — A41) — Cuota Steam 90 % en manual sync. `apps/api/src/config/steamQuota.ts` centraliza `STEAM_DAILY_LIMIT`, `STEAM_BACKGROUND_SYNC_THRESHOLD` (0.8) y `STEAM_MANUAL_SYNC_THRESHOLD` (0.9). `background-sync.scheduler.ts` migrado a importar del módulo compartido. `triggerManualSync`: nuevo bloque de comprobación de cuota para `platform === 'STEAM'` antes de encolar — lee el contador Redis del día; si ≥ 90 %: libera cooldown + retorna `skippedByQuota: true` si hay otras plataformas, o lanza `STEAM_QUOTA_EXCEEDED` 429 si Steam es la única. Controller: HTTP 200 para `skippedByQuota`, 202 para sync real. Mobile `useSyncAll`: detecta ambos escenarios y expone `steamQuotaState: 'exceeded'|'skipped'|null`. `SyncStatusBar`: aviso no bloqueante (rojo exceeded / ámbar skipped). 5 tests nuevos (3 API + 2 mobile) + 1 fix mock en `SyncStatusBar.test.tsx`. Tests: 623 API (+3) · 402 mobile (+2) · 0 TS/lint.
+
+**Fecha**: 2026-06-13 (auditoría S6a — A49) — UMP consent vs AdBanner. `consentResolved: boolean` (inicial `false`) añadido a `preferencesStore` sin persistencia AsyncStorage. `useGdprConsent` llama `setConsentResolved(true)` en `finally` de `requestConsent()` (ambas ramas: NOT_REQUIRED y REQUIRED) y en early return si el módulo nativo no está disponible. `AdBanner` gatea render con `if (!consentResolved) return null` de forma centralizada. 5 tests nuevos: 2 en `AdBanner.test.tsx` + 3 en `__tests__/hooks/useGdprConsent.test.ts`. Tests: 400 mobile (+5) · 620 API · 0 TS/lint.
+
+**Fecha**: 2026-06-12 (incidente deploy INC-01 — solo documentación) — Migración `20260612000000_add_performance_indexes_s3` (índices A33-A36) bloqueó producción con P3018/P3009: `CREATE INDEX CONCURRENTLY` no puede ejecutarse dentro de la transacción que Prisma 5.x añade automáticamente a toda migración. Resolución: `migrate resolve --rolled-back` → 5 índices creados manualmente con `prisma db execute --file` (fuera de transacción) → `indisvalid=true` verificado en todos → cada migración marcada con `migrate resolve --applied` → deploy SUCCESS. Sin cambios de código; solo archivos de migración y documentación. Pendiente de seguridad: rotar contraseña Postgres en Railway (SEC-01, AUDIT.md). Convención CONCURRENTLY actualizada en este documento.
+
+**Fecha**: 2026-06-11 (auditoría S5) — Mobile, seguridad y datos. A44 thumbnails Cloudinary (5 puntos), A45 polling dinámico useSyncStatus, A46 Sentry beforeSend (redacta token/Authorization y body /auth/*), A48 401 en refresh → clearSession + redirección a login (antes sesión inválida sin redirigir), A10 completo (0 console.log en producción mobile). A49 (UMP consent) → S6a pre-lanzamiento. Tests: 395 mobile (+8) · 620 API · 0 TS/lint.
+
+**Fecha**: 2026-06-11 (sesión 72) — Diagnóstico y fix de bugs en producción vía build local con logs de Metro. Fix uploadFile: XMLHttpRequest en lugar de fetch para multipart en React Native (fetch no serializa {uri,name,type} correctamente). Fix ruta rewarded-ad: '/api/v1/points/rewarded-ad' → '/api/v1/users/me/points/rewarded-ad' (ruta incorrecta desde el inicio, causaba 404). Fix bannerMutation.onSuccess: actualiza store de sesión en tiempo real con nuevo banner (antes requería reiniciar app). Fix loginHandler: añadidos avatar, banner, streakDays, streakShields, countryCode, profileVisibility, role a la respuesta. Fix meHandler: ahora devuelve perfil completo via userService.getProfile() en lugar de solo {id,email,isPremium}. Causa raíz del banner/avatar perdido tras logout: la respuesta de login no incluía avatar/banner. Tests: 385 mobile + 611 API. 0 errores TS/lint.
+
+**Fecha**: 2026-06-10 (sesión 71) — Segunda auditoría completa apps/mobile en dos prompts. Prompt 1 (crashes): ALTO-1 useRewardedAd listener CLOSED leak en showForReward → showForRewardUnsubRef + inFlightRef guard doble llamada. ALTO-2 isReady como useState reactivo. MEDIO-1 useWrappedInterstitial cooldown guardado antes de show() → movido dentro del callback + useRef para timeout. MEDIO-2 useCompletedGamesInterstitial IDs guardados antes de show() → flag cancelled + solo guardar si show() devolvió true. BAJO-1 ComingSoon edges prop opcional. Prompt 2 (calidad): CRÍTICO 5 claves i18n faltantes en PremiumBanner (active_lifetime, active_lifetime_desc, _aria×3). ALTO useRankings queryKeys locales migradas a lib/queryKeys.ts. ALTO useFeed flag unmounted en doConnect. ALTO reset-password guard token. ALTO profile.tsx AppState listener cooldown rewarded + guard data?.avatar + invalida queryKeys.me(). ALTO PremiumBanner expiresAt null guard. MEDIO useInterstitialAd show() retorna boolean. MEDIO useSyncProgress flag unmounted en grace timer. BAJO useSubscription cancelled flag. BAJO ComingSoon challenges edges. Tests: 378 mobile + 611 API. 0 errores TS/lint.
 
 **Fecha**: 2026-06-09 (sesión 70c) — Auditoría completa apps/mobile: 2 prompts de análisis. Fixes aplicados: useRewardedAd (RewardedAdEventType.CLOSED→AdEventType.CLOSED + tipo corregido), friends.tsx SafeAreaView edges, socket leaks en useFeed + useSyncProgress (handlers con nombre + off() en cleanup), AsyncStorage sin await en useWrappedInterstitial + useCompletedGamesInterstitial, i18n duplicados (sync_button + settings_theme en es.json y en.json), guards param undefined en game/[id].tsx + profile/[username].tsx + user-game/[username]/[gameId].tsx + wrapped/[year].tsx, queryKeys locales en useFriends migradas a lib/queryKeys.ts, debounce en preferencesStore.persistCurrent, useMemo en useMyGames deduplicación, AbortController timeout ref en useMaintenanceCheck, staleTime 5min en useRankings. Tests: 378 mobile + 611 API. 0 errores TS/lint.
 

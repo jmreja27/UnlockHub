@@ -3,6 +3,7 @@ import { registerSchema, loginSchema } from '@unlockhub/validators';
 import { z } from 'zod';
 
 import * as authService from '../services/auth.service';
+import * as userService from '../services/user.service';
 import { AppError } from '../middleware/errorHandler';
 import type { AuthenticatedRequest } from '../middleware/authenticate';
 
@@ -48,6 +49,13 @@ export async function loginHandler(req: Request, res: Response, next: NextFuncti
         isPremium: user.isPremium,
         level: user.level,
         xp: user.xp,
+        streakDays: user.streakDays,
+        streakShields: user.streakShields,
+        countryCode: user.countryCode,
+        avatar: user.avatar,
+        banner: user.banner,
+        profileVisibility: user.profileVisibility,
+        role: user.role,
       },
     });
   } catch (err) {
@@ -91,9 +99,14 @@ export async function logoutAllHandler(req: Request, res: Response, next: NextFu
   }
 }
 
-export function meHandler(req: Request, res: Response) {
-  const { id, email, isPremium } = (req as AuthenticatedRequest).user;
-  res.json({ id, email, isPremium });
+export async function meHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id } = (req as AuthenticatedRequest).user;
+    const profile = await userService.getProfile(id);
+    res.json(profile);
+  } catch (err) {
+    next(err);
+  }
 }
 
 export async function forgotPasswordHandler(req: Request, res: Response, next: NextFunction) {

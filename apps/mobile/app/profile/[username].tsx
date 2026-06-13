@@ -18,6 +18,7 @@ import { FriendshipButton } from '../../components/FriendshipButton';
 import { getPlatformColor } from '../../lib/platformColors';
 import { useTheme } from '../../hooks/useTheme';
 import { analytics } from '../../lib/analytics';
+import { getCloudinaryThumb } from '../../lib/cloudinary';
 
 interface CompareResult {
   targetUser: { username: string; level: number; xp: number; avatar: string | null };
@@ -140,7 +141,7 @@ export default function PublicProfileScreen() {
           }
         >
           <Image
-            source={profile.banner ?? null}
+            source={getCloudinaryThumb(profile.banner, 800, 240) ?? null}
             style={{ width: '100%', height: 120 }}
             contentFit="cover"
             placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
@@ -149,7 +150,7 @@ export default function PublicProfileScreen() {
           <View className="px-4 -mt-10">
             {profile.avatar ? (
               <Image
-                source={{ uri: profile.avatar }}
+                source={{ uri: getCloudinaryThumb(profile.avatar, 160, 160) }}
                 style={{ width: 80, height: 80, borderRadius: 40, borderWidth: 3, borderColor: '#16213e' }}
                 contentFit="cover"
                 placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}

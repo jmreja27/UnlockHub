@@ -24,9 +24,10 @@ import { PremiumBanner } from '../../components/PremiumBanner';
 import { ActivityCard } from '../../components/ActivityCard';
 import { AvatarPlaceholder } from '../../components/AvatarPlaceholder';
 import { FEATURES } from '../../lib/featureFlags';
-import { api } from '../../lib/api';
+import { api, uploadFile, getAccessToken } from '../../lib/api';
 import { useFeed } from '../../hooks/useFeed';
 import { queryKeys } from '../../lib/queryKeys';
+import { getCloudinaryThumb } from '../../lib/cloudinary';
 
 interface UserStats {
   xpByWeek: { week: string; xp: number }[];
@@ -211,11 +212,18 @@ export default function ProfileScreen() {
       const form = new FormData();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       form.append('banner', { uri, name: filename, type } as any);
-      return api.post('/api/v1/users/me/banner', form);
+      return uploadFile<{ banner: string }>('/api/v1/users/me/banner', form, getAccessToken());
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.profile() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.me() });
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (data?.banner) {
+        const current = useSessionStore.getState().user;
+        if (current) {
+          useSessionStore.getState().setUser({ ...current, banner: data.banner });
+        }
+      }
     },
     onError: () => {
       Alert.alert(t('profile.banner_error_title'), t('profile.banner_error_message'));
@@ -231,7 +239,7 @@ export default function ProfileScreen() {
       const type = mimeMap[ext] ?? 'image/jpeg';
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       form.append('avatar', { uri, name: filename, type } as any);
-      return api.post<{ avatar: string }>('/api/v1/users/me/avatar', form);
+      return uploadFile<{ avatar: string }>('/api/v1/users/me/avatar', form, getAccessToken());
     },
     onSuccess: (data) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.profile() });
@@ -432,7 +440,7 @@ export default function ProfileScreen() {
         >
           {user.banner ? (
             <Image
-              source={{ uri: user.banner }}
+              source={{ uri: getCloudinaryThumb(user.banner, 800, 240) }}
               style={{ width: '100%', height: 120 }}
               contentFit="cover"
               accessibilityElementsHidden
@@ -477,7 +485,7 @@ export default function ProfileScreen() {
           >
             {user.avatar ? (
               <Image
-                source={{ uri: user.avatar }}
+                source={{ uri: getCloudinaryThumb(user.avatar, 192, 192) }}
                 placeholder={AVATAR_BLURHASH}
                 style={{ width: 96, height: 96, borderRadius: 48 }}
                 contentFit="cover"

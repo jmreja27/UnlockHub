@@ -6,6 +6,7 @@ import { prisma } from '../lib/prisma';
 import { syncQueue } from '../jobs/sync.queue';
 import { AppError } from '../middleware/errorHandler';
 import { FEATURES } from '../config/features';
+import { STEAM_DAILY_LIMIT, STEAM_MANUAL_SYNC_THRESHOLD } from '../config/steamQuota';
 import { steamAdapter } from '../platforms/steam.adapter';
 import { retroAchievementsAdapter } from '../platforms/retroachievements.adapter';
 import { psnAdapter } from '../platforms/psn.adapter';
@@ -65,6 +66,39 @@ export async function triggerManualSync(
       429,
       { remainingSeconds: ttl > 0 ? ttl : cooldownSeconds },
     );
+  }
+
+  // Cuota Steam: si el contador diario de la API de Steam supera el 90 % del límite,
+  // omitir el trabajo de Steam para preservar cuota para syncs automáticos y otros usuarios.
+  // Solo se aplica a STEAM — la cuota es por plataforma.
+  if (platform === 'STEAM') {
+    const today = new Date().toISOString().slice(0, 10);
+    const steamCalls = parseInt((await redis.get(`steam:api:calls:${today}`)) ?? '0', 10);
+
+    if (steamCalls >= STEAM_DAILY_LIMIT * STEAM_MANUAL_SYNC_THRESHOLD) {
+      // Liberar cooldown para no penalizar al usuario: el rechazo es de infraestructura, no suyo.
+      await redis.del(cooldownKey(userId, platform));
+
+      const otherPlatformsCount = await prisma.platformAccount.count({
+        where: { userId, platform: { not: 'STEAM' } },
+      });
+
+      if (otherPlatformsCount === 0) {
+        throw new AppError(
+          'Cuota de Steam API agotada por hoy. Inténtalo mañana.',
+          'STEAM_QUOTA_EXCEEDED',
+          429,
+        );
+      }
+
+      // Múltiples plataformas: omitir Steam silenciosamente; el resto se encola normalmente.
+      return {
+        jobId: undefined,
+        platform,
+        message: 'Steam omitido: cuota de API al 90 %. El resto de tus plataformas se sincronizarán normalmente.',
+        skippedByQuota: true as const,
+      };
+    }
   }
 
   // Comprobar límite diario de syncs manuales (solo tier free) — INCR atómico
@@ -276,8 +310,8 @@ export async function getAggregateSyncStatus(
  * que dos express syncs del mismo usuario corran en paralelo (ej: Steam + PSN vinculados
  * en rápida sucesión durante el onboarding) o que el express sync solape con un job
  * de BullMQ que ya arrancó para el mismo usuario.
- * Si el lock no está disponible, se omite el express sync: el queueInitialSync encolado
- * justo después se encargará de la sincronización completa.
+ * Si el lock no está disponible, se omite el express sync y se encola un full sync
+ * como fallback para que el trabajo no se pierda (A22).
  */
 export async function triggerExpressSync(
   userId: string,
@@ -297,7 +331,10 @@ export async function triggerExpressSync(
   const acquired = await redis.set(lockKey, 'express', 'EX', 120, 'NX');
 
   if (!acquired) {
-    logger.info({ userId, platform }, '[SyncService] Express sync omitido — sync activo para este usuario');
+    logger.info({ userId, platform }, '[SyncService] Express sync omitido — sync activo para este usuario; encolando full sync como fallback');
+    // Encolar el full sync para que el trabajo no se pierda (UX: usuario que vincula
+    // dos plataformas en <25s vería la segunda sin logros hasta el sync nocturno).
+    await queueInitialSync(userId, platform);
     return;
   }
 

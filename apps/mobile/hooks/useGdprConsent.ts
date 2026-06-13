@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
 
+import { usePreferencesStore } from '../stores/preferencesStore';
+
 // Carga dinámica para evitar crashes si el módulo nativo no está disponible
 let AdsConsentModule: {
   requestInfoUpdate: () => Promise<{ isConsentFormAvailable: boolean; status: string }>;
@@ -21,8 +23,14 @@ try {
 }
 
 export function useGdprConsent(): void {
+  const setConsentResolved = usePreferencesStore((s) => s.setConsentResolved);
+
   useEffect(() => {
-    if (!AdsConsentModule || !ConsentStatus) return;
+    if (!AdsConsentModule || !ConsentStatus) {
+      // Módulo no disponible: no hay proceso de consentimiento, desbloquear anuncios
+      setConsentResolved(true);
+      return;
+    }
 
     async function requestConsent() {
       try {
@@ -32,9 +40,12 @@ export function useGdprConsent(): void {
         }
       } catch {
         // No interrumpir la app si el formulario de consentimiento falla
+      } finally {
+        // Marcar consentimiento resuelto en ambas ramas (formulario mostrado o no necesario)
+        setConsentResolved(true);
       }
     }
 
     void requestConsent();
-  }, []);
+  }, [setConsentResolved]);
 }

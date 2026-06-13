@@ -8,6 +8,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { usePreferencesStore } from '../stores/preferencesStore';
 import { getPlatformColor } from '../lib/platformColors';
+import { analytics } from '../lib/analytics';
 
 interface Step {
   titleKey: string;
@@ -39,6 +40,7 @@ export default function OnboardingScreen() {
 
   function finish() {
     completeOnboarding();
+    void analytics.onboardingCompleted();
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     router.replace('/(tabs)');
   }

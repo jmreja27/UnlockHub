@@ -16,13 +16,13 @@ const MAX_IDS = 500;
  * Solo para usuarios free. Llamar desde LibraryScreen con la lista completa de juegos.
  */
 export function useCompletedGamesInterstitial(games: LibraryGame[]) {
-  const { user } = useSessionStore();
+  const isPremium = useSessionStore((s) => s.user?.isPremium ?? false);
   const { show } = useInterstitialAd();
   const checkedRef = useRef(false);
 
   useEffect(() => {
     // Solo ejecutar cuando la lista está disponible y es la primera vez en esta sesión
-    if (user?.isPremium || games.length === 0 || checkedRef.current) return;
+    if (isPremium || games.length === 0 || checkedRef.current) return;
 
     const completedNow = games.filter((g) => g.completionPct === 100).map((g) => g.id);
     if (completedNow.length === 0) return;
@@ -53,5 +53,5 @@ export function useCompletedGamesInterstitial(games: LibraryGame[]) {
     })();
 
     return () => { cancelled = true; };
-  }, [games, show, user?.isPremium]);
+  }, [games, show, isPremium]);
 }

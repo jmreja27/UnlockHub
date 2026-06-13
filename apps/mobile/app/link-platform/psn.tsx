@@ -17,6 +17,7 @@ import type { PlatformAccount } from '@unlockhub/types';
 
 import { api, ApiRequestError } from '../../lib/api';
 import { queryKeys } from '../../lib/queryKeys';
+import { analytics } from '../../lib/analytics';
 
 function PrivacyGuide() {
   const { t } = useTranslation();
@@ -75,6 +76,7 @@ export default function LinkPsnScreen() {
     mutationFn: (psnUsername: string) =>
       api.post<PlatformAccount>('/api/v1/platforms/psn/link', { username: psnUsername }),
     onSuccess: () => {
+      void analytics.platformLinked('PSN');
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       void queryClient.invalidateQueries({ queryKey: queryKeys.linkedPlatforms() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.platformsBase() });

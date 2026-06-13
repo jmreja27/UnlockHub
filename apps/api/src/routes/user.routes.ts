@@ -24,8 +24,8 @@ const router = Router();
 // Rutas privadas — requieren autenticación
 router.get('/me', authenticate, getMeHandler);
 router.patch('/me', authenticate, updateMeHandler);
-router.post('/me/avatar', authenticate, uploadAvatar, uploadAvatarHandler);
-router.post('/me/banner', authenticate, uploadBanner, uploadBannerHandler);
+router.post('/me/avatar', authenticate, ...uploadAvatar, uploadAvatarHandler);
+router.post('/me/banner', authenticate, ...uploadBanner, uploadBannerHandler);
 router.get('/me/games', authenticate, getMyGamesHandler);
 router.get('/me/games/:gameId/achievements', authenticate, getMyGameAchievementsHandler);
 router.get('/me/streak-milestone', authenticate, getStreakMilestoneHandler);

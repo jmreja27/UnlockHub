@@ -13,6 +13,7 @@ interface AggregateSyncStatus {
   manualSyncsUsedToday: number;
   dailySyncsLimit: number | null;
   anyPlatformLinked: boolean;
+  isRunning?: boolean;
 }
 
 export interface SyncStatusResult {
@@ -67,7 +68,7 @@ export function useSyncStatus(userId: string | undefined): SyncStatusResult {
     queryFn: () => api.get<AggregateSyncStatus>('/api/v1/sync/my-summary'),
     enabled: !!userId,
     staleTime: 30_000,
-    refetchInterval: 60_000,
+    refetchInterval: (query) => query.state.data?.isRunning ? 2_000 : false,
   });
 
   if (!data) {

@@ -5,6 +5,8 @@ import type { Achievement, Game, SyncResult } from '@unlockhub/types';
 import { prisma } from '../lib/prisma';
 import { redis } from '../lib/redis';
 import { AppError } from '../middleware/errorHandler';
+import { logger } from '../lib/logger';
+import { STEAM_MAX_GAMES_PER_SYNC } from '../config/steamQuota';
 
 import type { PlatformAdapter, SyncBatchCallback } from './platform.interface';
 import { getCachedGameMeta, setCachedGameMeta } from './game-cache';
@@ -36,6 +38,8 @@ interface SteamOwnedGame {
   img_icon_url: string;
   has_community_visible_stats?: boolean;
   playtime_forever?: number;
+  /** Unix timestamp de la última sesión de juego. 0 si el juego nunca se ha iniciado. */
+  rtime_last_played?: number;
 }
 
 interface SteamPlayerAchievement {
@@ -58,6 +62,21 @@ interface SteamGlobalAchievementPercentage {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Incrementa el contador diario de llamadas reales a la Steam API.
+ * Se llama exclusivamente cuando hay cache miss (dentro del fetcher de cachedFetch).
+ * El scheduler de background-sync y el dashboard admin leen esta clave para decidir si continuar.
+ */
+async function incrementSteamApiCounter(): Promise<void> {
+  const today = new Date().toISOString().slice(0, 10);
+  const key = `steam:api:calls:${today}`;
+  const newCount = await redis.incr(key);
+  if (newCount === 1) {
+    // Primera llamada del día — fijar TTL de 48h para no acumular claves indefinidamente
+    await redis.expire(key, 48 * 3600);
+  }
+}
 
 /**
  * Normaliza los puntos de un logro en función de su rareza.
@@ -264,7 +283,15 @@ export class SteamAdapter implements PlatformAdapter {
     const steamId = account.externalId;
     const games = await this.fetchOwnedGames(steamId, apiKey);
     const eligible = games.filter((g) => g.has_community_visible_stats);
-    return this.processGames(eligible, steamId, apiKey, account.userId);
+    const capped = this.sortEligibleByActivity(eligible).slice(0, STEAM_MAX_GAMES_PER_SYNC);
+    const skipped = eligible.length - capped.length;
+    if (skipped > 0) {
+      logger.info(
+        { userId: account.userId, total: eligible.length, syncing: capped.length, skipped },
+        '[SteamAdapter] Biblioteca grande: omitidos juegos por STEAM_MAX_GAMES_PER_SYNC — procesando los más recientes',
+      );
+    }
+    return this.processGames(capped, steamId, apiKey, account.userId);
   }
 
   // ── syncUserExpress ────────────────────────────────────────────────────────
@@ -291,14 +318,25 @@ export class SteamAdapter implements PlatformAdapter {
 
     const games = await this.fetchOwnedGames(steamId, apiKey);
     const eligible = games.filter((g) => g.has_community_visible_stats);
-    const total = eligible.length;
+    const capped = this.sortEligibleByActivity(eligible).slice(0, STEAM_MAX_GAMES_PER_SYNC);
+    const skipped = eligible.length - capped.length;
+    if (skipped > 0) {
+      logger.info(
+        { userId: account.userId, total: eligible.length, syncing: capped.length, skipped },
+        '[SteamAdapter] Biblioteca grande: omitidos juegos por STEAM_MAX_GAMES_PER_SYNC — procesando los más recientes',
+      );
+    }
+
+    // El total del progreso se calcula sobre los juegos efectivamente procesados,
+    // no sobre la biblioteca completa — el cliente verá 100 % al terminar este intento.
+    const total = capped.length;
 
     let achievementsSynced = 0;
     let gamesUpdated = 0;
     let processed = 0;
 
-    for (let i = 0; i < eligible.length; i += BATCH_SIZE) {
-      const batch = eligible.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < capped.length; i += BATCH_SIZE) {
+      const batch = capped.slice(i, i + BATCH_SIZE);
       const batchResult = await this.processGames(batch, steamId, apiKey, account.userId);
 
       achievementsSynced += batchResult.achievementsSynced;
@@ -319,6 +357,23 @@ export class SteamAdapter implements PlatformAdapter {
       gamesUpdated,
       syncedAt: new Date().toISOString(),
     };
+  }
+
+  // ── Ordenación por actividad reciente ─────────────────────────────────────
+
+  /**
+   * Ordena los juegos elegibles priorizando los más jugados recientemente.
+   * Señal primaria: rtime_last_played (Unix timestamp de la última sesión, 0 si nunca jugado).
+   * Señal secundaria: playtime_forever (horas totales) como desempate cuando rtime es igual.
+   * Ambas señales las devuelve GetOwnedGames con include_appinfo=true.
+   */
+  private sortEligibleByActivity(games: SteamOwnedGame[]): SteamOwnedGame[] {
+    return [...games].sort((a, b) => {
+      const aTime = a.rtime_last_played ?? 0;
+      const bTime = b.rtime_last_played ?? 0;
+      if (bTime !== aTime) return bTime - aTime;
+      return (b.playtime_forever ?? 0) - (a.playtime_forever ?? 0);
+    });
   }
 
   // ── Lógica de procesamiento compartida ────────────────────────────────────
@@ -449,6 +504,7 @@ export class SteamAdapter implements PlatformAdapter {
       `steam:games:${steamId}`,
       TTL_GAMES,
       async () => {
+        await incrementSteamApiCounter();
         const url = `${STEAM_API_BASE}/IPlayerService/GetOwnedGames/v0001/`;
         const response = await axios.get<{
           response: { games?: SteamOwnedGame[] };
@@ -460,6 +516,7 @@ export class SteamAdapter implements PlatformAdapter {
             include_played_free_games: true,
             format: 'json',
           },
+          timeout: 10_000,
         });
 
         const games = response.data.response.games;
@@ -490,6 +547,7 @@ export class SteamAdapter implements PlatformAdapter {
       `steam:achievements:${steamId}:${appId}`,
       TTL_ACHIEVEMENTS,
       async () => {
+        await incrementSteamApiCounter();
         const url = `${STEAM_API_BASE}/ISteamUserStats/GetPlayerAchievements/v0001/`;
         try {
           const response = await axios.get<{
@@ -505,6 +563,7 @@ export class SteamAdapter implements PlatformAdapter {
               steamid: steamId,
               format: 'json',
             },
+            timeout: 10_000,
           });
 
           const { playerstats } = response.data;
@@ -539,6 +598,7 @@ export class SteamAdapter implements PlatformAdapter {
       `steam:schema:${appId}:es`,
       TTL_SCHEMA,
       async () => {
+        await incrementSteamApiCounter();
         const url = `${STEAM_API_BASE}/ISteamUserStats/GetSchemaForGame/v2/`;
         try {
           const response = await axios.get<{
@@ -554,6 +614,7 @@ export class SteamAdapter implements PlatformAdapter {
               l: 'spanish',
               format: 'json',
             },
+            timeout: 10_000,
           });
 
           return response.data.game?.availableGameStats?.achievements ?? [];
@@ -575,6 +636,7 @@ export class SteamAdapter implements PlatformAdapter {
       `steam:rarity:${appId}`,
       TTL_RARITY,
       async () => {
+        await incrementSteamApiCounter();
         const url = `${STEAM_API_BASE}/ISteamUserStats/GetGlobalAchievementPercentagesForApp/v0002/`;
         try {
           const response = await axios.get<{
@@ -583,6 +645,7 @@ export class SteamAdapter implements PlatformAdapter {
             };
           }>(url, {
             params: { gameid: appId, format: 'json' },
+            timeout: 10_000,
           });
           return response.data.achievementpercentages?.achievements ?? [];
         } catch {
@@ -630,12 +693,14 @@ export async function fetchSteamAchievementDefinitions(
     `steam:schema:${appId}:es`,
     TTL_SCHEMA,
     async () => {
+      await incrementSteamApiCounter();
       const url = `${STEAM_API_BASE}/ISteamUserStats/GetSchemaForGame/v2/`;
       try {
         const response = await axios.get<{
           game?: { availableGameStats?: { achievements?: SteamSchemaAchievement[] } };
         }>(url, {
           params: { key: apiKey, appid: appId, l: 'spanish', format: 'json' },
+          timeout: 10_000,
         });
         return response.data.game?.availableGameStats?.achievements ?? [];
       } catch {
@@ -650,11 +715,12 @@ export async function fetchSteamAchievementDefinitions(
     `steam:rarity:${appId}`,
     TTL_RARITY,
     async () => {
+      await incrementSteamApiCounter();
       const url = `${STEAM_API_BASE}/ISteamUserStats/GetGlobalAchievementPercentagesForApp/v0002/`;
       try {
         const response = await axios.get<{
           achievementpercentages?: { achievements?: SteamGlobalAchievementPercentage[] };
-        }>(url, { params: { gameid: appId, format: 'json' } });
+        }>(url, { params: { gameid: appId, format: 'json' }, timeout: 10_000 });
         return response.data.achievementpercentages?.achievements ?? [];
       } catch {
         return [];

@@ -1,0 +1,3 @@
+-- Migración neutralizada: los índices se aplicaron manualmente con CREATE INDEX
+-- CONCURRENTLY (ver migraciones 000001-000005 y AUDIT.md). El CONCURRENTLY
+-- original fallaba dentro de la transacción de Prisma (error 25001).

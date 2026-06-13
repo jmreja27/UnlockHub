@@ -1,6 +1,6 @@
 jest.mock('../lib/prisma', () => ({
   prisma: {
-    activityEvent: { create: jest.fn(), findMany: jest.fn(), count: jest.fn() },
+    activityEvent: { create: jest.fn(), findMany: jest.fn() },
   },
 }));
 jest.mock('../repositories/friendship.repository', () => ({
@@ -13,7 +13,6 @@ import { friendshipRepository } from '../repositories/friendship.repository';
 
 const mockCreate = prisma.activityEvent.create as jest.Mock;
 const mockFindMany = prisma.activityEvent.findMany as jest.Mock;
-const mockCount = prisma.activityEvent.count as jest.Mock;
 const mockFriendIds = friendshipRepository.findAcceptedFriendIds as jest.Mock;
 
 const makeRow = (overrides = {}) => ({
@@ -29,7 +28,6 @@ const makeRow = (overrides = {}) => ({
 beforeEach(() => {
   jest.clearAllMocks();
   mockFindMany.mockResolvedValue([]);
-  mockCount.mockResolvedValue(0);
 });
 
 describe('createEvent', () => {
@@ -115,14 +113,56 @@ describe('getFriendsFeed', () => {
 });
 
 describe('getPublicFeed', () => {
-  it('devuelve eventos paginados de todos los usuarios', async () => {
-    mockFindMany.mockResolvedValue([makeRow(), makeRow({ id: 'e2' })]);
-    mockCount.mockResolvedValue(2);
+  it('devuelve eventos paginados de todos los usuarios con nextCursor correcto', async () => {
+    const rows = Array.from({ length: 20 }, (_, i) => makeRow({ id: `e${i + 1}` }));
+    mockFindMany.mockResolvedValue(rows);
 
-    const result = await getPublicFeed(1, 20);
+    const result = await getPublicFeed(20);
 
-    expect(result.total).toBe(2);
-    expect(result.data).toHaveLength(2);
+    expect(result.data).toHaveLength(20);
+    expect(result.nextCursor).toBe('e20');
     expect(result.data[0]?.user?.username).toBe('player1');
+  });
+
+  it('devuelve nextCursor null en la última página (menos eventos que el límite)', async () => {
+    mockFindMany.mockResolvedValue([makeRow(), makeRow({ id: 'e2' })]);
+
+    const result = await getPublicFeed(20);
+
+    expect(result.data).toHaveLength(2);
+    expect(result.nextCursor).toBeNull();
+  });
+
+  it('pasa el cursor como filtro id lt al paginar', async () => {
+    mockFindMany.mockResolvedValue([]);
+
+    await getPublicFeed(20, 'cursor123');
+
+    expect(mockFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: { lt: 'cursor123' } }),
+      }),
+    );
+  });
+
+  it('no incluye filtro id cuando no se pasa cursor', async () => {
+    mockFindMany.mockResolvedValue([]);
+
+    await getPublicFeed(20);
+
+    expect(mockFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.not.objectContaining({ id: expect.anything() }),
+      }),
+    );
+  });
+
+  it('no llama a count()', async () => {
+    mockFindMany.mockResolvedValue([makeRow()]);
+
+    await getPublicFeed(20);
+
+    // prisma.activityEvent.count no existe en el mock — si se llamara lanzaría error
+    expect(mockFindMany).toHaveBeenCalledTimes(1);
   });
 });

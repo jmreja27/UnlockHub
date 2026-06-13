@@ -30,12 +30,12 @@ try {
 }
 
 export function useInterstitialAd() {
-  const { user } = useSessionStore();
+  const isPremium = useSessionStore((s) => s.user?.isPremium ?? false);
   const adRef = useRef<InterstitialAdInstance | null>(null);
   const loadedRef = useRef(false);
 
   useEffect(() => {
-    if (user?.isPremium || !admobModule) return;
+    if (isPremium || !admobModule) return;
 
     const ad = admobModule.InterstitialAd.createForAdRequest(AD_UNIT_ID);
     adRef.current = ad;
@@ -55,13 +55,13 @@ export function useInterstitialAd() {
       unsubLoaded();
       unsubClosed();
     };
-  }, [user?.isPremium]);
+  }, [isPremium]);
 
   const show = useCallback((): boolean => {
-    if (!loadedRef.current || !adRef.current || user?.isPremium) return false;
+    if (!loadedRef.current || !adRef.current || isPremium) return false;
     adRef.current.show();
     return true;
-  }, [user?.isPremium]);
+  }, [isPremium]);
 
   return { show };
 }

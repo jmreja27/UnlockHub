@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import type { ActivityEvent } from '@unlockhub/types';
 
 import { useTheme } from '../hooks/useTheme';
+import { getCloudinaryThumb } from '../lib/cloudinary';
 
 interface ActivityCardProps {
   event: ActivityEvent;
@@ -57,7 +58,7 @@ export function ActivityCard({ event }: ActivityCardProps) {
       style={{ borderBottomWidth: 1, borderBottomColor: colors.separator }}
     >
       <Image
-        source={event.user?.avatar ?? null}
+        source={getCloudinaryThumb(event.user?.avatar, 88, 88) ?? null}
         style={{ width: 44, height: 44, borderRadius: 22 }}
         contentFit="cover"
         placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}

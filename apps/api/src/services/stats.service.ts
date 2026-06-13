@@ -52,7 +52,7 @@ export async function getUserStats(userId: string): Promise<UserStats> {
 
   // Traer datos del usuario
   const user = await prisma.user.findUnique({
-    where: { id: userId },
+    where: { id: userId, deletedAt: null },
     select: { xp: true, streakDays: true },
   });
 

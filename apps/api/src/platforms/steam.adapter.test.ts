@@ -11,6 +11,8 @@ jest.mock('../lib/redis', () => ({
   redis: {
     get: jest.fn(),
     setex: jest.fn(),
+    incr: jest.fn().mockResolvedValue(1),
+    expire: jest.fn().mockResolvedValue(1),
   },
 }));
 jest.mock('../lib/prisma', () => ({ prisma: {} }));

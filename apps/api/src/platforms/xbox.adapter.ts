@@ -177,6 +177,7 @@ async function exchangeCodeForMsTokens(
   try {
     const response = await axios.post<MsTokenResponse>(MS_TOKEN_URL, params.toString(), {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      timeout: 15_000,
     });
     return response.data;
   } catch {
@@ -205,6 +206,7 @@ async function refreshMsAccessToken(
   try {
     const response = await axios.post<MsTokenResponse>(MS_TOKEN_URL, params.toString(), {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      timeout: 15_000,
     });
     return response.data;
   } catch {
@@ -233,6 +235,7 @@ async function getMsToXblToken(msAccessToken: string): Promise<XblTokenResponse>
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
+      timeout: 10_000,
     },
   );
   return response.data;
@@ -254,6 +257,7 @@ async function getXblToXstsToken(xblToken: string): Promise<XstsTokenResponse> {
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
+      timeout: 10_000,
     },
   );
   return response.data;
@@ -269,6 +273,7 @@ async function fetchGamertag(xuid: string, xstsToken: string, uhs: string): Prom
           'x-xbl-contract-version': '3',
           Accept: 'application/json',
         },
+        timeout: 10_000,
       },
     );
     const user = response.data.profileUsers[0];
@@ -283,6 +288,8 @@ async function fetchGamertag(xuid: string, xstsToken: string, uhs: string): Prom
   }
 }
 
+const XBOX_MAX_PAGES = 20; // failsafe: 20 páginas × 1000 = 20.000 logros máx
+
 async function fetchXboxAchievements(
   xuid: string,
   xstsToken: string,
@@ -295,6 +302,7 @@ async function fetchXboxAchievements(
       const allAchievements: XboxAchievement[] = [];
       let continuationToken: string | undefined;
       const maxItems = 1000;
+      let pages = 0;
 
       do {
         const params = new URLSearchParams({ unlockedOnly: 'false', maxItems: String(maxItems) });
@@ -307,11 +315,13 @@ async function fetchXboxAchievements(
             'x-xbl-contract-version': '4',
             Accept: 'application/json',
           },
+          timeout: 15_000,
         });
 
         allAchievements.push(...response.data.achievements);
         continuationToken = response.data.pagingInfo?.continuationToken;
-      } while (continuationToken);
+        pages++;
+      } while (continuationToken && pages < XBOX_MAX_PAGES);
 
       return allAchievements;
     },

@@ -62,6 +62,7 @@ jest.mock('../lib/redis', () => ({
     get: jest.fn().mockResolvedValue(null),   // siempre cache miss en tests
     set: jest.fn().mockResolvedValue('OK'),
     sadd: jest.fn().mockResolvedValue(1),
+    expire: jest.fn().mockResolvedValue(1),
     smembers: jest.fn().mockResolvedValue([]),
     del: jest.fn().mockResolvedValue(1),
   },

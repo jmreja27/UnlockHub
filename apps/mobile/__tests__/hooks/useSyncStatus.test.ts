@@ -145,4 +145,36 @@ describe('useSyncStatus', () => {
 
     expect(capturedOptions.enabled).toBe(false);
   });
+
+  it('refetchInterval devuelve 2000 cuando isRunning=true', () => {
+    type QueryOpts = { refetchInterval?: (q: { state: { data?: AggregateSyncStatusForTest } }) => number | false };
+    type AggregateSyncStatusForTest = { isRunning?: boolean };
+    const capturedOptions: QueryOpts = {};
+
+    mockUseQuery.mockImplementation((opts: QueryOpts) => {
+      Object.assign(capturedOptions, opts);
+      return { data: undefined };
+    });
+
+    renderHook(() => useSyncStatus('user-1'));
+
+    const fn = capturedOptions.refetchInterval!;
+    expect(fn({ state: { data: { isRunning: true } } })).toBe(2_000);
+  });
+
+  it('refetchInterval devuelve false cuando isRunning=false', () => {
+    type QueryOpts = { refetchInterval?: (q: { state: { data?: { isRunning?: boolean } } }) => number | false };
+    const capturedOptions: QueryOpts = {};
+
+    mockUseQuery.mockImplementation((opts: QueryOpts) => {
+      Object.assign(capturedOptions, opts);
+      return { data: undefined };
+    });
+
+    renderHook(() => useSyncStatus('user-1'));
+
+    const fn = capturedOptions.refetchInterval!;
+    expect(fn({ state: { data: { isRunning: false } } })).toBe(false);
+    expect(fn({ state: { data: undefined } })).toBe(false);
+  });
 });

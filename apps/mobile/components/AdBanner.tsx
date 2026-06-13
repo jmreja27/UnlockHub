@@ -1,6 +1,7 @@
 import { View, Text } from 'react-native';
 
 import { useSessionStore } from '../stores/sessionStore';
+import { usePreferencesStore } from '../stores/preferencesStore';
 import { ADMOB_TEST_IDS } from '../lib/adUnits';
 
 const BANNER_WIDTH = 320;
@@ -56,8 +57,10 @@ interface AdBannerProps {
 
 export function AdBanner({ unitId = 'home' }: AdBannerProps) {
   const { user } = useSessionStore();
+  const consentResolved = usePreferencesStore((s) => s.consentResolved);
 
   if (user?.isPremium) return null;
+  if (!consentResolved) return null;
 
   if (AdMobBanner !== null && BannerAdSize !== null) {
     const BannerComponent = AdMobBanner;

@@ -8,6 +8,7 @@ import type { GamingWrapped } from '@unlockhub/types';
 
 import { useWrapped } from '../../hooks/useWrapped';
 import { useWrappedInterstitial } from '../../hooks/useWrappedInterstitial';
+import { analytics } from '../../lib/analytics';
 
 const PLATFORM_LABELS: Record<string, string> = {
   STEAM: 'Steam',
@@ -123,6 +124,7 @@ export default function WrappedScreen() {
 
   function handleShare() {
     if (!wrapped) return;
+    void analytics.wrappedShared(period);
     Share.share({ message: buildShareText(wrapped, t) }).catch(() => undefined);
   }
 

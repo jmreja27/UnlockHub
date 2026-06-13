@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import type { UserSearchResult } from '@unlockhub/types';
 
+import { getCloudinaryThumb } from '../lib/cloudinary';
 import { useTheme } from '../hooks/useTheme';
 
 import { AvatarPlaceholder } from './AvatarPlaceholder';
@@ -29,7 +30,7 @@ export function UserCard({ user }: Props) {
     >
       {user.avatar ? (
         <Image
-          source={{ uri: user.avatar }}
+          source={{ uri: getCloudinaryThumb(user.avatar, 96, 96) }}
           style={{ width: 48, height: 48, borderRadius: 24 }}
           contentFit="cover"
           accessibilityElementsHidden

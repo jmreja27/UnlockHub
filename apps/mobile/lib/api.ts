@@ -5,7 +5,7 @@ const API_URL = process.env['EXPO_PUBLIC_API_URL'] ?? 'http://localhost:3000';
 const REFRESH_TOKEN_KEY = 'unlockhub_refresh_token';
 
 // Acceso lazy al store para evitar circular imports
-function getAccessToken(): string | null {
+export function getAccessToken(): string | null {
   // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/consistent-type-imports
   const { useSessionStore } = require('../stores/sessionStore') as typeof import('../stores/sessionStore');
   return useSessionStore.getState().accessToken;
@@ -48,7 +48,16 @@ export async function refreshAccessToken(): Promise<void> {
     body: JSON.stringify({ refreshToken }),
   });
 
-  if (!response.ok) throw new Error('Sesión expirada. Por favor, inicia sesión de nuevo.');
+  if (!response.ok) {
+    // Refresh token expirado — limpiar sesión para que el guard del layout redirija a login
+    if (response.status === 401) {
+      await deleteRefreshToken();
+      // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/consistent-type-imports
+      const { useSessionStore } = require('../stores/sessionStore') as typeof import('../stores/sessionStore');
+      useSessionStore.getState().clearSession();
+    }
+    throw new Error('Sesión expirada. Por favor, inicia sesión de nuevo.');
+  }
 
   const data = (await response.json()) as RefreshResponse;
   setAccessToken(data.accessToken);
@@ -145,6 +154,85 @@ export class ApiRequestError extends Error {
     this.statusCode = statusCode;
     this.retryAfterSeconds = retryAfterSeconds;
   }
+}
+
+interface XhrResult { status: number; body: string; retryAfter: string | null; }
+
+/**
+ * Sube un archivo multipart usando XMLHttpRequest.
+ * fetch en React Native no serializa { uri, name, type } correctamente en FormData — XHR sí lo hace.
+ * NO incluye Content-Type: XHR gestiona el boundary automáticamente.
+ */
+export async function uploadFile<T = unknown>(
+  path: string,
+  formData: FormData,
+  token: string | null,
+): Promise<T> {
+  const url = `${API_URL}${path}`;
+
+  const doUpload = (authToken: string | null): Promise<XhrResult> =>
+    new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', url);
+
+      if (authToken) {
+        xhr.setRequestHeader('Authorization', `Bearer ${authToken}`);
+      }
+
+      xhr.onload = () =>
+        resolve({
+          status: xhr.status,
+          body: xhr.responseText,
+          retryAfter: xhr.getResponseHeader('Retry-After'),
+        });
+      xhr.onerror = () => {
+        reject(
+          new ApiRequestError(
+            { error: 'Error de red. Por favor, inténtalo de nuevo.', code: 'NETWORK_ERROR' },
+            0,
+          ),
+        );
+      };
+
+      xhr.send(formData);
+    });
+
+  let result = await doUpload(token);
+
+  if (result.status === 401) {
+    if (!isRefreshing) {
+      isRefreshing = true;
+      refreshPromise = refreshAccessToken().finally(() => {
+        isRefreshing = false;
+        refreshPromise = null;
+      });
+    }
+    await refreshPromise;
+
+    const newToken = getAccessToken();
+    result = await doUpload(newToken);
+  }
+
+  if (result.status >= 400) {
+    let errorData: ApiError;
+    try {
+      errorData = JSON.parse(result.body) as ApiError;
+    } catch {
+      errorData = {
+        error: 'Error de servidor. Por favor, inténtalo de nuevo más tarde.',
+        code: 'SERVER_ERROR',
+      };
+    }
+    const retryAfterSeconds =
+      result.status === 429 && result.retryAfter
+        ? parseInt(result.retryAfter, 10)
+        : undefined;
+    throw new ApiRequestError(errorData, result.status, retryAfterSeconds);
+  }
+
+  if (result.status === 204) return undefined as unknown as T;
+
+  return JSON.parse(result.body) as T;
 }
 
 export const api = {

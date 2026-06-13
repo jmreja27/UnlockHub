@@ -12,6 +12,7 @@ import '../i18n';
 
 import { api, getRefreshToken, saveRefreshToken, deleteRefreshToken } from '../lib/api';
 import { useSessionStore } from '../stores/sessionStore';
+import { analytics } from '../lib/analytics';
 import { usePreferencesStore } from '../stores/preferencesStore';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 import { useGdprConsent } from '../hooks/useGdprConsent';
@@ -27,6 +28,24 @@ Sentry.init({
   environment: __DEV__ ? 'development' : 'production',
   enabled: !__DEV__ && !!process.env['EXPO_PUBLIC_SENTRY_DSN'],
   tracesSampleRate: 0.1,
+  beforeSend(event) {
+    // Eliminar Authorization header para no enviar access tokens a Sentry
+    if (event.request?.headers) {
+      const headers = { ...event.request.headers } as Record<string, string>;
+      delete headers['Authorization'];
+      delete headers['authorization'];
+      event.request.headers = headers;
+    }
+    // Eliminar body de requests de autenticación (login, register, reset-password)
+    if (event.request?.data && typeof event.request.data === 'string') {
+      const authPaths = ['/auth/login', '/auth/register', '/auth/reset-password', '/auth/refresh'];
+      const url = event.request?.url ?? '';
+      if (authPaths.some((p) => url.includes(p))) {
+        event.request.data = '[redacted]';
+      }
+    }
+    return event;
+  },
 });
 
 SplashScreen.preventAutoHideAsync();
@@ -51,6 +70,8 @@ function SessionRestorer({ onReady }: { onReady: () => void }) {
   const { setSession, clearSession } = useSessionStore();
 
   useEffect(() => {
+    void analytics.appOpen();
+
     async function restore() {
       try {
         const storedRefresh = await getRefreshToken();
@@ -78,6 +99,7 @@ function SessionRestorer({ onReady }: { onReady: () => void }) {
         });
 
         setSession(user, accessToken);
+        void analytics.identify(user.id, { isPremium: user.isPremium, level: user.level });
       } catch {
         clearSession();
       }

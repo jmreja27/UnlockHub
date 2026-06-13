@@ -50,6 +50,8 @@ export const queryKeys = {
 
   wrapped: (period: string) => ['wrapped', period] as const,
 
+  publicFeed: () => ['public-feed'] as const,
+
   userGames: (username: string) => ['user-games', username] as const,
   userGameAchievements: (username: string, gameId: string) =>
     ['user-game-achievements', username, gameId] as const,

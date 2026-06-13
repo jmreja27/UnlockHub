@@ -19,6 +19,7 @@ import type { PlatformAccount } from '@unlockhub/types';
 
 import { api, ApiRequestError } from '../../lib/api';
 import { queryKeys } from '../../lib/queryKeys';
+import { analytics } from '../../lib/analytics';
 
 const STEAM_PRIVACY_URL = 'https://store.steampowered.com/account/';
 
@@ -49,6 +50,7 @@ export default function LinkSteamScreen() {
     mutationFn: (data: { username: string }) =>
       api.post<PlatformAccount>('/api/v1/platforms/steam/link', data),
     onSuccess: () => {
+      void analytics.platformLinked('STEAM');
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       void queryClient.invalidateQueries({ queryKey: queryKeys.linkedPlatforms() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.platformsBase() });
