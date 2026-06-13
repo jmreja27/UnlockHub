@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next';
 import type { UserSearchResult } from '@unlockhub/types';
 
 import { getCloudinaryThumb } from '../lib/cloudinary';
-
 import { useTheme } from '../hooks/useTheme';
 
 import { AvatarPlaceholder } from './AvatarPlaceholder';

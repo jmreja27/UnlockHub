@@ -77,9 +77,7 @@ describe('usePublicFeed', () => {
     await act(async () => {
       await result.current.fetchNextPage();
     });
-    await waitFor(() => expect(result.current.isFetchingNextPage).toBe(false));
-
-    expect(result.current.events).toHaveLength(4);
+    await waitFor(() => expect(result.current.events).toHaveLength(4));
     expect(result.current.events.map((e) => e.id)).toEqual(['e1', 'e2', 'e3', 'e4']);
     expect(result.current.hasNextPage).toBe(false);
   });

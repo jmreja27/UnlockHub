@@ -5,6 +5,7 @@ import type { User } from '@unlockhub/types';
 
 import { api, ApiRequestError, saveRefreshToken, getRefreshToken, deleteRefreshToken } from '../lib/api';
 import { useSessionStore } from '../stores/sessionStore';
+import { analytics } from '../lib/analytics';
 
 interface LoginInput {
   email: string;
@@ -63,6 +64,7 @@ export function useAuth() {
     onSuccess: async (data) => {
       await saveRefreshToken(data.refreshToken);
       setSession(data.user, data.accessToken);
+      void analytics.identify(data.user.id, { isPremium: data.user.isPremium, level: data.user.level });
       queryClient.removeQueries();
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace('/(tabs)');
@@ -75,6 +77,7 @@ export function useAuth() {
     onSuccess: async (data) => {
       await saveRefreshToken(data.refreshToken);
       setSession(data.user, data.accessToken);
+      void analytics.identify(data.user.id, { isPremium: data.user.isPremium, level: data.user.level });
       queryClient.removeQueries();
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace('/onboarding');
@@ -89,12 +92,14 @@ export function useAuth() {
     onSuccess: async () => {
       await deleteRefreshToken();
       clearSession();
+      void analytics.reset();
       void queryClient.clear();
       router.replace('/(auth)/login');
     },
     onError: async () => {
       await deleteRefreshToken();
       clearSession();
+      void analytics.reset();
       void queryClient.clear();
       router.replace('/(auth)/login');
     },

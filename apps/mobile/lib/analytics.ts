@@ -4,28 +4,36 @@
 
 type Properties = Record<string, string | number | boolean | null | undefined>;
 
-let _posthog: { capture: (event: string, properties?: Properties) => void } | null = null;
+interface PosthogClient {
+  capture: (event: string, properties?: Properties) => void;
+  identify: (userId: string, properties?: Properties) => void;
+  reset: () => void;
+}
 
-async function getPosthog() {
+let _posthog: PosthogClient | null = null;
+
+async function getPosthog(): Promise<PosthogClient> {
   if (_posthog !== null) return _posthog;
 
   const apiKey = process.env['EXPO_PUBLIC_POSTHOG_API_KEY'];
   if (!apiKey) {
     // Sin key: stub no-op para no romper builds ni lanzar errores
-    _posthog = { capture: () => undefined };
+    _posthog = { capture: () => undefined, identify: () => undefined, reset: () => undefined };
     return _posthog;
   }
 
   try {
     const { PostHog } = await import('posthog-react-native');
     const client = new PostHog(apiKey, { host: 'https://eu.i.posthog.com' });
-    // Cast necesario: nuestro tipo Properties incluye undefined pero PostHog solo acepta JsonType
     _posthog = {
       capture: (event, props) =>
         client.capture(event, props as Record<string, string | number | boolean | null>),
+      identify: (userId, props) =>
+        client.identify(userId, props as Record<string, string | number | boolean | null>),
+      reset: () => client.reset(),
     };
   } catch {
-    _posthog = { capture: () => undefined };
+    _posthog = { capture: () => undefined, identify: () => undefined, reset: () => undefined };
   }
 
   return _posthog;
@@ -41,7 +49,27 @@ export const analytics = {
     }
   },
 
-  // Eventos estándar tipados para evitar typos
+  async identify(userId: string, properties?: Properties): Promise<void> {
+    try {
+      const ph = await getPosthog();
+      ph.identify(userId, properties);
+    } catch {
+      // Silencioso
+    }
+  },
+
+  async reset(): Promise<void> {
+    try {
+      const ph = await getPosthog();
+      ph.reset();
+    } catch {
+      // Silencioso
+    }
+  },
+
+  // Eventos tipados para evitar typos
+  appOpen: () => analytics.track('app_open'),
+  syncCompleted: (platform: string) => analytics.track('sync_completed', { platform }),
   onboardingCompleted: () => analytics.track('onboarding_completed'),
   platformLinked: (platform: string) => analytics.track('platform_linked', { platform }),
   achievementViewed: (achievementId: string, platform: string) =>

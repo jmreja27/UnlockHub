@@ -6,6 +6,7 @@ import { connectSocket, getSocket } from '../lib/socket';
 import { useSessionStore } from '../stores/sessionStore';
 import { api } from '../lib/api';
 import { queryKeys } from '../lib/queryKeys';
+import { analytics } from '../lib/analytics';
 
 /** Estado de progreso de un sync activo para una plataforma concreta. */
 export interface SyncProgressState {
@@ -153,6 +154,7 @@ export function useSyncProgress(onComplete?: SyncCompleteCallback): UseSyncProgr
 
     const onSyncComplete = (event: SyncCompleteEvent) => {
       lastSocketEventRef.current = Date.now();
+      void analytics.syncCompleted(event.platform);
       setActiveSyncs((prev) => {
         const next = new Map(prev);
         next.delete(event.platform);

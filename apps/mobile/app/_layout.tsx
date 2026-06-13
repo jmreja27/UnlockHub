@@ -12,6 +12,7 @@ import '../i18n';
 
 import { api, getRefreshToken, saveRefreshToken, deleteRefreshToken } from '../lib/api';
 import { useSessionStore } from '../stores/sessionStore';
+import { analytics } from '../lib/analytics';
 import { usePreferencesStore } from '../stores/preferencesStore';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 import { useGdprConsent } from '../hooks/useGdprConsent';
@@ -69,6 +70,8 @@ function SessionRestorer({ onReady }: { onReady: () => void }) {
   const { setSession, clearSession } = useSessionStore();
 
   useEffect(() => {
+    void analytics.appOpen();
+
     async function restore() {
       try {
         const storedRefresh = await getRefreshToken();
@@ -96,6 +99,7 @@ function SessionRestorer({ onReady }: { onReady: () => void }) {
         });
 
         setSession(user, accessToken);
+        void analytics.identify(user.id, { isPremium: user.isPremium, level: user.level });
       } catch {
         clearSession();
       }
