@@ -1,0 +1,8 @@
+# depcheck config — apps/api
+#
+# Falsos positivos conocidos:
+# - pino-pretty: depcheck no detecta la referencia dinámica en logger.ts
+#   (`target: 'pino-pretty'` dentro del objeto de transports de pino).
+#   Se usa en desarrollo para logs legibles; no es una dep muerta.
+ignores:
+  - pino-pretty

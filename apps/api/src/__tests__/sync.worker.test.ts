@@ -265,6 +265,35 @@ describe('syncService.triggerExpressSync — lock por usuario', () => {
     expect(mockRedis.del).not.toHaveBeenCalledWith('sync:user-lock:user-1');
   });
 
+  // A22 — fallback: lock ocupado → encola full sync en lugar de descartar silenciosamente
+  it('A22: encola queueInitialSync como fallback cuando el lock no está disponible', async () => {
+    mockRedis.set.mockResolvedValueOnce(null); // lock no disponible
+
+    await syncService.triggerExpressSync('user-1', 'STEAM');
+
+    expect(mockSteamAdapter.syncUserExpress).not.toHaveBeenCalled();
+    // El job de full sync debe encolarse para que el trabajo no se pierda
+    expect((syncQueue.add as jest.Mock)).toHaveBeenCalledWith(
+      'initial-sync:user-1:STEAM',
+      expect.objectContaining({ triggerType: 'initial' }),
+      { priority: 10 },
+    );
+  });
+
+  // A22 — no doble encolado: lock disponible → express sync normal, queueInitialSync NO llamado dentro
+  it('A22: no encola queueInitialSync dentro de triggerExpressSync cuando el lock sí se adquiere', async () => {
+    mockRedis.set.mockResolvedValueOnce('OK'); // lock disponible
+    (mockSteamAdapter.syncUserExpress as jest.Mock).mockResolvedValueOnce({
+      gamesUpdated: 5, achievementsSynced: 50, syncedAt: new Date().toISOString(),
+    });
+
+    await syncService.triggerExpressSync('user-1', 'STEAM');
+
+    expect(mockSteamAdapter.syncUserExpress).toHaveBeenCalledWith(account);
+    // syncQueue.add NO debe haber sido llamado desde dentro de triggerExpressSync
+    expect((syncQueue.add as jest.Mock)).not.toHaveBeenCalled();
+  });
+
   it('libera el lock en finally aunque el express sync falle', async () => {
     mockRedis.set.mockResolvedValueOnce('OK');
     (mockSteamAdapter.syncUserExpress as jest.Mock).mockRejectedValueOnce(new Error('PSN timeout'));

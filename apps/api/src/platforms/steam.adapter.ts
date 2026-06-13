@@ -5,6 +5,8 @@ import type { Achievement, Game, SyncResult } from '@unlockhub/types';
 import { prisma } from '../lib/prisma';
 import { redis } from '../lib/redis';
 import { AppError } from '../middleware/errorHandler';
+import { logger } from '../lib/logger';
+import { STEAM_MAX_GAMES_PER_SYNC } from '../config/steamQuota';
 
 import type { PlatformAdapter, SyncBatchCallback } from './platform.interface';
 import { getCachedGameMeta, setCachedGameMeta } from './game-cache';
@@ -36,6 +38,8 @@ interface SteamOwnedGame {
   img_icon_url: string;
   has_community_visible_stats?: boolean;
   playtime_forever?: number;
+  /** Unix timestamp de la última sesión de juego. 0 si el juego nunca se ha iniciado. */
+  rtime_last_played?: number;
 }
 
 interface SteamPlayerAchievement {
@@ -279,7 +283,15 @@ export class SteamAdapter implements PlatformAdapter {
     const steamId = account.externalId;
     const games = await this.fetchOwnedGames(steamId, apiKey);
     const eligible = games.filter((g) => g.has_community_visible_stats);
-    return this.processGames(eligible, steamId, apiKey, account.userId);
+    const capped = this.sortEligibleByActivity(eligible).slice(0, STEAM_MAX_GAMES_PER_SYNC);
+    const skipped = eligible.length - capped.length;
+    if (skipped > 0) {
+      logger.info(
+        { userId: account.userId, total: eligible.length, syncing: capped.length, skipped },
+        '[SteamAdapter] Biblioteca grande: omitidos juegos por STEAM_MAX_GAMES_PER_SYNC — procesando los más recientes',
+      );
+    }
+    return this.processGames(capped, steamId, apiKey, account.userId);
   }
 
   // ── syncUserExpress ────────────────────────────────────────────────────────
@@ -306,14 +318,25 @@ export class SteamAdapter implements PlatformAdapter {
 
     const games = await this.fetchOwnedGames(steamId, apiKey);
     const eligible = games.filter((g) => g.has_community_visible_stats);
-    const total = eligible.length;
+    const capped = this.sortEligibleByActivity(eligible).slice(0, STEAM_MAX_GAMES_PER_SYNC);
+    const skipped = eligible.length - capped.length;
+    if (skipped > 0) {
+      logger.info(
+        { userId: account.userId, total: eligible.length, syncing: capped.length, skipped },
+        '[SteamAdapter] Biblioteca grande: omitidos juegos por STEAM_MAX_GAMES_PER_SYNC — procesando los más recientes',
+      );
+    }
+
+    // El total del progreso se calcula sobre los juegos efectivamente procesados,
+    // no sobre la biblioteca completa — el cliente verá 100 % al terminar este intento.
+    const total = capped.length;
 
     let achievementsSynced = 0;
     let gamesUpdated = 0;
     let processed = 0;
 
-    for (let i = 0; i < eligible.length; i += BATCH_SIZE) {
-      const batch = eligible.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < capped.length; i += BATCH_SIZE) {
+      const batch = capped.slice(i, i + BATCH_SIZE);
       const batchResult = await this.processGames(batch, steamId, apiKey, account.userId);
 
       achievementsSynced += batchResult.achievementsSynced;
@@ -334,6 +357,23 @@ export class SteamAdapter implements PlatformAdapter {
       gamesUpdated,
       syncedAt: new Date().toISOString(),
     };
+  }
+
+  // ── Ordenación por actividad reciente ─────────────────────────────────────
+
+  /**
+   * Ordena los juegos elegibles priorizando los más jugados recientemente.
+   * Señal primaria: rtime_last_played (Unix timestamp de la última sesión, 0 si nunca jugado).
+   * Señal secundaria: playtime_forever (horas totales) como desempate cuando rtime es igual.
+   * Ambas señales las devuelve GetOwnedGames con include_appinfo=true.
+   */
+  private sortEligibleByActivity(games: SteamOwnedGame[]): SteamOwnedGame[] {
+    return [...games].sort((a, b) => {
+      const aTime = a.rtime_last_played ?? 0;
+      const bTime = b.rtime_last_played ?? 0;
+      if (bTime !== aTime) return bTime - aTime;
+      return (b.playtime_forever ?? 0) - (a.playtime_forever ?? 0);
+    });
   }
 
   // ── Lógica de procesamiento compartida ────────────────────────────────────

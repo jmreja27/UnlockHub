@@ -8,9 +8,11 @@ interface PreferencesState {
   theme: ThemePreference;
   onboardingCompleted: boolean;
   librarySortOrder: LibrarySortOrder;
+  consentResolved: boolean;
   setTheme: (theme: ThemePreference) => void;
   completeOnboarding: () => void;
   setLibrarySortOrder: (order: LibrarySortOrder) => void;
+  setConsentResolved: (value: boolean) => void;
   loadPreferences: () => Promise<void>;
 }
 
@@ -39,6 +41,11 @@ export const usePreferencesStore = create<PreferencesState>((set) => ({
   theme: 'dark',
   onboardingCompleted: false,
   librarySortOrder: 'last_played',
+  consentResolved: false,
+
+  setConsentResolved: (value) => {
+    set({ consentResolved: value });
+  },
 
   setTheme: (theme) => {
     set({ theme });

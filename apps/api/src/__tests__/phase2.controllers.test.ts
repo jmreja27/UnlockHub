@@ -85,11 +85,11 @@ describe('activity controller', () => {
     expect(next).toHaveBeenCalled();
   });
 
-  it('getPublicFeedHandler devuelve el feed público', async () => {
-    const req = makeReq({ query: { page: '1', limit: '20' } });
+  it('getPublicFeedHandler devuelve el feed público con cursor', async () => {
+    const req = makeReq({ query: { limit: '20' } });
     const res = makeRes();
     await getPublicFeedHandler(req, res, makeNext());
-    expect(mockGetPublicFeed).toHaveBeenCalledWith(1, 20);
+    expect(mockGetPublicFeed).toHaveBeenCalledWith(20, undefined);
     expect(res.json).toHaveBeenCalledWith(PAGINATED);
   });
 

@@ -236,7 +236,9 @@
     "sync_button_a11y": "Sincronizar ahora",
     "sync_button_cooldown_a11y": "Sync disponible en {{time}}",
     "sync_button_syncing_a11y": "Sincronización en curso",
-    "sync_long_warning": "Puede tardar varios minutos..."
+    "sync_long_warning": "Puede tardar varios minutos...",
+    "sync_steam_quota_skipped": "Steam omitido — cuota diaria agotada (resto sincronizado)",
+    "sync_steam_quota_exceeded": "Cuota de Steam agotada. Inténtalo mañana."
   },
   "feed": {
     "title": "Feed",

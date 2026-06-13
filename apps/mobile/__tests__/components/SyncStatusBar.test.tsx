@@ -52,7 +52,7 @@ function renderWithClient(ui: React.ReactElement) {
 
 function setupMocks(overrides: Partial<typeof defaultSyncStatus> = {}) {
   mockUseSessionStore.mockReturnValue({ id: 'u1', isPremium: false, username: 'tester' });
-  mockUseSyncAll.mockReturnValue({ sync: mockSync, isSyncing: false });
+  mockUseSyncAll.mockReturnValue({ sync: mockSync, isSyncing: false, steamQuotaState: null });
   mockUseSyncStatus.mockReturnValue({ ...defaultSyncStatus, ...overrides });
 }
 

@@ -1,4 +1,4 @@
-import type { ActivityEvent, ActivityEventType, PaginatedResponse, CursorPaginatedResponse } from '@unlockhub/types';
+import type { ActivityEvent, ActivityEventType, CursorPaginatedResponse } from '@unlockhub/types';
 
 import { prisma } from '../lib/prisma';
 import { friendshipRepository } from '../repositories/friendship.repository';
@@ -60,20 +60,20 @@ export async function getFriendsFeed(
 }
 
 export async function getPublicFeed(
-  page: number,
   limit: number,
-): Promise<PaginatedResponse<ActivityEvent>> {
-  const skip = (page - 1) * limit;
+  cursor?: string,
+): Promise<CursorPaginatedResponse<ActivityEvent>> {
+  const rows = await prisma.activityEvent.findMany({
+    where: {
+      ...(cursor ? { id: { lt: cursor } } : {}),
+    },
+    include: { user: { select: { id: true, username: true, avatar: true } } },
+    orderBy: { createdAt: 'desc' },
+    take: limit,
+  });
 
-  const [rows, total] = await Promise.all([
-    prisma.activityEvent.findMany({
-      include: { user: { select: { id: true, username: true, avatar: true } } },
-      orderBy: { createdAt: 'desc' },
-      skip,
-      take: limit,
-    }),
-    prisma.activityEvent.count(),
-  ]);
+  const lastRow = rows[rows.length - 1];
+  const nextCursor = rows.length === limit && lastRow ? lastRow.id : null;
 
-  return { data: rows.map(toDto), total, page, limit };
+  return { data: rows.map(toDto), nextCursor };
 }

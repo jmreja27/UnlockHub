@@ -12,6 +12,7 @@ export function useWrapped(period: number | string) {
   const periodStr = String(period);
   const isValid = typeof period === 'number'
     ? period >= 2024
+    // eslint-disable-next-line security/detect-unsafe-regex -- /^\d{4}(-\d{2})?$/ no tiene cuantificadores anidados; sin riesgo de backtracking exponencial
     : /^\d{4}(-\d{2})?$/.test(periodStr);
 
   return useQuery({

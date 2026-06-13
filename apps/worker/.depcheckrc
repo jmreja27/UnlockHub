@@ -1,0 +1,15 @@
+# depcheck config — apps/worker
+#
+# Falsos positivos conocidos:
+# - Todas las dependencias listadas como "unused" son falsos positivos.
+#   apps/worker importa desde el workspace @unlockhub/api (apps/api/src/**) y
+#   desde @unlockhub/types. depcheck no resuelve imports de workspaces internos
+#   correctamente, por lo que reporta como "no utilizadas" dependencias que
+#   en realidad se ejercitan a través del código compartido.
+ignores:
+  - "@prisma/client"
+  - prisma
+  - bullmq
+  - ioredis
+  - pino
+  - "@sentry/node"

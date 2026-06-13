@@ -1,6 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { paginationSchema } from '@unlockhub/validators';
 
 import type { AuthenticatedRequest } from '../middleware/authenticate';
 import { getFriendsFeed, getPublicFeed } from '../services/activity.service';
@@ -23,8 +22,8 @@ export async function getFriendsFeedHandler(req: Request, res: Response, next: N
 
 export async function getPublicFeedHandler(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { page, limit } = paginationSchema.parse(req.query);
-    const result = await getPublicFeed(page, limit);
+    const { cursor, limit } = feedQuerySchema.parse(req.query);
+    const result = await getPublicFeed(limit, cursor);
     res.json(result);
   } catch (err) {
     next(err);

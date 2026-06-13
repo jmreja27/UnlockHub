@@ -5,7 +5,26 @@ import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 
 type UserAchievementFull = Prisma.UserAchievementGetPayload<{
-  include: { achievement: { include: { game: true } } };
+  select: {
+    unlockedAt: true;
+    achievement: {
+      select: {
+        title: true;
+        iconUrl: true;
+        rarity: true;
+        normalizedPoints: true;
+        platform: true;
+        game: {
+          select: {
+            id: true;
+            title: true;
+            iconUrl: true;
+            platform: true;
+          };
+        };
+      };
+    };
+  };
 }>;
 
 function yearBounds(year: number): { start: Date; end: Date } {
@@ -30,7 +49,26 @@ async function loadUserAchievements(
 ): Promise<UserAchievementFull[]> {
   return prisma.userAchievement.findMany({
     where: { userId, unlockedAt: { gte: start, lte: end } },
-    include: { achievement: { include: { game: true } } },
+    select: {
+      unlockedAt: true,
+      achievement: {
+        select: {
+          title: true,
+          iconUrl: true,
+          rarity: true,
+          normalizedPoints: true,
+          platform: true,
+          game: {
+            select: {
+              id: true,
+              title: true,
+              iconUrl: true,
+              platform: true,
+            },
+          },
+        },
+      },
+    },
   });
 }
 

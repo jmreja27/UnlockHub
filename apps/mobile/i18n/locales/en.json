@@ -236,7 +236,9 @@
     "sync_button_a11y": "Sync now",
     "sync_button_cooldown_a11y": "Sync available in {{time}}",
     "sync_button_syncing_a11y": "Sync in progress",
-    "sync_long_warning": "May take a few minutes..."
+    "sync_long_warning": "May take a few minutes...",
+    "sync_steam_quota_skipped": "Steam skipped — daily API quota reached (others synced fine)",
+    "sync_steam_quota_exceeded": "Steam API quota reached. Try again tomorrow."
   },
   "feed": {
     "title": "Feed",

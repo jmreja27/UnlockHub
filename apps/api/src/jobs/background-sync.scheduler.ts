@@ -3,13 +3,11 @@ import { Queue } from 'bullmq';
 import { redis } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
+import { STEAM_DAILY_LIMIT, STEAM_BACKGROUND_SYNC_THRESHOLD } from '../config/steamQuota';
 
 import { syncQueue } from './sync.queue';
 
 const backgroundSyncQueue = new Queue('background-sync', { connection: redis });
-
-const STEAM_DAILY_LIMIT = 100_000;
-const STEAM_PAUSE_THRESHOLD = 0.8;
 
 // Lanza syncs automáticos para todos los usuarios que hayan tenido actividad
 // en las últimas 24 horas. Se ejecuta una vez al día desde el scheduler.
@@ -20,7 +18,7 @@ export async function runBackgroundSyncs(): Promise<void> {
   const steamApiKey = `steam:api:calls:${today}`;
   const steamCalls = parseInt((await redis.get(steamApiKey)) ?? '0', 10);
 
-  if (steamCalls >= STEAM_DAILY_LIMIT * STEAM_PAUSE_THRESHOLD) {
+  if (steamCalls >= STEAM_DAILY_LIMIT * STEAM_BACKGROUND_SYNC_THRESHOLD) {
     logger.warn(
       { usagePct: Math.round((steamCalls / STEAM_DAILY_LIMIT) * 100) },
       '[BackgroundSync] Steam API por encima del umbral — batch omitido para preservar cuota',

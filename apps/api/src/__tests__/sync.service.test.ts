@@ -15,7 +15,7 @@ jest.mock('../lib/redis', () => ({
 
 jest.mock('../lib/prisma', () => ({
   prisma: {
-    platformAccount: { findUnique: jest.fn(), findMany: jest.fn(), upsert: jest.fn() },
+    platformAccount: { findUnique: jest.fn(), findMany: jest.fn(), upsert: jest.fn(), count: jest.fn() },
     user: { update: jest.fn() },
   },
 }));
@@ -160,6 +160,53 @@ describe('syncService.getSyncStatus', () => {
 
     expect(status.linked).toBe(false);
     expect(status.lastSyncedAt).toBeNull();
+  });
+});
+
+describe('syncService.triggerManualSync — cuota Steam 90 % (A41)', () => {
+  it('encola Steam normalmente cuando el contador está por debajo del 90 %', async () => {
+    mockRedis.set.mockResolvedValue('OK');
+    mockRedis.incr.mockResolvedValue(1);
+    mockRedis.expire.mockResolvedValue(1);
+    // Contador en 89.999 (89,999 % < 90 %)
+    mockRedis.get.mockResolvedValue('89999');
+    (mockPrisma.platformAccount.findUnique as jest.Mock).mockResolvedValue(account);
+
+    const result = await syncService.triggerManualSync('user-1', 'STEAM', false);
+
+    expect(result.jobId).toBe('job-1');
+    expect(result.skippedByQuota).toBeUndefined();
+  });
+
+  it('devuelve skippedByQuota: true y libera cooldown cuando contador ≥ 90 % y usuario tiene otras plataformas', async () => {
+    mockRedis.set.mockResolvedValue('OK');
+    // Contador en 90.000 (exactamente el umbral del 90 %)
+    mockRedis.get.mockResolvedValue('90000');
+    mockRedis.del.mockResolvedValue(1);
+    // Usuario tiene RA vinculada además de STEAM
+    (mockPrisma.platformAccount.count as jest.Mock).mockResolvedValue(1);
+
+    const result = await syncService.triggerManualSync('user-1', 'STEAM', false);
+
+    expect(result.skippedByQuota).toBe(true);
+    expect(result.jobId).toBeUndefined();
+    // El cooldown debe liberarse para no penalizar al usuario
+    expect(mockRedis.del).toHaveBeenCalledWith('sync:cooldown:user-1:STEAM');
+  });
+
+  it('lanza STEAM_QUOTA_EXCEEDED 429 cuando contador ≥ 90 % y Steam es la única plataforma', async () => {
+    mockRedis.set.mockResolvedValue('OK');
+    // Contador en 95.000 (por encima del umbral del 90 %)
+    mockRedis.get.mockResolvedValue('95000');
+    mockRedis.del.mockResolvedValue(1);
+    // Sin otras plataformas vinculadas
+    (mockPrisma.platformAccount.count as jest.Mock).mockResolvedValue(0);
+
+    await expect(
+      syncService.triggerManualSync('user-1', 'STEAM', false),
+    ).rejects.toMatchObject({ code: 'STEAM_QUOTA_EXCEEDED', statusCode: 429 });
+
+    expect(mockRedis.del).toHaveBeenCalledWith('sync:cooldown:user-1:STEAM');
   });
 });
 

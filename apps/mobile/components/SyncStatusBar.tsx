@@ -34,7 +34,7 @@ export function SyncStatusBar({ isRunning }: SyncStatusBarProps) {
   const userId = user?.id;
   const isPremium = user?.isPremium ?? false;
 
-  const { sync, isSyncing } = useSyncAll(userId);
+  const { sync, isSyncing, steamQuotaState } = useSyncAll(userId);
   const {
     canSyncNow,
     timeUntilNextAutoSync,
@@ -173,6 +173,7 @@ export function SyncStatusBar({ isRunning }: SyncStatusBarProps) {
       <View style={{ width: 1, height: 12, backgroundColor: colors.border }} />
 
       {/* Aviso de sync largo — visible cuando lleva >30s en progreso */}
+      {/* Aviso de cuota Steam — visible tras un sync que omitió Steam o agotó la cuota */}
       {showLongSyncWarning ? (
         <Text
           testID="sync-long-warning"
@@ -180,6 +181,20 @@ export function SyncStatusBar({ isRunning }: SyncStatusBarProps) {
           numberOfLines={1}
         >
           {t('library.sync_long_warning')}
+        </Text>
+      ) : steamQuotaState !== null && !activeSyncRunning ? (
+        <Text
+          testID="sync-steam-quota-warning"
+          className="text-xs"
+          style={{ color: steamQuotaState === 'exceeded' ? '#f87171' : '#fbbf24' }}
+          numberOfLines={1}
+          accessible
+          accessibilityLiveRegion="polite"
+          accessibilityRole="alert"
+        >
+          {steamQuotaState === 'exceeded'
+            ? t('library.sync_steam_quota_exceeded')
+            : t('library.sync_steam_quota_skipped')}
         </Text>
       ) : (
         <>

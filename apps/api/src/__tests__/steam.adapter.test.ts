@@ -21,8 +21,10 @@ const mockAxios = axios as jest.Mocked<typeof axios>;
 
 import { resolveVanityUrl, checkSteamProfilePublic, SteamAdapter } from '../platforms/steam.adapter';
 import { prisma } from '../lib/prisma';
+import { redis } from '../lib/redis';
 
 const mockPrisma = prisma as jest.Mocked<typeof prisma>;
+const mockRedis = redis as jest.Mocked<typeof redis>;
 
 const STEAM_API_KEY = 'test-key';
 
@@ -187,5 +189,111 @@ describe('SteamAdapter — rawValue/rarity/iconUrl en upsert', () => {
     const upsertCall = mockPrisma.achievement.upsert.mock.calls[0]?.[0];
     expect(upsertCall.create.iconUrl).toBe(fullUrl);
     expect(upsertCall.create.iconUrl).not.toContain('media.steampowered.com');
+  });
+});
+
+// ─── SteamAdapter — tope STEAM_MAX_GAMES_PER_SYNC ────────────────────────────
+
+describe('SteamAdapter — tope STEAM_MAX_GAMES_PER_SYNC', () => {
+  function makeGame(index: number, rtimeLastPlayed: number, playtime = 100) {
+    return {
+      appid: index + 1,
+      name: `Game ${index + 1}`,
+      img_icon_url: 'icon',
+      has_community_visible_stats: true,
+      playtime_forever: playtime,
+      rtime_last_played: rtimeLastPlayed,
+    };
+  }
+
+  // Respuesta combinada válida para PlayerAchievements, SchemaForGame y GlobalRarityPercentages.
+  // Cada fetcher extrae solo el campo que le corresponde e ignora el resto.
+  const perGameResponse = {
+    data: {
+      playerstats: {
+        success: true,
+        achievements: [{ apiname: 'ACH_1', achieved: 1, unlocktime: 1_000 }],
+      },
+      game: {
+        availableGameStats: {
+          achievements: [{ name: 'ACH_1', displayName: 'Ach', icon: '', icongray: '' }],
+        },
+      },
+      achievementpercentages: { achievements: [{ name: 'ACH_1', percent: 10 }] },
+    },
+  };
+
+  beforeEach(() => {
+    // Reset completo de axios para evitar sangrado de implementaciones entre suites
+    mockAxios.get.mockReset();
+    mockPrisma.game.upsert.mockResolvedValue({ id: 'game-id' } as never);
+    mockPrisma.achievement.upsert.mockResolvedValue({ id: 'ach-id' } as never);
+    mockPrisma.userAchievement.upsert.mockResolvedValue({} as never);
+  });
+
+  afterEach(() => {
+    // Limpieza de la implementación por defecto para no contaminar otras suites
+    mockAxios.get.mockReset();
+  });
+
+  it('con ≤100 juegos elegibles, los sincroniza todos sin aplicar el tope', async () => {
+    const games = Array.from({ length: 80 }, (_, i) => makeGame(i, 1_000 - i));
+    mockAxios.get
+      .mockResolvedValueOnce({ data: { response: { games } } })
+      .mockResolvedValue(perGameResponse);
+
+    const adapter = new SteamAdapter();
+    const result = await adapter.syncUser({ externalId: '76561198000000001', userId: 'user-1' } as never);
+
+    // Los 80 juegos deben procesarse — ninguno omitido
+    expect(mockPrisma.game.upsert).toHaveBeenCalledTimes(80);
+    expect(result.gamesUpdated).toBe(80);
+  });
+
+  it('con >100 juegos elegibles, sincroniza exactamente los 100 más recientes por rtime_last_played', async () => {
+    // Juegos 0-99: jugados recientemente (rtime decreciente → el primero es el más reciente)
+    // Juegos 100-149: nunca jugados (rtime = 0) → deben omitirse por el tope
+    const games = [
+      ...Array.from({ length: 100 }, (_, i) => makeGame(i, 1_000 - i)),
+      ...Array.from({ length: 50 }, (_, i) => makeGame(100 + i, 0)),
+    ];
+    mockAxios.get
+      .mockResolvedValueOnce({ data: { response: { games } } })
+      .mockResolvedValue(perGameResponse);
+
+    const adapter = new SteamAdapter();
+    await adapter.syncUser({ externalId: '76561198000000001', userId: 'user-1' } as never);
+
+    // Exactamente 100 juegos procesados (los de rtime > 0)
+    expect(mockPrisma.game.upsert).toHaveBeenCalledTimes(100);
+
+    // Los appids procesados deben ser los de los juegos con actividad (1-100), no los omitidos (101-150)
+    const processedExternalIds = mockPrisma.game.upsert.mock.calls.map(
+      (call) => call[0].create.externalId as string,
+    );
+    expect(processedExternalIds).toContain('1');
+    expect(processedExternalIds).toContain('100');
+    expect(processedExternalIds).not.toContain('101');
+    expect(processedExternalIds).not.toContain('150');
+  });
+
+  it('el contador de llamadas a la Steam API solo incrementa para los juegos efectivamente sincronizados', async () => {
+    // 150 juegos: 100 con actividad reciente (serán sincronizados), 50 sin actividad (omitidos)
+    const games = [
+      ...Array.from({ length: 100 }, (_, i) => makeGame(i, 1_000 - i)),
+      ...Array.from({ length: 50 }, (_, i) => makeGame(100 + i, 0)),
+    ];
+    mockAxios.get
+      .mockResolvedValueOnce({ data: { response: { games } } })
+      .mockResolvedValue(perGameResponse);
+
+    mockRedis.incr.mockClear();
+
+    const adapter = new SteamAdapter();
+    await adapter.syncUser({ externalId: '76561198000000001', userId: 'user-1' } as never);
+
+    // 1 incr por GetOwnedGames + 3 incrs × 100 juegos procesados = 301
+    // Si los 50 omitidos también contaran: 1 + 3 × 150 = 451
+    expect(mockRedis.incr).toHaveBeenCalledTimes(301);
   });
 });

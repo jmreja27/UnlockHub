@@ -1,19 +1,27 @@
-﻿import React from 'react';
+import React from 'react';
 import { View } from 'react-native';
 import { render } from '@testing-library/react-native';
 
 import { AdBanner } from '../../components/AdBanner';
 import { useSessionStore } from '../../stores/sessionStore';
+import { usePreferencesStore } from '../../stores/preferencesStore';
 
 jest.mock('../../stores/sessionStore', () => ({
   useSessionStore: jest.fn(),
 }));
 
+jest.mock('../../stores/preferencesStore', () => ({
+  usePreferencesStore: jest.fn(),
+}));
+
 const mockUseSessionStore = useSessionStore as unknown as jest.Mock;
+const mockUsePreferencesStore = usePreferencesStore as unknown as jest.Mock;
 
 describe('AdBanner', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Por defecto el consentimiento está resuelto para no romper tests existentes
+    mockUsePreferencesStore.mockReturnValue(true);
   });
 
   it('renderiza algo para usuarios free', () => {
@@ -30,6 +38,20 @@ describe('AdBanner', () => {
 
   it('renderiza algo cuando no hay usuario autenticado', () => {
     mockUseSessionStore.mockReturnValue({ user: null });
+    const { toJSON } = render(<AdBanner />);
+    expect(toJSON()).not.toBeNull();
+  });
+
+  it('no renderiza nada cuando consentResolved es false', () => {
+    mockUsePreferencesStore.mockReturnValue(false);
+    mockUseSessionStore.mockReturnValue({ user: { isPremium: false } });
+    const { toJSON } = render(<AdBanner />);
+    expect(toJSON()).toBeNull();
+  });
+
+  it('renderiza cuando consentResolved pasa a true', () => {
+    mockUsePreferencesStore.mockReturnValue(true);
+    mockUseSessionStore.mockReturnValue({ user: { isPremium: false } });
     const { toJSON } = render(<AdBanner />);
     expect(toJSON()).not.toBeNull();
   });
@@ -65,4 +87,3 @@ describe('AdBanner', () => {
     expect(placeholder?.props.importantForAccessibility).toBe('no-hide-descendants');
   });
 });
-
