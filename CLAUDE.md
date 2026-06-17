@@ -47,7 +47,7 @@ Esta sección lista todo lo que **el desarrollador debe hacer manualmente** ante
 > - B7 (Google Play Developer): ✅ Cuenta creada — $25 pagados
 > - B14 (Email soporte): ✅ `soporte@unlockhub.app` creado con dominio Cloudflare
 > - N2 (Logtail/Better Stack): ✅ Cuenta creada, fuente "UnlockHub API" con JavaScript/HTTP, `LOGTAIL_SOURCE_TOKEN` configurado en Railway Variables
-> - N4 (PostHog): ✅ Cuenta creada, plan Free, `POSTHOG_API_KEY` configurado en Railway Variables — analytics activo en producción
+> - N4 (PostHog): ✅ Proyecto EU (203333, `eu.i.posthog.com`) activo. `POSTHOG_API_KEY` configurado en Railway. `EXPO_PUBLIC_POSTHOG_API_KEY` (key EU) configurada como EAS secret. Cuenta US original obsoleta (ver PL24 en BACKLOG).
 > - N5 (Keystore Android): ✅ Guardado desde expo.dev → proyecto → Credentials
 
 ### 🟡 Necesarios antes del lanzamiento
@@ -56,7 +56,7 @@ Esta sección lista todo lo que **el desarrollador debe hacer manualmente** ante
 |---|---|---|---|---|
 | ~~N2~~ | ✅ **Logtail (Better Stack) conectado a Railway** | Better Stack → fuente "UnlockHub API" (JavaScript/HTTP) → `LOGTAIL_SOURCE_TOKEN` configurado en Railway Variables | Gratis (7 días retención) | ✅ Completado — logs estructurados JSON de pino enviados a Better Stack |
 | N3 | Escalar Railway a **mínimo 2 réplicas** en producción | Railway dashboard → service → Settings → Replicas → 2 | ~5€/mes adicional | Alta disponibilidad — redis-adapter ya configurado |
-| ~~N4~~ | ✅ **PostHog — cuenta + Project API Key configurada** | posthog.com → Create Project → `POSTHOG_API_KEY` configurado en Railway Variables | Gratis hasta 1M eventos/mes | ✅ Completado — analytics activo en producción. Plan Free |
+| ~~N4~~ | ✅ **PostHog — cuenta + Project API Key configurada** | posthog.com → Create Project → `POSTHOG_API_KEY` configurado en Railway Variables | Gratis hasta 1M eventos/mes | ✅ Completado — **Proyecto EU (203333)**. `analytics.ts` apunta a `https://eu.i.posthog.com`. `EXPO_PUBLIC_POSTHOG_API_KEY` (key EU) configurada como EAS secret. Cuenta US original obsoleta — ver PL24 en BACKLOG. |
 | ~~N5~~ | ✅ **Keystore Android guardado desde Expo credentials** | expo.dev → proyecto → Credentials | Gratis | ✅ Completado |
 
 ### 🟢 Cuando el volumen lo justifique
@@ -1238,6 +1238,8 @@ Ver [docs/BACKLOG.md](docs/BACKLOG.md)
 ---
 
 ## Última revisión de código
+
+**Fecha**: 2026-06-17 (diagnóstico PostHog EU + AdMob plugin fix + bugfix challenge friend_challenged) — Fix de región PostHog (US → EU, proyecto 203333) + `host: 'https://eu.i.posthog.com'` + `flushAt: 10` / `flushInterval: 5000` en `analytics.ts`. AdMob plugin movido a `expo.plugins` con `androidAppId`/`iosAppId` — `APPLICATION_ID` ahora inyectado correctamente en el manifest (banners no cargaban en builds release). Smoke test preview: PostHog EU ✅ (eventos `app_open` + `identify` capturados), A49 CMP ✅ (consentimiento antes de banners), AdMob banners ✅, A51 cubierto por tests (pendiente verificar en prod con usuario >100 juegos Steam). Bugfix `friend_challenged` (feature 100% rota en producción): `game/[id].tsx` enviaba `{ friendId }` → backend esperaba `{ friendUserId }` → 400 sistemático. Fix de 3 líneas en cliente + `analytics.friendChallenged(achievementId)` en `onSuccess` + test de regresión en `GameDetailScreen.test.tsx`. Barrido de 16 contratos cliente↔backend: único desajuste real. Tests: **412 mobile (+1) · 632 API · 0 TS/lint**.
 
 **Fecha**: 2026-06-13 (analítica de retención pre-lanzamiento) — Instrumentación PostHog mínima para medir retención y activación. `lib/analytics.ts`: extendido con `identify(userId, properties)`, `reset()`, `appOpen()` y `syncCompleted(platform)`. `hooks/useAuth.ts`: `analytics.identify` en login/register `onSuccess`; `analytics.reset()` en ambas ramas de logout. `app/_layout.tsx` (`SessionRestorer`): `analytics.appOpen()` en cada cold start; `analytics.identify` tras restaurar sesión exitosamente. Eventos tipados conectados: `onboarding_completed` en `onboarding.tsx`, `platform_linked` en las 3 pantallas de vinculación (Steam/RA/PSN), `wrapped_shared` en `wrapped/[year].tsx`, `sync_completed` en `useSyncProgress.ts:onSyncComplete`. `.env.example` actualizado con `EXPO_PUBLIC_POSTHOG_API_KEY` (placeholder). Estado EAS secret: verificar en expo.dev → Secrets antes de la próxima build. Tests: 4 nuevos en `__tests__/hooks/useAuth.test.ts` (identify en login/register, reset en logout exitoso y fallido). Tests: **411 mobile (+4) · 632 API · 0 TS/lint**.
 
