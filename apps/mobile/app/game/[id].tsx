@@ -25,6 +25,7 @@ import { useFriends } from '../../hooks/useFriends';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { api } from '../../lib/api';
 import { FEATURES } from '../../lib/featureFlags';
+import { analytics } from '../../lib/analytics';
 import { useSessionStore } from '../../stores/sessionStore';
 import { useTheme } from '../../hooks/useTheme';
 import { queryKeys } from '../../lib/queryKeys';
@@ -309,9 +310,12 @@ export default function GameDetailScreen() {
   // ── Mutations ────────────────────────────────────────────────────────────────
 
   const challengeMutation = useMutation({
-    mutationFn: ({ achievementId, friendId }: { achievementId: string; friendId: string }) =>
-      api.post<void>(`/api/v1/achievements/${achievementId}/challenge`, { friendId }),
-    onSuccess: () => setChallengeAchievementId(null),
+    mutationFn: ({ achievementId, friendUserId }: { achievementId: string; friendUserId: string }) =>
+      api.post<void>(`/api/v1/achievements/${achievementId}/challenge`, { friendUserId }),
+    onSuccess: (_data, vars) => {
+      void analytics.friendChallenged(vars.achievementId);
+      setChallengeAchievementId(null);
+    },
     onError: () => Alert.alert(t('common.error_generic')),
   });
 
@@ -558,7 +562,7 @@ export default function GameDetailScreen() {
                         if (challengeAchievementId && !challengeMutation.isPending) {
                           challengeMutation.mutate({
                             achievementId: challengeAchievementId,
-                            friendId,
+                            friendUserId: friendId,
                           });
                         }
                       }}

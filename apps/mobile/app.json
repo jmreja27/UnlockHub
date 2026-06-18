@@ -1,12 +1,8 @@
 {
-  "react-native-google-mobile-ads": {
-    "android_app_id": "ca-app-pub-3506466357843399~6211856600",
-    "ios_app_id": "ca-app-pub-3940256099942544~1458002511"
-  },
   "expo": {
     "name": "UnlockHub",
     "slug": "unlockhub",
-    "version": "1.3.0",
+    "version": "1.3.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "unlockhub",
@@ -64,7 +60,14 @@
       "expo-image",
       "expo-localization",
       "expo-secure-store",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-3506466357843399~6211856600",
+          "iosAppId": "ca-app-pub-3940256099942544~1458002511"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

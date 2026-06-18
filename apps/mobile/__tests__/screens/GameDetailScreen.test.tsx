@@ -12,6 +12,7 @@ jest.mock('../../hooks/useSearch');
 jest.mock('../../stores/sessionStore');
 jest.mock('../../hooks/useFriends');
 jest.mock('../../lib/api');
+jest.mock('../../lib/analytics');
 jest.mock('../../components/SkeletonBox', () => ({ SkeletonBox: () => null }));
 
 jest.mock('expo-router', () => {
@@ -65,6 +66,51 @@ beforeEach(() => {
   mockUseFriends.mockReturnValue({ friends: [] });
   mockUseMyGameAchievements.mockReturnValue({ data: [] });
 });
+
+// ── Regresión: el campo del body debe ser friendUserId, no friendId ──────────
+
+describe('GameDetailScreen — retar a un amigo', () => {
+  const friendUserId = 'friend-user-id-0001';
+
+  const acceptedFriendship = {
+    id: 'friendship-1',
+    senderId: 'user-1',
+    receiverId: friendUserId,
+    status: 'ACCEPTED' as const,
+    createdAt: '2025-01-01T00:00:00Z',
+    sender: { id: 'user-1', username: 'me', avatar: null, level: 1, xp: 0 },
+    receiver: { id: friendUserId, username: 'alice', avatar: null, level: 1, xp: 0 },
+  };
+
+  it('envía { friendUserId } (no { friendId }) al endpoint de challenge', async () => {
+    mockUseGameDetail.mockReturnValue({ data: gameWithAchievements, isLoading: false, isError: false });
+    mockUseSessionStore.mockReturnValue({ user: { id: 'user-1' }, isAuthenticated: true });
+    mockUseFriends.mockReturnValue({ friends: [acceptedFriendship] });
+    mockApiPost.mockResolvedValue({ ok: true });
+
+    const { getAllByLabelText } = renderWithClient(<GameDetailScreen />);
+
+    // Pulsar el 🎯 del primer logro no conseguido → abre el modal
+    const challengeButtons = getAllByLabelText('game.challenge_friend_label');
+    fireEvent.press(challengeButtons[0]);
+
+    // Seleccionar el amigo en el modal
+    await waitFor(() => {
+      const friendButtons = getAllByLabelText('game.challenge_friend alice');
+      fireEvent.press(friendButtons[0]);
+    });
+
+    // El body enviado debe usar friendUserId, no friendId
+    await waitFor(() => {
+      expect(mockApiPost).toHaveBeenCalledWith(
+        `/api/v1/achievements/${gameWithAchievements.achievements[0]!.id}/challenge`,
+        { friendUserId },
+      );
+    });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 describe('GameDetailScreen — juego con 0 logros (shell game)', () => {
   it('muestra el botón "Cargar logros" cuando totalAchievements === 0 y el usuario está autenticado', () => {
