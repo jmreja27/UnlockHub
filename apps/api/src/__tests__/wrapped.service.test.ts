@@ -14,7 +14,7 @@ import { prisma } from '../lib/prisma';
 const mockUserFindUnique = prisma.user.findUnique as jest.Mock;
 const mockUAFindMany = prisma.userAchievement.findMany as jest.Mock;
 const mockGameFindMany = prisma.game.findMany as jest.Mock;
-const mockPointAggregate = prisma.userPoint.aggregate as jest.Mock;
+const mockStreakAggregate = prisma.userPoint.aggregate as jest.Mock;
 const mockActivityFindMany = prisma.activityEvent.findMany as jest.Mock;
 
 const GAME = { id: 'g1', title: 'Half-Life 2', iconUrl: 'https://img/hl2.png', platform: 'STEAM' };
@@ -30,7 +30,7 @@ beforeEach(() => {
   mockUserFindUnique.mockResolvedValue({ id: 'u1', streakDays: 14 });
   mockUAFindMany.mockResolvedValue([]);
   mockGameFindMany.mockResolvedValue([]);
-  mockPointAggregate.mockResolvedValue({ _sum: { amount: 0 } });
+  mockStreakAggregate.mockResolvedValue({ _sum: { amount: 0 } });
   mockActivityFindMany.mockResolvedValue([]);
 });
 
@@ -59,10 +59,21 @@ describe('getWrapped', () => {
     expect(result.totalAchievements).toBe(2);
   });
 
-  it('suma XP correctamente', async () => {
-    mockPointAggregate.mockResolvedValue({ _sum: { amount: 1500 } });
+  it('suma XP de logros a partir de normalizedPoints (no de UserPoint genérico)', async () => {
+    // 2 logros con 25 + 100 = 125 XP de logros. Sin racha.
+    mockUAFindMany.mockResolvedValue([makeUA(ACHIEVEMENT), makeUA(RARE_ACHIEVEMENT)]);
+    mockStreakAggregate.mockResolvedValue({ _sum: { amount: 0 } });
     const result = await getWrapped('u1', 2024);
-    expect(result.totalXpGained).toBe(1500);
+    expect(result.totalXpGained).toBe(125); // 25 + 100
+  });
+
+  it('totalXpGained incluye logros (por unlockedAt) MÁS racha (por createdAt)', async () => {
+    // Verifica coherencia Opción B: achievement XP + streak XP
+    mockUAFindMany.mockResolvedValue([makeUA(ACHIEVEMENT), makeUA(RARE_ACHIEVEMENT)]);
+    mockStreakAggregate.mockResolvedValue({ _sum: { amount: 350 } }); // 7 días × 50 XP
+    const result = await getWrapped('u1', 2024);
+    // 25 (ACHIEVEMENT) + 100 (RARE_ACHIEVEMENT) + 350 (STREAK) = 475
+    expect(result.totalXpGained).toBe(475);
   });
 
   it('calcula topGame como el juego con más logros', async () => {
@@ -101,18 +112,20 @@ describe('getWrapped', () => {
   });
 
   it('incluye previousYear cuando el año anterior tiene datos', async () => {
+    // ACHIEVEMENT tiene normalizedPoints: 25. Un logro por año → 25 XP de logros por año.
+    // streak aggregate: 500 XP año solicitado, 200 XP año anterior.
     mockUAFindMany
-      .mockResolvedValueOnce([makeUA()])   // año solicitado
-      .mockResolvedValueOnce([makeUA()])   // año anterior
+      .mockResolvedValueOnce([makeUA()])   // año solicitado (1 logro = 25 XP)
+      .mockResolvedValueOnce([makeUA()])   // año anterior (1 logro = 25 XP)
       .mockResolvedValue([]);               // earnedAllTimeByGame (extended stats)
-    mockPointAggregate
-      .mockResolvedValueOnce({ _sum: { amount: 500 } })   // año solicitado
-      .mockResolvedValueOnce({ _sum: { amount: 200 } });  // año anterior
+    mockStreakAggregate
+      .mockResolvedValueOnce({ _sum: { amount: 500 } })   // racha año solicitado
+      .mockResolvedValueOnce({ _sum: { amount: 200 } });  // racha año anterior
     mockGameFindMany.mockResolvedValue([{ id: 'g1', platform: 'STEAM', totalAchievements: 5 }]);
     const result = await getWrapped('u1', 2025);
     expect(result.previousYear).not.toBeNull();
     expect(result.previousYear?.totalAchievements).toBe(1);
-    expect(result.previousYear?.totalXpGained).toBe(200);
+    expect(result.previousYear?.totalXpGained).toBe(25 + 200); // logros + racha
   });
 
   it('previousYear es null cuando el año anterior no tiene datos', async () => {
@@ -275,16 +288,18 @@ describe('getMonthlyWrapped', () => {
   });
 
   it('incluye previousYear cuando el mismo mes del año anterior tiene datos', async () => {
+    // 1 logro (25 XP) por mes + racha: 300 XP mes solicitado, 150 XP mes anterior.
     mockUAFindMany
-      .mockResolvedValueOnce([makeUA()])   // mes solicitado
-      .mockResolvedValueOnce([makeUA()]);  // mismo mes año anterior
-    mockPointAggregate
+      .mockResolvedValueOnce([makeUA()])   // mes solicitado (25 XP de logros)
+      .mockResolvedValueOnce([makeUA()]);  // mismo mes año anterior (25 XP de logros)
+    mockStreakAggregate
       .mockResolvedValueOnce({ _sum: { amount: 300 } })
       .mockResolvedValueOnce({ _sum: { amount: 150 } });
 
     const result = await getMonthlyWrapped('u1', 2024, 6);
     expect(result.previousYear).not.toBeNull();
     expect(result.previousYear?.totalAchievements).toBe(1);
+    expect(result.previousYear?.totalXpGained).toBe(25 + 150); // logros + racha año anterior
   });
 
   it('usa streakDays del usuario si bestStreak es 0 en el mes actual', async () => {

@@ -84,10 +84,10 @@ async function computeStats(
   topGame: GamingWrapped['topGame'];
   rarestAchievement: GamingWrapped['rarestAchievement'];
 }> {
-  const [userAchievements, xpResult, streakEvents] = await Promise.all([
+  const [userAchievements, streakXpResult, streakEvents] = await Promise.all([
     preloaded ?? loadUserAchievements(userId, start, end),
     prisma.userPoint.aggregate({
-      where: { userId, createdAt: { gte: start, lte: end } },
+      where: { userId, reason: 'STREAK', createdAt: { gte: start, lte: end } },
       _sum: { amount: true },
     }),
     prisma.activityEvent.findMany({
@@ -96,7 +96,8 @@ async function computeStats(
   ]);
 
   const totalAchievements = userAchievements.length;
-  const totalXpGained = xpResult._sum.amount ?? 0;
+  const achievementXp = userAchievements.reduce((sum, ua) => sum + ua.achievement.normalizedPoints, 0);
+  const totalXpGained = achievementXp + (streakXpResult._sum.amount ?? 0);
 
   // Mejor racha del año basada en eventos de hito
   let bestStreak = 0;
