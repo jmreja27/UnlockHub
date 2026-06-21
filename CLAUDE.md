@@ -551,6 +551,16 @@ No modificar estas fórmulas sin actualizar este documento y regenerar los valor
 - `streak.worker.ts`: antes de resetear `streakDays` a 0, comprobar `streakShields > 0` → decrementar 1 y no resetear.
 - UI: badge de escudo junto al contador de racha en el perfil.
 
+### XP en el Wrapped — cálculo correcto
+
+El XP del Wrapped **NO** usa el aggregate genérico de `UserPoint`. El cálculo en `wrapped.service.ts` es:
+
+- `achievementXp` = suma de `normalizedPoints` de `UserAchievement` del período, filtrado por `unlockedAt` (fecha real del desbloqueo del logro).
+- `streakXp` = suma de `UserPoint.amount` con `reason: 'STREAK'` filtrado por `createdAt` (correcto por construcción — el punto de racha se concede el día en que ocurre).
+- `totalXpGained = achievementXp + streakXp`.
+
+**Por qué no `UserPoint.createdAt` para achievements**: los `UserPoint` de tipo `ACHIEVEMENT` se registran en la fecha del sync (siempre reciente), no en la fecha real del logro — lo que hacía que `totalXpGained` fuera 0 para períodos históricos (bug T96, fix `04e8a9c`).
+
 ### Sistema de canje de puntos
 
 - 300 puntos = 7 días premium.
@@ -1238,6 +1248,8 @@ Ver [docs/BACKLOG.md](docs/BACKLOG.md)
 ---
 
 ## Última revisión de código
+
+**Fecha**: 2026-06-21 (fix XP Wrapped + listing Play Store + solicitud producción) — Fix BUG XP Wrapped (T96): `totalXpGained` en `wrapped.service.ts` calculaba sobre `UserPoint.createdAt` (fecha de sync, siempre 2026) → mostraba 0 para años anteriores. Fix: `achievementXp = sum(normalizedPoints)` de `UserAchievement` filtrados por `unlockedAt` (fecha real del desbloqueo) + `streakXp = sum(UserPoint.amount, reason: STREAK, createdAt en período)`. Rama `fix/wrapped-xp-zero` → develop (commit `04e8a9c`). Deploy automático Railway. Verificado en device: 42.200 XP en Wrapped 2025. Listing Play Store completado (PL22 ✅): nombre "UnlockHub: Logros y Trofeos", 5 capturas orientadas a lo social, solicitud de producción enviada a Google (2026-06-21) tras 14 días de prueba cerrada. Pendiente: aprobación Google + outreach día D. Tests: **412 mobile · 632 API · 0 TS/lint** (sesión solo docs).
 
 **Fecha**: 2026-06-17 (diagnóstico PostHog EU + AdMob plugin fix + bugfix challenge friend_challenged) — Fix de región PostHog (US → EU, proyecto 203333) + `host: 'https://eu.i.posthog.com'` + `flushAt: 10` / `flushInterval: 5000` en `analytics.ts`. AdMob plugin movido a `expo.plugins` con `androidAppId`/`iosAppId` — `APPLICATION_ID` ahora inyectado correctamente en el manifest (banners no cargaban en builds release). Smoke test preview: PostHog EU ✅ (eventos `app_open` + `identify` capturados), A49 CMP ✅ (consentimiento antes de banners), AdMob banners ✅, A51 cubierto por tests (pendiente verificar en prod con usuario >100 juegos Steam). Bugfix `friend_challenged` (feature 100% rota en producción): `game/[id].tsx` enviaba `{ friendId }` → backend esperaba `{ friendUserId }` → 400 sistemático. Fix de 3 líneas en cliente + `analytics.friendChallenged(achievementId)` en `onSuccess` + test de regresión en `GameDetailScreen.test.tsx`. Barrido de 16 contratos cliente↔backend: único desajuste real. Tests: **412 mobile (+1) · 632 API · 0 TS/lint**.
 
