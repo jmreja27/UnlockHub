@@ -99,7 +99,7 @@ Aplicación móvil (iOS + Android) para tracking unificado de logros de videojue
 | expo-haptics | Feedback háptico en acciones importantes |
 | expo-notifications | Push notifications iOS y Android |
 | expo-network | Detección de conectividad (OfflineBanner global) |
-| Intl.NumberFormat / Intl.DateTimeFormat | Formateo localizado — usar siempre, nunca hardcodear formatos |
+| `lib/formatTimeAgo` (`formatNumber`, `formatDayMonth`, `formatTimeAgo`) | Formateo de números y fechas sin Intl — usar siempre estas utilidades propias |
 | socket.io-client | Conexión Socket.io para sync progress en tiempo real |
 | react-native-reanimated | Animaciones nativas (usado en SkeletonBox, transiciones) — v4, requiere react-native-worklets@0.7.x |
 | posthog-react-native | SDK de PostHog para analytics — usar siempre via `lib/analytics.ts` |
@@ -750,7 +750,7 @@ cd apps/api && npx ts-node ../../scripts/rotate-encryption-key.ts --old-key=<VIE
 - **Haptics**: `expo-haptics` en logros desbloqueados y subidas de nivel.
 - **SafeAreaView**: en todas las pantallas. Soporte de notch y Dynamic Island.
 - **Gestos nativos**: swipe para volver, pull-to-refresh donde corresponda.
-- **Formateo localizado**: `Intl.NumberFormat` e `Intl.DateTimeFormat` siempre.
+- **Formateo de números y fechas**: usar siempre las utilidades propias de `lib/formatTimeAgo` (`formatNumber`, `formatDayMonth`, `formatTimeAgo`). **Nunca** usar `Intl.NumberFormat`, `Intl.DateTimeFormat`, `Intl.RelativeTimeFormat` ni `Number.prototype.toLocaleString()` — crash documentado en Sentry: `Intl.RelativeTimeFormat` es `undefined` en algunos dispositivos Android con el build actual de Hermes, lo que demuestra que el soporte Intl no está garantizado en todos los builds de Hermes aunque la documentación lo indique. `toLocaleString()` puede apoyarse en Intl internamente y sufrir el mismo crash.
 
 ### Gestión de errores — patrón establecido
 
