@@ -6,6 +6,7 @@ import {
   Pressable,
   ActivityIndicator,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -72,6 +73,15 @@ export default function LinkPsnScreen() {
   const [username, setUsername] = useState('');
   const [fieldError, setFieldError] = useState<string | null>(null);
 
+  function navigate() {
+    if (router.canGoBack()) { router.back(); } else { router.replace('/(tabs)'); }
+  }
+
+  function showError(msg: string) {
+    Alert.alert(msg);
+    setFieldError(msg);
+  }
+
   const linkMutation = useMutation({
     mutationFn: (psnUsername: string) =>
       api.post<PlatformAccount>('/api/v1/platforms/psn/link', { username: psnUsername }),
@@ -82,33 +92,35 @@ export default function LinkPsnScreen() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.platformsBase() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.syncSummaryBase() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.myGames() });
-      router.back();
+      Alert.alert(t('link_platform.psn.success'), '', [
+        { text: 'OK', onPress: navigate },
+      ]);
     },
     onError: (err) => {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       if (err instanceof ApiRequestError) {
         if (err.statusCode === 404) {
-          setFieldError(t('link_platform.psn.error_not_found'));
+          showError(t('link_platform.psn.error_not_found'));
           return;
         }
         if (err.statusCode === 409) {
-          setFieldError(t('link_platform.psn.error_already_linked'));
+          showError(t('link_platform.psn.error_already_linked'));
           return;
         }
         if (err.statusCode === 400 && err.apiError.code === 'PSN_PROFILE_PRIVATE') {
-          setFieldError(t('link_platform.psn.error_profile_private'));
+          showError(t('link_platform.psn.error_profile_private'));
           return;
         }
         if (err.statusCode === 400) {
-          setFieldError(t('link_platform.psn.error_invalid'));
+          showError(t('link_platform.psn.error_invalid'));
           return;
         }
         if (err.statusCode === 503) {
-          setFieldError(t('link_platform.psn.error_service_unavailable'));
+          showError(t('link_platform.psn.error_service_unavailable'));
           return;
         }
       }
-      setFieldError(t('common.error_generic'));
+      showError(t('common.error_generic'));
     },
   });
 
@@ -134,7 +146,7 @@ export default function LinkPsnScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <Pressable
-          onPress={() => router.back()}
+          onPress={navigate}
           accessibilityRole="button"
           accessibilityLabel={t('common.back')}
           className="mb-6 self-start"

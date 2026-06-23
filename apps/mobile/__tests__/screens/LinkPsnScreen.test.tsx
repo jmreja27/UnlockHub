@@ -20,7 +20,7 @@ jest.mock('expo-haptics', () => ({
   NotificationFeedbackType: { Success: 'success', Error: 'error' },
 }));
 jest.mock('expo-router', () => ({
-  router: { back: jest.fn() },
+  router: { back: jest.fn(), canGoBack: jest.fn().mockReturnValue(true), replace: jest.fn() },
 }));
 
 const mockedApi = api as jest.Mocked<typeof api>;
@@ -65,7 +65,23 @@ describe('LinkPsnScreen', () => {
     expect(getByText('link_platform.psn.error_empty')).toBeTruthy();
   });
 
-  it('navega de vuelta cuando el perfil PSN es público (201)', async () => {
+  it('muestra alert de éxito cuando el perfil PSN es público (201)', async () => {
+    mockedApi.post.mockResolvedValue(makeAccount({ psnProfilePrivate: false }));
+
+    const { getByTestId, getByText } = renderScreen();
+    fireEvent.changeText(getByTestId('psn-username-input'), 'PSNUser99');
+    fireEvent.press(getByText('link_platform.psn.submit'));
+
+    await waitFor(() => {
+      expect(Alert.alert).toHaveBeenCalledWith(
+        'link_platform.psn.success',
+        '',
+        expect.any(Array),
+      );
+    });
+  });
+
+  it('navega de vuelta al confirmar el alert de éxito PSN con historial', async () => {
     mockedApi.post.mockResolvedValue(makeAccount({ psnProfilePrivate: false }));
 
     // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/consistent-type-imports
@@ -75,7 +91,13 @@ describe('LinkPsnScreen', () => {
     fireEvent.changeText(getByTestId('psn-username-input'), 'PSNUser99');
     fireEvent.press(getByText('link_platform.psn.submit'));
 
-    await waitFor(() => expect(router.back).toHaveBeenCalled());
+    await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
+
+    const alertArgs = (Alert.alert as jest.Mock).mock.calls[0] as Parameters<typeof Alert.alert>;
+    const buttons = alertArgs[2] as Array<{ text: string; onPress?: () => void }>;
+    buttons[0]?.onPress?.();
+
+    expect(router.back).toHaveBeenCalled();
   });
 
   // ── BUG-4: perfil privado ahora devuelve 400 y muestra error inline ─────────
@@ -165,5 +187,50 @@ describe('LinkPsnScreen', () => {
     await waitFor(() => {
       expect(getByText('link_platform.psn.error_service_unavailable')).toBeTruthy();
     });
+  });
+
+  it('CRÍTICO — muestra alert de error visible cuando el servidor devuelve 503', async () => {
+    mockedApi.post.mockRejectedValue(new ApiRequestError({ error: 'Service unavailable', code: 'PSN_SYSTEM_NOT_CONFIGURED' }, 503));
+
+    const { getByTestId, getByText } = renderScreen();
+    fireEvent.changeText(getByTestId('psn-username-input'), 'somepsn');
+    fireEvent.press(getByText('link_platform.psn.submit'));
+
+    await waitFor(() => {
+      expect(Alert.alert).toHaveBeenCalledWith('link_platform.psn.error_service_unavailable');
+    });
+  });
+
+  it('guard canGoBack: presionar Volver sin historial navega a /(tabs)', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/consistent-type-imports
+    const { router } = require('expo-router') as typeof import('expo-router');
+    (router.canGoBack as jest.Mock).mockReturnValue(false);
+
+    const { getByText } = renderScreen();
+    fireEvent.press(getByText('common.back'));
+
+    expect(router.back).not.toHaveBeenCalled();
+    expect(router.replace).toHaveBeenCalledWith('/(tabs)');
+  });
+
+  it('guard canGoBack: OK en alert de éxito sin historial navega a /(tabs)', async () => {
+    mockedApi.post.mockResolvedValue(makeAccount({ psnProfilePrivate: false }));
+
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/consistent-type-imports
+    const { router } = require('expo-router') as typeof import('expo-router');
+    (router.canGoBack as jest.Mock).mockReturnValue(false);
+
+    const { getByTestId, getByText } = renderScreen();
+    fireEvent.changeText(getByTestId('psn-username-input'), 'PSNUser99');
+    fireEvent.press(getByText('link_platform.psn.submit'));
+
+    await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
+
+    const alertArgs = (Alert.alert as jest.Mock).mock.calls[0] as Parameters<typeof Alert.alert>;
+    const buttons = alertArgs[2] as Array<{ text: string; onPress?: () => void }>;
+    buttons[0]?.onPress?.();
+
+    expect(router.replace).toHaveBeenCalledWith('/(tabs)');
+    expect(router.back).not.toHaveBeenCalled();
   });
 });
