@@ -11,12 +11,15 @@ import {
   ScrollView,
   Linking,
 } from 'react-native';
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '../../hooks/useAuth';
+import { formatBirthDate } from '../../lib/formatTimeAgo';
 
 const MIN_AGE = 16;
 
@@ -30,12 +33,18 @@ type FieldErrors = {
   birthDate?: string;
 };
 
-function isOldEnough(dateStr: string): boolean {
-  const birth = new Date(dateStr);
-  if (isNaN(birth.getTime())) return false;
+function isOldEnough(date: Date): boolean {
   const today = new Date();
   const cutoff = new Date(today.getFullYear() - MIN_AGE, today.getMonth(), today.getDate());
-  return birth <= cutoff;
+  return date <= cutoff;
+}
+
+// Formatea Date → "YYYY-MM-DD" para la API. Sin Intl.
+function formatForApi(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 export default function RegisterScreen() {
@@ -43,10 +52,15 @@ export default function RegisterScreen() {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [birthDate, setBirthDate] = useState('');
+  const [birthDate, setBirthDate] = useState<Date | null>(null);
+  const [showPicker, setShowPicker] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
   const { register, isRegistering, registerError } = useAuth();
+
+  // Fecha máxima permitida: hoy - MIN_AGE años
+  const today = new Date();
+  const maxDate = new Date(today.getFullYear() - MIN_AGE, today.getMonth(), today.getDate());
 
   function validateFields(): boolean {
     const errors: FieldErrors = {};
@@ -77,11 +91,9 @@ export default function RegisterScreen() {
       errors.password = t('auth.register.error_password_number');
     }
 
-    if (!birthDate.trim()) {
+    if (!birthDate) {
       errors.birthDate = t('auth.register.error_birthdate_required');
-    } else if (!/^\d{4}-\d{2}-\d{2}$/.test(birthDate.trim())) {
-      errors.birthDate = t('auth.register.error_birthdate_format');
-    } else if (!isOldEnough(birthDate.trim())) {
+    } else if (!isOldEnough(birthDate)) {
       errors.birthDate = t('auth.register.error_birthdate_underage', { age: MIN_AGE });
     }
 
@@ -101,8 +113,20 @@ export default function RegisterScreen() {
       username: username.trim(),
       email: email.trim().toLowerCase(),
       password,
-      birthDate: birthDate.trim(),
+      birthDate: formatForApi(birthDate!),
     });
+  }
+
+  function handleDateChange(event: DateTimePickerEvent, selectedDate?: Date) {
+    if (Platform.OS !== 'ios') {
+      setShowPicker(false);
+    }
+    if (event.type === 'set' && selectedDate) {
+      setBirthDate(selectedDate);
+      if (fieldErrors.birthDate) {
+        setFieldErrors((prev: FieldErrors) => ({ ...prev, birthDate: undefined }));
+      }
+    }
   }
 
   return (
@@ -250,32 +274,56 @@ export default function RegisterScreen() {
               )}
             </View>
 
-            {/* Campo fecha de nacimiento — requerido por GDPR España (≥16 años) */}
+            {/* Campo fecha de nacimiento — date picker nativo, requerido por GDPR España (≥16 años) */}
             <View className="mb-8">
               <Text className="text-gray-300 text-sm mb-1.5 ml-1">
                 {t('auth.register.birthdate_label')}
               </Text>
-              <TextInput
-                className={`w-full bg-surface-elevated rounded-xl px-4 py-3.5 text-white text-base border ${
+
+              {/* Botón que abre el picker */}
+              <Pressable
+                className={`w-full bg-surface-elevated rounded-xl px-4 flex-row items-center justify-between border ${
                   fieldErrors.birthDate ? 'border-red-500' : 'border-surface-card'
                 }`}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor="#6b7280"
-                keyboardType="numbers-and-punctuation"
-                autoCapitalize="none"
-                autoCorrect={false}
-                returnKeyType="done"
-                value={birthDate}
-                onChangeText={(text: string) => {
-                  setBirthDate(text);
-                  if (fieldErrors.birthDate) {
-                    setFieldErrors((prev: FieldErrors) => ({ ...prev, birthDate: undefined }));
-                  }
-                }}
-                onSubmitEditing={handleSubmit}
+                onPress={() => setShowPicker(true)}
+                accessibilityRole="button"
                 accessibilityLabel={t('auth.register.birthdate_label')}
                 accessibilityHint={t('auth.register.birthdate_hint')}
-              />
+                style={{ minHeight: 52 }}
+              >
+                <Text className={birthDate ? 'text-white text-base' : 'text-gray-500 text-base'}>
+                  {birthDate ? formatBirthDate(birthDate) : t('auth.register.birthdate_placeholder')}
+                </Text>
+                <Ionicons name="calendar-outline" size={18} color="#6b7280" />
+              </Pressable>
+
+              {/* DateTimePicker — modal en Android, spinner inline en iOS */}
+              {showPicker && (
+                <DateTimePicker
+                  value={birthDate ?? maxDate}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  maximumDate={maxDate}
+                  minimumDate={new Date(1900, 0, 1)}
+                  onChange={handleDateChange}
+                />
+              )}
+
+              {/* Botón "Confirmar" en iOS para cerrar el spinner inline */}
+              {Platform.OS === 'ios' && showPicker && (
+                <Pressable
+                  onPress={() => setShowPicker(false)}
+                  className="self-end mt-1 px-2 py-1"
+                  accessibilityRole="button"
+                  accessibilityLabel={t('auth.register.birthdate_confirm')}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text className="text-primary-light font-medium text-sm">
+                    {t('auth.register.birthdate_confirm')}
+                  </Text>
+                </Pressable>
+              )}
+
               <Text className="text-gray-500 text-xs mt-1 ml-1">
                 {t('auth.register.birthdate_gdpr_note', { age: MIN_AGE })}
               </Text>

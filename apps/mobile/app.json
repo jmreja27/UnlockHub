@@ -67,7 +67,8 @@
           "androidAppId": "ca-app-pub-3506466357843399~6211856600",
           "iosAppId": "ca-app-pub-3940256099942544~1458002511"
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true
