@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { User, PlatformAccount } from '@unlockhub/types';
 
 import ProfileScreen from '../../app/(tabs)/profile';
+import { formatNumber } from '../../lib/formatTimeAgo';
 import { useSessionStore } from '../../stores/sessionStore';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -159,9 +160,8 @@ describe('ProfileScreen', () => {
 
     it('muestra el XP del usuario', async () => {
       const { getByText } = renderProfile();
-      // toLocaleString() puede devolver '1,500' o '1500' segÃºn el entorno Node.js
-      const formattedXp = (1500).toLocaleString();
-      await waitFor(() => expect(getByText(formattedXp)).toBeTruthy());
+      // El mock global de useTranslation devuelve i18n.language = 'en'
+      await waitFor(() => expect(getByText(formatNumber(1500, 'en'))).toBeTruthy());
     });
 
     it('muestra la racha de dÃ­as', async () => {

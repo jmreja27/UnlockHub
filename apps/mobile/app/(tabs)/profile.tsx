@@ -28,6 +28,7 @@ import { api, uploadFile, getAccessToken } from '../../lib/api';
 import { useFeed } from '../../hooks/useFeed';
 import { queryKeys } from '../../lib/queryKeys';
 import { getCloudinaryThumb } from '../../lib/cloudinary';
+import { formatNumber } from '../../lib/formatTimeAgo';
 
 interface UserStats {
   xpByWeek: { week: string; xp: number }[];
@@ -102,7 +103,7 @@ const REWARDED_COOLDOWN_KEY = 'admob:rewarded_ad:last_claimed';
 const REWARDED_COOLDOWN_MS = 3 * 60 * 60 * 1000;
 
 export default function ProfileScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const colors = useTheme();
   const { user, isAuthenticated } = useSessionStore();
   const { logout, isLoggingOut } = useAuth();
@@ -474,7 +475,7 @@ export default function ProfileScreen() {
           accessibilityLabel={t('profile.profile_aria', {
             username: user.username,
             level: user.level ?? 1,
-            xp: (user.xp ?? 0).toLocaleString(),
+            xp: formatNumber(user.xp ?? 0, i18n.language),
           })}
         >
           <Pressable
@@ -540,7 +541,7 @@ export default function ProfileScreen() {
           accessible
           accessibilityLabel={t('profile.stats_aria', {
             level: user.level ?? 1,
-            xp: (user.xp ?? 0).toLocaleString(),
+            xp: formatNumber(user.xp ?? 0, i18n.language),
             streak: user.streakDays ?? 0,
           })}
         >
@@ -550,7 +551,7 @@ export default function ProfileScreen() {
           </View>
           <View className="w-px" style={{ backgroundColor: colors.border }} />
           <View className="flex-1 items-center">
-            <Text className="text-xl font-bold" style={{ color: colors.text }}>{(user.xp ?? 0).toLocaleString()}</Text>
+            <Text className="text-xl font-bold" style={{ color: colors.text }}>{formatNumber(user.xp ?? 0, i18n.language)}</Text>
             <Text className="text-xs mt-1" style={{ color: colors.textSecondary }}>{t('profile.stat_xp')}</Text>
           </View>
           <View className="w-px" style={{ backgroundColor: colors.border }} />
@@ -736,7 +737,7 @@ export default function ProfileScreen() {
                     accessibilityLabel={`${pointsBalance} ${t('profile.points_label')}`}
                     testID="points-balance"
                   >
-                    {new Intl.NumberFormat().format(pointsBalance)}
+                    {formatNumber(pointsBalance, i18n.language)}
                     {'  '}
                     <Text className="text-sm font-normal" style={{ color: colors.textSecondary }}>
                       {t('profile.points_label')}
@@ -857,7 +858,7 @@ export default function ProfileScreen() {
                   <View className="flex-row gap-2">
                     <View className="flex-1 rounded-xl p-3" style={{ backgroundColor: colors.surface }}>
                       <Text className="text-base font-bold" style={{ color: colors.text }}>
-                        {new Intl.NumberFormat().format(statsData.totalXp)}
+                        {formatNumber(statsData.totalXp ?? 0, i18n.language)}
                       </Text>
                       <Text className="text-xs mt-0.5" style={{ color: colors.textSecondary }}>
                         {t('profile.stats_total_xp')}
@@ -865,7 +866,7 @@ export default function ProfileScreen() {
                     </View>
                     <View className="flex-1 rounded-xl p-3" style={{ backgroundColor: colors.surface }}>
                       <Text className="text-base font-bold" style={{ color: colors.text }}>
-                        {new Intl.NumberFormat().format(statsData.totalAchievements)}
+                        {formatNumber(statsData.totalAchievements ?? 0, i18n.language)}
                       </Text>
                       <Text className="text-xs mt-0.5" style={{ color: colors.textSecondary }}>
                         {t('profile.stats_total_achievements')}

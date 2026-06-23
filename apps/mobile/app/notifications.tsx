@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import type { PaginatedResponse } from '@unlockhub/types';
 
 import { api } from '../lib/api';
+import { formatTimeAgo } from '../lib/formatTimeAgo';
 import { EmptyState } from '../components/EmptyState';
 import { SkeletonBox } from '../components/SkeletonBox';
 import { useTheme } from '../hooks/useTheme';
@@ -38,12 +39,10 @@ function NotificationItem({
   item: AppNotification;
   onRead: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   const colors = useTheme();
   const icon = TYPE_ICONS[item.type] ?? '🔔';
-  const timeAgo = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }).format(
-    Math.round((new Date(item.createdAt).getTime() - Date.now()) / 1000 / 60),
-    'minutes',
-  );
+  const timeAgo = formatTimeAgo(item.createdAt, t);
 
   return (
     <Pressable

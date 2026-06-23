@@ -9,6 +9,7 @@ import type { GamingWrapped } from '@unlockhub/types';
 import { useWrapped } from '../../hooks/useWrapped';
 import { useWrappedInterstitial } from '../../hooks/useWrappedInterstitial';
 import { analytics } from '../../lib/analytics';
+import { formatDayMonth, MONTH_NAMES } from '../../lib/formatTimeAgo';
 
 const PLATFORM_LABELS: Record<string, string> = {
   STEAM: 'Steam',
@@ -102,10 +103,6 @@ function parsePeriod(raw: string): { year: number; month: number | undefined; is
   return { year, month: undefined, isMonthly: false };
 }
 
-const MONTH_NAMES: Record<string, string[]> = {
-  es: ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'],
-  en: ['January','February','March','April','May','June','July','August','September','October','November','December'],
-};
 
 export default function WrappedScreen() {
   const { year: periodParam } = useLocalSearchParams<{ year: string }>();
@@ -438,9 +435,7 @@ export default function WrappedScreen() {
             <View className="mt-3">
               <StatCard
                 label={t('wrapped.most_productive_day')}
-                value={new Intl.DateTimeFormat(undefined, {
-                  day: 'numeric', month: 'long'
-                }).format(new Date(wrapped.mostProductiveDay.date + 'T12:00:00Z'))}
+                value={formatDayMonth(wrapped.mostProductiveDay.date, i18n.language)}
                 sub={t('wrapped.most_productive_count', {
                   count: wrapped.mostProductiveDay.achievementsCount,
                 })}

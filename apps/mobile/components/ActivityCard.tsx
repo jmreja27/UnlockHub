@@ -6,17 +6,10 @@ import type { ActivityEvent } from '@unlockhub/types';
 
 import { useTheme } from '../hooks/useTheme';
 import { getCloudinaryThumb } from '../lib/cloudinary';
+import { formatTimeAgo } from '../lib/formatTimeAgo';
 
 interface ActivityCardProps {
   event: ActivityEvent;
-}
-
-function relativeTime(isoDate: string, t: ReturnType<typeof useTranslation>['t']): string {
-  const diff = Math.floor((Date.now() - new Date(isoDate).getTime()) / 1000);
-  if (diff < 60) return t('feed.just_now');
-  if (diff < 3600) return t('feed.minutes_ago', { count: Math.floor(diff / 60) });
-  if (diff < 86400) return t('feed.hours_ago', { count: Math.floor(diff / 3600) });
-  return t('feed.days_ago', { count: Math.floor(diff / 86400) });
 }
 
 function eventLabel(event: ActivityEvent, t: ReturnType<typeof useTranslation>['t']): string {
@@ -43,7 +36,7 @@ export function ActivityCard({ event }: ActivityCardProps) {
   const { t } = useTranslation();
   const colors = useTheme();
   const label = eventLabel(event, t);
-  const time = relativeTime(event.createdAt, t);
+  const time = formatTimeAgo(event.createdAt, t);
 
   function handlePress() {
     void Haptics.selectionAsync();
