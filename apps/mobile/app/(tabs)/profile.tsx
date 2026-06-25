@@ -148,7 +148,7 @@ export default function ProfileScreen() {
   });
   const pointsBalance = pointsData?.total ?? 0;
 
-  const { showForReward } = useRewardedAd();
+  const { showForReward, isReady: isAdReady } = useRewardedAd();
   const isOnCooldown = rewardedCooldownEnd > Date.now();
   const cooldownHoursLeft = isOnCooldown
     ? Math.ceil((rewardedCooldownEnd - Date.now()) / (1000 * 60 * 60))
@@ -347,6 +347,13 @@ export default function ProfileScreen() {
   }
 
   async function handleWatchAd() {
+    if (!isAdReady) {
+      Alert.alert(
+        t('profile.points_rewarded_unavailable_title'),
+        t('profile.points_rewarded_unavailable_body'),
+      );
+      return;
+    }
     setIsWatchingAd(true);
     try {
       const pts = await showForReward();
@@ -359,6 +366,11 @@ export default function ProfileScreen() {
         Alert.alert(
           t('profile.points_rewarded_success_title'),
           t('profile.points_rewarded_success_body', { pts }),
+        );
+      } else {
+        Alert.alert(
+          t('common.error_boundary_title'),
+          t('profile.points_rewarded_error'),
         );
       }
     } finally {
@@ -756,23 +768,25 @@ export default function ProfileScreen() {
             {!user.isPremium && (
               <Pressable
                 onPress={() => { void handleWatchAd(); }}
-                disabled={isOnCooldown || isWatchingAd}
+                disabled={isOnCooldown || isWatchingAd || !isAdReady}
                 accessibilityRole="button"
                 accessibilityLabel={
                   isOnCooldown
                     ? t('profile.points_rewarded_cooldown', { hours: cooldownHoursLeft })
+                    : !isAdReady
+                    ? t('profile.points_watch_ad_loading')
                     : t('profile.points_watch_ad')
                 }
-                accessibilityState={{ disabled: isOnCooldown || isWatchingAd, busy: isWatchingAd }}
+                accessibilityState={{ disabled: isOnCooldown || isWatchingAd || !isAdReady, busy: isWatchingAd }}
                 testID="watch-ad-button"
                 style={{
                   minHeight: 44,
                   borderRadius: 12,
                   borderWidth: 1,
-                  borderColor: isOnCooldown ? colors.border : colors.primary + '99',
+                  borderColor: isOnCooldown || !isAdReady ? colors.border : colors.primary + '99',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  opacity: isOnCooldown ? 0.6 : 1,
+                  opacity: isOnCooldown || !isAdReady ? 0.6 : 1,
                 }}
               >
                 {isWatchingAd ? (
@@ -780,10 +794,12 @@ export default function ProfileScreen() {
                 ) : (
                   <Text
                     className="text-sm font-semibold"
-                    style={{ color: isOnCooldown ? colors.textMuted : colors.primary }}
+                    style={{ color: isOnCooldown || !isAdReady ? colors.textMuted : colors.primary }}
                   >
                     {isOnCooldown
                       ? t('profile.points_rewarded_cooldown', { hours: cooldownHoursLeft })
+                      : !isAdReady
+                      ? t('profile.points_watch_ad_loading')
                       : t('profile.points_watch_ad')}
                   </Text>
                 )}

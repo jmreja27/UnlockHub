@@ -98,12 +98,12 @@ function CompareRow({
         {check(achievement.isUnlockedByMe === true)}
       </View>
 
-      {/* Nombre del logro */}
+      {/* Nombre del logro — centrado para que quede claro a qué par de checks corresponde */}
       <View className="flex-1 mx-3">
-        <Text className="text-white text-sm font-semibold" numberOfLines={1}>
+        <Text className="text-white text-sm font-semibold text-center" numberOfLines={1}>
           {achievement.title}
         </Text>
-        <Text className="text-gray-500 text-xs mt-0.5">
+        <Text className="text-gray-500 text-xs mt-0.5 text-center">
           {achievement.normalizedPoints} XP
         </Text>
       </View>
@@ -239,8 +239,13 @@ export default function UserGameScreen() {
                 </Text>
               </View>
               <View className="flex-1 mx-3" />
-              <View className="w-9 items-center">
-                <Text className="text-gray-400 text-xs font-semibold uppercase" numberOfLines={1}>
+              {/* Columna del amigo — ancho máximo 100px para que el nombre no se corte */}
+              <View style={{ minWidth: 36, maxWidth: 100, alignItems: 'center' }}>
+                <Text
+                  className="text-gray-400 text-xs font-semibold uppercase"
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
                   {username}
                 </Text>
               </View>

@@ -8,18 +8,16 @@ import ProfileScreen from '../../app/(tabs)/profile';
 import { formatNumber } from '../../lib/formatTimeAgo';
 import { useSessionStore } from '../../stores/sessionStore';
 import { useAuth } from '../../hooks/useAuth';
+import { useRewardedAd } from '../../hooks/useRewardedAd';
 
 jest.mock('../../stores/sessionStore');
 jest.mock('../../hooks/useAuth');
 jest.mock('../../hooks/useFeed', () => ({
   useFeed: () => ({ events: [], isLoading: false, isError: false, refetch: jest.fn() }),
 }));
-jest.mock('../../hooks/useRewardedAd', () => ({
-  useRewardedAd: () => ({
-    showForReward: jest.fn().mockResolvedValue(10),
-    isReady: true,
-  }),
-}));
+jest.mock('../../hooks/useRewardedAd');
+
+const mockUseRewardedAd = useRewardedAd as jest.Mock;
 jest.mock('expo-image-picker', () => ({
   requestMediaLibraryPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
   launchImageLibraryAsync: jest.fn().mockResolvedValue({ canceled: true }),
@@ -111,6 +109,10 @@ describe('ProfileScreen', () => {
     mockUseAuth.mockReturnValue({
       logout: jest.fn(),
       isLoggingOut: false,
+    });
+    mockUseRewardedAd.mockReturnValue({
+      showForReward: jest.fn().mockResolvedValue(10),
+      isReady: true,
     });
   });
 
@@ -443,6 +445,37 @@ describe('ProfileScreen', () => {
           (call) => (call[0] as { queryKey?: string[] })?.queryKey?.[0],
         );
         expect(keys).toContain('my-points-total');
+      });
+    });
+
+    it('F37: el botón está deshabilitado cuando !isReady (anuncio aún cargando)', async () => {
+      mockUseRewardedAd.mockReturnValue({
+        showForReward: jest.fn().mockResolvedValue(null),
+        isReady: false,
+      });
+      const { getByTestId } = renderProfile();
+      await waitFor(() => {
+        const btn = getByTestId('watch-ad-button');
+        expect(btn.props.accessibilityState?.disabled).toBe(true);
+      });
+    });
+
+    it('F37: cuando showForReward devuelve null (error API) muestra el Alert de error', async () => {
+      mockUseRewardedAd.mockReturnValue({
+        showForReward: jest.fn().mockResolvedValue(null),
+        isReady: true,
+      });
+      const alertSpy = jest.spyOn(Alert, 'alert');
+      const { getByTestId } = renderProfile();
+
+      await waitFor(() => getByTestId('watch-ad-button'));
+      fireEvent.press(getByTestId('watch-ad-button'));
+
+      await waitFor(() => {
+        expect(alertSpy).toHaveBeenCalledWith(
+          'common.error_boundary_title',
+          'profile.points_rewarded_error',
+        );
       });
     });
 

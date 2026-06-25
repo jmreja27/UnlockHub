@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
+import * as Sentry from '@sentry/react-native';
 
 import { api } from '../lib/api';
 import { useSessionStore } from '../stores/sessionStore';
@@ -92,7 +93,10 @@ export function useRewardedAd() {
         api
           .post<RewardResult>('/api/v1/users/me/points/rewarded-ad')
           .then((data) => resolve(data.pointsEarned))
-          .catch(() => resolve(null));
+          .catch((err: unknown) => {
+            Sentry.captureException(err, { tags: { feature: 'rewarded_ad' } });
+            resolve(null);
+          });
       });
 
       showForRewardUnsubRef.current = unsubClosed;

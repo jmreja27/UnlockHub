@@ -501,9 +501,13 @@
     "points_label": "pts",
     "points_coming_soon": "Próximamente podrás canjear tus puntos por recompensas exclusivas",
     "points_watch_ad": "Ver anuncio (+10 pts)",
+    "points_watch_ad_loading": "Cargando anuncio...",
     "points_rewarded_cooldown": "Vuelve en {{hours}} h",
     "points_rewarded_success_title": "¡Puntos ganados!",
-    "points_rewarded_success_body": "+{{pts}} puntos añadidos a tu saldo"
+    "points_rewarded_success_body": "+{{pts}} puntos añadidos a tu saldo",
+    "points_rewarded_unavailable_title": "Anuncio no disponible",
+    "points_rewarded_unavailable_body": "No hay anuncios disponibles ahora mismo. Inténtalo de nuevo en unos minutos.",
+    "points_rewarded_error": "Hubo un problema al procesar el anuncio. Inténtalo de nuevo."
   },
   "premium": {
     "title": "UnlockHub Premium",
