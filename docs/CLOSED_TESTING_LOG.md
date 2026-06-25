@@ -82,6 +82,48 @@ La vinculación de PSN *sí funcionaba* en todos los casos (la cuenta aparecía 
 
 ---
 
+### BUG-03 — Rewarded ad: botón sin feedback visual de estado de carga
+
+**Reportado por**: Tester directo.
+
+**Descripción**: El botón "Ver anuncio" aparecía visualmente levemente atenuado cuando el anuncio aún no había terminado de cargar (`isReady = false`), pero seguía siendo pulsable. Al pulsarlo se mostraba un Alert de "anuncio no disponible", pero la experiencia resultaba confusa: el botón parecía funcional y el mensaje era inesperado. El tester lo describió como "el botón se puede pulsar pero no hace nada".
+
+**Diagnóstico / causa raíz**: El prop `disabled` del botón solo cubría dos estados: cooldown activo e `isWatchingAd` (spinner). El estado `!isReady` (anuncio aún descargándose desde los servidores de AdMob) no ponía el botón en `disabled`, aunque la opacidad bajaba a 0.75 como indicio visual. El texto del botón tampoco cambiaba para indicar que se estaba cargando.
+
+**Corrección aplicada**:
+- `disabled` extendido a `isOnCooldown || isWatchingAd || !isAdReady`.
+- `accessibilityState.disabled` actualizado en consecuencia.
+- Texto del botón: cuando `!isAdReady` (y sin cooldown), muestra `t('profile.points_watch_ad_loading')` ("Cargando anuncio...") en lugar de "Ver anuncio".
+- Opacidad: 0.6 cuando deshabilitado por cualquier causa (cooldown o no disponible), 1 cuando disponible.
+- Nuevas claves i18n `points_watch_ad_loading` en ES y EN.
+- 2 tests actualizados en `ProfileScreen.test.tsx`.
+
+**Archivos modificados**: `apps/mobile/app/(tabs)/profile.tsx`, `apps/mobile/i18n/locales/es.json`, `apps/mobile/i18n/locales/en.json`, `apps/mobile/__tests__/screens/ProfileScreen.test.tsx`.
+
+**Estado**: Corregido en `develop`. Pendiente de incluir en el próximo build EAS.
+
+---
+
+### MEJ-02 — Layout de comparación: nombre del amigo truncado + nombres de logros no centrados
+
+**Reportado por**: Tester directo (capturas de pantalla).
+
+**Descripción (a)**: En la pantalla de comparación de logros (`user-game/[username]/[gameId].tsx`, tab "Comparar"), la columna del nombre del amigo en la cabecera tenía un ancho fijo de `w-9` (36px), igual que la columna de los checks. Usernames de más de 4-5 caracteres se cortaban y aparecían como "SEIT..." o similar.
+
+**Descripción (b)**: Los nombres de los logros en las filas de comparación estaban alineados a la izquierda. Al ser la columna central entre dos checks (✓/○), la alineación izquierda hacía que no quedara claro visualmente a qué par de checks correspondía cada logro.
+
+**Corrección aplicada**:
+
+*(a) Nombre del amigo*: la columna derecha de la cabecera cambia de `className="w-9 items-center"` (36px fijo) a `style={{ minWidth: 36, maxWidth: 100, alignItems: 'center' }}`. Permite hasta ~12-15 caracteres a `text-xs` sin corte visible; los más largos se truncan con `ellipsizeMode="tail"` de forma controlada.
+
+*(b) Nombres de logros*: `CompareRow` — añadido `text-center` a los `Text` de título y XP de la columna central para que los nombres queden centrados entre los dos checks.
+
+**Archivos modificados**: `apps/mobile/app/user-game/[username]/[gameId].tsx`.
+
+**Estado**: Corregido en `develop`. Pendiente de incluir en el próximo build EAS.
+
+---
+
 ### F-01 — Wrapped: estadísticas extendidas (F45)
 
 **Reportado por**: Feedback de testers — interés en ver más detalles en el resumen anual/mensual.
@@ -112,7 +154,9 @@ Se publicó una actualización de la app durante el período de prueba cerrada c
 
 - **Crash en notificaciones** (BUG-01): eliminados todos los usos de `Intl.RelativeTimeFormat` y APIs Intl relacionadas, reemplazados por utilidades propias. El crash ya no es reproducible.
 - **Navegación y feedback en vinculación de plataformas** (BUG-02): corregido el comportamiento del botón "Volver" en las tres pantallas de vinculación; añadido mensaje de confirmación al vincular PSN; mejorada la visibilidad de errores.
+- **Botón rewarded ad sin feedback de estado de carga** (BUG-03): botón ahora deshabilitado visualmente (`disabled + opacidad 0.6`) mientras el anuncio carga; texto cambia a "Cargando anuncio..." para que el usuario entienda que hay que esperar.
+- **Layout de comparación** (MEJ-02): nombre del amigo en la cabecera ya no se trunca (ancho máximo 100px); nombres de logros centrados en la columna central.
 
 ### Iteración durante la prueba
 
-La prueba cerrada no fue un evento puntual sino un proceso iterativo: se recibió feedback, se diagnosticaron los problemas y se aplicaron correcciones en la rama `develop`. Las correcciones de BUG-01, BUG-02 y MEJ-01 están listas en `develop` y serán incluidas en el próximo build EAS, que se generará y distribuirá a los mismos testers del track de prueba cerrada para verificar que los bugs están resueltos antes de promover a producción. El build aún no se ha generado — esta actualización se publicará al track de prueba cerrada con ese build, no antes.
+La prueba cerrada no fue un evento puntual sino un proceso iterativo: se recibió feedback, se diagnosticaron los problemas y se aplicaron correcciones en la rama `develop`. Las correcciones de BUG-01, BUG-02, BUG-03, MEJ-01 y MEJ-02 están listas en `develop` y serán incluidas en el próximo build EAS, que se generará y distribuirá a los mismos testers del track de prueba cerrada para verificar que los bugs están resueltos antes de promover a producción. El build aún no se ha generado — esta actualización se publicará al track de prueba cerrada con ese build, no antes.
