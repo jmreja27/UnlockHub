@@ -1,11 +1,12 @@
 import { View, Text, Pressable } from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { useSafeBack } from '../hooks/useSafeBack';
 
 export function ComingSoon({ edges }: { edges?: Edge[] }) {
   const { t } = useTranslation();
+  const safeBack = useSafeBack();
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={edges}>
@@ -21,7 +22,7 @@ export function ComingSoon({ edges }: { edges?: Edge[] }) {
           {t('common.coming_soon_body')}
         </Text>
         <Pressable
-          onPress={() => router.back()}
+          onPress={safeBack}
           accessibilityRole="button"
           accessibilityLabel={t('common.back')}
           className="mt-8 bg-surface-elevated rounded-xl px-8 py-3 active:opacity-80"

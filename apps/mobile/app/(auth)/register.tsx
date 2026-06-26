@@ -14,8 +14,8 @@ import {
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { useSafeBack } from '../../hooks/useSafeBack';
 import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '../../hooks/useAuth';
@@ -49,6 +49,7 @@ function formatForApi(date: Date): string {
 
 export default function RegisterScreen() {
   const { t } = useTranslation();
+  const safeBack = useSafeBack();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -143,7 +144,7 @@ export default function RegisterScreen() {
           <View className="flex-1 px-6 pt-6 pb-12">
             {/* Botón volver */}
             <Pressable
-              onPress={() => router.back()}
+              onPress={safeBack}
               className="mb-8 self-start"
               accessibilityRole="button"
               accessibilityLabel={t('auth.register.back_label')}

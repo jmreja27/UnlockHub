@@ -4,7 +4,6 @@ import {
   ActivityIndicator, Alert, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
@@ -12,6 +11,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { PURCHASES_ERROR_CODE } from 'react-native-purchases';
 
 import { api } from '../lib/api';
+import { useSafeBack } from '../hooks/useSafeBack';
 import { useSubscription } from '../hooks/useSubscription';
 import { usePremiumPlans } from '../hooks/usePremiumPlans';
 import type { PremiumPlan } from '../hooks/usePremiumPlans';
@@ -92,6 +92,7 @@ function PlanCard({ plan, selected, onSelect }: PlanCardProps) {
 
 export default function PremiumScreen() {
   const { t } = useTranslation();
+  const safeBack = useSafeBack();
   const { purchase, isPurchasing, restorePurchases, isRestoring } = useSubscription();
   const { plans, isLoading: isLoadingPlans } = usePremiumPlans();
   const [selectedType, setSelectedType] = useState<'monthly' | 'annual'>('annual');
@@ -118,7 +119,7 @@ export default function PremiumScreen() {
       await purchase(selectedPlan);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert(t('premium.success_title'), t('premium.success_body'), [
-        { text: 'OK', onPress: () => router.back() },
+        { text: 'OK', onPress: safeBack },
       ]);
     } catch (err) {
       // USER_CANCELLED: no mostrar error — el usuario salió intencionalmente
@@ -134,7 +135,7 @@ export default function PremiumScreen() {
       await api.post('/api/v1/subscriptions/redeem-points', { points: POINTS_PER_REDEEM });
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert(t('premium.success_title'), t('premium.success_body'), [
-        { text: 'OK', onPress: () => router.back() },
+        { text: 'OK', onPress: safeBack },
       ]);
     } catch {
       Alert.alert(t('premium.error_title'), t('premium.error_purchase'));
@@ -157,7 +158,7 @@ export default function PremiumScreen() {
       {/* Cabecera */}
       <View className="flex-row items-center justify-end px-5 pt-3">
         <Pressable
-          onPress={() => router.back()}
+          onPress={safeBack}
           accessibilityRole="button"
           accessibilityLabel={t('common.close')}
           style={{ minHeight: 44, minWidth: 44, justifyContent: 'center', alignItems: 'flex-end' }}
