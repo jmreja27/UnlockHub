@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, waitFor } from '@testing-library/react-native';
+import { render, waitFor, fireEvent } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import PublicProfileScreen from '../../app/profile/[username]';
@@ -29,7 +29,7 @@ jest.mock('expo-router', () => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   const ReactNative = jest.requireActual<typeof import('react-native')>('react-native');
   const mockReplace = jest.fn();
-  const mockRouter = { push: jest.fn(), replace: mockReplace, back: jest.fn() };
+  const mockRouter = { push: jest.fn(), replace: mockReplace, back: jest.fn(), canGoBack: jest.fn().mockReturnValue(true) };
   return {
     router: mockRouter,
     Link: ReactNative.Pressable,
@@ -170,5 +170,31 @@ describe('PublicProfileScreen', () => {
 
     const { getByText } = renderWithClient(<PublicProfileScreen />);
     expect(getByText('public_profile.no_games')).toBeTruthy();
+  });
+
+  it('BUG-010 guard canGoBack: Volver con historial llama router.back()', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/consistent-type-imports
+    const { router } = require('expo-router') as typeof import('expo-router');
+    (router.canGoBack as jest.Mock).mockReturnValue(true);
+
+    mockUsePublicProfile.mockReturnValue({ data: sampleProfile, isLoading: false, isError: false, refetch: jest.fn() });
+    const { getByLabelText } = renderWithClient(<PublicProfileScreen />);
+    fireEvent.press(getByLabelText('common.back'));
+
+    expect(router.back).toHaveBeenCalledTimes(1);
+    expect(router.replace).not.toHaveBeenCalledWith('/(tabs)');
+  });
+
+  it('BUG-010 guard canGoBack: Volver sin historial navega a /(tabs)', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/consistent-type-imports
+    const { router } = require('expo-router') as typeof import('expo-router');
+    (router.canGoBack as jest.Mock).mockReturnValue(false);
+
+    mockUsePublicProfile.mockReturnValue({ data: sampleProfile, isLoading: false, isError: false, refetch: jest.fn() });
+    const { getByLabelText } = renderWithClient(<PublicProfileScreen />);
+    fireEvent.press(getByLabelText('common.back'));
+
+    expect(router.replace).toHaveBeenCalledWith('/(tabs)');
+    expect(router.back).not.toHaveBeenCalled();
   });
 });

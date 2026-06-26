@@ -8,6 +8,7 @@ import type { GamingWrapped } from '@unlockhub/types';
 
 import { useWrapped } from '../../hooks/useWrapped';
 import { useWrappedInterstitial } from '../../hooks/useWrappedInterstitial';
+import { useSafeBack } from '../../hooks/useSafeBack';
 import { analytics } from '../../lib/analytics';
 import { formatDayMonth, formatNumber, MONTH_NAMES } from '../../lib/formatTimeAgo';
 
@@ -113,6 +114,7 @@ export default function WrappedScreen() {
   const { data: wrapped, isLoading, isError } = useWrapped(isMonthly ? period : year);
 
   useWrappedInterstitial();
+  const safeBack = useSafeBack();
 
   const monthNames = MONTH_NAMES[i18n.language] ?? MONTH_NAMES['en']!;
   const periodLabel = isMonthly
@@ -133,7 +135,7 @@ export default function WrappedScreen() {
         </Text>
         <Pressable
           className="mt-6 px-6 py-3 bg-primary rounded-xl"
-          onPress={() => router.back()}
+          onPress={safeBack}
           accessibilityRole="button"
         >
           <Text className="text-white font-semibold">{t('common.back')}</Text>
@@ -147,7 +149,7 @@ export default function WrappedScreen() {
       {/* Cabecera */}
       <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-800">
         <Pressable
-          onPress={() => router.back()}
+          onPress={safeBack}
           accessibilityRole="button"
           accessibilityLabel={t('common.back')}
           className="p-1"

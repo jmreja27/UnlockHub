@@ -18,6 +18,7 @@ import { FriendshipButton } from '../../components/FriendshipButton';
 import { getPlatformColor } from '../../lib/platformColors';
 import { useTheme } from '../../hooks/useTheme';
 import { analytics } from '../../lib/analytics';
+import { useSafeBack } from '../../hooks/useSafeBack';
 import { getCloudinaryThumb } from '../../lib/cloudinary';
 import { formatNumber } from '../../lib/formatTimeAgo';
 
@@ -52,6 +53,7 @@ const PLATFORM_LABEL: Record<string, string> = {
 export default function PublicProfileScreen() {
   const { username } = useLocalSearchParams<{ username: string }>();
   const router = useRouter();
+  const safeBack = useSafeBack();
   const { t, i18n } = useTranslation();
   const colors = useTheme();
 
@@ -91,7 +93,7 @@ export default function PublicProfileScreen() {
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.background }}>
       <View className="flex-row items-center justify-between px-4 pt-2 pb-1">
         <Pressable
-          onPress={() => router.back()}
+          onPress={safeBack}
           accessibilityLabel={t('common.back')}
           accessibilityRole="button"
           style={{ minWidth: 44, minHeight: 44, justifyContent: 'center' }}

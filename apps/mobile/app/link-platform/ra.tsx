@@ -20,6 +20,7 @@ import type { PlatformAccount } from '@unlockhub/types';
 import { api, ApiRequestError } from '../../lib/api';
 import { queryKeys } from '../../lib/queryKeys';
 import { analytics } from '../../lib/analytics';
+import { useSafeBack } from '../../hooks/useSafeBack';
 
 const RA_REGISTER_URL = 'https://retroachievements.org/createaccount.php';
 
@@ -46,9 +47,7 @@ export default function LinkRAScreen() {
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [guideExpanded, setGuideExpanded] = useState(false);
 
-  function navigate() {
-    if (router.canGoBack()) { router.back(); } else { router.replace('/(tabs)'); }
-  }
+  const navigate = useSafeBack();
 
   function showError(msg: string) {
     Alert.alert(msg);

@@ -19,6 +19,7 @@ import type { PlatformAccount } from '@unlockhub/types';
 import { api, ApiRequestError } from '../../lib/api';
 import { queryKeys } from '../../lib/queryKeys';
 import { analytics } from '../../lib/analytics';
+import { useSafeBack } from '../../hooks/useSafeBack';
 
 function PrivacyGuide() {
   const { t } = useTranslation();
@@ -73,9 +74,7 @@ export default function LinkPsnScreen() {
   const [username, setUsername] = useState('');
   const [fieldError, setFieldError] = useState<string | null>(null);
 
-  function navigate() {
-    if (router.canGoBack()) { router.back(); } else { router.replace('/(tabs)'); }
-  }
+  const navigate = useSafeBack();
 
   function showError(msg: string) {
     Alert.alert(msg);

@@ -1,5 +1,5 @@
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { render, fireEvent } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import UserGameScreen from '../../app/user-game/[username]/[gameId]';
@@ -14,7 +14,7 @@ jest.mock('../../lib/platformColors', () => ({
 }));
 
 jest.mock('expo-router', () => {
-  const mockRouter = { push: jest.fn(), back: jest.fn(), replace: jest.fn() };
+  const mockRouter = { push: jest.fn(), back: jest.fn(), replace: jest.fn(), canGoBack: jest.fn().mockReturnValue(true) };
   return {
     router: mockRouter,
     useLocalSearchParams: jest.fn(() => ({ username: 'targetUser', gameId: 'game-1' })),
@@ -138,5 +138,31 @@ describe('UserGameScreen', () => {
     const { getByText } = renderWithClient(<UserGameScreen />);
     // "1/2 logros · 50%"
     expect(getByText(/50%/)).toBeTruthy();
+  });
+
+  it('BUG-012 guard canGoBack: Volver con historial llama router.back()', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/consistent-type-imports
+    const { router } = require('expo-router') as typeof import('expo-router');
+    (router.canGoBack as jest.Mock).mockReturnValue(true);
+
+    mockUseUserGameAchievements.mockReturnValue({ data: sampleData, isLoading: false, isError: false });
+    const { getByLabelText } = renderWithClient(<UserGameScreen />);
+    fireEvent.press(getByLabelText('common.back'));
+
+    expect(router.back).toHaveBeenCalledTimes(1);
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it('BUG-012 guard canGoBack: Volver sin historial navega a /(tabs)', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/consistent-type-imports
+    const { router } = require('expo-router') as typeof import('expo-router');
+    (router.canGoBack as jest.Mock).mockReturnValue(false);
+
+    mockUseUserGameAchievements.mockReturnValue({ data: sampleData, isLoading: false, isError: false });
+    const { getByLabelText } = renderWithClient(<UserGameScreen />);
+    fireEvent.press(getByLabelText('common.back'));
+
+    expect(router.replace).toHaveBeenCalledWith('/(tabs)');
+    expect(router.back).not.toHaveBeenCalled();
   });
 });

@@ -22,6 +22,7 @@ import type { Friendship } from '@unlockhub/types';
 
 import { useGameDetail, useMyGameAchievements } from '../../hooks/useSearch';
 import { useFriends } from '../../hooks/useFriends';
+import { useSafeBack } from '../../hooks/useSafeBack';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { api } from '../../lib/api';
 import { FEATURES } from '../../lib/featureFlags';
@@ -272,6 +273,7 @@ export default function GameDetailScreen() {
   const { t } = useTranslation();
   const colors = useTheme();
   const queryClient = useQueryClient();
+  const safeBack = useSafeBack();
   const { user, isAuthenticated } = useSessionStore();
   const currentUserId = user?.id ?? '';
 
@@ -375,7 +377,7 @@ export default function GameDetailScreen() {
         {/* Header */}
         <View className="px-4 pt-2 pb-3">
           <Pressable
-            onPress={() => router.back()}
+            onPress={safeBack}
             className="self-start mb-4"
             accessibilityRole="button"
             accessibilityLabel={t('common.back')}

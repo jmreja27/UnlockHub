@@ -21,7 +21,7 @@ jest.mock('expo-router', () => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   const ReactNative = jest.requireActual<typeof import('react-native')>('react-native');
   return {
-    router: { push: jest.fn(), replace: jest.fn(), back: jest.fn(), navigate: jest.fn() },
+    router: { push: jest.fn(), replace: jest.fn(), back: jest.fn(), navigate: jest.fn(), canGoBack: jest.fn().mockReturnValue(true) },
     Link: ReactNative.Pressable,
     useLocalSearchParams: jest.fn(() => ({})),
     useRouter: jest.fn(() => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() })),

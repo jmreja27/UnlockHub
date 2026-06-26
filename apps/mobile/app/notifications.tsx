@@ -10,6 +10,7 @@ import type { PaginatedResponse } from '@unlockhub/types';
 
 import { api } from '../lib/api';
 import { formatTimeAgo } from '../lib/formatTimeAgo';
+import { useSafeBack } from '../hooks/useSafeBack';
 import { EmptyState } from '../components/EmptyState';
 import { SkeletonBox } from '../components/SkeletonBox';
 import { useTheme } from '../hooks/useTheme';
@@ -87,6 +88,7 @@ export default function NotificationsScreen() {
   const { t } = useTranslation();
   const colors = useTheme();
   const queryClient = useQueryClient();
+  const safeBack = useSafeBack();
 
   const {
     data,
@@ -149,7 +151,7 @@ export default function NotificationsScreen() {
       {/* Header */}
       <View className="flex-row items-center justify-between px-4 pt-4 pb-2">
         <Pressable
-          onPress={() => router.back()}
+          onPress={safeBack}
           accessibilityRole="button"
           accessibilityLabel={t('common.back')}
           style={{ minWidth: 44, minHeight: 44, justifyContent: 'center' }}

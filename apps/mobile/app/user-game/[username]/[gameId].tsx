@@ -2,11 +2,12 @@ import { useState } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { FlashList } from '@shopify/flash-list';
 
 import { useUserGameAchievements } from '../../../hooks/useUserGames';
+import { useSafeBack } from '../../../hooks/useSafeBack';
 import { useSessionStore } from '../../../stores/sessionStore';
 import { SkeletonBox } from '../../../components/SkeletonBox';
 import { getPlatformColor } from '../../../lib/platformColors';
@@ -120,7 +121,7 @@ function CompareRow({
 
 export default function UserGameScreen() {
   const { username, gameId } = useLocalSearchParams<{ username: string; gameId: string }>();
-  const router = useRouter();
+  const safeBack = useSafeBack();
   const { t } = useTranslation();
   const isAuthenticated = useSessionStore((s) => s.isAuthenticated);
 
@@ -139,7 +140,7 @@ export default function UserGameScreen() {
     <SafeAreaView className="flex-1 bg-surface" edges={['top', 'left', 'right']}>
       {/* Back */}
       <Pressable
-        onPress={() => router.back()}
+        onPress={safeBack}
         className="px-4 pt-3 pb-1"
         accessibilityLabel={t('common.back')}
         accessibilityRole="button"

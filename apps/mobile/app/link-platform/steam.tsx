@@ -20,6 +20,7 @@ import type { PlatformAccount } from '@unlockhub/types';
 import { api, ApiRequestError } from '../../lib/api';
 import { queryKeys } from '../../lib/queryKeys';
 import { analytics } from '../../lib/analytics';
+import { useSafeBack } from '../../hooks/useSafeBack';
 
 const STEAM_PRIVACY_URL = 'https://store.steampowered.com/account/';
 
@@ -46,9 +47,7 @@ export default function LinkSteamScreen() {
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [guideExpanded, setGuideExpanded] = useState(false);
 
-  function navigate() {
-    if (router.canGoBack()) { router.back(); } else { router.replace('/(tabs)'); }
-  }
+  const navigate = useSafeBack();
 
   function showError(msg: string) {
     Alert.alert(msg);

@@ -16,7 +16,7 @@ jest.mock('../../lib/analytics');
 jest.mock('../../components/SkeletonBox', () => ({ SkeletonBox: () => null }));
 
 jest.mock('expo-router', () => {
-  const mockRouter = { push: jest.fn(), back: jest.fn(), replace: jest.fn() };
+  const mockRouter = { push: jest.fn(), back: jest.fn(), replace: jest.fn(), canGoBack: jest.fn().mockReturnValue(true) };
   return {
     router: mockRouter,
     useLocalSearchParams: jest.fn(() => ({ id: 'game-shell-1' })),
@@ -154,5 +154,39 @@ describe('GameDetailScreen — juego con 0 logros (shell game)', () => {
         '/api/v1/games/game-shell-1/fetch-achievements',
       );
     });
+  });
+});
+
+// ── BUG-009: guard canGoBack en botón Volver ──────────────────────────────────
+
+describe('GameDetailScreen — guard canGoBack (BUG-009)', () => {
+  it('presionar Volver con historial llama router.back()', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/consistent-type-imports
+    const { router } = require('expo-router') as typeof import('expo-router');
+    (router.canGoBack as jest.Mock).mockReturnValue(true);
+
+    mockUseGameDetail.mockReturnValue({ data: shellGame, isLoading: false, isError: false });
+    mockUseSessionStore.mockReturnValue({ user: { id: 'user-1' }, isAuthenticated: true });
+
+    const { getByLabelText } = renderWithClient(<GameDetailScreen />);
+    fireEvent.press(getByLabelText('common.back'));
+
+    expect(router.back).toHaveBeenCalledTimes(1);
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it('presionar Volver sin historial navega a /(tabs)', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/consistent-type-imports
+    const { router } = require('expo-router') as typeof import('expo-router');
+    (router.canGoBack as jest.Mock).mockReturnValue(false);
+
+    mockUseGameDetail.mockReturnValue({ data: shellGame, isLoading: false, isError: false });
+    mockUseSessionStore.mockReturnValue({ user: { id: 'user-1' }, isAuthenticated: true });
+
+    const { getByLabelText } = renderWithClient(<GameDetailScreen />);
+    fireEvent.press(getByLabelText('common.back'));
+
+    expect(router.replace).toHaveBeenCalledWith('/(tabs)');
+    expect(router.back).not.toHaveBeenCalled();
   });
 });
