@@ -843,6 +843,7 @@ io.adapter(createAdapter(pubClient, subClient));
 - **Un único propietario del estado de progreso de sync**: no instanciar `useSyncProgress` en más de un componente simultáneamente. El componente raíz de la pantalla (ej. `LibraryScreen`) es el propietario; pasa `isRunning: boolean` como prop a los hijos (`SyncStatusBar`). Instanciar el hook en varios componentes duplica listeners Socket.io, timers de gracia e intervals de polling fallback por cada instancia.
 - **Selectores Zustand siempre precisos**: usar `useStore((s) => s.campo)` en lugar de `useStore()` sin selector. Sin selector, cualquier cambio en el store (XP o nivel tras sync) re-renderiza el componente completo aunque el campo que usa no haya cambiado.
 - **Actualizar el backlog** al final de cada sesión marcando ítems completados con ✅.
+- **Toda `useMutation` DEBE tener `onError`** que: (a) informe al usuario con un mensaje específico a la acción (no un Alert genérico copiado), y (b) revierta cualquier update optimista o invalide para resincronizar con el backend. Las mutations con update optimista llevan `onMutate` (snapshot) + `onError` (rollback) + `onSettled` (invalidate). Referencia del patrón correcto: `useFriendshipActions.ts`. Excepción deliberada documentada: `markReadMutation` en `notifications.tsx` — solo invalida silenciosamente porque el tap-to-read no tiene update optimista y el Alert sería intrusivo para una acción menor. Convención añadida en Lote 3 de auditoría (2026-06-26, BUG-015/017–021/023).
 
 ### Estrategia de branching
 
