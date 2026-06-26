@@ -1,6 +1,6 @@
 {
   "common": {
-    "back": "← Back",
+    "back": "Back",
     "retry": "Retry",
     "loading": "Loading...",
     "error_generic": "Something went wrong. Please try again.",
