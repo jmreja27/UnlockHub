@@ -112,6 +112,12 @@ function AchievementRow({
         queryKey: queryKeys.achievementGuides(achievement.id),
       });
     },
+    onError: () => {
+      Alert.alert(t('common.error_boundary_title'), t('game.guides_upvote_error'));
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.achievementGuides(achievement.id),
+      });
+    },
   });
 
   const reportMutation = useMutation({
@@ -122,6 +128,9 @@ function AchievementRow({
         t('game.guides_report_confirm_title'),
         t('game.guides_report_confirmed'),
       );
+    },
+    onError: () => {
+      Alert.alert(t('common.error_boundary_title'), t('game.guides_report_error'));
     },
   });
 

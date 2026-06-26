@@ -479,6 +479,68 @@ describe('ProfileScreen', () => {
       });
     });
 
+    describe('BUG-015: unlinkMutation.onError', () => {
+      it('muestra Alert de error cuando api.delete falla al desvincular', async () => {
+        const apiGet = jest.fn(() => Promise.resolve([steamAccount]));
+        const apiDelete = jest.fn(() => Promise.reject(new Error('Network error')));
+        const { getByRole } = renderProfile(apiGet, apiDelete);
+        const alertSpy = jest.spyOn(Alert, 'alert');
+
+        // Primera llamada a Alert: diálogo de confirmación — auto-confirmar la acción destructiva
+        alertSpy.mockImplementationOnce((_title, _msg, buttons) => {
+          const confirmBtn = (buttons as { style?: string; onPress?: () => void }[])
+            ?.find((b) => b.style === 'destructive');
+          confirmBtn?.onPress?.();
+        });
+
+        await waitFor(() =>
+          expect(getByRole('button', { name: 'link_platform.steam.unlink' })).toBeTruthy(),
+        );
+        fireEvent.press(getByRole('button', { name: 'link_platform.steam.unlink' }));
+
+        await waitFor(() => expect(apiDelete).toHaveBeenCalled());
+
+        // Segunda llamada a Alert: feedback de error con título específico
+        await waitFor(() => {
+          const errorCall = alertSpy.mock.calls.find((c) => c[0] === 'profile.unlink_error_title');
+          expect(errorCall).toBeDefined();
+          expect(errorCall?.[1]).toBe('profile.unlink_error_message');
+        });
+      });
+    });
+
+    describe('BUG-017: deleteAccountMutation.onError', () => {
+      it('muestra Alert con título "cuenta NO eliminada" cuando api.delete falla', async () => {
+        // Sin cuentas de plataforma para que api.delete solo se use para deleteAccount
+        const apiDelete = jest.fn(() => Promise.reject(new Error('Server error')));
+        const { getByRole } = renderProfile(undefined, apiDelete);
+        const alertSpy = jest.spyOn(Alert, 'alert');
+
+        // Primera llamada a Alert: diálogo de confirmación — auto-confirmar
+        alertSpy.mockImplementationOnce((_title, _msg, buttons) => {
+          const confirmBtn = (buttons as { style?: string; onPress?: () => void }[])
+            ?.find((b) => b.style === 'destructive');
+          confirmBtn?.onPress?.();
+        });
+
+        await waitFor(() =>
+          expect(getByRole('button', { name: 'profile.delete_account' })).toBeTruthy(),
+        );
+        fireEvent.press(getByRole('button', { name: 'profile.delete_account' }));
+
+        await waitFor(() => expect(apiDelete).toHaveBeenCalled());
+
+        // El título inequívoco indica que la cuenta NO fue eliminada
+        await waitFor(() => {
+          const errorCall = alertSpy.mock.calls.find(
+            (c) => c[0] === 'profile.delete_account_error_title',
+          );
+          expect(errorCall).toBeDefined();
+          expect(errorCall?.[1]).toBe('profile.delete_account_error');
+        });
+      });
+    });
+
     describe('bannerMutation', () => {
       const NEW_BANNER_URL = 'https://res.cloudinary.com/new-banner.jpg';
 

@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { View, Text, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import { router } from 'expo-router';
@@ -114,6 +114,10 @@ export default function NotificationsScreen() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.notifications() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.notificationsUnreadCount() });
     },
+    onError: () => {
+      // Resincroniza silenciosamente — tap-to-read es acción menor, no merece Alert
+      void queryClient.invalidateQueries({ queryKey: queryKeys.notifications() });
+    },
   });
 
   const markAllMutation = useMutation({
@@ -122,6 +126,9 @@ export default function NotificationsScreen() {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       void queryClient.invalidateQueries({ queryKey: queryKeys.notifications() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.notificationsUnreadCount() });
+    },
+    onError: () => {
+      Alert.alert(t('common.error_boundary_title'), t('notifications.mark_all_error'));
     },
   });
 

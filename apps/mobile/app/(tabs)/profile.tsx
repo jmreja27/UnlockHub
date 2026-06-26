@@ -189,6 +189,11 @@ export default function ProfileScreen() {
       // aparecerán pronto" cuando el refetch de my-games termina antes que el de sync-summary.
       void queryClient.refetchQueries({ queryKey: queryKeys.syncSummaryBase() });
     },
+    onError: () => {
+      Alert.alert(t('profile.unlink_error_title'), t('profile.unlink_error_message'));
+      // Resincroniza el estado real: el backend no cambió nada
+      void queryClient.invalidateQueries({ queryKey: queryKeys.platforms(user?.id ?? '') });
+    },
   });
 
   const bannerMutation = useMutation({
@@ -323,6 +328,10 @@ export default function ProfileScreen() {
     onSuccess: () => {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       logout();
+    },
+    onError: () => {
+      // Título inequívoco: la cuenta NO fue eliminada — el usuario no debe dudar
+      Alert.alert(t('profile.delete_account_error_title'), t('profile.delete_account_error'));
     },
   });
 

@@ -167,7 +167,9 @@
     "guides_report_confirmed": "Gracias por tu reporte. Lo revisaremos pronto.",
     "guide_placeholder": "Comparte consejos, trucos o pistas para este logro…",
     "guide_submit": "Publicar guía",
-    "guide_min_length": "La guía debe tener al menos 20 caracteres."
+    "guide_min_length": "La guía debe tener al menos 20 caracteres.",
+    "guides_upvote_error": "No se pudo registrar el voto. Inténtalo de nuevo.",
+    "guides_report_error": "No se pudo enviar el reporte. Inténtalo de nuevo."
   },
   "home": {
     "title": "Inicio",
@@ -309,7 +311,8 @@
     "pending_item_label": "Solicitud de amistad de {{username}}",
     "unauthenticated_title": "Inicia sesión para ver tus amigos",
     "unauthenticated_body": "Crea una cuenta o inicia sesión para añadir amigos y ver su actividad.",
-    "unauthenticated_cta": "Iniciar sesión"
+    "unauthenticated_cta": "Iniciar sesión",
+    "error_send_request": "No se pudo enviar la solicitud de amistad. Inténtalo de nuevo."
   },
   "challenges": {
     "title": "Reto de la semana",
@@ -392,7 +395,8 @@
     "mark_all_read": "Marcar todo como leído",
     "empty_title": "Sin notificaciones",
     "empty_body": "Aquí aparecerán tus solicitudes de amistad, retos y logros de la comunidad.",
-    "list_label": "Lista de notificaciones"
+    "list_label": "Lista de notificaciones",
+    "mark_all_error": "No se pudieron marcar las notificaciones como leídas. Inténtalo de nuevo."
   },
   "wrapped": {
     "section_title": "Gaming Wrapped",
@@ -507,7 +511,10 @@
     "points_rewarded_success_body": "+{{pts}} puntos añadidos a tu saldo",
     "points_rewarded_unavailable_title": "Anuncio no disponible",
     "points_rewarded_unavailable_body": "No hay anuncios disponibles ahora mismo. Inténtalo de nuevo en unos minutos.",
-    "points_rewarded_error": "Hubo un problema al procesar el anuncio. Inténtalo de nuevo."
+    "points_rewarded_error": "Hubo un problema al procesar el anuncio. Inténtalo de nuevo.",
+    "unlink_error_title": "No se pudo desvincular",
+    "unlink_error_message": "No se pudo desvincular la plataforma. Inténtalo de nuevo.",
+    "delete_account_error_title": "Tu cuenta NO se ha eliminado"
   },
   "premium": {
     "title": "UnlockHub Premium",

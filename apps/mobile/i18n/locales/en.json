@@ -167,7 +167,9 @@
     "guides_report_confirmed": "Thanks for your report. We'll review it soon.",
     "guide_placeholder": "Share tips, walkthroughs or hints for this achievement…",
     "guide_submit": "Submit guide",
-    "guide_min_length": "Guide must be at least 20 characters."
+    "guide_min_length": "Guide must be at least 20 characters.",
+    "guides_upvote_error": "Could not register vote. Please try again.",
+    "guides_report_error": "Could not send report. Please try again."
   },
   "home": {
     "title": "Home",
@@ -309,7 +311,8 @@
     "pending_item_label": "Friend request from {{username}}",
     "unauthenticated_title": "Log in to see your friends",
     "unauthenticated_body": "Create an account or log in to add friends and see their activity.",
-    "unauthenticated_cta": "Log in"
+    "unauthenticated_cta": "Log in",
+    "error_send_request": "Could not send friend request. Please try again."
   },
   "challenges": {
     "title": "Weekly Challenge",
@@ -392,7 +395,8 @@
     "mark_all_read": "Mark all as read",
     "empty_title": "No notifications",
     "empty_body": "Friend requests, challenges and community achievements will appear here.",
-    "list_label": "Notifications list"
+    "list_label": "Notifications list",
+    "mark_all_error": "Could not mark notifications as read. Please try again."
   },
   "wrapped": {
     "section_title": "Gaming Wrapped",
@@ -507,7 +511,10 @@
     "points_rewarded_success_body": "+{{pts}} points added to your balance",
     "points_rewarded_unavailable_title": "Ad unavailable",
     "points_rewarded_unavailable_body": "No ads are available right now. Try again in a few minutes.",
-    "points_rewarded_error": "Something went wrong while processing the ad. Please try again."
+    "points_rewarded_error": "Something went wrong while processing the ad. Please try again.",
+    "unlink_error_title": "Could not unlink",
+    "unlink_error_message": "Could not unlink the platform. Please try again.",
+    "delete_account_error_title": "Your account was NOT deleted"
   },
   "premium": {
     "title": "UnlockHub Premium",
