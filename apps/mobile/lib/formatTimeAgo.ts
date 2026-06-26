@@ -37,6 +37,17 @@ export function formatBirthDate(date: Date): string {
   return `${d}/${m}/${y}`;
 }
 
+// Formatea una ISO datetime string o "YYYY-MM-DD" como "DD/MM/AAAA" sin Intl.DateTimeFormat.
+// Divide por 'T' antes de partir por '-' para manejar timestamps completos (ej: account.lastSyncedAt).
+export function formatFullDate(dateStr: string, _lang?: string): string {
+  const datePart = dateStr.split('T')[0] ?? dateStr;
+  const parts = datePart.split('-');
+  const year = parts[0] ?? '';
+  const month = (parts[1] ?? '01').padStart(2, '0');
+  const day = (parts[2] ?? '01').padStart(2, '0');
+  return `${day}/${month}/${year}`;
+}
+
 // Formatea una fecha "YYYY-MM-DD" como "15 de Junio" (es) o "June 15" (en)
 // sin Intl.DateTimeFormat, que no está garantizado en todos los builds de Hermes.
 export function formatDayMonth(dateStr: string, lang: string): string {

@@ -19,6 +19,7 @@ import { getPlatformColor } from '../../lib/platformColors';
 import { useTheme } from '../../hooks/useTheme';
 import { analytics } from '../../lib/analytics';
 import { getCloudinaryThumb } from '../../lib/cloudinary';
+import { formatNumber } from '../../lib/formatTimeAgo';
 
 interface CompareResult {
   targetUser: { username: string; level: number; xp: number; avatar: string | null };
@@ -51,7 +52,7 @@ const PLATFORM_LABEL: Record<string, string> = {
 export default function PublicProfileScreen() {
   const { username } = useLocalSearchParams<{ username: string }>();
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const colors = useTheme();
 
   const { data: profile, isLoading, isError, error, refetch } = usePublicProfile(username ?? '');
@@ -229,8 +230,8 @@ export default function PublicProfileScreen() {
                       style={{ color: compareData.xpDiff > 0 ? '#4ade80' : compareData.xpDiff < 0 ? '#f87171' : colors.textSecondary }}
                     >
                       {compareData.xpDiff > 0
-                        ? `+${compareData.xpDiff.toLocaleString()}`
-                        : compareData.xpDiff.toLocaleString()}
+                        ? `+${formatNumber(compareData.xpDiff, i18n.language)}`
+                        : formatNumber(compareData.xpDiff, i18n.language)}
                     </Text>
                     <Text className="text-xs text-center mt-0.5" style={{ color: colors.textSecondary }}>
                       {t('public_profile.compare_xp_label')}

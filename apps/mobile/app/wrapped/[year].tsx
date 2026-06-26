@@ -9,7 +9,7 @@ import type { GamingWrapped } from '@unlockhub/types';
 import { useWrapped } from '../../hooks/useWrapped';
 import { useWrappedInterstitial } from '../../hooks/useWrappedInterstitial';
 import { analytics } from '../../lib/analytics';
-import { formatDayMonth, MONTH_NAMES } from '../../lib/formatTimeAgo';
+import { formatDayMonth, formatNumber, MONTH_NAMES } from '../../lib/formatTimeAgo';
 
 const PLATFORM_LABELS: Record<string, string> = {
   STEAM: 'Steam',
@@ -62,11 +62,11 @@ function ComparisonBadge({ current, previous, label }: { current: number; previo
   );
 }
 
-function buildShareText(wrapped: GamingWrapped, t: (key: string, opts?: Record<string, unknown>) => string): string {
+function buildShareText(wrapped: GamingWrapped, t: (key: string, opts?: Record<string, unknown>) => string, lang: string): string {
   const lines = [
     t('wrapped.share_header', { year: wrapped.year }),
     `🏆 ${t('wrapped.total_achievements')}: ${wrapped.totalAchievements}`,
-    `⭐ ${t('wrapped.total_xp')}: ${wrapped.totalXpGained.toLocaleString()} XP`,
+    `⭐ ${t('wrapped.total_xp')}: ${formatNumber(wrapped.totalXpGained, lang)} XP`,
   ];
   if (wrapped.topGame) {
     lines.push(`🎮 ${t('wrapped.top_game')}: ${wrapped.topGame.title} (${wrapped.topGame.achievementsCount})`);
@@ -122,7 +122,7 @@ export default function WrappedScreen() {
   function handleShare() {
     if (!wrapped) return;
     void analytics.wrappedShared(period);
-    Share.share({ message: buildShareText(wrapped, t) }).catch(() => undefined);
+    Share.share({ message: buildShareText(wrapped, t, i18n.language) }).catch(() => undefined);
   }
 
   if (isNaN(year) || (isMonthly && (month === undefined || month < 1 || month > 12))) {
@@ -232,10 +232,10 @@ export default function WrappedScreen() {
           <View className="mt-3">
             <StatCard
               label={t('wrapped.total_xp')}
-              value={`${wrapped.totalXpGained.toLocaleString()} XP`}
+              value={`${formatNumber(wrapped.totalXpGained, i18n.language)} XP`}
               sub={
                 wrapped.previousYear
-                  ? `${t('wrapped.vs_previous')}: ${wrapped.previousYear.totalXpGained.toLocaleString()} XP`
+                  ? `${t('wrapped.vs_previous')}: ${formatNumber(wrapped.previousYear.totalXpGained, i18n.language)} XP`
                   : undefined
               }
               delay={100}

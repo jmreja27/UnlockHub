@@ -1,4 +1,4 @@
-import { formatTimeAgo, formatDayMonth, formatNumber } from '../../lib/formatTimeAgo';
+import { formatTimeAgo, formatDayMonth, formatNumber, formatFullDate } from '../../lib/formatTimeAgo';
 
 type TFunc = (key: string, opts?: Record<string, unknown>) => string;
 
@@ -161,5 +161,31 @@ describe('formatDayMonth', () => {
   it('día 1 (singular)', () => {
     expect(formatDayMonth('2025-03-01', 'en')).toBe('March 1');
     expect(formatDayMonth('2025-03-01', 'es')).toBe('1 de Marzo');
+  });
+});
+
+describe('formatFullDate', () => {
+  it('ISO datetime completo → DD/MM/AAAA', () => {
+    expect(formatFullDate('2026-06-25T10:30:00.000Z')).toBe('25/06/2026');
+  });
+
+  it('fecha plana YYYY-MM-DD → DD/MM/AAAA', () => {
+    expect(formatFullDate('2026-06-25')).toBe('25/06/2026');
+  });
+
+  it('día y mes de un dígito → cero a la izquierda', () => {
+    expect(formatFullDate('2026-01-05T00:00:00.000Z')).toBe('05/01/2026');
+  });
+
+  it('fin de año (31/12)', () => {
+    expect(formatFullDate('2025-12-31T23:59:59.000Z')).toBe('31/12/2025');
+  });
+
+  it('inicio de año siguiente (01/01)', () => {
+    expect(formatFullDate('2026-01-01T00:00:00.000Z')).toBe('01/01/2026');
+  });
+
+  it('preserva el año de la fecha, no la fecha local del dispositivo', () => {
+    expect(formatFullDate('2024-03-15T00:00:00.000Z')).toBe('15/03/2024');
   });
 });

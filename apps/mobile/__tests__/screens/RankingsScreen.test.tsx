@@ -6,6 +6,7 @@ import type { RankingEntry } from '@unlockhub/types';
 import RankingsScreen from '../../app/(tabs)/rankings';
 import { useGlobalRankings, usePlatformRanking, useMyRanking } from '../../hooks/useRankings';
 import { useSessionStore } from '../../stores/sessionStore';
+import { formatNumber } from '../../lib/formatTimeAgo';
 
 jest.mock('../../hooks/useRankings');
 jest.mock('../../stores/sessionStore');
@@ -221,13 +222,13 @@ describe('RankingsScreen', () => {
     const { getByRole, getByText } = renderWithClient(<RankingsScreen />);
 
     // Estado inicial (global): el banner muestra el XP global
-    expect(getByText(`${GLOBAL_XP.toLocaleString()} XP`)).toBeTruthy();
+    expect(getByText(`${formatNumber(GLOBAL_XP, 'en')} XP`)).toBeTruthy();
 
     // Cambiar al filtro PSN
     fireEvent.press(getByRole('tab', { name: 'rankings.filter_psn' }));
 
     // El banner ahora debe mostrar el XP de PSN, no el global
-    expect(getByText(`${PSN_XP.toLocaleString()} XP`)).toBeTruthy();
+    expect(getByText(`${formatNumber(PSN_XP, 'en')} XP`)).toBeTruthy();
   });
 
   it('banner muestra XP de RA (450) al activar filtro RA, no el XP global', () => {
@@ -255,7 +256,7 @@ describe('RankingsScreen', () => {
     // Cambiar al filtro RA
     fireEvent.press(getByRole('tab', { name: 'rankings.filter_ra' }));
 
-    expect(getByText(`${RA_XP.toLocaleString()} XP`)).toBeTruthy();
+    expect(getByText(`${formatNumber(RA_XP, 'en')} XP`)).toBeTruthy();
   });
 
   it('banner vuelve a mostrar XP global al regresar al filtro global desde PSN', () => {
@@ -282,10 +283,10 @@ describe('RankingsScreen', () => {
 
     // Ir a PSN
     fireEvent.press(getByRole('tab', { name: 'rankings.filter_psn' }));
-    expect(getByText(`${PSN_XP.toLocaleString()} XP`)).toBeTruthy();
+    expect(getByText(`${formatNumber(PSN_XP, 'en')} XP`)).toBeTruthy();
 
     // Volver a global
     fireEvent.press(getByRole('tab', { name: 'rankings.filter_global' }));
-    expect(getByText(`${GLOBAL_XP.toLocaleString()} XP`)).toBeTruthy();
+    expect(getByText(`${formatNumber(GLOBAL_XP, 'en')} XP`)).toBeTruthy();
   });
 });

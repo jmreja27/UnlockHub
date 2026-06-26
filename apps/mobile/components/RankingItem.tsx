@@ -5,6 +5,7 @@ import type { RankingEntry } from '@unlockhub/types';
 
 import { useTheme } from '../hooks/useTheme';
 import { getCloudinaryThumb } from '../lib/cloudinary';
+import { formatNumber } from '../lib/formatTimeAgo';
 
 // Placeholder blurhash para avatares mientras cargan
 const AVATAR_BLURHASH = 'L6PZfSi_.AyE_3t7t7R**0o#DgR4';
@@ -29,8 +30,8 @@ export function RankingItem({ entry, isCurrentUser = false, onPress }: RankingIt
   const isTopThree = entry.rank <= 3;
 
   const accessibilityLabel = isCurrentUser
-    ? `Tú: posición ${entry.rank}, ${entry.username}, ${entry.xp.toLocaleString()} XP`
-    : `Posición ${entry.rank}: ${entry.username}, ${entry.xp.toLocaleString()} XP`;
+    ? `Tú: posición ${entry.rank}, ${entry.username}, ${formatNumber(entry.xp)} XP`
+    : `Posición ${entry.rank}: ${entry.username}, ${formatNumber(entry.xp)} XP`;
 
   return (
     <Pressable
@@ -88,7 +89,7 @@ export function RankingItem({ entry, isCurrentUser = false, onPress }: RankingIt
           className="font-bold text-base"
           style={{ color: isCurrentUser ? colors.primary : colors.text }}
         >
-          {entry.xp.toLocaleString()}
+          {formatNumber(entry.xp)}
         </Text>
         <Text className="text-xs" style={{ color: colors.textMuted }}>XP</Text>
       </View>

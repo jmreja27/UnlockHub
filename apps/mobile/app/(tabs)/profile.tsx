@@ -28,7 +28,7 @@ import { api, uploadFile, getAccessToken } from '../../lib/api';
 import { useFeed } from '../../hooks/useFeed';
 import { queryKeys } from '../../lib/queryKeys';
 import { getCloudinaryThumb } from '../../lib/cloudinary';
-import { formatNumber } from '../../lib/formatTimeAgo';
+import { formatNumber, formatFullDate } from '../../lib/formatTimeAgo';
 
 interface UserStats {
   xpByWeek: { week: string; xp: number }[];
@@ -634,7 +634,7 @@ export default function ProfileScreen() {
                   )}
                   {account.lastSyncedAt && !account.psnProfilePrivate && (
                     <Text className="text-xs mr-2" style={{ color: colors.textMuted }}>
-                      {t('profile.sync_prefix')} {new Date(account.lastSyncedAt).toLocaleDateString()}
+                      {t('profile.sync_prefix')} {formatFullDate(account.lastSyncedAt)}
                     </Text>
                   )}
                   {canUnlink && (
