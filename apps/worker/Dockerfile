@@ -72,4 +72,7 @@ COPY apps/api/src ./apps/api/src
 COPY apps/worker/src ./apps/worker/src
 
 # Sin EXPOSE — el worker no levanta HTTP
+RUN chown -R node:node /app
+
+USER node
 CMD ["npx", "tsx", "apps/worker/src/index.ts"]

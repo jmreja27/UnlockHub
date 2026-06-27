@@ -72,5 +72,8 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
 EXPOSE 3000
 
+RUN chown -R node:node /app
+
 WORKDIR /app/apps/api
+USER node
 CMD ["node", "dist/index.js"]
