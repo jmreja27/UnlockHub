@@ -32,5 +32,11 @@
   },
   "dependencies": {
     "react-native-worklets": "^0.7.4"
+  },
+  "overrides": {
+    "form-data": "^4.0.6",
+    "engine.io": "^6.6.9",
+    "socket.io-adapter": "^2.5.8",
+    "engine.io-client": "^6.6.6"
   }
 }
