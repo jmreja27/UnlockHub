@@ -187,7 +187,11 @@ async function fetchRaUniqueGames(username: string): Promise<Map<string, RaCompl
         'Error al obtener los juegos del usuario desde RetroAchievements',
         'RA_API_ERROR',
         502,
-        { username, originalError: error instanceof Error ? error.message : String(error) },
+        {
+          username,
+          originalError: error instanceof Error ? error.message : String(error),
+          httpStatus: axios.isAxiosError(error) ? error.response?.status : undefined,
+        },
       );
     }
   }

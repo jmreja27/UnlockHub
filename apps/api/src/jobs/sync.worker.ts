@@ -290,7 +290,15 @@ export function startSyncWorker() {
   });
 
   worker.on('failed', (job, err) => {
-    logger.error({ platform: job?.data.platform, userId: job?.data.userId, err: err.message }, 'Sync fallido');
+    logger.error(
+      {
+        platform: job?.data.platform,
+        userId: job?.data.userId,
+        err: err.message,
+        details: err instanceof AppError ? err.details : undefined,
+      },
+      'Sync fallido',
+    );
   });
 
   return worker;
