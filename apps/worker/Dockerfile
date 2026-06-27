@@ -42,6 +42,7 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
+ENV XDG_CACHE_HOME=/app/.cache
 
 # Copiar manifiestos para instalar solo dependencias de producción
 COPY package.json package-lock.json ./
