@@ -384,7 +384,10 @@
     "filter_steam": "Steam",
     "filter_ra": "RetroAchievements",
     "filter_psn": "PlayStation",
-    "national_no_country": "Configura tu país en el perfil para ver el ranking nacional"
+    "national_no_country": "Configura tu país en el perfil para ver el ranking nacional",
+    "item_label": "Posición {{rank}}: {{username}}, {{xp}} XP",
+    "item_label_self": "Tú: posición {{rank}}, {{username}}, {{xp}} XP",
+    "item_hint": "Pulsa para ver el perfil de este jugador"
   },
   "notifications": {
     "title": "Notificaciones",

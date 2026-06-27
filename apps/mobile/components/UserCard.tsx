@@ -31,7 +31,7 @@ export function UserCard({ user }: Props) {
     >
       {user.avatar ? (
         <Image
-          source={{ uri: getCloudinaryThumb(user.avatar, 96, 96) }}
+          source={{ uri: getCloudinaryThumb(user.avatar, 96, 96) ?? undefined }}
           style={{ width: 48, height: 48, borderRadius: 24 }}
           contentFit="cover"
           accessibilityElementsHidden

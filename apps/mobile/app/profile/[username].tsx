@@ -84,7 +84,7 @@ export default function PublicProfileScreen() {
     if (!username) return;
     const ogUrl = `https://unlockhub.app/u/${encodeURIComponent(username)}`;
     void Share.share({ message: ogUrl, url: ogUrl });
-    analytics.profileShared();
+    void analytics.profileShared();
   }
 
   if (!username) return null;

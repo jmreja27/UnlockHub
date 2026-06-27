@@ -1,6 +1,7 @@
 // Componente reutilizable para un ítem del ranking global
 import { View, Text, Pressable } from 'react-native';
 import { Image } from 'expo-image';
+import { useTranslation } from 'react-i18next';
 import type { RankingEntry } from '@unlockhub/types';
 
 import { useTheme } from '../hooks/useTheme';
@@ -26,12 +27,13 @@ function getMedalColor(rank: number): string {
 
 export function RankingItem({ entry, isCurrentUser = false, onPress }: RankingItemProps) {
   const colors = useTheme();
+  const { t, i18n } = useTranslation();
   const medalColor = getMedalColor(entry.rank);
   const isTopThree = entry.rank <= 3;
 
   const accessibilityLabel = isCurrentUser
-    ? `Tú: posición ${entry.rank}, ${entry.username}, ${formatNumber(entry.xp)} XP`
-    : `Posición ${entry.rank}: ${entry.username}, ${formatNumber(entry.xp)} XP`;
+    ? t('rankings.item_label_self', { rank: entry.rank, username: entry.username, xp: formatNumber(entry.xp, i18n.language) })
+    : t('rankings.item_label', { rank: entry.rank, username: entry.username, xp: formatNumber(entry.xp, i18n.language) });
 
   return (
     <Pressable
@@ -39,7 +41,7 @@ export function RankingItem({ entry, isCurrentUser = false, onPress }: RankingIt
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      accessibilityHint={onPress ? 'Pulsa para ver el perfil de este jugador' : undefined}
+      accessibilityHint={onPress ? t('rankings.item_hint') : undefined}
       style={{ minHeight: 60, backgroundColor: isCurrentUser ? undefined : colors.surface }}
     >
       {/* Número de posición */}

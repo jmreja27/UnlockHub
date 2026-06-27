@@ -9,6 +9,7 @@ import { SkeletonBox } from '../../components/SkeletonBox';
 import { EmptyState } from '../../components/EmptyState';
 import { ComingSoon } from '../../components/ComingSoon';
 import { FEATURES } from '../../lib/featureFlags';
+import { formatFullDate } from '../../lib/formatTimeAgo';
 
 function classifyError(err: Error | null): 'network' | 'auth' | 'server' {
   if (!err) return 'server';
@@ -24,10 +25,8 @@ function metricKey(metric: ChallengeMetric): string {
   return `challenges.metric_${metric}`;
 }
 
-function formatDate(iso: string, locale: string): string {
-  return new Date(iso).toLocaleDateString(locale === 'es' ? 'es-ES' : 'en-US', {
-    day: 'numeric', month: 'long', year: 'numeric',
-  });
+function formatDate(iso: string): string {
+  return formatFullDate(iso);
 }
 
 function ProgressBar({ pct }: { pct: number }) {
@@ -61,7 +60,7 @@ function ChallengeSkeleton() {
 }
 
 export default function ChallengesScreen() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const challengeData = useChallenges();
 
   if (!FEATURES.challenges) return <ComingSoon edges={['left', 'right']} />;
@@ -143,7 +142,7 @@ export default function ChallengesScreen() {
             </Text>
 
             <Text className="text-gray-500 text-xs mt-1">
-              {t('challenges.ends_at', { date: formatDate(challenge.endAt, i18n.language) })}
+              {t('challenges.ends_at', { date: formatDate(challenge.endAt) })}
             </Text>
 
             <View className="mt-4">
