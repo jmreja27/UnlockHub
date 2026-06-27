@@ -314,12 +314,43 @@ export default function ProfileScreen() {
   const privacyMutation = useMutation({
     mutationFn: (visibility: ProfileVisibility) =>
       api.patch<{ profileVisibility: ProfileVisibility }>('/api/v1/users/me', { profileVisibility: visibility }),
+    onMutate: (visibility) => {
+      const current = useSessionStore.getState().user;
+      const previousVisibility: ProfileVisibility = current?.profileVisibility ?? 'PUBLIC';
+      if (current) {
+        useSessionStore.getState().setUser({ ...current, profileVisibility: visibility });
+      }
+      return { previousVisibility };
+    },
     onSuccess: (data) => {
+      // Confirma el valor real del servidor (por si difiere del update optimista)
       const current = useSessionStore.getState().user;
       if (current) {
         useSessionStore.getState().setUser({ ...current, profileVisibility: data.profileVisibility });
       }
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+    onError: (_err, _vars, context) => {
+      // Rollback: restaura la visibilidad anterior para que la UI refleje el estado real del backend
+      const current = useSessionStore.getState().user;
+      const previousVisibility = context?.previousVisibility ?? 'PUBLIC';
+      if (current) {
+        useSessionStore.getState().setUser({ ...current, profileVisibility: previousVisibility });
+      }
+      const prevLabel = t(
+        previousVisibility === 'PUBLIC'
+          ? 'profile.privacy_public'
+          : previousVisibility === 'FRIENDS_ONLY'
+          ? 'profile.privacy_friends'
+          : 'profile.privacy_private',
+      );
+      Alert.alert(
+        t('profile.privacy_error_title'),
+        t('profile.privacy_error_message', { visibility: prevLabel }),
+      );
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.me() });
     },
   });
 

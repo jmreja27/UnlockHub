@@ -370,6 +370,13 @@ describe('ProfileScreen', () => {
       const patchSpy = jest.fn(() => Promise.resolve({ profileVisibility: 'PRIVATE' }));
       api.patch = patchSpy;
 
+      // getState necesario para que onMutate y onSuccess lean y actualicen el store
+      const setUserMock = jest.fn();
+      (useSessionStore as unknown as { getState: jest.Mock }).getState = jest.fn().mockReturnValue({
+        user: { ...baseUser },
+        setUser: setUserMock,
+      });
+
       const apiGet = jest.fn(() => Promise.resolve([]));
       const { getByTestId } = renderProfile(apiGet);
       await waitFor(() => getByTestId('privacy-option-private'));
@@ -381,6 +388,75 @@ describe('ProfileScreen', () => {
           { profileVisibility: 'PRIVATE' },
         ),
       );
+    });
+
+    describe('BUG-016: privacyMutation — rollback al fallar la API', () => {
+      let setUserMock: jest.Mock;
+
+      beforeEach(() => {
+        setUserMock = jest.fn();
+        (useSessionStore as unknown as { getState: jest.Mock }).getState = jest.fn().mockReturnValue({
+          user: { ...baseUser, profileVisibility: 'PUBLIC' },
+          setUser: setUserMock,
+        });
+      });
+
+      it('(a) rollback: el store restaura la visibilidad anterior cuando la API falla', async () => {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { api } = require('../../lib/api') as { api: { get: jest.Mock; patch: jest.Mock } };
+        api.patch = jest.fn(() => Promise.reject(new Error('Network error')));
+        const { getByTestId } = renderProfile(jest.fn(() => Promise.resolve([])));
+
+        await waitFor(() => getByTestId('privacy-option-private'));
+        fireEvent.press(getByTestId('privacy-option-private'));
+
+        // Primera llamada: update optimista → PRIVATE
+        // Última llamada: rollback → PUBLIC (visibilidad real del backend)
+        await waitFor(() => {
+          expect(setUserMock.mock.calls.length).toBeGreaterThanOrEqual(2);
+          const lastArg = setUserMock.mock.calls[setUserMock.mock.calls.length - 1]?.[0] as {
+            profileVisibility?: string;
+          };
+          expect(lastArg?.profileVisibility).toBe('PUBLIC');
+        });
+      });
+
+      it('(b) mensaje de error: Alert informa al usuario de que el cambio no se aplicó', async () => {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { api } = require('../../lib/api') as { api: { get: jest.Mock; patch: jest.Mock } };
+        api.patch = jest.fn(() => Promise.reject(new Error('Network error')));
+        const alertSpy = jest.spyOn(Alert, 'alert');
+        const { getByTestId } = renderProfile(jest.fn(() => Promise.resolve([])));
+
+        await waitFor(() => getByTestId('privacy-option-private'));
+        fireEvent.press(getByTestId('privacy-option-private'));
+
+        await waitFor(() => {
+          const errorCall = alertSpy.mock.calls.find(
+            (c) => c[0] === 'profile.privacy_error_title',
+          );
+          expect(errorCall).toBeDefined();
+          expect(errorCall?.[1]).toBe('profile.privacy_error_message');
+        });
+      });
+
+      it('(c) resincronización: invalida queryKeys.me() para garantizar estado real del backend', async () => {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { api } = require('../../lib/api') as { api: { get: jest.Mock; patch: jest.Mock } };
+        api.patch = jest.fn(() => Promise.reject(new Error('Network error')));
+        const { client, getByTestId } = renderProfile(jest.fn(() => Promise.resolve([])));
+        const invalidateSpy = jest.spyOn(client, 'invalidateQueries');
+
+        await waitFor(() => getByTestId('privacy-option-private'));
+        fireEvent.press(getByTestId('privacy-option-private'));
+
+        await waitFor(() => {
+          const keys = invalidateSpy.mock.calls.map(
+            (call) => (call[0] as { queryKey?: string[] })?.queryKey?.[0],
+          );
+          expect(keys).toContain('me');
+        });
+      });
     });
 
     it('F36: muestra la sección de puntos cuando el usuario está autenticado', async () => {

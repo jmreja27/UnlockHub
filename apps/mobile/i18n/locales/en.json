@@ -468,6 +468,8 @@
     "privacy_private": "Private",
     "privacy_private_desc": "Your profile is not visible to anyone",
     "privacy_saving": "Saving...",
+    "privacy_error_title": "Privacy change failed",
+    "privacy_error_message": "Could not change profile visibility. It remains: {{visibility}}.",
     "sync_prefix": "Sync:",
     "platforms_empty": "You have no linked platforms yet.\nLink them from settings to sync your achievements.",
     "logout": "Log out",

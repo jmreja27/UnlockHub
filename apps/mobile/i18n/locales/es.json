@@ -468,6 +468,8 @@
     "privacy_private": "Privado",
     "privacy_private_desc": "Tu perfil no es visible para nadie",
     "privacy_saving": "Guardando...",
+    "privacy_error_title": "No se pudo cambiar la privacidad",
+    "privacy_error_message": "No se pudo cambiar la visibilidad del perfil. Sigue siendo: {{visibility}}.",
     "sync_prefix": "Sync:",
     "platforms_empty": "No tienes plataformas vinculadas todavía.\nVincúlalas desde los ajustes para sincronizar tus logros.",
     "logout": "Cerrar sesión",
