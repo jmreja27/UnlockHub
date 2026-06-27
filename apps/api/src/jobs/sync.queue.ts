@@ -8,6 +8,15 @@ export interface SyncJobData {
   platformAccountId: string;
   platform: Platform;
   triggerType: 'manual' | 'auto' | 'initial';
+  /** Número de intentos de adquirir el lock fallidos. Failsafe: se abandona al llegar a LOCK_MAX_RETRIES. */
+  lockRetryCount?: number;
+}
+
+/** Job batch: procesa múltiples plataformas de un usuario en serie (background-sync diario). */
+export interface SyncBatchJobData {
+  userId: string;
+  platforms: { platform: Platform; platformAccountId: string }[];
+  triggerType: 'auto' | 'initial';
 }
 
 export interface SyncJobResult {
@@ -16,7 +25,9 @@ export interface SyncJobResult {
   syncedAt: string;
 }
 
-export const syncQueue = new Queue<SyncJobData, SyncJobResult>('sync', {
+export type AnySyncJobData = SyncJobData | SyncBatchJobData;
+
+export const syncQueue = new Queue<AnySyncJobData, SyncJobResult>('sync', {
   connection: redis,
   defaultJobOptions: {
     attempts: 3,
