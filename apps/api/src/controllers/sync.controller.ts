@@ -11,8 +11,13 @@ export async function triggerSyncHandler(req: Request, res: Response, next: Next
     const platform = platformSchema.parse(req.params['platform']?.toUpperCase()) as Platform;
 
     const result = await syncService.triggerManualSync(userId, platform, isPremium);
+    // 202 cuando ya hay un sync activo (in_progress) — el cliente lo ignorará vía useSyncProgress
+    if ('status' in result && result.status === 'in_progress') {
+      res.status(202).json(result);
+      return;
+    }
     // 200 cuando Steam fue omitido por cuota (sin job encolado); 202 para sync real iniciado.
-    res.status(result.skippedByQuota ? 200 : 202).json(result);
+    res.status('skippedByQuota' in result && result.skippedByQuota ? 200 : 202).json(result);
   } catch (err) {
     next(err);
   }

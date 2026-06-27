@@ -41,7 +41,8 @@ function syncProgressKey(userId: string, platform: Platform) {
 
 /**
  * Inicia un sync manual para una plataforma, respetando cooldowns y límites diarios.
- * Utiliza SET NX en Redis para adquirir el cooldown de forma atómica y evitar race conditions.
+ * Comprueba primero si ya hay un sync activo para el usuario (lock Redis) — si existe,
+ * devuelve {status:'in_progress'} sin encolar ni consumir cooldown ni cuota diaria.
  * @throws {AppError} SYNC_COOLDOWN (429) si el cooldown no ha expirado.
  * @throws {AppError} DAILY_SYNC_LIMIT_EXCEEDED (429) si el usuario free alcanzó el límite diario.
  * @throws {AppError} PLATFORM_NOT_LINKED (404) si el usuario no tiene esa plataforma vinculada.
@@ -51,6 +52,14 @@ export async function triggerManualSync(
   platform: Platform,
   isPremium: boolean,
 ) {
+  // Comprobar si ya hay un sync activo para este usuario antes de consumir cooldown/cuota.
+  // El lock key es el mismo que usa el worker y triggerExpressSync.
+  const lockKey = `sync:user-lock:${userId}`;
+  const activeLock = await redis.get(lockKey);
+  if (activeLock) {
+    return { status: 'in_progress' as const, platform };
+  }
+
   // Mientras premium esté desactivado todos usan el tier free
   const effectivePremium = FEATURES.premium && isPremium;
   const config = SYNC_COOLDOWNS[effectivePremium ? 'premium' : 'free'];
