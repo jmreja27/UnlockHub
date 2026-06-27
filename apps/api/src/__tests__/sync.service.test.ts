@@ -26,6 +26,7 @@ jest.mock('../jobs/sync.queue', () => ({
 
 import { redis } from '../lib/redis';
 import { prisma } from '../lib/prisma';
+import { syncQueue } from '../jobs/sync.queue';
 
 const mockRedis = redis as jest.Mocked<typeof redis>;
 const mockPrisma = prisma as jest.Mocked<typeof prisma>;
@@ -163,13 +164,43 @@ describe('syncService.getSyncStatus', () => {
   });
 });
 
-describe('syncService.triggerManualSync — cuota Steam 90 % (A41)', () => {
-  it('encola Steam normalmente cuando el contador está por debajo del 90 %', async () => {
+describe('syncService.triggerManualSync — lock activo (in_progress)', () => {
+  it('devuelve status:in_progress sin encolar cuando el lock Redis está activo', async () => {
+    // Primera llamada redis.get: lock key existe (sync activo)
+    mockRedis.get.mockResolvedValueOnce('some-job-id');
+
+    const result = await syncService.triggerManualSync('user-1', 'STEAM', false);
+
+    expect(result).toMatchObject({ status: 'in_progress', platform: 'STEAM' });
+    // No debe encolar ni consumir cooldown/cuota
+    expect((syncQueue.add as jest.Mock)).not.toHaveBeenCalled();
+    expect(mockRedis.set).not.toHaveBeenCalled();
+    expect(mockRedis.incr).not.toHaveBeenCalled();
+  });
+
+  it('procede normalmente cuando el lock no está activo (get devuelve null)', async () => {
+    // Primera llamada redis.get: lock no existe
+    mockRedis.get.mockResolvedValueOnce(null);
     mockRedis.set.mockResolvedValue('OK');
     mockRedis.incr.mockResolvedValue(1);
     mockRedis.expire.mockResolvedValue(1);
-    // Contador en 89.999 (89,999 % < 90 %)
-    mockRedis.get.mockResolvedValue('89999');
+    (mockPrisma.platformAccount.findUnique as jest.Mock).mockResolvedValue(account);
+
+    const result = await syncService.triggerManualSync('user-1', 'STEAM', false);
+
+    expect(result.jobId).toBe('job-1');
+  });
+});
+
+describe('syncService.triggerManualSync — cuota Steam 90 % (A41)', () => {
+  it('encola Steam normalmente cuando el contador está por debajo del 90 %', async () => {
+    // Primera get: lock check (null = sin sync activo)
+    mockRedis.get.mockResolvedValueOnce(null);
+    mockRedis.set.mockResolvedValue('OK');
+    mockRedis.incr.mockResolvedValue(1);
+    mockRedis.expire.mockResolvedValue(1);
+    // Segunda get: contador Steam en 89.999 (89,999 % < 90 %)
+    mockRedis.get.mockResolvedValueOnce('89999');
     (mockPrisma.platformAccount.findUnique as jest.Mock).mockResolvedValue(account);
 
     const result = await syncService.triggerManualSync('user-1', 'STEAM', false);
@@ -179,9 +210,11 @@ describe('syncService.triggerManualSync — cuota Steam 90 % (A41)', () => {
   });
 
   it('devuelve skippedByQuota: true y libera cooldown cuando contador ≥ 90 % y usuario tiene otras plataformas', async () => {
+    // Primera get: lock check (null)
+    mockRedis.get.mockResolvedValueOnce(null);
     mockRedis.set.mockResolvedValue('OK');
-    // Contador en 90.000 (exactamente el umbral del 90 %)
-    mockRedis.get.mockResolvedValue('90000');
+    // Segunda get: contador en 90.000 (exactamente el umbral del 90 %)
+    mockRedis.get.mockResolvedValueOnce('90000');
     mockRedis.del.mockResolvedValue(1);
     // Usuario tiene RA vinculada además de STEAM
     (mockPrisma.platformAccount.count as jest.Mock).mockResolvedValue(1);
@@ -195,9 +228,11 @@ describe('syncService.triggerManualSync — cuota Steam 90 % (A41)', () => {
   });
 
   it('lanza STEAM_QUOTA_EXCEEDED 429 cuando contador ≥ 90 % y Steam es la única plataforma', async () => {
+    // Primera get: lock check (null)
+    mockRedis.get.mockResolvedValueOnce(null);
     mockRedis.set.mockResolvedValue('OK');
-    // Contador en 95.000 (por encima del umbral del 90 %)
-    mockRedis.get.mockResolvedValue('95000');
+    // Segunda get: contador en 95.000 (por encima del umbral del 90 %)
+    mockRedis.get.mockResolvedValueOnce('95000');
     mockRedis.del.mockResolvedValue(1);
     // Sin otras plataformas vinculadas
     (mockPrisma.platformAccount.count as jest.Mock).mockResolvedValue(0);
