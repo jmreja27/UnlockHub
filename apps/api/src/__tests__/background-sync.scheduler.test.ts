@@ -186,3 +186,40 @@ describe('runBackgroundSyncs — A41: Steam omitido del array si supera umbral d
     expect(jobData.platforms[0]).toMatchObject({ platform: 'PSN' });
   });
 });
+
+describe('runBackgroundSyncs — filtro por userId (force-sync)', () => {
+  it('runBackgroundSyncs(userId) pasa where:{userId} a la query y omite el filtro lastSyncAt', async () => {
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([
+      { id: 'acc-steam', userId: 'user-x', platform: 'STEAM' },
+      { id: 'acc-ra', userId: 'user-x', platform: 'RA' },
+    ]);
+
+    await runBackgroundSyncs('user-x');
+
+    expect(mockPrisma.platformAccount.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 'user-x' } }),
+    );
+    expect((syncQueue.add as jest.Mock)).toHaveBeenCalledTimes(1);
+    expect((syncQueue.add as jest.Mock)).toHaveBeenCalledWith(
+      'sync-bg:user-x',
+      expect.objectContaining({ userId: 'user-x' }),
+      expect.objectContaining({ jobId: 'sync-bg:user-x' }),
+    );
+  });
+
+  it('runBackgroundSyncs() sin argumento usa el filtro lastSyncAt y encola todos los usuarios elegibles', async () => {
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([
+      { id: 'acc-a1', userId: 'user-1', platform: 'STEAM' },
+      { id: 'acc-a2', userId: 'user-2', platform: 'RA' },
+    ]);
+
+    await runBackgroundSyncs();
+
+    expect(mockPrisma.platformAccount.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { user: expect.objectContaining({ lastSyncAt: expect.any(Object) }) },
+      }),
+    );
+    expect((syncQueue.add as jest.Mock)).toHaveBeenCalledTimes(2);
+  });
+});

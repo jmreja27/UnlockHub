@@ -20,7 +20,7 @@ const backgroundSyncQueue = new Queue('background-sync', { connection: redis });
  * - Si Steam supera el umbral del 80 %, se omite del array de plataformas del usuario
  *   (no se omite el usuario entero — el resto de plataformas sigue sincronizándose).
  */
-export async function runBackgroundSyncs(): Promise<void> {
+export async function runBackgroundSyncs(userId?: string): Promise<void> {
   const today = new Date().toISOString().slice(0, 10);
   const steamApiKey = `steam:api:calls:${today}`;
   const steamCalls = parseInt((await redis.get(steamApiKey)) ?? '0', 10);
@@ -37,9 +37,9 @@ export async function runBackgroundSyncs(): Promise<void> {
   const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
   const accounts = await prisma.platformAccount.findMany({
-    where: {
-      user: { lastSyncAt: { lte: oneDayAgo } },
-    },
+    where: userId
+      ? { userId }
+      : { user: { lastSyncAt: { lte: oneDayAgo } } },
     select: {
       id: true,
       userId: true,
