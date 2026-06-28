@@ -1,3 +1,7 @@
+jest.mock('../lib/logger', () => ({
+  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
+}));
+
 jest.mock('../services/user.service', () => ({
   addXp: jest.fn().mockResolvedValue({ newXp: 100, newLevel: 1, leveledUp: false }),
   invalidateUserPublicCache: jest.fn().mockResolvedValue(undefined),
@@ -66,6 +70,7 @@ import { Worker } from 'bullmq';
 import { redis } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 import { getIO } from '../lib/socket';
+import { logger } from '../lib/logger';
 import * as syncService from '../services/sync.service';
 import type { SyncBatchProgress } from '../platforms/platform.interface';
 import { AppError } from '../middleware/errorHandler';
@@ -152,7 +157,7 @@ describe('onBatch callback — emite sync:progress y actualiza Redis', () => {
 
     const onBatch = async (p: SyncBatchProgress): Promise<void> => {
       const percentComplete = p.total > 0 ? Math.round((p.processed / p.total) * 100) : 0;
-      await redis.setex(`sync:progress:user-1:STEAM`, 7200,
+      await redis.setex(`sync:progress:user-1:STEAM`, 900,
         JSON.stringify({ isRunning: true, processed: p.processed, total: p.total, percentComplete, startedAt }));
       mockIO.to('user:user-1').emit('sync:progress', {
         platform: 'STEAM', processed: p.processed, total: p.total,
@@ -163,7 +168,7 @@ describe('onBatch callback — emite sync:progress y actualiza Redis', () => {
     await onBatch(progress);
 
     expect(mockRedis.setex).toHaveBeenCalledWith(
-      'sync:progress:user-1:STEAM', 7200,
+      'sync:progress:user-1:STEAM', 900,
       expect.stringContaining('"processed":20'),
     );
     expect(mockTo).toHaveBeenCalledWith('user:user-1');
@@ -834,6 +839,38 @@ describe('startSyncWorker — batch job (SyncBatchJobData)', () => {
     expect(mockEmit).toHaveBeenCalledWith('sync:complete', expect.objectContaining({ platform: 'RA' }));
   });
 
+  // ─── T104: del de syncProgressKey en finally del batch (safety-net interno) ──
+  it('T104: batch — syncProgressKey borrada en finally aunque adapter de una plataforma falle', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    mockRedis.set.mockResolvedValueOnce('OK');
+    const extendLock = jest.fn().mockResolvedValue(0);
+
+    // Plataforma única (STEAM) — adapter falla
+    mockPrisma.platformAccount.findUnique.mockResolvedValueOnce(steamAccount);
+    mockPrisma.userAchievement.findMany.mockResolvedValueOnce([]); // prevEarnedIds
+
+    (mockSteamAdapter.syncUser as jest.Mock).mockRejectedValueOnce(new Error('Adapter error'));
+
+    await processFn({
+      id: 'batch-t104',
+      name: 'sync-bg:user-1',
+      opts: {},
+      token: 'tok-t104',
+      extendLock,
+      data: {
+        userId: 'user-1',
+        platforms: [{ platform: 'STEAM', platformAccountId: 'acc-steam' }],
+        triggerType: 'auto',
+      },
+    });
+
+    // La clave sync:progress debe borrarse (del desde finally de syncPlatform + safety-net de batch)
+    expect(mockRedis.del).toHaveBeenCalledWith('sync:progress:user-1:STEAM');
+  });
+
   it('batch con lock ocupado abandona sin reencolar', async () => {
     MockWorker.mockClear();
     startSyncWorker();
@@ -856,5 +893,211 @@ describe('startSyncWorker — batch job (SyncBatchJobData)', () => {
     // Batch no reencola — simplemente abandona
     expect((syncQueue.add as jest.Mock)).not.toHaveBeenCalled();
     expect((result as { achievementsSynced: number }).achievementsSynced).toBe(0);
+  });
+});
+
+// ─── T102: TTL 900s en ambas escrituras setex ────────────────────────────────
+
+describe('syncPlatform — T102: TTL de sync:progress = 900s (no 7200s)', () => {
+  type JobLike = { data: { userId: string; platformAccountId: string; platform: string; triggerType: string } };
+  type ProcessFn = (job: JobLike) => Promise<unknown>;
+
+  it('usa TTL=900 en el setex inicial (isRunning=true al arrancar)', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    mockRedis.set.mockResolvedValueOnce('OK');
+    mockPrisma.userAchievement.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    (mockSteamAdapter.syncUser as jest.Mock).mockResolvedValueOnce({
+      gamesUpdated: 0, achievementsSynced: 0, syncedAt: new Date().toISOString(),
+    });
+    mockPrisma.user.findUnique.mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' });
+    mockPrisma.platformAccount.findMany.mockResolvedValueOnce([]);
+
+    await processFn({ data: { userId: 'user-1', platformAccountId: 'acc-1', platform: 'STEAM', triggerType: 'manual' } });
+
+    // El primer setex (isRunning: true, processed: 0) debe usar TTL 900
+    expect(mockRedis.setex).toHaveBeenCalledWith(
+      'sync:progress:user-1:STEAM',
+      900,
+      expect.stringContaining('"isRunning":true'),
+    );
+  });
+
+  it('NO usa TTL=7200 en ninguna escritura setex de sync:progress', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    mockRedis.set.mockResolvedValueOnce('OK');
+    mockPrisma.userAchievement.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    (mockSteamAdapter.syncUser as jest.Mock).mockResolvedValueOnce({
+      gamesUpdated: 0, achievementsSynced: 0, syncedAt: new Date().toISOString(),
+    });
+    mockPrisma.user.findUnique.mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' });
+    mockPrisma.platformAccount.findMany.mockResolvedValueOnce([]);
+
+    await processFn({ data: { userId: 'user-1', platformAccountId: 'acc-1', platform: 'STEAM', triggerType: 'manual' } });
+
+    const setexCalls = (mockRedis.setex as jest.Mock).mock.calls;
+    const staleSetex = setexCalls.filter(
+      (call) => typeof call[0] === 'string' && call[0].startsWith('sync:progress') && call[1] === 7200,
+    );
+    expect(staleSetex).toHaveLength(0);
+  });
+});
+
+// ─── T103: logger.info al inicio y fin de cada plataforma ───────────────────
+
+describe('syncPlatform — T103: logs de inicio y fin por plataforma', () => {
+  const mockLogger = logger as jest.Mocked<typeof logger>;
+
+  type JobLike = { data: { userId: string; platformAccountId: string; platform: string; triggerType: string } };
+  type ProcessFn = (job: JobLike) => Promise<unknown>;
+
+  it('emite logger.info con "Sync iniciado" al arrancar la plataforma', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    mockRedis.set.mockResolvedValueOnce('OK');
+    mockPrisma.userAchievement.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    (mockSteamAdapter.syncUser as jest.Mock).mockResolvedValueOnce({
+      gamesUpdated: 2, achievementsSynced: 5, syncedAt: new Date().toISOString(),
+    });
+    mockPrisma.user.findUnique.mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' });
+    mockPrisma.platformAccount.findMany.mockResolvedValueOnce([]);
+
+    await processFn({ data: { userId: 'user-1', platformAccountId: 'acc-1', platform: 'STEAM', triggerType: 'manual' } });
+
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-1', platform: 'STEAM' }),
+      '[SyncWorker] Sync iniciado',
+    );
+  });
+
+  it('emite logger.info con "Sync completado" y métricas al terminar con éxito', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    mockRedis.set.mockResolvedValueOnce('OK');
+    mockPrisma.userAchievement.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    (mockSteamAdapter.syncUser as jest.Mock).mockResolvedValueOnce({
+      gamesUpdated: 3, achievementsSynced: 12, syncedAt: new Date().toISOString(),
+    });
+    mockPrisma.user.findUnique.mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' });
+    mockPrisma.platformAccount.findMany.mockResolvedValueOnce([]);
+
+    await processFn({ data: { userId: 'user-1', platformAccountId: 'acc-1', platform: 'STEAM', triggerType: 'manual' } });
+
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        platform: 'STEAM',
+        gamesUpdated: 3,
+        achievementsSynced: 12,
+      }),
+      '[SyncWorker] Sync completado',
+    );
+  });
+
+  it('NO emite "Sync completado" cuando el adapter falla', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    mockRedis.set.mockResolvedValueOnce('OK');
+    mockPrisma.userAchievement.findMany.mockResolvedValueOnce([]);
+    (mockSteamAdapter.syncUser as jest.Mock).mockRejectedValueOnce(new Error('Timeout'));
+
+    await expect(
+      processFn({ data: { userId: 'user-1', platformAccountId: 'acc-1', platform: 'STEAM', triggerType: 'manual' } }),
+    ).rejects.toThrow();
+
+    const completadoCalls = (mockLogger.info as jest.Mock).mock.calls.filter(
+      (call) => call[1] === '[SyncWorker] Sync completado',
+    );
+    expect(completadoCalls).toHaveLength(0);
+  });
+});
+
+// ─── T104: del de syncProgressKey en finally — cubre código post-adapter ─────
+
+describe('syncPlatform — T104: syncProgressKey borrada en finally en todos los caminos', () => {
+  type JobLike = { data: { userId: string; platformAccountId: string; platform: string; triggerType: string } };
+  type ProcessFn = (job: JobLike) => Promise<unknown>;
+
+  it('borra syncProgressKey cuando el adapter falla (error path)', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    mockRedis.set.mockResolvedValueOnce('OK');
+    mockPrisma.userAchievement.findMany.mockResolvedValueOnce([]);
+    (mockSteamAdapter.syncUser as jest.Mock).mockRejectedValueOnce(new Error('API down'));
+
+    await expect(
+      processFn({ data: { userId: 'user-1', platformAccountId: 'acc-1', platform: 'STEAM', triggerType: 'manual' } }),
+    ).rejects.toThrow();
+
+    expect(mockRedis.del).toHaveBeenCalledWith('sync:progress:user-1:STEAM');
+  });
+
+  it('borra syncProgressKey cuando falla código post-adapter (prisma.platformAccount.upsert)', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    mockRedis.set.mockResolvedValueOnce('OK');
+    mockPrisma.userAchievement.findMany.mockResolvedValueOnce([]);
+
+    // Adapter tiene éxito
+    (mockSteamAdapter.syncUser as jest.Mock).mockResolvedValueOnce({
+      gamesUpdated: 1, achievementsSynced: 5, syncedAt: new Date().toISOString(),
+    });
+    // Pero el upsert post-adapter falla
+    mockPrisma.platformAccount.upsert.mockRejectedValueOnce(new Error('DB timeout'));
+
+    await expect(
+      processFn({ data: { userId: 'user-1', platformAccountId: 'acc-1', platform: 'STEAM', triggerType: 'manual' } }),
+    ).rejects.toThrow('DB timeout');
+
+    // T104: el finally de syncPlatform garantiza el borrado aunque el adapter haya tenido éxito
+    expect(mockRedis.del).toHaveBeenCalledWith('sync:progress:user-1:STEAM');
+  });
+
+  it('borra syncProgressKey en el camino exitoso (success path)', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    mockRedis.set.mockResolvedValueOnce('OK');
+    mockPrisma.userAchievement.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    (mockSteamAdapter.syncUser as jest.Mock).mockResolvedValueOnce({
+      gamesUpdated: 0, achievementsSynced: 0, syncedAt: new Date().toISOString(),
+    });
+    mockPrisma.user.findUnique.mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' });
+    mockPrisma.platformAccount.findMany.mockResolvedValueOnce([]);
+
+    await processFn({ data: { userId: 'user-1', platformAccountId: 'acc-1', platform: 'STEAM', triggerType: 'manual' } });
+
+    expect(mockRedis.del).toHaveBeenCalledWith('sync:progress:user-1:STEAM');
   });
 });

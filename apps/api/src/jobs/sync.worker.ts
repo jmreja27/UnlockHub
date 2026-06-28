@@ -39,6 +39,9 @@ const LOCK_TTL_SECONDS = 600;
 const LOCK_RETRY_DELAY_MS = 30_000;
 /** Número máximo de reintentos de adquisición de lock antes de abandonar el job. */
 const LOCK_MAX_RETRIES = 3;
+/** TTL de la clave sync:progress en Redis. Se renueva en cada callback onBatch (T102).
+ *  15 min cubre el peor caso real por plataforma (PSN+Steam con tope A51 en serie). */
+const SYNC_PROGRESS_TTL_SECONDS = 900;
 
 function syncProgressKey(userId: string, platform: Platform): string {
   return `sync:progress:${userId}:${platform}`;
@@ -91,18 +94,19 @@ async function syncPlatform(
   const startedAt = new Date().toISOString();
   await redis.setex(
     syncProgressKey(userId, platform),
-    7200,
+    SYNC_PROGRESS_TTL_SECONDS,
     JSON.stringify({ isRunning: true, processed: 0, total: 0, percentComplete: 0, startedAt }),
   );
 
   const io = getIOSafe();
+  logger.info({ userId, platform }, '[SyncWorker] Sync iniciado');
 
   const onBatch = async (progress: SyncBatchProgress): Promise<void> => {
     const percentComplete =
       progress.total > 0 ? Math.round((progress.processed / progress.total) * 100) : 0;
     await redis.setex(
       syncProgressKey(userId, platform),
-      7200,
+      SYNC_PROGRESS_TTL_SECONDS,
       JSON.stringify({
         isRunning: true,
         processed: progress.processed,
@@ -123,136 +127,145 @@ async function syncPlatform(
     }
   };
 
-  let result: Awaited<ReturnType<typeof adapter.syncUser>>;
+  // T104: finally garantiza que la clave sync:progress se borra en TODOS los caminos de salida
+  // (éxito, error del adapter, error en código post-adapter, throw inesperado).
   try {
-    if (adapter.syncUserBatched) {
-      result = await adapter.syncUserBatched(account, onBatch);
-    } else {
-      result = await adapter.syncUser(account);
+    let result: Awaited<ReturnType<typeof adapter.syncUser>>;
+    try {
+      if (adapter.syncUserBatched) {
+        result = await adapter.syncUserBatched(account, onBatch);
+      } else {
+        result = await adapter.syncUser(account);
+      }
+    } catch (err) {
+      if (err instanceof AppError && err.code === 'PSN_REFRESH_TOKEN_EXPIRED') {
+        await prisma.platformAccount.upsert({
+          where: { userId_platform: { userId: account.userId, platform: account.platform } },
+          update: { requiresReauth: true },
+          create: {
+            userId: account.userId,
+            platform: account.platform,
+            externalId: account.externalId,
+            username: account.username,
+            encryptedToken: account.encryptedToken,
+            requiresReauth: true,
+          },
+        });
+        await createNotification({
+          userId,
+          type: 'PLATFORM_REAUTH_REQUIRED',
+          title: 'Reconecta tu cuenta PSN',
+          body: 'Tu sesión de PlayStation ha expirado. Vuelve a vincular tu cuenta para continuar sincronizando tus trofeos.',
+        });
+        logger.warn({ userId, platform }, '[SyncWorker] Refresh token PSN expirado — requiresReauth marcado');
+      } else if (err instanceof AppError && err.code === 'PSN_PROFILE_PRIVATE') {
+        await prisma.platformAccount.upsert({
+          where: { userId_platform: { userId: account.userId, platform: account.platform } },
+          update: { psnProfilePrivate: true },
+          create: {
+            userId: account.userId,
+            platform: account.platform,
+            externalId: account.externalId,
+            username: account.username,
+            encryptedToken: account.encryptedToken,
+            psnProfilePrivate: true,
+          },
+        });
+        logger.warn({ userId, platform }, '[SyncWorker] Perfil PSN privado — psnProfilePrivate marcado');
+      }
+      if (io) {
+        io.to(userRoom(userId)).emit('sync:error', {
+          platform,
+          error: err instanceof AppError ? err.code : 'SYNC_FAILED',
+          processedBeforeError: 0,
+        });
+      }
+      throw err;
     }
-  } catch (err) {
-    if (err instanceof AppError && err.code === 'PSN_REFRESH_TOKEN_EXPIRED') {
-      await prisma.platformAccount.upsert({
-        where: { userId_platform: { userId: account.userId, platform: account.platform } },
-        update: { requiresReauth: true },
-        create: {
-          userId: account.userId,
-          platform: account.platform,
-          externalId: account.externalId,
-          username: account.username,
-          encryptedToken: account.encryptedToken,
-          requiresReauth: true,
-        },
-      });
-      await createNotification({
-        userId,
-        type: 'PLATFORM_REAUTH_REQUIRED',
-        title: 'Reconecta tu cuenta PSN',
-        body: 'Tu sesión de PlayStation ha expirado. Vuelve a vincular tu cuenta para continuar sincronizando tus trofeos.',
-      });
-      logger.warn({ userId, platform }, '[SyncWorker] Refresh token PSN expirado — requiresReauth marcado');
-    } else if (err instanceof AppError && err.code === 'PSN_PROFILE_PRIVATE') {
-      await prisma.platformAccount.upsert({
-        where: { userId_platform: { userId: account.userId, platform: account.platform } },
-        update: { psnProfilePrivate: true },
-        create: {
-          userId: account.userId,
-          platform: account.platform,
-          externalId: account.externalId,
-          username: account.username,
-          encryptedToken: account.encryptedToken,
-          psnProfilePrivate: true,
-        },
-      });
-      logger.warn({ userId, platform }, '[SyncWorker] Perfil PSN privado — psnProfilePrivate marcado');
-    }
-    await redis.del(syncProgressKey(userId, platform));
-    if (io) {
-      io.to(userRoom(userId)).emit('sync:error', {
-        platform,
-        error: err instanceof AppError ? err.code : 'SYNC_FAILED',
-        processedBeforeError: 0,
-      });
-    }
-    throw err;
-  }
 
-  await prisma.platformAccount.upsert({
-    where: { userId_platform: { userId: account.userId, platform: account.platform } },
-    update: { lastSyncedAt: new Date(), requiresReauth: false, psnProfilePrivate: false },
-    create: {
-      userId: account.userId,
-      platform: account.platform,
-      externalId: account.externalId,
-      username: account.username,
-      encryptedToken: account.encryptedToken,
-      lastSyncedAt: new Date(),
-    },
-  });
-
-  await prisma.user.update({
-    where: { id: userId },
-    data: { lastSyncAt: new Date() },
-  });
-
-  const newAchievements = await prisma.userAchievement.findMany({
-    where: {
-      userId,
-      achievementId: { notIn: [...prevEarnedIds] },
-    },
-    include: { achievement: { select: { title: true, normalizedPoints: true } } },
-    orderBy: { unlockedAt: 'desc' },
-  });
-
-  const xpEarned = newAchievements.reduce((sum, ua) => sum + ua.achievement.normalizedPoints, 0);
-
-  for (const ua of newAchievements.slice(0, 3)) {
-    await sendPush(
-      userId,
-      '🏆 ¡Nuevo logro desbloqueado!',
-      `${ua.achievement.title} · ${PLATFORM_LABELS[platform] ?? platform} · +${ua.achievement.normalizedPoints} XP`,
-      { achievementId: ua.achievementId, platform },
-    ).catch((err: unknown) => {
-      logger.warn({ err: (err as Error).message }, '[SyncWorker] Push notification fallida');
+    await prisma.platformAccount.upsert({
+      where: { userId_platform: { userId: account.userId, platform: account.platform } },
+      update: { lastSyncedAt: new Date(), requiresReauth: false, psnProfilePrivate: false },
+      create: {
+        userId: account.userId,
+        platform: account.platform,
+        externalId: account.externalId,
+        username: account.username,
+        encryptedToken: account.encryptedToken,
+        lastSyncedAt: new Date(),
+      },
     });
-  }
 
-  if (xpEarned > 0) {
-    await addXp(userId, xpEarned, 'ACHIEVEMENT');
-  } else {
-    const dbUser = await prisma.user.findUnique({
+    await prisma.user.update({
       where: { id: userId },
-      select: { xp: true, profileVisibility: true },
+      data: { lastSyncAt: new Date() },
     });
-    if (dbUser) {
-      const platformsData = await prisma.platformAccount.findMany({
-        where: { userId },
-        select: { platform: true },
-      });
-      await upsertUserScore(
+
+    const newAchievements = await prisma.userAchievement.findMany({
+      where: {
         userId,
-        dbUser.xp,
-        platformsData.map((p) => p.platform),
-        dbUser.profileVisibility,
-      );
-    }
-  }
-
-  await invalidateUserPublicCache(userId).catch((err: unknown) => {
-    logger.warn({ err: (err as Error).message }, '[SyncWorker] Error al invalidar caché pública');
-  });
-
-  await redis.del(syncProgressKey(userId, platform));
-  if (io) {
-    io.to(userRoom(userId)).emit('sync:complete', {
-      platform,
-      totalGames: result.gamesUpdated,
-      newAchievements: result.achievementsSynced,
-      xpEarned,
+        achievementId: { notIn: [...prevEarnedIds] },
+      },
+      include: { achievement: { select: { title: true, normalizedPoints: true } } },
+      orderBy: { unlockedAt: 'desc' },
     });
-  }
 
-  return { achievementsSynced: result.achievementsSynced, gamesUpdated: result.gamesUpdated };
+    const xpEarned = newAchievements.reduce((sum, ua) => sum + ua.achievement.normalizedPoints, 0);
+
+    for (const ua of newAchievements.slice(0, 3)) {
+      await sendPush(
+        userId,
+        '🏆 ¡Nuevo logro desbloqueado!',
+        `${ua.achievement.title} · ${PLATFORM_LABELS[platform] ?? platform} · +${ua.achievement.normalizedPoints} XP`,
+        { achievementId: ua.achievementId, platform },
+      ).catch((err: unknown) => {
+        logger.warn({ err: (err as Error).message }, '[SyncWorker] Push notification fallida');
+      });
+    }
+
+    if (xpEarned > 0) {
+      await addXp(userId, xpEarned, 'ACHIEVEMENT');
+    } else {
+      const dbUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { xp: true, profileVisibility: true },
+      });
+      if (dbUser) {
+        const platformsData = await prisma.platformAccount.findMany({
+          where: { userId },
+          select: { platform: true },
+        });
+        await upsertUserScore(
+          userId,
+          dbUser.xp,
+          platformsData.map((p) => p.platform),
+          dbUser.profileVisibility,
+        );
+      }
+    }
+
+    await invalidateUserPublicCache(userId).catch((err: unknown) => {
+      logger.warn({ err: (err as Error).message }, '[SyncWorker] Error al invalidar caché pública');
+    });
+
+    if (io) {
+      io.to(userRoom(userId)).emit('sync:complete', {
+        platform,
+        totalGames: result.gamesUpdated,
+        newAchievements: result.achievementsSynced,
+        xpEarned,
+      });
+    }
+
+    logger.info(
+      { userId, platform, gamesUpdated: result.gamesUpdated, achievementsSynced: result.achievementsSynced },
+      '[SyncWorker] Sync completado',
+    );
+
+    return { achievementsSynced: result.achievementsSynced, gamesUpdated: result.gamesUpdated };
+  } finally {
+    await redis.del(syncProgressKey(userId, platform));
+  }
 }
 
 export function startSyncWorker() {
