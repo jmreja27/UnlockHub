@@ -35,6 +35,12 @@ const TTL_TITLE_TROPHIES = 86400;    // 24 horas — metadatos de trofeos rarame
 const TTL_USER_TITLES   = 3600;     // 1 hora — lista de juegos del usuario
 const TTL_SYSTEM_TOKEN  = 55 * 60;  // 55 minutos — tokens PSN expiran en 60 min
 
+// Timeout de aplicación para todas las llamadas a psn-api.
+// psn-api usa fetch internamente pero no expone AbortSignal en sus params públicos,
+// por lo que el timeout se implementa vía Promise.race.
+// Sin timeout, PSN colgada bloquea un slot de worker BullMQ hasta lockDuration (5 min).
+const PSN_REQUEST_TIMEOUT_MS = 15_000;
+
 // Puntos normalizados por tipo de trofeo PSN
 const TROPHY_POINTS: Record<string, number> = {
   bronze:   15,
@@ -92,6 +98,23 @@ function normalizePoints(trophyType: string, earnedRate?: string): number {
 }
 
 /**
+ * Envuelve una llamada a psn-api con un timeout de aplicación.
+ * psn-api no expone AbortSignal en sus parámetros públicos, así que se usa Promise.race.
+ * Si PSN no responde en PSN_REQUEST_TIMEOUT_MS ms, rechaza y libera el slot de worker BullMQ.
+ */
+function withPsnTimeout<T>(fn: () => Promise<T>): Promise<T> {
+  return Promise.race([
+    fn(),
+    new Promise<never>((_, reject) =>
+      setTimeout(
+        () => reject(new Error(`PSN request timeout after ${PSN_REQUEST_TIMEOUT_MS}ms`)),
+        PSN_REQUEST_TIMEOUT_MS,
+      ),
+    ),
+  ]);
+}
+
+/**
  * Wrapper de caché genérico sobre Redis.
  */
 async function cachedFetch<T>(key: string, ttl: number, fetcher: () => Promise<T>): Promise<T> {
@@ -131,7 +154,7 @@ export async function getSystemPsnAuth(): Promise<AuthorizationPayload> {
 
   let code: string;
   try {
-    code = await exchangeNpssoForAccessCode(npsso);
+    code = await withPsnTimeout(() => exchangeNpssoForAccessCode(npsso));
   } catch {
     throw new AppError(
       'El PSN_SYSTEM_NPSSO ha expirado. Renuévalo en Railway Variables (my.playstation.com → F12 → ssocookie).',
@@ -140,7 +163,7 @@ export async function getSystemPsnAuth(): Promise<AuthorizationPayload> {
     );
   }
 
-  const tokens = await exchangeAccessCodeForAuthTokens(code);
+  const tokens = await withPsnTimeout(() => exchangeAccessCodeForAuthTokens(code));
   await redis.setex(REDIS_SYSTEM_TOKEN_KEY, TTL_SYSTEM_TOKEN, tokens.accessToken);
 
   return { accessToken: tokens.accessToken };
@@ -157,7 +180,7 @@ export async function lookupPsnUser(
 ): Promise<{ accountId: string; onlineId: string }> {
   let result: Awaited<ReturnType<typeof getProfileFromUserName>>;
   try {
-    result = await getProfileFromUserName(auth, username);
+    result = await withPsnTimeout(() => getProfileFromUserName(auth, username));
   } catch {
     throw new AppError(
       'No se encontró ninguna cuenta de PSN con ese username. Comprueba que el nombre de usuario es correcto.',
@@ -182,7 +205,7 @@ export async function checkPsnProfilePrivacy(
   accountId: string,
 ): Promise<boolean> {
   try {
-    await getUserTitles(auth, accountId, { limit: 1, offset: 0 });
+    await withPsnTimeout(() => getUserTitles(auth, accountId, { limit: 1, offset: 0 }));
     return false;
   } catch {
     return true;
@@ -203,7 +226,7 @@ export async function exchangeNpssoForPsnTokens(npsso: string): Promise<{
 }> {
   let code: string;
   try {
-    code = await exchangeNpssoForAccessCode(npsso);
+    code = await withPsnTimeout(() => exchangeNpssoForAccessCode(npsso));
   } catch {
     throw new AppError(
       'NPSSO inválido o expirado. Obtén un nuevo token desde ca.account.sony.com',
@@ -214,7 +237,7 @@ export async function exchangeNpssoForPsnTokens(npsso: string): Promise<{
 
   let tokens: Awaited<ReturnType<typeof exchangeAccessCodeForAuthTokens>>;
   try {
-    tokens = await exchangeAccessCodeForAuthTokens(code);
+    tokens = await withPsnTimeout(() => exchangeAccessCodeForAuthTokens(code));
   } catch {
     throw new AppError(
       'No se pudo obtener el access token de PSN. Inténtalo de nuevo.',
@@ -228,7 +251,7 @@ export async function exchangeNpssoForPsnTokens(npsso: string): Promise<{
   const auth: AuthorizationPayload = { accessToken: tokens.accessToken };
   let profile: Awaited<ReturnType<typeof getProfileFromAccountId>>;
   try {
-    profile = await getProfileFromAccountId(auth, 'me');
+    profile = await withPsnTimeout(() => getProfileFromAccountId(auth, 'me'));
   } catch {
     throw new AppError(
       'No se pudo obtener el perfil de PSN.',
@@ -511,7 +534,7 @@ export class PsnAdapter implements PlatformAdapter {
         try {
           // eslint-disable-next-line no-constant-condition
           while (true) {
-            const response = await getUserTitles(auth, accountId, { limit, offset });
+            const response = await withPsnTimeout(() => getUserTitles(auth, accountId, { limit, offset }));
             allTitles.push(...response.trophyTitles);
             pages++;
             if (allTitles.length >= response.totalItemCount || !response.nextOffset || pages >= MAX_PAGES) break;
@@ -547,9 +570,9 @@ export class PsnAdapter implements PlatformAdapter {
       cachedFetch(
         `psn:trophies:${npCommunicationId}:${npServiceName}`,
         TTL_TITLE_TROPHIES,
-        () => getTitleTrophies(auth, npCommunicationId, 'all', opts),
+        () => withPsnTimeout(() => getTitleTrophies(auth, npCommunicationId, 'all', opts)),
       ),
-      getUserTrophiesEarnedForTitle(auth, accountId, npCommunicationId, 'all', opts),
+      withPsnTimeout(() => getUserTrophiesEarnedForTitle(auth, accountId, npCommunicationId, 'all', opts)),
     ]);
 
     // Indexar estado ganado por trophyId para merge O(1)
@@ -583,7 +606,7 @@ export class PsnAdapter implements PlatformAdapter {
       throw new AppError('Token PSN corrupto o inválido', 'PSN_TOKEN_CORRUPT', 401);
     }
     if (new Date(stored.expiresAt) <= new Date()) {
-      const fresh = await exchangeRefreshTokenForAuthTokens(stored.refreshToken);
+      const fresh = await withPsnTimeout(() => exchangeRefreshTokenForAuthTokens(stored.refreshToken));
       return { accessToken: fresh.accessToken };
     }
     return { accessToken: stored.accessToken };
@@ -616,7 +639,7 @@ export class PsnAdapter implements PlatformAdapter {
       );
     }
 
-    const fresh = await exchangeRefreshTokenForAuthTokens(stored.refreshToken);
+    const fresh = await withPsnTimeout(() => exchangeRefreshTokenForAuthTokens(stored.refreshToken));
     const newStored: PsnStoredTokens = {
       accessToken: fresh.accessToken,
       refreshToken: fresh.refreshToken,

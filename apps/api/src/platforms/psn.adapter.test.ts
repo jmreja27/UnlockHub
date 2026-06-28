@@ -294,6 +294,22 @@ describe('lookupPsnUser', () => {
       statusCode: 404,
     });
   });
+
+  it('T106: rechaza si getProfileFromUserName no responde en 15 s (timeout de aplicación)', async () => {
+    jest.useFakeTimers();
+    try {
+      // La promesa nunca resuelve — simula PSN colgada
+      mocked.getProfileFromUserName.mockImplementation(() => new Promise(() => {}));
+
+      const promise = lookupPsnUser({ accessToken: SYSTEM_ACCESS_TOKEN }, 'lentoPSN');
+      jest.advanceTimersByTime(15_000);
+
+      // El catch de lookupPsnUser envuelve el timeout como PSN_USER_NOT_FOUND (comportamiento actual)
+      await expect(promise).rejects.toMatchObject({ code: 'PSN_USER_NOT_FOUND' });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });
 
 // ─── Tests: PsnAdapter.syncUser ────────────────────────────────────────────────
