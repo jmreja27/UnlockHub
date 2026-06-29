@@ -9,6 +9,7 @@ import { useSessionStore } from '../../stores/sessionStore';
 import { NotificationBell } from '../../components/NotificationBell';
 import { FEATURES } from '../../lib/featureFlags';
 import { queryKeys } from '../../lib/queryKeys';
+import { useAutoSync } from '../../hooks/useAutoSync';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -31,6 +32,8 @@ const TABS: TabConfig[] = [
 export default function TabsLayout() {
   const { t } = useTranslation();
   const isAuthenticated = useSessionStore((s) => s.isAuthenticated);
+
+  useAutoSync();
 
   // Reutiliza la misma queryKey que useFriends para no crear peticiones duplicadas.
   // Se llama aquí (antes del guard) para respetar React Rules of Hooks — nunca
