@@ -7,6 +7,7 @@ import { redis } from '../lib/redis';
 import { cloudinary } from '../lib/cloudinary';
 
 import { upsertUserScore, removeUserFromRankings } from './ranking.service';
+import { cancelAutoSync } from '../jobs/sync.scheduler';
 
 const USER_GAMES_CACHE_TTL = 300; // 5 minutos
 const USER_GAMES_KEYS_SET = (userId: string) => `user-cache-keys:${userId}`;
@@ -706,6 +707,7 @@ export async function deleteAccount(userId: string): Promise<void> {
   await Promise.all([
     removeUserFromRankings(userId, platforms),
     invalidateUserPublicCache(userId),
+    ...platforms.map((p) => cancelAutoSync(userId, p)),
   ]);
 }
 

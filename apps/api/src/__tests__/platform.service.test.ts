@@ -371,6 +371,46 @@ describe('platformService.unlinkPlatform', () => {
     expect(mockRemoveUserFromRankings).toHaveBeenCalledWith('user-1', ['STEAM']);
   });
 
+  it('T108: cancela el repeat job solo de la plataforma desvinculada, no las demás (toHaveBeenCalledTimes=1)', async () => {
+    (mockPrisma.platformAccount.findFirst as jest.Mock).mockResolvedValue(basePlatformAccount);
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([]);
+    (mockPrisma.userAchievement.deleteMany as jest.Mock).mockResolvedValue({ count: 0 });
+    (mockPrisma.platformAccount.delete as jest.Mock).mockResolvedValue(basePlatformAccount);
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(baseUserWithXp);
+    (mockPrisma.user.update as jest.Mock).mockResolvedValue({});
+    // Plataformas restantes: PSN y RA siguen activas
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([
+      { platform: 'PSN' },
+      { platform: 'RA' },
+    ]);
+
+    await platformService.unlinkPlatform('user-1', 'STEAM');
+
+    expect(mockCancelAutoSync).toHaveBeenCalledWith('user-1', 'STEAM');
+    expect(mockCancelAutoSync).toHaveBeenCalledTimes(1);
+    expect(mockCancelAutoSync).not.toHaveBeenCalledWith('user-1', 'PSN');
+    expect(mockCancelAutoSync).not.toHaveBeenCalledWith('user-1', 'RA');
+  });
+
+  it('T108: un fallo en cancelAutoSync no bloquea la desvinculación ni la limpieza posterior', async () => {
+    mockCancelAutoSync.mockRejectedValueOnce(new Error('BullMQ unavailable'));
+    (mockPrisma.platformAccount.findFirst as jest.Mock).mockResolvedValue(basePlatformAccount);
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue(steamAchievements);
+    (mockPrisma.userAchievement.deleteMany as jest.Mock).mockResolvedValue({ count: 2 });
+    (mockPrisma.platformAccount.delete as jest.Mock).mockResolvedValue(basePlatformAccount);
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(baseUserWithXp);
+    (mockPrisma.user.update as jest.Mock).mockResolvedValue({});
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
+
+    // Debe completarse sin lanzar aunque cancelAutoSync haya fallado
+    const result = await platformService.unlinkPlatform('user-1', 'STEAM');
+    expect(result.deletedAchievements).toBe(2);
+
+    // Las operaciones de limpieza deben ejecutarse igualmente
+    expect(mockInvalidateUserPublicCache).toHaveBeenCalledWith('user-1');
+    expect(mockRemoveUserFromRankings).toHaveBeenCalledWith('user-1', ['STEAM']);
+  });
+
   it('actualiza el ranking global con el XP restante tras desvincular', async () => {
     (mockPrisma.platformAccount.findFirst as jest.Mock).mockResolvedValue(basePlatformAccount);
     (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue(steamAchievements);

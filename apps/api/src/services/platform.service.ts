@@ -194,8 +194,10 @@ export async function unlinkPlatform(
     },
   );
 
-  // Cancelar el sync automático para esta plataforma
-  await cancelAutoSync(userId, platform);
+  // Best-effort: la PlatformAccount ya fue borrada en la transacción; si cancelAutoSync falla,
+  // el job puede quedar huérfano hasta el próximo reinicio del worker, pero la desvinculación
+  // está completa y no debe abortar — cache e invalidación de rankings deben ejecutarse igualmente
+  await cancelAutoSync(userId, platform).catch(() => undefined);
 
   // Invalidar caché pública para que otros usuarios no vean los juegos de esta plataforma
   await invalidateUserPublicCache(userId);
