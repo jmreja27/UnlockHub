@@ -52,7 +52,7 @@ const account = {
 beforeEach(() => jest.clearAllMocks());
 
 describe('syncService.triggerManualSync', () => {
-  it('encola job batch (sync-bg:{userId}) con todas las plataformas cuando no hay cooldown', async () => {
+  it('encola job batch (sync-bg-{userId}) con todas las plataformas cuando no hay cooldown', async () => {
     mockRedis.ttl.mockResolvedValue(-1);
     mockRedis.incr.mockResolvedValue(1);
     mockRedis.expire.mockResolvedValue(1);
@@ -66,13 +66,13 @@ describe('syncService.triggerManualSync', () => {
     expect(result.platform).toBe('STEAM');
     // Verifica convergencia en batch con jobId determinista
     expect((syncQueue.add as jest.Mock)).toHaveBeenCalledWith(
-      'sync-bg:user-1',
+      'sync-bg-user-1',
       expect.objectContaining({
         userId: 'user-1',
         triggerType: 'manual',
         platforms: [{ platform: 'STEAM', platformAccountId: 'acc-1' }],
       }),
-      expect.objectContaining({ jobId: 'sync-bg:user-1' }),
+      expect.objectContaining({ jobId: 'sync-bg-user-1' }),
     );
   });
 
@@ -423,7 +423,7 @@ describe('syncService.triggerAppOpenSync', () => {
     expect(syncQueue.add as jest.Mock).not.toHaveBeenCalled();
   });
 
-  it('devuelve {queued:true} y encola sync-bg:{userId} cuando adquiere el cooldown', async () => {
+  it('devuelve {queued:true} y encola sync-bg-{userId} cuando adquiere el cooldown', async () => {
     mockRedis.set.mockResolvedValue('OK');
     (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([account]);
 
@@ -431,9 +431,9 @@ describe('syncService.triggerAppOpenSync', () => {
 
     expect(result).toEqual({ queued: true });
     expect(syncQueue.add as jest.Mock).toHaveBeenCalledWith(
-      'sync-bg:user-1',
+      'sync-bg-user-1',
       expect.objectContaining({ userId: 'user-1', triggerType: 'auto' }),
-      expect.objectContaining({ jobId: 'sync-bg:user-1' }),
+      expect.objectContaining({ jobId: 'sync-bg-user-1' }),
     );
   });
 

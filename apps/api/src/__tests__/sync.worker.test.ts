@@ -692,7 +692,7 @@ describe('startSyncWorker — batch job (SyncBatchJobData)', () => {
 
     await processFn({
       id: 'batch-1',
-      name: 'sync-bg:user-1',
+      name: 'sync-bg-user-1',
       opts: {},
       token: 'tok-1',
       extendLock: jest.fn().mockResolvedValue(0),
@@ -747,7 +747,7 @@ describe('startSyncWorker — batch job (SyncBatchJobData)', () => {
 
     await processFn({
       id: 'batch-2',
-      name: 'sync-bg:user-1',
+      name: 'sync-bg-user-1',
       opts: {},
       token: 'tok-2',
       extendLock,
@@ -813,7 +813,7 @@ describe('startSyncWorker — batch job (SyncBatchJobData)', () => {
 
     const result = await processFn({
       id: 'batch-3',
-      name: 'sync-bg:user-1',
+      name: 'sync-bg-user-1',
       opts: {},
       token: 'tok-3',
       extendLock,
@@ -856,7 +856,7 @@ describe('startSyncWorker — batch job (SyncBatchJobData)', () => {
 
     await processFn({
       id: 'batch-t104',
-      name: 'sync-bg:user-1',
+      name: 'sync-bg-user-1',
       opts: {},
       token: 'tok-t104',
       extendLock,
@@ -881,7 +881,7 @@ describe('startSyncWorker — batch job (SyncBatchJobData)', () => {
 
     const result = await processFn({
       id: 'batch-locked',
-      name: 'sync-bg:user-1',
+      name: 'sync-bg-user-1',
       opts: {},
       data: {
         userId: 'user-1',

@@ -85,7 +85,7 @@ describe('runBackgroundSyncs — agrupación por usuario (un job por usuario)', 
     await runBackgroundSyncs();
 
     expect((syncQueue.add as jest.Mock)).toHaveBeenCalledWith(
-      'sync-bg:user-1',
+      'sync-bg-user-1',
       expect.objectContaining({
         userId: 'user-1',
         triggerType: 'auto',
@@ -94,11 +94,11 @@ describe('runBackgroundSyncs — agrupación por usuario (un job por usuario)', 
           { platform: 'PSN', platformAccountId: 'acc-psn' },
         ]),
       }),
-      expect.objectContaining({ jobId: 'sync-bg:user-1' }),
+      expect.objectContaining({ jobId: 'sync-bg-user-1' }),
     );
   });
 
-  it('el jobId determinista sync-bg:{userId} garantiza deduplicación nativa', async () => {
+  it('el jobId determinista sync-bg-{userId} garantiza deduplicación nativa', async () => {
     (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([
       { id: 'acc-1', userId: 'user-1', platform: 'STEAM' },
     ]);
@@ -106,7 +106,7 @@ describe('runBackgroundSyncs — agrupación por usuario (un job por usuario)', 
     await runBackgroundSyncs();
 
     const opts = (syncQueue.add as jest.Mock).mock.calls[0]?.[2];
-    expect(opts).toMatchObject({ jobId: 'sync-bg:user-1' });
+    expect(opts).toMatchObject({ jobId: 'sync-bg-user-1' });
   });
 
   it('no encola nada cuando no hay cuentas activas', async () => {
@@ -218,9 +218,9 @@ describe('runBackgroundSyncs — filtro por userId (force-sync)', () => {
     );
     expect((syncQueue.add as jest.Mock)).toHaveBeenCalledTimes(1);
     expect((syncQueue.add as jest.Mock)).toHaveBeenCalledWith(
-      'sync-bg:user-x',
+      'sync-bg-user-x',
       expect.objectContaining({ userId: 'user-x' }),
-      expect.objectContaining({ jobId: 'sync-bg:user-x' }),
+      expect.objectContaining({ jobId: 'sync-bg-user-x' }),
     );
   });
 

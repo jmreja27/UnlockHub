@@ -150,16 +150,16 @@ export async function triggerManualSync(
     select: { id: true, platform: true },
   });
 
-  // Converge en sync-bg:{userId} (jobId determinista) → deduplicación nativa BullMQ.
+  // Converge en sync-bg-{userId} (jobId determinista) → deduplicación nativa BullMQ.
   // Si hay un batch en WAITING, el manual se absorbe en él (se sincroniza todo, no solo la plataforma pedida).
   const job = await syncQueue.add(
-    `sync-bg:${userId}`,
+    `sync-bg-${userId}`,
     {
       userId,
       platforms: allAccounts.map((a) => ({ platform: a.platform as Platform, platformAccountId: a.id })),
       triggerType: 'manual',
     },
-    { jobId: `sync-bg:${userId}`, removeOnComplete: { count: 20 }, removeOnFail: { count: 10 } },
+    { jobId: `sync-bg-${userId}`, removeOnComplete: { count: 20 }, removeOnFail: { count: 10 } },
   );
 
   return { jobId: job.id, platform, message: 'Sync iniciado correctamente.' };
@@ -439,13 +439,13 @@ export async function triggerAppOpenSync(
   }
 
   await syncQueue.add(
-    `sync-bg:${userId}`,
+    `sync-bg-${userId}`,
     {
       userId,
       platforms: accounts.map((a) => ({ platform: a.platform as Platform, platformAccountId: a.id })),
       triggerType: 'auto',
     },
-    { jobId: `sync-bg:${userId}`, removeOnComplete: { count: 20 }, removeOnFail: { count: 10 } },
+    { jobId: `sync-bg-${userId}`, removeOnComplete: { count: 20 }, removeOnFail: { count: 10 } },
   );
 
   return { queued: true };

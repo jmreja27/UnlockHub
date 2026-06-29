@@ -15,7 +15,7 @@ const backgroundSyncQueue = new Queue('background-sync', { connection: redis });
  *
  * Cambio respecto al diseño anterior (un job por plataforma):
  * - Las plataformas de cada usuario se procesan EN SERIE dentro del mismo job.
- * - El jobId determinista `sync-bg:{userId}` garantiza deduplicación nativa de BullMQ:
+ * - El jobId determinista `sync-bg-{userId}` garantiza deduplicación nativa de BullMQ:
  *   si el scheduler corre dos veces antes de que el job procese, no se encola duplicado.
  * - Si Steam supera el umbral del 80 %, se omite del array de plataformas del usuario
  *   (no se omite el usuario entero — el resto de plataformas sigue sincronizándose).
@@ -75,10 +75,10 @@ export async function runBackgroundSyncs(userId?: string): Promise<void> {
   let enqueued = 0;
   for (const [userId, platforms] of byUser) {
     await syncQueue.add(
-      `sync-bg:${userId}`,
+      `sync-bg-${userId}`,
       { userId, platforms, triggerType: 'auto' },
       {
-        jobId: `sync-bg:${userId}`, // deduplicación nativa: solo un job activo por usuario
+        jobId: `sync-bg-${userId}`, // deduplicación nativa: solo un job activo por usuario
         removeOnComplete: { count: 20 },
         removeOnFail: { count: 10 },
       },
@@ -94,7 +94,7 @@ export async function runBackgroundSyncs(userId?: string): Promise<void> {
 
 /**
  * Worker que procesa los jobs de la cola 'background-sync'.
- * Cada job dispara runBackgroundSyncs() que encola un sync-bg:{userId} en la cola 'sync'
+ * Cada job dispara runBackgroundSyncs() que encola un sync-bg-{userId} en la cola 'sync'
  * para todos los usuarios elegibles (lastSyncAt > 24h).
  * El job diario lo registra scheduleBackgroundSyncJob() a las 03:00 UTC.
  */
