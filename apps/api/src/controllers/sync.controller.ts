@@ -54,3 +54,13 @@ export async function getAggregateSyncStatusHandler(req: Request, res: Response,
     next(err);
   }
 }
+
+export async function appOpenSyncHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id: userId, isPremium } = (req as AuthenticatedRequest).user;
+    const result = await syncService.triggerAppOpenSync(userId, isPremium);
+    res.status(202).json(result);
+  } catch (err) {
+    next(err);
+  }
+}

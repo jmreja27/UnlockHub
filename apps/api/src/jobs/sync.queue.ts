@@ -12,11 +12,11 @@ export interface SyncJobData {
   lockRetryCount?: number;
 }
 
-/** Job batch: procesa múltiples plataformas de un usuario en serie (background-sync diario). */
+/** Job batch: procesa múltiples plataformas de un usuario en serie. */
 export interface SyncBatchJobData {
   userId: string;
   platforms: { platform: Platform; platformAccountId: string }[];
-  triggerType: 'auto' | 'initial';
+  triggerType: 'auto' | 'initial' | 'manual';
 }
 
 export interface SyncJobResult {

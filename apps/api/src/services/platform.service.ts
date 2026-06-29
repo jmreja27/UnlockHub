@@ -3,8 +3,6 @@ import type { Platform, PlatformAccount } from '@unlockhub/types';
 import { AppError } from '../middleware/errorHandler';
 import { prisma } from '../lib/prisma';
 import { encrypt } from '../lib/crypto';
-import { scheduleAutoSync, cancelAutoSync } from '../jobs/sync.scheduler';
-
 import { removeUserFromRankings, upsertUserScore } from './ranking.service';
 import { calculateLevel, invalidateUserPublicCache } from './user.service';
 
@@ -100,10 +98,6 @@ export async function linkPlatform(
     },
   });
 
-  // Al vincular una plataforma, resetear requiresReauth (nueva vinculación limpia el estado)
-  // Programar el sync automático para esta plataforma
-  await scheduleAutoSync(userId, dbAccount.id, platform, user.isPremium);
-
   // Añadir al usuario en el sorted set de esta plataforma para que aparezca en rankings
   // inmediatamente, incluso antes de que el primer sync complete
   const allPlatforms = await prisma.platformAccount.findMany({
@@ -193,11 +187,6 @@ export async function unlinkPlatform(
       };
     },
   );
-
-  // Best-effort: la PlatformAccount ya fue borrada en la transacción; si cancelAutoSync falla,
-  // el job puede quedar huérfano hasta el próximo reinicio del worker, pero la desvinculación
-  // está completa y no debe abortar — cache e invalidación de rankings deben ejecutarse igualmente
-  await cancelAutoSync(userId, platform).catch(() => undefined);
 
   // Invalidar caché pública para que otros usuarios no vean los juegos de esta plataforma
   await invalidateUserPublicCache(userId);

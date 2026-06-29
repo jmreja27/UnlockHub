@@ -20,6 +20,10 @@ jest.mock('../lib/prisma', () => ({
   },
 }));
 
+jest.mock('../config/features', () => ({
+  FEATURES: { premium: false },
+}));
+
 jest.mock('../jobs/sync.queue', () => ({
   syncQueue: { add: jest.fn().mockResolvedValue({ id: 'job-1' }) },
 }));
@@ -27,6 +31,7 @@ jest.mock('../jobs/sync.queue', () => ({
 import { redis } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 import { syncQueue } from '../jobs/sync.queue';
+import { FEATURES } from '../config/features';
 
 const mockRedis = redis as jest.Mocked<typeof redis>;
 const mockPrisma = prisma as jest.Mocked<typeof prisma>;
@@ -47,18 +52,28 @@ const account = {
 beforeEach(() => jest.clearAllMocks());
 
 describe('syncService.triggerManualSync', () => {
-  it('encola el job y devuelve jobId cuando no hay cooldown', async () => {
+  it('encola job batch (sync-bg:{userId}) con todas las plataformas cuando no hay cooldown', async () => {
     mockRedis.ttl.mockResolvedValue(-1);
-    // INCR devuelve 1 (primer sync del dÃ­a) â†’ dentro del lÃ­mite
     mockRedis.incr.mockResolvedValue(1);
     mockRedis.expire.mockResolvedValue(1);
     mockRedis.set.mockResolvedValue('OK');
     (mockPrisma.platformAccount.findUnique as jest.Mock).mockResolvedValue(account);
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([account]);
 
     const result = await syncService.triggerManualSync('user-1', 'STEAM', false);
 
     expect(result.jobId).toBe('job-1');
     expect(result.platform).toBe('STEAM');
+    // Verifica convergencia en batch con jobId determinista
+    expect((syncQueue.add as jest.Mock)).toHaveBeenCalledWith(
+      'sync-bg:user-1',
+      expect.objectContaining({
+        userId: 'user-1',
+        triggerType: 'manual',
+        platforms: [{ platform: 'STEAM', platformAccountId: 'acc-1' }],
+      }),
+      expect.objectContaining({ jobId: 'sync-bg:user-1' }),
+    );
   });
 
   it('lanza SYNC_COOLDOWN si el cooldown de Redis estÃ¡ activo', async () => {
@@ -72,10 +87,10 @@ describe('syncService.triggerManualSync', () => {
   });
 
   it('lanza DAILY_SYNC_LIMIT_EXCEEDED para free con 5 syncs ya realizados (INCR devuelve 6)', async () => {
-    // SET NX devuelve 'OK' â†’ cooldown adquirido correctamente, no hay bloqueo por cooldown
+    // SET NX devuelve 'OK' â†' cooldown adquirido correctamente, no hay bloqueo por cooldown
     mockRedis.set.mockResolvedValue('OK');
     mockRedis.ttl.mockResolvedValue(-1);
-    // INCR devuelve 6 â†’ supera el lÃ­mite de 5
+    // INCR devuelve 6 â†' supera el lÃ­mite de 5
     mockRedis.incr.mockResolvedValue(6);
     mockRedis.decr.mockResolvedValue(5);
 
@@ -88,12 +103,13 @@ describe('syncService.triggerManualSync', () => {
   });
 
   // Con FEATURES.premium = false todos los usuarios siguen el tier free (incluidos isPremium=true)
-  it('isPremium=true aplica lÃ­mite diario mientras premium estÃ¡ desactivado por feature flag', async () => {
+  it('isPremium=true aplica límite diario mientras premium está desactivado por feature flag', async () => {
     mockRedis.ttl.mockResolvedValue(-1);
     mockRedis.incr.mockResolvedValue(1);
     mockRedis.expire.mockResolvedValue(1);
     mockRedis.set.mockResolvedValue('OK');
     (mockPrisma.platformAccount.findUnique as jest.Mock).mockResolvedValue(account);
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([account]);
 
     const result = await syncService.triggerManualSync('user-1', 'STEAM', true);
 
@@ -112,23 +128,25 @@ describe('syncService.triggerManualSync', () => {
     ).rejects.toMatchObject({ code: 'PLATFORM_NOT_LINKED', statusCode: 404 });
   });
 
-  it('fija el TTL con expire solo en el primer sync del dÃ­a (INCR = 1)', async () => {
+  it('fija el TTL con expire solo en el primer sync del día (INCR = 1)', async () => {
     mockRedis.ttl.mockResolvedValue(-1);
     mockRedis.incr.mockResolvedValue(1);
     mockRedis.expire.mockResolvedValue(1);
     mockRedis.set.mockResolvedValue('OK');
     (mockPrisma.platformAccount.findUnique as jest.Mock).mockResolvedValue(account);
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([account]);
 
     await syncService.triggerManualSync('user-1', 'STEAM', false);
 
     expect(mockRedis.expire).toHaveBeenCalledTimes(1);
   });
 
-  it('no llama a expire si el contador ya existÃ­a (INCR > 1)', async () => {
+  it('no llama a expire si el contador ya existía (INCR > 1)', async () => {
     mockRedis.ttl.mockResolvedValue(-1);
     mockRedis.incr.mockResolvedValue(3);
     mockRedis.set.mockResolvedValue('OK');
     (mockPrisma.platformAccount.findUnique as jest.Mock).mockResolvedValue(account);
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([account]);
 
     await syncService.triggerManualSync('user-1', 'STEAM', false);
 
@@ -185,6 +203,7 @@ describe('syncService.triggerManualSync — lock activo (in_progress)', () => {
     mockRedis.incr.mockResolvedValue(1);
     mockRedis.expire.mockResolvedValue(1);
     (mockPrisma.platformAccount.findUnique as jest.Mock).mockResolvedValue(account);
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([account]);
 
     const result = await syncService.triggerManualSync('user-1', 'STEAM', false);
 
@@ -202,6 +221,7 @@ describe('syncService.triggerManualSync — cuota Steam 90 % (A41)', () => {
     // Segunda get: contador Steam en 89.999 (89,999 % < 90 %)
     mockRedis.get.mockResolvedValueOnce('89999');
     (mockPrisma.platformAccount.findUnique as jest.Mock).mockResolvedValue(account);
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([account]);
 
     const result = await syncService.triggerManualSync('user-1', 'STEAM', false);
 
@@ -352,6 +372,79 @@ describe('syncService.getAggregateSyncStatus', () => {
     const result = await syncService.getAggregateSyncStatus('user-1', false);
 
     expect(result.canSyncNow).toBe(false);
+  });
+});
+
+describe('syncService.triggerAppOpenSync', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (FEATURES as { premium: boolean }).premium = false;
+    (syncQueue.add as jest.Mock).mockResolvedValue({ id: 'job-1' });
+  });
+
+  afterEach(() => {
+    (FEATURES as { premium: boolean }).premium = false;
+  });
+
+  it('TTL del cooldown es 3600s (60 min) para tier free (autoSyncIntervalMinutes=60)', async () => {
+    mockRedis.set.mockResolvedValue('OK');
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([account]);
+
+    await syncService.triggerAppOpenSync('user-1', false);
+
+    expect(mockRedis.set).toHaveBeenCalledWith('sync:appopen:user-1', '1', 'EX', 3600, 'NX');
+  });
+
+  it('TTL del cooldown es 900s (15 min) para tier premium con FEATURES.premium=true', async () => {
+    (FEATURES as { premium: boolean }).premium = true;
+    mockRedis.set.mockResolvedValue('OK');
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([account]);
+
+    await syncService.triggerAppOpenSync('user-1', true);
+
+    expect(mockRedis.set).toHaveBeenCalledWith('sync:appopen:user-1', '1', 'EX', 900, 'NX');
+  });
+
+  it('TTL es 3600s (free) aunque isPremium=true cuando FEATURES.premium=false', async () => {
+    mockRedis.set.mockResolvedValue('OK');
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([account]);
+
+    await syncService.triggerAppOpenSync('user-1', true);
+
+    expect(mockRedis.set).toHaveBeenCalledWith('sync:appopen:user-1', '1', 'EX', 3600, 'NX');
+  });
+
+  it('devuelve {queued:false} si el cooldown Redis ya está activo (SET NX retorna null)', async () => {
+    mockRedis.set.mockResolvedValue(null);
+
+    const result = await syncService.triggerAppOpenSync('user-1', false);
+
+    expect(result).toEqual({ queued: false });
+    expect(syncQueue.add as jest.Mock).not.toHaveBeenCalled();
+  });
+
+  it('devuelve {queued:true} y encola sync-bg:{userId} cuando adquiere el cooldown', async () => {
+    mockRedis.set.mockResolvedValue('OK');
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([account]);
+
+    const result = await syncService.triggerAppOpenSync('user-1', false);
+
+    expect(result).toEqual({ queued: true });
+    expect(syncQueue.add as jest.Mock).toHaveBeenCalledWith(
+      'sync-bg:user-1',
+      expect.objectContaining({ userId: 'user-1', triggerType: 'auto' }),
+      expect.objectContaining({ jobId: 'sync-bg:user-1' }),
+    );
+  });
+
+  it('devuelve {queued:false} si el usuario no tiene plataformas vinculadas', async () => {
+    mockRedis.set.mockResolvedValue('OK');
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
+
+    const result = await syncService.triggerAppOpenSync('user-1', false);
+
+    expect(result).toEqual({ queued: false });
+    expect(syncQueue.add as jest.Mock).not.toHaveBeenCalled();
   });
 });
 

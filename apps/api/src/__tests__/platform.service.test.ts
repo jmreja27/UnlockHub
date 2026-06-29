@@ -28,12 +28,6 @@ jest.mock('../lib/crypto', () => ({
   decrypt: jest.fn((str: string) => str.replace('encrypted:', '')),
 }));
 
-// Mock del scheduler de syncs
-jest.mock('../jobs/sync.scheduler', () => ({
-  scheduleAutoSync: jest.fn().mockResolvedValue(undefined),
-  cancelAutoSync: jest.fn().mockResolvedValue(undefined),
-}));
-
 // Mock del ranking service para evitar llamadas a Redis
 jest.mock('../services/ranking.service', () => ({
   removeUserFromRankings: jest.fn().mockResolvedValue(undefined),
@@ -48,14 +42,11 @@ jest.mock('../services/user.service', () => ({
 
 import { prisma } from '../lib/prisma';
 import { encrypt } from '../lib/crypto';
-import { scheduleAutoSync, cancelAutoSync } from '../jobs/sync.scheduler';
 import { removeUserFromRankings, upsertUserScore } from '../services/ranking.service';
 import { invalidateUserPublicCache } from '../services/user.service';
 
 const mockPrisma = prisma as jest.Mocked<typeof prisma>;
 const mockEncrypt = encrypt as jest.Mock;
-const mockScheduleAutoSync = scheduleAutoSync as jest.Mock;
-const mockCancelAutoSync = cancelAutoSync as jest.Mock;
 const mockRemoveUserFromRankings = removeUserFromRankings as jest.Mock;
 const mockUpsertUserScore = upsertUserScore as jest.Mock;
 const mockInvalidateUserPublicCache = invalidateUserPublicCache as jest.Mock;
@@ -119,7 +110,7 @@ describe('platformService.linkPlatform', () => {
     expect(account.externalId).toBe('76561198000000000');
   });
 
-  it('programa el auto-sync tras vincular la plataforma', async () => {
+  it('vincula la plataforma e inserta al usuario en el ranking inmediatamente', async () => {
     (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(baseUser);
     (mockPrisma.platformAccount.findFirst as jest.Mock).mockResolvedValue(null);
     (mockPrisma.platformAccount.upsert as jest.Mock).mockResolvedValue(basePlatformAccount);
@@ -133,24 +124,7 @@ describe('platformService.linkPlatform', () => {
       'api-key',
     );
 
-    expect(mockScheduleAutoSync).toHaveBeenCalledWith('user-1', 'acc-1', 'STEAM', false);
-  });
-
-  it('usa el tier premium si el usuario es premium', async () => {
-    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({ ...baseUser, isPremium: true });
-    (mockPrisma.platformAccount.findFirst as jest.Mock).mockResolvedValue(null);
-    (mockPrisma.platformAccount.upsert as jest.Mock).mockResolvedValue(basePlatformAccount);
-    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([{ platform: 'STEAM' }]);
-
-    await platformService.linkPlatform(
-      'user-1',
-      'STEAM',
-      '76561198000000000',
-      'steamuser',
-      'api-key',
-    );
-
-    expect(mockScheduleAutoSync).toHaveBeenCalledWith('user-1', 'acc-1', 'STEAM', true);
+    expect(mockUpsertUserScore).toHaveBeenCalledWith('user-1', 0, ['STEAM'], 'PUBLIC');
   });
 
   it('llama a upsertUserScore con todas las plataformas vinculadas tras vincular', async () => {
@@ -357,7 +331,7 @@ describe('platformService.unlinkPlatform', () => {
     );
   });
 
-  it('cancela el auto-sync y elimina al usuario del ranking de la plataforma', async () => {
+  it('elimina al usuario del ranking de la plataforma desvinculada', async () => {
     (mockPrisma.platformAccount.findFirst as jest.Mock).mockResolvedValue(basePlatformAccount);
     (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([]);
     (mockPrisma.userAchievement.deleteMany as jest.Mock).mockResolvedValue({ count: 0 });
@@ -367,11 +341,10 @@ describe('platformService.unlinkPlatform', () => {
 
     await platformService.unlinkPlatform('user-1', 'STEAM');
 
-    expect(mockCancelAutoSync).toHaveBeenCalledWith('user-1', 'STEAM');
     expect(mockRemoveUserFromRankings).toHaveBeenCalledWith('user-1', ['STEAM']);
   });
 
-  it('T108: cancela el repeat job solo de la plataforma desvinculada, no las demás (toHaveBeenCalledTimes=1)', async () => {
+  it('invalida caché pública y actualiza ranking tras desvincular aunque haya otras plataformas activas', async () => {
     (mockPrisma.platformAccount.findFirst as jest.Mock).mockResolvedValue(basePlatformAccount);
     (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([]);
     (mockPrisma.userAchievement.deleteMany as jest.Mock).mockResolvedValue({ count: 0 });
@@ -386,27 +359,6 @@ describe('platformService.unlinkPlatform', () => {
 
     await platformService.unlinkPlatform('user-1', 'STEAM');
 
-    expect(mockCancelAutoSync).toHaveBeenCalledWith('user-1', 'STEAM');
-    expect(mockCancelAutoSync).toHaveBeenCalledTimes(1);
-    expect(mockCancelAutoSync).not.toHaveBeenCalledWith('user-1', 'PSN');
-    expect(mockCancelAutoSync).not.toHaveBeenCalledWith('user-1', 'RA');
-  });
-
-  it('T108: un fallo en cancelAutoSync no bloquea la desvinculación ni la limpieza posterior', async () => {
-    mockCancelAutoSync.mockRejectedValueOnce(new Error('BullMQ unavailable'));
-    (mockPrisma.platformAccount.findFirst as jest.Mock).mockResolvedValue(basePlatformAccount);
-    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue(steamAchievements);
-    (mockPrisma.userAchievement.deleteMany as jest.Mock).mockResolvedValue({ count: 2 });
-    (mockPrisma.platformAccount.delete as jest.Mock).mockResolvedValue(basePlatformAccount);
-    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(baseUserWithXp);
-    (mockPrisma.user.update as jest.Mock).mockResolvedValue({});
-    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
-
-    // Debe completarse sin lanzar aunque cancelAutoSync haya fallado
-    const result = await platformService.unlinkPlatform('user-1', 'STEAM');
-    expect(result.deletedAchievements).toBe(2);
-
-    // Las operaciones de limpieza deben ejecutarse igualmente
     expect(mockInvalidateUserPublicCache).toHaveBeenCalledWith('user-1');
     expect(mockRemoveUserFromRankings).toHaveBeenCalledWith('user-1', ['STEAM']);
   });
@@ -475,13 +427,14 @@ describe('platformService.unlinkPlatform', () => {
     await expect(platformService.unlinkPlatform('user-1', 'RA')).rejects.toBeInstanceOf(AppError);
   });
 
-  it('la transacción es atómica: si $transaction lanza, PlatformAccount no se borra fuera', async () => {
+  it('la transacción es atómica: si $transaction lanza, la limpieza exterior no se ejecuta', async () => {
     (mockPrisma.platformAccount.findFirst as jest.Mock).mockResolvedValue(basePlatformAccount);
     (mockPrisma.$transaction as jest.Mock).mockRejectedValue(new Error('db error'));
 
     await expect(platformService.unlinkPlatform('user-1', 'STEAM')).rejects.toThrow('db error');
-    // La operación exterior (cancelAutoSync) no debe haberse llamado
-    expect(mockCancelAutoSync).not.toHaveBeenCalled();
+    // La limpieza exterior (caché, rankings) no debe ejecutarse si la transacción falló
+    expect(mockInvalidateUserPublicCache).not.toHaveBeenCalled();
+    expect(mockRemoveUserFromRankings).not.toHaveBeenCalled();
   });
 });
 

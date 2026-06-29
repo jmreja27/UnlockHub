@@ -130,11 +130,12 @@ export async function triggerManualSync(
     }
   }
 
-  const account = await prisma.platformAccount.findUnique({
+  // Verificar que la plataforma solicitada está vinculada
+  const requestedAccount = await prisma.platformAccount.findUnique({
     where: { userId_platform: { userId, platform } },
+    select: { id: true },
   });
-  if (!account) {
-    // Liberar el cooldown si la cuenta no existe para no penalizar al usuario
+  if (!requestedAccount) {
     await redis.del(cooldownKey(userId, platform));
     throw new AppError(
       `No tienes vinculada una cuenta de ${platform}.`,
@@ -143,9 +144,22 @@ export async function triggerManualSync(
     );
   }
 
+  // Obtener TODAS las plataformas vinculadas para el job batch
+  const allAccounts = await prisma.platformAccount.findMany({
+    where: { userId },
+    select: { id: true, platform: true },
+  });
+
+  // Converge en sync-bg:{userId} (jobId determinista) → deduplicación nativa BullMQ.
+  // Si hay un batch en WAITING, el manual se absorbe en él (se sincroniza todo, no solo la plataforma pedida).
   const job = await syncQueue.add(
-    `manual-sync:${userId}:${platform}`,
-    { userId, platformAccountId: account.id, platform, triggerType: 'manual' },
+    `sync-bg:${userId}`,
+    {
+      userId,
+      platforms: allAccounts.map((a) => ({ platform: a.platform as Platform, platformAccountId: a.id })),
+      triggerType: 'manual',
+    },
+    { jobId: `sync-bg:${userId}`, removeOnComplete: { count: 20 }, removeOnFail: { count: 10 } },
   );
 
   return { jobId: job.id, platform, message: 'Sync iniciado correctamente.' };
@@ -389,6 +403,52 @@ export async function queueInitialSync(
     { priority: 10 },
   );
   return job.id;
+}
+
+/**
+ * Sync silencioso disparado al abrir la app (app-open trigger).
+ * Usa un cooldown Redis por tier para respetar el intervalo de auto-sync:
+ *   - free:    3600 s (60 min)
+ *   - premium:  900 s (15 min)
+ * El TTL es el propio intervalo del plan — no un valor fijo de 24h.
+ * Si el cooldown está activo, devuelve {queued: false} sin coste alguno.
+ */
+export async function triggerAppOpenSync(
+  userId: string,
+  isPremium: boolean,
+): Promise<{ queued: boolean }> {
+  const effectivePremium = FEATURES.premium && isPremium;
+  const ttlSeconds =
+    SYNC_COOLDOWNS[effectivePremium ? 'premium' : 'free'].autoSyncIntervalMinutes * 60;
+
+  const appOpenKey = `sync:appopen:${userId}`;
+  const acquired = await redis.set(appOpenKey, '1', 'EX', ttlSeconds, 'NX');
+
+  if (!acquired) {
+    return { queued: false };
+  }
+
+  // Obtener todas las plataformas vinculadas y encolar el batch
+  const accounts = await prisma.platformAccount.findMany({
+    where: { userId },
+    select: { id: true, platform: true },
+  });
+
+  if (accounts.length === 0) {
+    return { queued: false };
+  }
+
+  await syncQueue.add(
+    `sync-bg:${userId}`,
+    {
+      userId,
+      platforms: accounts.map((a) => ({ platform: a.platform as Platform, platformAccountId: a.id })),
+      triggerType: 'auto',
+    },
+    { jobId: `sync-bg:${userId}`, removeOnComplete: { count: 20 }, removeOnFail: { count: 10 } },
+  );
+
+  return { queued: true };
 }
 
 function getSecondsUntilMidnight(): number {

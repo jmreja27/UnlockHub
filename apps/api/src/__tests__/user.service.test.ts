@@ -56,11 +56,6 @@ jest.mock('../services/ranking.service', () => ({
   removeUserFromRankings: jest.fn().mockResolvedValue(undefined),
 }));
 
-// Mock del scheduler de syncs — evita que sync.queue cree una conexión BullMQ real
-jest.mock('../jobs/sync.scheduler', () => ({
-  cancelAutoSync: jest.fn().mockResolvedValue(undefined),
-}));
-
 // Mock de Redis — getUserGames/getUserGameAchievements/invalidateUserPublicCache usan caché
 jest.mock('../lib/redis', () => ({
   redis: {
@@ -77,12 +72,10 @@ jest.mock('../lib/redis', () => ({
 import { prisma } from '../lib/prisma';
 import { cloudinary } from '../lib/cloudinary';
 import { upsertUserScore, removeUserFromRankings } from '../services/ranking.service';
-import { cancelAutoSync } from '../jobs/sync.scheduler';
 
 const mockPrisma = prisma as jest.Mocked<typeof prisma>;
 const mockUpsertUserScore = upsertUserScore as jest.Mock;
 const mockRemoveUserFromRankings = removeUserFromRankings as jest.Mock;
-const mockCancelAutoSync = cancelAutoSync as jest.Mock;
 
 // Usuario base para los tests
 const baseUser = {
@@ -1273,7 +1266,7 @@ describe('userService.deleteAccount', () => {
     expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
   });
 
-  it('cancela el auto-sync de todas las plataformas del usuario al borrar la cuenta (T108)', async () => {
+  it('elimina al usuario de todos los rankings de plataforma al borrar la cuenta', async () => {
     const userWithMultiplePlatforms = {
       ...baseUser,
       platformAccounts: [
@@ -1286,18 +1279,16 @@ describe('userService.deleteAccount', () => {
 
     await userService.deleteAccount('user-1');
 
-    expect(mockCancelAutoSync).toHaveBeenCalledWith('user-1', 'STEAM');
-    expect(mockCancelAutoSync).toHaveBeenCalledWith('user-1', 'PSN');
-    expect(mockCancelAutoSync).toHaveBeenCalledWith('user-1', 'RA');
-    expect(mockCancelAutoSync).toHaveBeenCalledTimes(3);
+    expect(mockRemoveUserFromRankings).toHaveBeenCalledWith(
+      'user-1',
+      expect.arrayContaining(['STEAM', 'PSN', 'RA']),
+    );
   });
 
-  it('no cancela ningún auto-sync si el usuario no tiene plataformas vinculadas al borrar', async () => {
+  it('completa el borrado sin error si el usuario no tiene plataformas vinculadas', async () => {
     (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({ ...baseUser, platformAccounts: [] });
 
-    await userService.deleteAccount('user-1');
-
-    expect(mockCancelAutoSync).not.toHaveBeenCalled();
+    await expect(userService.deleteAccount('user-1')).resolves.toBeUndefined();
   });
 });
 

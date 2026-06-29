@@ -1,7 +1,7 @@
-import { Queue } from 'bullmq';
+import { Queue, Worker } from 'bullmq';
 import type { Platform } from '@unlockhub/types';
 
-import { redis } from '../lib/redis';
+import { redis, createWorkerConnection } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 import { STEAM_DAILY_LIMIT, STEAM_BACKGROUND_SYNC_THRESHOLD } from '../config/steamQuota';
@@ -90,6 +90,28 @@ export async function runBackgroundSyncs(userId?: string): Promise<void> {
     { userCount: enqueued, accountCount: accounts.length },
     '[BackgroundSync] Jobs de sync encolados — 1 por usuario',
   );
+}
+
+/**
+ * Worker que procesa los jobs de la cola 'background-sync'.
+ * Cada job dispara runBackgroundSyncs() que encola un sync-bg:{userId} en la cola 'sync'
+ * para todos los usuarios elegibles (lastSyncAt > 24h).
+ * El job diario lo registra scheduleBackgroundSyncJob() a las 03:00 UTC.
+ */
+export function startBackgroundSyncWorker() {
+  const worker = new Worker(
+    'background-sync',
+    async () => {
+      await runBackgroundSyncs();
+    },
+    { connection: createWorkerConnection() },
+  );
+
+  worker.on('failed', (_job, err) => {
+    logger.error({ err: err.message }, '[BackgroundSyncWorker] Job fallido');
+  });
+
+  return worker;
 }
 
 export async function scheduleBackgroundSyncJob(): Promise<void> {

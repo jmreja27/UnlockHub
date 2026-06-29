@@ -38,7 +38,8 @@ jest.mock('bullmq', () => ({
 import { redis } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 import { syncQueue } from '../jobs/sync.queue';
-import { runBackgroundSyncs } from '../jobs/background-sync.scheduler';
+import { runBackgroundSyncs, startBackgroundSyncWorker } from '../jobs/background-sync.scheduler';
+import { Worker } from 'bullmq';
 
 const mockRedis = redis as jest.Mocked<typeof redis>;
 const mockPrisma = prisma as jest.Mocked<typeof prisma>;
@@ -184,6 +185,22 @@ describe('runBackgroundSyncs — A41: Steam omitido del array si supera umbral d
     const jobData = (syncQueue.add as jest.Mock).mock.calls[0]?.[1];
     expect(jobData.platforms).toHaveLength(1);
     expect(jobData.platforms[0]).toMatchObject({ platform: 'PSN' });
+  });
+});
+
+describe('startBackgroundSyncWorker', () => {
+  it('instancia un Worker en la cola background-sync', () => {
+    startBackgroundSyncWorker();
+    expect(Worker).toHaveBeenCalledWith(
+      'background-sync',
+      expect.any(Function),
+      expect.any(Object),
+    );
+  });
+
+  it('retorna el worker con método close', () => {
+    const worker = startBackgroundSyncWorker();
+    expect(worker.close).toBeDefined();
   });
 });
 
