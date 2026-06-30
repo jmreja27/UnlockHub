@@ -357,3 +357,19 @@ como palabra, no como marcador de tarea). 0 FIXME. No hay deuda pendiente de có
 | ID | Fecha | Descripción | Estado |
 |---|---|---|---|
 | SEC-01 | 2026-06-12 | **DATABASE_URL de producción expuesta** durante el incidente INC-01 — la contraseña de Postgres quedó accesible en texto plano en esta sesión de trabajo. Rotada en Railway dashboard → servicio Postgres → Settings → Credentials. `.env` local actualizado con la nueva credencial. | ✅ CERRADO — credencial rotada |
+| SEC-02 | 2026-06-30 | **API key Firebase Client en repo público** — `google-services.json` commiteado. La key client no es un secret (va en el APK), pero una key sin restricción puede generar consumo de cuota fraudulento. Acción pendiente del desarrollador: verificar y aplicar restricciones en Google Cloud Console (package name + SHA-1 + APIs mínimas) antes de rotar. Ver T116 en BACKLOG. | ⚙️ Pendiente — acción del desarrollador |
+
+---
+
+## Seguridad — Aspectos bien implementados (confirmados en auditoría 2026-06-30)
+
+Los siguientes controles de seguridad fueron verificados activos y correctos. **No modificar sin revisión explícita.**
+
+| Control | Ubicación | Verificado |
+|---|---|---|
+| Sentry `beforeSend` sanitiza `Authorization` header y body de rutas `/auth/*` | `apps/api/src/index.ts` + `apps/mobile/app/_layout.tsx` | ✅ 2026-06-30 |
+| PostHog solo envía `userId` interno — nunca email ni datos personales | `apps/mobile/lib/analytics.ts` | ✅ 2026-06-30 |
+| UMP/consentimiento GDPR activo antes de renderizar cualquier banner AdMob | `hooks/useGdprConsent.ts` + `components/AdBanner.tsx` (`consentResolved` gate) | ✅ 2026-06-30 |
+| Tokens de plataforma cifrados AES-256-GCM — nunca texto plano en BD | `apps/api/src/lib/crypto.ts` + todos los adapters | ✅ 2026-06-30 |
+| Perfiles públicos excluyen `email`, `isPremium`, `lastSyncAt` | `apps/api/src/services/user.service.ts` (mapUser) | ✅ 2026-06-30 |
+| Webhook RevenueCat verifica HMAC-SHA256 (`crypto.timingSafeEqual`) | `apps/api/src/controllers/webhook.controller.ts` | ✅ 2026-06-30 |
