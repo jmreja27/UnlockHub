@@ -48,7 +48,7 @@ export async function runBackgroundSyncs(userId?: string): Promise<void> {
   });
 
   if (accounts.length === 0) {
-    logger.info('[BackgroundSync] Sin usuarios activos en las últimas 24h');
+    logger.info('[BackgroundSync] Sin cuentas con más de 24h sin sync — cron sin trabajo');
     return;
   }
 
