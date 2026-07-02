@@ -12,8 +12,7 @@ jest.mock('../lib/prisma', () => ({
   },
 }));
 jest.mock('../services/sync.service', () => ({
-  triggerExpressSync: jest.fn().mockResolvedValue(undefined),
-  queueInitialSync: jest.fn().mockResolvedValue(undefined),
+  runExpressThenQueueFull: jest.fn().mockResolvedValue(undefined),
   getSyncStatus: jest.fn(),
   getAggregateSyncStatus: jest.fn(),
 }));
@@ -38,6 +37,7 @@ import request from 'supertest';
 
 import * as psnAdapter from '../platforms/psn.adapter';
 import * as platformService from '../services/platform.service';
+import * as syncService from '../services/sync.service';
 import app from '../app';
 import { signAccessToken } from '../lib/jwt';
 import type { PlatformAccount } from '@prisma/client';
@@ -46,6 +46,7 @@ const mockGetSystemPsnAuth = psnAdapter.getSystemPsnAuth as jest.Mock;
 const mockLookupPsnUser = psnAdapter.lookupPsnUser as jest.Mock;
 const mockCheckPsnProfilePrivacy = psnAdapter.checkPsnProfilePrivacy as jest.Mock;
 const mockLinkPlatform = platformService.linkPlatform as jest.Mock;
+const mockRunExpressThenQueueFull = syncService.runExpressThenQueueFull as jest.Mock;
 
 function makeToken() {
   return signAccessToken({ sub: 'u1', email: 'test@example.com', isPremium: false });
@@ -113,5 +114,62 @@ describe('POST /api/v1/platforms/psn/link — BUG-4', () => {
 
     expect(res.status).toBe(201);
     expect(mockLinkPlatform).toHaveBeenCalledWith('u1', 'PSN', 'psn-account-id-123', 'PSNUser99', '');
+  });
+
+  it('201 inmediato — no espera el express sync (fire-and-forget) y llama runExpressThenQueueFull', async () => {
+    mockCheckPsnProfilePrivacy.mockResolvedValue(false);
+    mockLinkPlatform.mockResolvedValue(fakeAccount);
+
+    const res = await request(app)
+      .post('/api/v1/platforms/psn/link')
+      .set('Authorization', `Bearer ${makeToken()}`)
+      .send({ username: 'PSNUser99' });
+
+    expect(res.status).toBe(201);
+    expect(mockRunExpressThenQueueFull).toHaveBeenCalledWith('u1', 'PSN');
+  });
+});
+
+// ─── POST /api/v1/platforms/steam/link — fire-and-forget ──────────────────────
+
+describe('POST /api/v1/platforms/steam/link — runExpressThenQueueFull', () => {
+  const { resolveVanityUrl, checkSteamProfilePublic } = jest.requireMock('../platforms/steam.adapter') as {
+    resolveVanityUrl: jest.Mock;
+    checkSteamProfilePublic: jest.Mock;
+  };
+
+  it('devuelve 201 y llama runExpressThenQueueFull en fire-and-forget', async () => {
+    resolveVanityUrl.mockResolvedValue('76561198000000000');
+    checkSteamProfilePublic.mockResolvedValue(undefined);
+    mockLinkPlatform.mockResolvedValue({ ...fakeAccount, platform: 'STEAM' });
+
+    const res = await request(app)
+      .post('/api/v1/platforms/steam/link')
+      .set('Authorization', `Bearer ${makeToken()}`)
+      .send({ username: 'testuser' });
+
+    expect(res.status).toBe(201);
+    expect(mockRunExpressThenQueueFull).toHaveBeenCalledWith('u1', 'STEAM');
+  });
+});
+
+// ─── POST /api/v1/platforms/ra/link — fire-and-forget ─────────────────────────
+
+describe('POST /api/v1/platforms/ra/link — runExpressThenQueueFull', () => {
+  const { lookupRaUser } = jest.requireMock('../platforms/retroachievements.adapter') as {
+    lookupRaUser: jest.Mock;
+  };
+
+  it('devuelve 201 y llama runExpressThenQueueFull en fire-and-forget', async () => {
+    lookupRaUser.mockResolvedValue({ username: 'rauser', points: 1000 });
+    mockLinkPlatform.mockResolvedValue({ ...fakeAccount, platform: 'RA' });
+
+    const res = await request(app)
+      .post('/api/v1/platforms/ra/link')
+      .set('Authorization', `Bearer ${makeToken()}`)
+      .send({ username: 'rauser' });
+
+    expect(res.status).toBe(201);
+    expect(mockRunExpressThenQueueFull).toHaveBeenCalledWith('u1', 'RA');
   });
 });

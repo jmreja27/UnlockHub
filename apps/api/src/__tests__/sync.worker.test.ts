@@ -111,6 +111,8 @@ beforeEach(() => {
   mockGetIO.mockReturnValue(mockIO);
   mockPrisma.platformAccount.findUnique.mockResolvedValue(account);
   mockPrisma.platformAccount.upsert.mockResolvedValue(account);
+  // findMany usado por queueInitialSync (llamado desde A22 fallback y runExpressThenQueueFull)
+  (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([account]);
   mockPrisma.user.update.mockResolvedValue({ id: 'user-1' } as never);
   mockPrisma.userAchievement.findMany.mockResolvedValue([]);
 });
@@ -270,18 +272,23 @@ describe('syncService.triggerExpressSync — lock por usuario', () => {
     expect(mockRedis.del).not.toHaveBeenCalledWith('sync:user-lock:user-1');
   });
 
-  // A22 — fallback: lock ocupado → encola full sync en lugar de descartar silenciosamente
-  it('A22: encola queueInitialSync como fallback cuando el lock no está disponible', async () => {
+  // A22 — fallback: lock ocupado → encola batch completo (sync-bg-{userId}) en lugar de descartar silenciosamente
+  it('A22: encola batch sync-bg-{userId} como fallback cuando el lock no está disponible', async () => {
     mockRedis.set.mockResolvedValueOnce(null); // lock no disponible
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValueOnce([account]);
 
     await syncService.triggerExpressSync('user-1', 'STEAM');
 
     expect(mockSteamAdapter.syncUserExpress).not.toHaveBeenCalled();
-    // El job de full sync debe encolarse para que el trabajo no se pierda
+    // El job batch debe encolarse con jobId determinista para que el trabajo no se pierda
     expect((syncQueue.add as jest.Mock)).toHaveBeenCalledWith(
-      'initial-sync:user-1:STEAM',
-      expect.objectContaining({ triggerType: 'initial' }),
-      { priority: 10 },
+      'sync-bg-user-1',
+      expect.objectContaining({
+        userId: 'user-1',
+        triggerType: 'initial',
+        platforms: [{ platform: 'STEAM', platformAccountId: 'acc-1' }],
+      }),
+      expect.objectContaining({ jobId: 'sync-bg-user-1' }),
     );
   });
 
@@ -311,14 +318,72 @@ describe('syncService.triggerExpressSync — lock por usuario', () => {
 });
 
 describe('syncService.queueInitialSync', () => {
-  it('encola el job con triggerType=initial y prioridad alta', async () => {
+  it('encola SyncBatchJobData con sync-bg-{userId} y todas las plataformas del usuario', async () => {
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValueOnce([account]);
+
     const jobId = await syncService.queueInitialSync('user-1', 'STEAM');
+
     expect(jobId).toBe('job-1');
     expect((syncQueue.add as jest.Mock)).toHaveBeenCalledWith(
-      'initial-sync:user-1:STEAM',
-      expect.objectContaining({ triggerType: 'initial' }),
-      { priority: 10 },
+      'sync-bg-user-1',
+      expect.objectContaining({
+        userId: 'user-1',
+        triggerType: 'initial',
+        platforms: [{ platform: 'STEAM', platformAccountId: 'acc-1' }],
+      }),
+      expect.objectContaining({ jobId: 'sync-bg-user-1' }),
     );
+  });
+
+  it('devuelve undefined si el usuario no tiene plataformas vinculadas', async () => {
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValueOnce([]);
+
+    const jobId = await syncService.queueInitialSync('user-1', 'STEAM');
+
+    expect(jobId).toBeUndefined();
+    expect((syncQueue.add as jest.Mock)).not.toHaveBeenCalled();
+  });
+});
+
+describe('syncService.runExpressThenQueueFull', () => {
+  it('llama express sync y queueInitialSync en secuencia cuando express tiene éxito', async () => {
+    mockRedis.set.mockResolvedValueOnce('OK'); // lock adquirido
+    (mockSteamAdapter.syncUserExpress as jest.Mock).mockResolvedValueOnce({
+      gamesUpdated: 5, achievementsSynced: 30, syncedAt: new Date().toISOString(),
+    });
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValueOnce([account]);
+
+    await syncService.runExpressThenQueueFull('user-1', 'STEAM');
+
+    expect(mockSteamAdapter.syncUserExpress).toHaveBeenCalledWith(account);
+    expect((syncQueue.add as jest.Mock)).toHaveBeenCalledWith(
+      'sync-bg-user-1',
+      expect.objectContaining({ userId: 'user-1', triggerType: 'initial' }),
+      expect.objectContaining({ jobId: 'sync-bg-user-1' }),
+    );
+  });
+
+  it('llama queueInitialSync igualmente si triggerExpressSync lanza (infra error)', async () => {
+    // Simular fallo de infraestructura en findUnique (antes del lock)
+    mockPrisma.platformAccount.findUnique.mockRejectedValueOnce(new Error('DB timeout'));
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValueOnce([account]);
+
+    await syncService.runExpressThenQueueFull('user-1', 'STEAM');
+
+    // A pesar del error en express, queueInitialSync debe haberse llamado
+    expect((syncQueue.add as jest.Mock)).toHaveBeenCalledWith(
+      'sync-bg-user-1',
+      expect.objectContaining({ userId: 'user-1', triggerType: 'initial' }),
+      expect.objectContaining({ jobId: 'sync-bg-user-1' }),
+    );
+  });
+
+  it('no lanza aunque tanto express como queueInitialSync fallen', async () => {
+    mockPrisma.platformAccount.findUnique.mockRejectedValueOnce(new Error('DB error'));
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValueOnce([]);
+
+    // findMany devuelve [] → queueInitialSync retorna undefined sin encolar → no lanza
+    await expect(syncService.runExpressThenQueueFull('user-1', 'STEAM')).resolves.toBeUndefined();
   });
 });
 
@@ -632,8 +697,6 @@ describe('startSyncWorker — failsafe de lock (LOCK_MAX_RETRIES)', () => {
 // ─── Batch job: plataformas en serie con lock único ──────────────────────────
 
 describe('startSyncWorker — batch job (SyncBatchJobData)', () => {
-  const psnAdapter = { platform: 'PSN', syncUser: jest.fn(), syncUserExpress: jest.fn() };
-
   // Tipo de job batch para las llamadas a processFn
   type BatchJobLike = {
     id?: string;

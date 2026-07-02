@@ -354,9 +354,10 @@ export async function triggerExpressSync(
   const acquired = await redis.set(lockKey, 'express', 'EX', 120, 'NX');
 
   if (!acquired) {
-    logger.info({ userId, platform }, '[SyncService] Express sync omitido — sync activo para este usuario; encolando full sync como fallback');
-    // Encolar el full sync para que el trabajo no se pierda (UX: usuario que vincula
-    // dos plataformas en <25s vería la segunda sin logros hasta el sync nocturno).
+    logger.info({ userId, platform }, '[SyncService] Express sync omitido — sync activo para este usuario; encolando full sync como fallback (A22)');
+    // Encolar el full sync para que el trabajo no se pierda (A22).
+    // runExpressThenQueueFull también llama queueInitialSync tras este return,
+    // pero el jobId determinista sync-bg-{userId} previene doble encolado en BullMQ.
     await queueInitialSync(userId, platform);
     return;
   }
@@ -384,25 +385,60 @@ export async function triggerExpressSync(
 }
 
 /**
- * Encola el sync completo (batched) en BullMQ para procesamiento en background.
- * Se llama justo después de triggerExpressSync al vincular una plataforma.
- * @returns jobId de BullMQ, o undefined si no existe la PlatformAccount.
+ * Encola el sync completo (batch) en BullMQ para procesamiento en background.
+ * Converge en sync-bg-{userId} con TODAS las plataformas vinculadas del usuario —
+ * igual que el scheduler nocturno y el app-open sync. El jobId determinista garantiza
+ * que BullMQ deduplica si ya existe un job pendiente para el mismo usuario.
+ * Se llama siempre tras triggerExpressSync al vincular una plataforma.
+ * @param platform — solo para logging; el job incluye todas las plataformas del usuario.
+ * @returns jobId de BullMQ, o undefined si el usuario no tiene plataformas vinculadas.
  */
 export async function queueInitialSync(
   userId: string,
   platform: Platform,
 ): Promise<string | undefined> {
-  const account = await prisma.platformAccount.findUnique({
-    where: { userId_platform: { userId, platform } },
+  const accounts = await prisma.platformAccount.findMany({
+    where: { userId },
+    select: { id: true, platform: true },
   });
-  if (!account) return undefined;
+  if (accounts.length === 0) return undefined;
 
   const job = await syncQueue.add(
-    `initial-sync:${userId}:${platform}`,
-    { userId, platformAccountId: account.id, platform, triggerType: 'initial' },
-    { priority: 10 },
+    `sync-bg-${userId}`,
+    {
+      userId,
+      platforms: accounts.map((a) => ({ platform: a.platform as Platform, platformAccountId: a.id })),
+      triggerType: 'initial',
+    },
+    {
+      jobId: `sync-bg-${userId}`,
+      removeOnComplete: { count: 20 },
+      removeOnFail: { count: 10 },
+    },
   );
+  logger.info({ userId, platform, jobId: job.id }, '[SyncService] Sync inicial encolado (convergente sync-bg)');
   return job.id;
+}
+
+/**
+ * Secuencia al vincular una plataforma: express sync (lock 120s, top-N juegos) →
+ * libera lock en finally → encola batch completo con todas las plataformas del usuario.
+ * queueInitialSync se llama siempre, incluso si el express sync falla.
+ * Diseñado para fire-and-forget desde los handlers de vinculación (201 ya enviado).
+ */
+export async function runExpressThenQueueFull(
+  userId: string,
+  platform: Platform,
+): Promise<void> {
+  try {
+    await triggerExpressSync(userId, platform);
+  } catch (err) {
+    logger.warn(
+      { userId, platform, err: (err as Error).message },
+      '[SyncService] Express sync fallido — encolando sync completo igualmente',
+    );
+  }
+  await queueInitialSync(userId, platform);
 }
 
 /**
