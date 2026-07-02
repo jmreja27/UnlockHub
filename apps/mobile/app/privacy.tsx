@@ -1,8 +1,8 @@
 // Pantalla de política de privacidad — requerida por Google Play y RGPD
 import { View, Text, Pressable, ScrollView, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { useSafeBack } from '../hooks/useSafeBack';
 
 // GitHub Pages: https://jmreja27.github.io/UnlockHub/privacy-policy.html
 // Con dominio custom: https://unlockhub.app/privacy-policy.html
@@ -10,13 +10,14 @@ const PRIVACY_POLICY_URL = 'https://jmreja27.github.io/UnlockHub/privacy-policy.
 
 export default function PrivacyScreen() {
   const { t } = useTranslation();
+  const safeBack = useSafeBack();
 
   return (
     <SafeAreaView className="flex-1 bg-surface">
       {/* Cabecera con botón de retroceso */}
       <View className="flex-row items-center px-4 py-3 border-b border-gray-800">
         <Pressable
-          onPress={() => router.back()}
+          onPress={safeBack}
           accessibilityRole="button"
           accessibilityLabel={t('common.back')}
           style={{ minHeight: 44, minWidth: 44, justifyContent: 'center' }}

@@ -19,7 +19,7 @@ jest.mock('expo-haptics', () => ({
   NotificationFeedbackType: { Success: 'success', Error: 'error' },
 }));
 jest.mock('expo-router', () => ({
-  router: { back: jest.fn() },
+  router: { back: jest.fn(), canGoBack: jest.fn().mockReturnValue(true), replace: jest.fn() },
 }));
 
 const mockedApi = api as jest.Mocked<typeof api>;
@@ -166,5 +166,57 @@ describe('LinkSteamScreen', () => {
         expect.any(Array),
       );
     });
+  });
+
+  it('muestra alert de error visible cuando el servidor devuelve 503', async () => {
+    mockedApi.post.mockRejectedValue(new ApiRequestError({ error: 'Service unavailable', code: 'SERVICE_UNAVAILABLE' }, 503));
+
+    const { getByTestId, getByText } = renderScreen();
+    fireEvent.changeText(getByTestId('steam-username-input'), 'someuser');
+    fireEvent.press(getByText('link_platform.steam.submit'));
+
+    await waitFor(() => {
+      expect(Alert.alert).toHaveBeenCalledWith('link_platform.steam.error_service_unavailable');
+    });
+  });
+
+  it('guard canGoBack: presionar Volver sin historial navega a /(tabs)', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/consistent-type-imports
+    const { router } = require('expo-router') as typeof import('expo-router');
+    (router.canGoBack as jest.Mock).mockReturnValue(false);
+
+    const { getByText } = renderScreen();
+    fireEvent.press(getByText('common.back'));
+
+    expect(router.back).not.toHaveBeenCalled();
+    expect(router.replace).toHaveBeenCalledWith('/(tabs)');
+  });
+
+  it('guard canGoBack: OK en alert de éxito sin historial navega a /(tabs)', async () => {
+    mockedApi.post.mockResolvedValue({
+      id: 'acct-1',
+      userId: 'u1',
+      platform: 'STEAM',
+      externalId: '76561198000000001',
+      username: 'mysteamname',
+      lastSyncedAt: null,
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/consistent-type-imports
+    const { router } = require('expo-router') as typeof import('expo-router');
+    (router.canGoBack as jest.Mock).mockReturnValue(false);
+
+    const { getByTestId, getByText } = renderScreen();
+    fireEvent.changeText(getByTestId('steam-username-input'), 'mysteamname');
+    fireEvent.press(getByText('link_platform.steam.submit'));
+
+    await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
+
+    const alertArgs = (Alert.alert as jest.Mock).mock.calls[0] as Parameters<typeof Alert.alert>;
+    const buttons = alertArgs[2] as Array<{ text: string; onPress?: () => void }>;
+    buttons[0]?.onPress?.();
+
+    expect(router.replace).toHaveBeenCalledWith('/(tabs)');
+    expect(router.back).not.toHaveBeenCalled();
   });
 });

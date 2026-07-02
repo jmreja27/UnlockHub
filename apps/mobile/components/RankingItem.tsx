@@ -1,10 +1,12 @@
 // Componente reutilizable para un ítem del ranking global
 import { View, Text, Pressable } from 'react-native';
 import { Image } from 'expo-image';
+import { useTranslation } from 'react-i18next';
 import type { RankingEntry } from '@unlockhub/types';
 
 import { useTheme } from '../hooks/useTheme';
 import { getCloudinaryThumb } from '../lib/cloudinary';
+import { formatNumber } from '../lib/formatTimeAgo';
 
 // Placeholder blurhash para avatares mientras cargan
 const AVATAR_BLURHASH = 'L6PZfSi_.AyE_3t7t7R**0o#DgR4';
@@ -25,12 +27,13 @@ function getMedalColor(rank: number): string {
 
 export function RankingItem({ entry, isCurrentUser = false, onPress }: RankingItemProps) {
   const colors = useTheme();
+  const { t, i18n } = useTranslation();
   const medalColor = getMedalColor(entry.rank);
   const isTopThree = entry.rank <= 3;
 
   const accessibilityLabel = isCurrentUser
-    ? `Tú: posición ${entry.rank}, ${entry.username}, ${entry.xp.toLocaleString()} XP`
-    : `Posición ${entry.rank}: ${entry.username}, ${entry.xp.toLocaleString()} XP`;
+    ? t('rankings.item_label_self', { rank: entry.rank, username: entry.username, xp: formatNumber(entry.xp, i18n.language) })
+    : t('rankings.item_label', { rank: entry.rank, username: entry.username, xp: formatNumber(entry.xp, i18n.language) });
 
   return (
     <Pressable
@@ -38,7 +41,7 @@ export function RankingItem({ entry, isCurrentUser = false, onPress }: RankingIt
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      accessibilityHint={onPress ? 'Pulsa para ver el perfil de este jugador' : undefined}
+      accessibilityHint={onPress ? t('rankings.item_hint') : undefined}
       style={{ minHeight: 60, backgroundColor: isCurrentUser ? undefined : colors.surface }}
     >
       {/* Número de posición */}
@@ -88,7 +91,7 @@ export function RankingItem({ entry, isCurrentUser = false, onPress }: RankingIt
           className="font-bold text-base"
           style={{ color: isCurrentUser ? colors.primary : colors.text }}
         >
-          {entry.xp.toLocaleString()}
+          {formatNumber(entry.xp)}
         </Text>
         <Text className="text-xs" style={{ color: colors.textMuted }}>XP</Text>
       </View>

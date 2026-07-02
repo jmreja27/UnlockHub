@@ -1,14 +1,15 @@
 import { useCallback } from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { View, Text, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
-import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { PaginatedResponse } from '@unlockhub/types';
 
 import { api } from '../lib/api';
+import { formatTimeAgo } from '../lib/formatTimeAgo';
+import { useSafeBack } from '../hooks/useSafeBack';
 import { EmptyState } from '../components/EmptyState';
 import { SkeletonBox } from '../components/SkeletonBox';
 import { useTheme } from '../hooks/useTheme';
@@ -38,12 +39,10 @@ function NotificationItem({
   item: AppNotification;
   onRead: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   const colors = useTheme();
   const icon = TYPE_ICONS[item.type] ?? '🔔';
-  const timeAgo = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }).format(
-    Math.round((new Date(item.createdAt).getTime() - Date.now()) / 1000 / 60),
-    'minutes',
-  );
+  const timeAgo = formatTimeAgo(item.createdAt, t);
 
   return (
     <Pressable
@@ -88,6 +87,7 @@ export default function NotificationsScreen() {
   const { t } = useTranslation();
   const colors = useTheme();
   const queryClient = useQueryClient();
+  const safeBack = useSafeBack();
 
   const {
     data,
@@ -113,6 +113,10 @@ export default function NotificationsScreen() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.notifications() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.notificationsUnreadCount() });
     },
+    onError: () => {
+      // Resincroniza silenciosamente — tap-to-read es acción menor, no merece Alert
+      void queryClient.invalidateQueries({ queryKey: queryKeys.notifications() });
+    },
   });
 
   const markAllMutation = useMutation({
@@ -121,6 +125,9 @@ export default function NotificationsScreen() {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       void queryClient.invalidateQueries({ queryKey: queryKeys.notifications() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.notificationsUnreadCount() });
+    },
+    onError: () => {
+      Alert.alert(t('common.error_boundary_title'), t('notifications.mark_all_error'));
     },
   });
 
@@ -150,7 +157,7 @@ export default function NotificationsScreen() {
       {/* Header */}
       <View className="flex-row items-center justify-between px-4 pt-4 pb-2">
         <Pressable
-          onPress={() => router.back()}
+          onPress={safeBack}
           accessibilityRole="button"
           accessibilityLabel={t('common.back')}
           style={{ minWidth: 44, minHeight: 44, justifyContent: 'center' }}

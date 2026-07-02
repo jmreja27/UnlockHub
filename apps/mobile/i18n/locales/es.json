@@ -1,6 +1,6 @@
 {
   "common": {
-    "back": "← Volver",
+    "back": "Volver",
     "retry": "Reintentar",
     "loading": "Cargando...",
     "error_generic": "Algo salió mal. Inténtalo de nuevo.",
@@ -20,7 +20,7 @@
       "title": "UnlockHub",
       "subtitle": "Tu hub de logros",
       "email_label": "Email",
-      "email_placeholder": "tu@email.com",
+      "email_placeholder": "nombre@ejemplo.com",
       "email_hint": "Introduce tu dirección de correo electrónico",
       "password_label": "Contraseña",
       "password_hint": "Introduce tu contraseña",
@@ -43,7 +43,7 @@
       "username_placeholder": "gamer_pro_99",
       "username_hint": "Introduce un nombre de usuario único. Solo letras, números, guiones y guiones bajos.",
       "email_label": "Email",
-      "email_placeholder": "tu@email.com",
+      "email_placeholder": "nombre@ejemplo.com",
       "email_hint": "Introduce tu dirección de correo electrónico",
       "password_label": "Contraseña",
       "password_placeholder": "Mínimo 8 caracteres, una mayúscula y un número",
@@ -62,7 +62,9 @@
       "error_password_uppercase": "La contraseña debe contener al menos una mayúscula.",
       "error_password_number": "La contraseña debe contener al menos un número.",
       "birthdate_label": "Fecha de nacimiento",
-      "birthdate_hint": "Introduce tu fecha de nacimiento en formato AAAA-MM-DD",
+      "birthdate_placeholder": "DD/MM/AAAA",
+      "birthdate_hint": "Toca para abrir el selector de fecha",
+      "birthdate_confirm": "Confirmar",
       "birthdate_gdpr_note": "Debes tener al menos {{age}} años para registrarte (RGPD)",
       "error_birthdate_required": "La fecha de nacimiento es obligatoria.",
       "error_birthdate_format": "El formato debe ser AAAA-MM-DD (ej. 1990-05-14).",
@@ -77,7 +79,7 @@
       "title": "¿Olvidaste tu contraseña?",
       "subtitle": "Introduce tu email y te enviaremos un enlace para restablecerla.",
       "email_label": "Email",
-      "email_placeholder": "tu@email.com",
+      "email_placeholder": "nombre@ejemplo.com",
       "cta": "Enviar enlace",
       "loading": "Enviando…",
       "success_title": "Revisa tu email",
@@ -165,7 +167,9 @@
     "guides_report_confirmed": "Gracias por tu reporte. Lo revisaremos pronto.",
     "guide_placeholder": "Comparte consejos, trucos o pistas para este logro…",
     "guide_submit": "Publicar guía",
-    "guide_min_length": "La guía debe tener al menos 20 caracteres."
+    "guide_min_length": "La guía debe tener al menos 20 caracteres.",
+    "guides_upvote_error": "No se pudo registrar el voto. Inténtalo de nuevo.",
+    "guides_report_error": "No se pudo enviar el reporte. Inténtalo de nuevo."
   },
   "home": {
     "title": "Inicio",
@@ -307,7 +311,8 @@
     "pending_item_label": "Solicitud de amistad de {{username}}",
     "unauthenticated_title": "Inicia sesión para ver tus amigos",
     "unauthenticated_body": "Crea una cuenta o inicia sesión para añadir amigos y ver su actividad.",
-    "unauthenticated_cta": "Iniciar sesión"
+    "unauthenticated_cta": "Iniciar sesión",
+    "error_send_request": "No se pudo enviar la solicitud de amistad. Inténtalo de nuevo."
   },
   "challenges": {
     "title": "Reto de la semana",
@@ -379,7 +384,10 @@
     "filter_steam": "Steam",
     "filter_ra": "RetroAchievements",
     "filter_psn": "PlayStation",
-    "national_no_country": "Configura tu país en el perfil para ver el ranking nacional"
+    "national_no_country": "Configura tu país en el perfil para ver el ranking nacional",
+    "item_label": "Posición {{rank}}: {{username}}, {{xp}} XP",
+    "item_label_self": "Tú: posición {{rank}}, {{username}}, {{xp}} XP",
+    "item_hint": "Pulsa para ver el perfil de este jugador"
   },
   "notifications": {
     "title": "Notificaciones",
@@ -390,7 +398,8 @@
     "mark_all_read": "Marcar todo como leído",
     "empty_title": "Sin notificaciones",
     "empty_body": "Aquí aparecerán tus solicitudes de amistad, retos y logros de la comunidad.",
-    "list_label": "Lista de notificaciones"
+    "list_label": "Lista de notificaciones",
+    "mark_all_error": "No se pudieron marcar las notificaciones como leídas. Inténtalo de nuevo."
   },
   "wrapped": {
     "section_title": "Gaming Wrapped",
@@ -462,6 +471,8 @@
     "privacy_private": "Privado",
     "privacy_private_desc": "Tu perfil no es visible para nadie",
     "privacy_saving": "Guardando...",
+    "privacy_error_title": "No se pudo cambiar la privacidad",
+    "privacy_error_message": "No se pudo cambiar la visibilidad del perfil. Sigue siendo: {{visibility}}.",
     "sync_prefix": "Sync:",
     "platforms_empty": "No tienes plataformas vinculadas todavía.\nVincúlalas desde los ajustes para sincronizar tus logros.",
     "logout": "Cerrar sesión",
@@ -499,9 +510,16 @@
     "points_label": "pts",
     "points_coming_soon": "Próximamente podrás canjear tus puntos por recompensas exclusivas",
     "points_watch_ad": "Ver anuncio (+10 pts)",
+    "points_watch_ad_loading": "Cargando anuncio...",
     "points_rewarded_cooldown": "Vuelve en {{hours}} h",
     "points_rewarded_success_title": "¡Puntos ganados!",
-    "points_rewarded_success_body": "+{{pts}} puntos añadidos a tu saldo"
+    "points_rewarded_success_body": "+{{pts}} puntos añadidos a tu saldo",
+    "points_rewarded_unavailable_title": "Anuncio no disponible",
+    "points_rewarded_unavailable_body": "No hay anuncios disponibles ahora mismo. Inténtalo de nuevo en unos minutos.",
+    "points_rewarded_error": "Hubo un problema al procesar el anuncio. Inténtalo de nuevo.",
+    "unlink_error_title": "No se pudo desvincular",
+    "unlink_error_message": "No se pudo desvincular la plataforma. Inténtalo de nuevo.",
+    "delete_account_error_title": "Tu cuenta NO se ha eliminado"
   },
   "premium": {
     "title": "UnlockHub Premium",

@@ -1265,6 +1265,31 @@ describe('userService.deleteAccount', () => {
 
     expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
   });
+
+  it('elimina al usuario de todos los rankings de plataforma al borrar la cuenta', async () => {
+    const userWithMultiplePlatforms = {
+      ...baseUser,
+      platformAccounts: [
+        { platform: 'STEAM' as const },
+        { platform: 'PSN' as const },
+        { platform: 'RA' as const },
+      ],
+    };
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(userWithMultiplePlatforms);
+
+    await userService.deleteAccount('user-1');
+
+    expect(mockRemoveUserFromRankings).toHaveBeenCalledWith(
+      'user-1',
+      expect.arrayContaining(['STEAM', 'PSN', 'RA']),
+    );
+  });
+
+  it('completa el borrado sin error si el usuario no tiene plataformas vinculadas', async () => {
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({ ...baseUser, platformAccounts: [] });
+
+    await expect(userService.deleteAccount('user-1')).resolves.toBeUndefined();
+  });
 });
 
 // ─── uploadAvatar ─────────────────────────────────────────────────────────────

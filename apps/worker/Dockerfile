@@ -42,6 +42,7 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
+ENV XDG_CACHE_HOME=/app/.cache
 
 # Copiar manifiestos para instalar solo dependencias de producción
 COPY package.json package-lock.json ./
@@ -72,4 +73,7 @@ COPY apps/api/src ./apps/api/src
 COPY apps/worker/src ./apps/worker/src
 
 # Sin EXPOSE — el worker no levanta HTTP
+RUN chown -R node:node /app
+
+USER node
 CMD ["npx", "tsx", "apps/worker/src/index.ts"]

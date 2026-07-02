@@ -235,6 +235,12 @@ export default function LibraryScreen() {
     // Usar el resultado de cada fetchNextPage (no el closure de hasNextPage — puede ser stale)
     let result = await fetchNextPage();
     while (result.hasNextPage) {
+      // T107: si el backend devuelve página vacía pero total > loaded (inconsistencia de conteo
+      // server-side, p.ej. race condition con sync en curso), el bucle sería infinito.
+      // Salir si la última página recibida no tiene ítems.
+      const pages = result.data?.pages;
+      const lastPage = pages?.[pages.length - 1];
+      if (!lastPage || lastPage.data.length === 0) break;
       result = await fetchNextPage();
     }
   }, [fetchNextPage, hasNextPage]);

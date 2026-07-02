@@ -6,8 +6,7 @@ import { challengeWorker, scheduleChallengeEvaluation } from '../../api/src/jobs
 import { shieldWorker, scheduleShieldRecharge } from '../../api/src/jobs/streak-shields.scheduler';
 import { gdprCleanupWorker, scheduleGdprCleanupJob } from '../../api/src/jobs/gdpr-cleanup.scheduler';
 import { scheduleStreakJob } from '../../api/src/jobs/streak.scheduler';
-import { scheduleBackgroundSyncJob } from '../../api/src/jobs/background-sync.scheduler';
-import { restoreAutoSyncs } from '../../api/src/jobs/sync.scheduler';
+import { scheduleBackgroundSyncJob, startBackgroundSyncWorker } from '../../api/src/jobs/background-sync.scheduler';
 import { redis } from '../../api/src/lib/redis';
 import { prisma } from '../../api/src/lib/prisma';
 import { logger } from '../../api/src/lib/logger';
@@ -16,6 +15,7 @@ validateEnv();
 
 const syncWorker = startSyncWorker();
 const seedCatalogWorker = startSeedCatalogWorker();
+const backgroundSyncWorker = startBackgroundSyncWorker();
 
 logger.info('Worker arrancado — esperando jobs BullMQ');
 
@@ -27,7 +27,6 @@ logger.info('Worker arrancado — esperando jobs BullMQ');
   try { await scheduleBackgroundSyncJob(); } catch (e) { logger.error({ err: e }, 'scheduleBackgroundSyncJob falló (no fatal)'); }
   try { await scheduleShieldRecharge(); } catch (e) { logger.error({ err: e }, 'scheduleShieldRecharge falló (no fatal)'); }
   try { await scheduleGdprCleanupJob(); } catch (e) { logger.error({ err: e }, 'scheduleGdprCleanupJob falló (no fatal)'); }
-  try { await restoreAutoSyncs(); } catch (e) { logger.error({ err: e }, 'restoreAutoSyncs falló (no fatal)'); }
 })();
 
 process.on('SIGTERM', async () => {
@@ -35,6 +34,7 @@ process.on('SIGTERM', async () => {
   await Promise.allSettled([
     syncWorker.close(),
     seedCatalogWorker.close(),
+    backgroundSyncWorker.close(),
     streakWorker.close(),
     challengeWorker.close(),
     shieldWorker.close(),
@@ -51,6 +51,7 @@ process.on('SIGINT', async () => {
   await Promise.allSettled([
     syncWorker.close(),
     seedCatalogWorker.close(),
+    backgroundSyncWorker.close(),
     streakWorker.close(),
     challengeWorker.close(),
     shieldWorker.close(),

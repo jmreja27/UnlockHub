@@ -1,6 +1,6 @@
 import { View, Text, ScrollView, Share, Pressable, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, router } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 import { useTranslation } from 'react-i18next';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -8,7 +8,9 @@ import type { GamingWrapped } from '@unlockhub/types';
 
 import { useWrapped } from '../../hooks/useWrapped';
 import { useWrappedInterstitial } from '../../hooks/useWrappedInterstitial';
+import { useSafeBack } from '../../hooks/useSafeBack';
 import { analytics } from '../../lib/analytics';
+import { formatDayMonth, formatNumber, MONTH_NAMES } from '../../lib/formatTimeAgo';
 
 const PLATFORM_LABELS: Record<string, string> = {
   STEAM: 'Steam',
@@ -61,11 +63,11 @@ function ComparisonBadge({ current, previous, label }: { current: number; previo
   );
 }
 
-function buildShareText(wrapped: GamingWrapped, t: (key: string, opts?: Record<string, unknown>) => string): string {
+function buildShareText(wrapped: GamingWrapped, t: (key: string, opts?: Record<string, unknown>) => string, lang: string): string {
   const lines = [
     t('wrapped.share_header', { year: wrapped.year }),
     `🏆 ${t('wrapped.total_achievements')}: ${wrapped.totalAchievements}`,
-    `⭐ ${t('wrapped.total_xp')}: ${wrapped.totalXpGained.toLocaleString()} XP`,
+    `⭐ ${t('wrapped.total_xp')}: ${formatNumber(wrapped.totalXpGained, lang)} XP`,
   ];
   if (wrapped.topGame) {
     lines.push(`🎮 ${t('wrapped.top_game')}: ${wrapped.topGame.title} (${wrapped.topGame.achievementsCount})`);
@@ -102,10 +104,6 @@ function parsePeriod(raw: string): { year: number; month: number | undefined; is
   return { year, month: undefined, isMonthly: false };
 }
 
-const MONTH_NAMES: Record<string, string[]> = {
-  es: ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'],
-  en: ['January','February','March','April','May','June','July','August','September','October','November','December'],
-};
 
 export default function WrappedScreen() {
   const { year: periodParam } = useLocalSearchParams<{ year: string }>();
@@ -116,6 +114,7 @@ export default function WrappedScreen() {
   const { data: wrapped, isLoading, isError } = useWrapped(isMonthly ? period : year);
 
   useWrappedInterstitial();
+  const safeBack = useSafeBack();
 
   const monthNames = MONTH_NAMES[i18n.language] ?? MONTH_NAMES['en']!;
   const periodLabel = isMonthly
@@ -125,7 +124,7 @@ export default function WrappedScreen() {
   function handleShare() {
     if (!wrapped) return;
     void analytics.wrappedShared(period);
-    Share.share({ message: buildShareText(wrapped, t) }).catch(() => undefined);
+    Share.share({ message: buildShareText(wrapped, t, i18n.language) }).catch(() => undefined);
   }
 
   if (isNaN(year) || (isMonthly && (month === undefined || month < 1 || month > 12))) {
@@ -136,7 +135,7 @@ export default function WrappedScreen() {
         </Text>
         <Pressable
           className="mt-6 px-6 py-3 bg-primary rounded-xl"
-          onPress={() => router.back()}
+          onPress={safeBack}
           accessibilityRole="button"
         >
           <Text className="text-white font-semibold">{t('common.back')}</Text>
@@ -150,7 +149,7 @@ export default function WrappedScreen() {
       {/* Cabecera */}
       <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-800">
         <Pressable
-          onPress={() => router.back()}
+          onPress={safeBack}
           accessibilityRole="button"
           accessibilityLabel={t('common.back')}
           className="p-1"
@@ -235,10 +234,10 @@ export default function WrappedScreen() {
           <View className="mt-3">
             <StatCard
               label={t('wrapped.total_xp')}
-              value={`${wrapped.totalXpGained.toLocaleString()} XP`}
+              value={`${formatNumber(wrapped.totalXpGained, i18n.language)} XP`}
               sub={
                 wrapped.previousYear
-                  ? `${t('wrapped.vs_previous')}: ${wrapped.previousYear.totalXpGained.toLocaleString()} XP`
+                  ? `${t('wrapped.vs_previous')}: ${formatNumber(wrapped.previousYear.totalXpGained, i18n.language)} XP`
                   : undefined
               }
               delay={100}
@@ -438,9 +437,7 @@ export default function WrappedScreen() {
             <View className="mt-3">
               <StatCard
                 label={t('wrapped.most_productive_day')}
-                value={new Intl.DateTimeFormat(undefined, {
-                  day: 'numeric', month: 'long'
-                }).format(new Date(wrapped.mostProductiveDay.date + 'T12:00:00Z'))}
+                value={formatDayMonth(wrapped.mostProductiveDay.date, i18n.language)}
                 sub={t('wrapped.most_productive_count', {
                   count: wrapped.mostProductiveDay.achievementsCount,
                 })}

@@ -28,6 +28,7 @@ import { api, uploadFile, getAccessToken } from '../../lib/api';
 import { useFeed } from '../../hooks/useFeed';
 import { queryKeys } from '../../lib/queryKeys';
 import { getCloudinaryThumb } from '../../lib/cloudinary';
+import { formatNumber, formatFullDate } from '../../lib/formatTimeAgo';
 
 interface UserStats {
   xpByWeek: { week: string; xp: number }[];
@@ -102,7 +103,7 @@ const REWARDED_COOLDOWN_KEY = 'admob:rewarded_ad:last_claimed';
 const REWARDED_COOLDOWN_MS = 3 * 60 * 60 * 1000;
 
 export default function ProfileScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const colors = useTheme();
   const { user, isAuthenticated } = useSessionStore();
   const { logout, isLoggingOut } = useAuth();
@@ -147,7 +148,7 @@ export default function ProfileScreen() {
   });
   const pointsBalance = pointsData?.total ?? 0;
 
-  const { showForReward } = useRewardedAd();
+  const { showForReward, isReady: isAdReady } = useRewardedAd();
   const isOnCooldown = rewardedCooldownEnd > Date.now();
   const cooldownHoursLeft = isOnCooldown
     ? Math.ceil((rewardedCooldownEnd - Date.now()) / (1000 * 60 * 60))
@@ -187,6 +188,11 @@ export default function ProfileScreen() {
       // de forma INMEDIATA sin esperar al staleTime — evita el flash de "Tus juegos
       // aparecerán pronto" cuando el refetch de my-games termina antes que el de sync-summary.
       void queryClient.refetchQueries({ queryKey: queryKeys.syncSummaryBase() });
+    },
+    onError: () => {
+      Alert.alert(t('profile.unlink_error_title'), t('profile.unlink_error_message'));
+      // Resincroniza el estado real: el backend no cambió nada
+      void queryClient.invalidateQueries({ queryKey: queryKeys.platforms(user?.id ?? '') });
     },
   });
 
@@ -308,12 +314,43 @@ export default function ProfileScreen() {
   const privacyMutation = useMutation({
     mutationFn: (visibility: ProfileVisibility) =>
       api.patch<{ profileVisibility: ProfileVisibility }>('/api/v1/users/me', { profileVisibility: visibility }),
+    onMutate: (visibility) => {
+      const current = useSessionStore.getState().user;
+      const previousVisibility: ProfileVisibility = current?.profileVisibility ?? 'PUBLIC';
+      if (current) {
+        useSessionStore.getState().setUser({ ...current, profileVisibility: visibility });
+      }
+      return { previousVisibility };
+    },
     onSuccess: (data) => {
+      // Confirma el valor real del servidor (por si difiere del update optimista)
       const current = useSessionStore.getState().user;
       if (current) {
         useSessionStore.getState().setUser({ ...current, profileVisibility: data.profileVisibility });
       }
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+    onError: (_err, _vars, context) => {
+      // Rollback: restaura la visibilidad anterior para que la UI refleje el estado real del backend
+      const current = useSessionStore.getState().user;
+      const previousVisibility = context?.previousVisibility ?? 'PUBLIC';
+      if (current) {
+        useSessionStore.getState().setUser({ ...current, profileVisibility: previousVisibility });
+      }
+      const prevLabel = t(
+        previousVisibility === 'PUBLIC'
+          ? 'profile.privacy_public'
+          : previousVisibility === 'FRIENDS_ONLY'
+          ? 'profile.privacy_friends'
+          : 'profile.privacy_private',
+      );
+      Alert.alert(
+        t('profile.privacy_error_title'),
+        t('profile.privacy_error_message', { visibility: prevLabel }),
+      );
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.me() });
     },
   });
 
@@ -322,6 +359,10 @@ export default function ProfileScreen() {
     onSuccess: () => {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       logout();
+    },
+    onError: () => {
+      // Título inequívoco: la cuenta NO fue eliminada — el usuario no debe dudar
+      Alert.alert(t('profile.delete_account_error_title'), t('profile.delete_account_error'));
     },
   });
 
@@ -346,6 +387,13 @@ export default function ProfileScreen() {
   }
 
   async function handleWatchAd() {
+    if (!isAdReady) {
+      Alert.alert(
+        t('profile.points_rewarded_unavailable_title'),
+        t('profile.points_rewarded_unavailable_body'),
+      );
+      return;
+    }
     setIsWatchingAd(true);
     try {
       const pts = await showForReward();
@@ -358,6 +406,11 @@ export default function ProfileScreen() {
         Alert.alert(
           t('profile.points_rewarded_success_title'),
           t('profile.points_rewarded_success_body', { pts }),
+        );
+      } else {
+        Alert.alert(
+          t('common.error_boundary_title'),
+          t('profile.points_rewarded_error'),
         );
       }
     } finally {
@@ -474,7 +527,7 @@ export default function ProfileScreen() {
           accessibilityLabel={t('profile.profile_aria', {
             username: user.username,
             level: user.level ?? 1,
-            xp: (user.xp ?? 0).toLocaleString(),
+            xp: formatNumber(user.xp ?? 0, i18n.language),
           })}
         >
           <Pressable
@@ -540,7 +593,7 @@ export default function ProfileScreen() {
           accessible
           accessibilityLabel={t('profile.stats_aria', {
             level: user.level ?? 1,
-            xp: (user.xp ?? 0).toLocaleString(),
+            xp: formatNumber(user.xp ?? 0, i18n.language),
             streak: user.streakDays ?? 0,
           })}
         >
@@ -550,7 +603,7 @@ export default function ProfileScreen() {
           </View>
           <View className="w-px" style={{ backgroundColor: colors.border }} />
           <View className="flex-1 items-center">
-            <Text className="text-xl font-bold" style={{ color: colors.text }}>{(user.xp ?? 0).toLocaleString()}</Text>
+            <Text className="text-xl font-bold" style={{ color: colors.text }}>{formatNumber(user.xp ?? 0, i18n.language)}</Text>
             <Text className="text-xs mt-1" style={{ color: colors.textSecondary }}>{t('profile.stat_xp')}</Text>
           </View>
           <View className="w-px" style={{ backgroundColor: colors.border }} />
@@ -621,7 +674,7 @@ export default function ProfileScreen() {
                   )}
                   {account.lastSyncedAt && !account.psnProfilePrivate && (
                     <Text className="text-xs mr-2" style={{ color: colors.textMuted }}>
-                      {t('profile.sync_prefix')} {new Date(account.lastSyncedAt).toLocaleDateString()}
+                      {t('profile.sync_prefix')} {formatFullDate(account.lastSyncedAt)}
                     </Text>
                   )}
                   {canUnlink && (
@@ -736,7 +789,7 @@ export default function ProfileScreen() {
                     accessibilityLabel={`${pointsBalance} ${t('profile.points_label')}`}
                     testID="points-balance"
                   >
-                    {new Intl.NumberFormat().format(pointsBalance)}
+                    {formatNumber(pointsBalance, i18n.language)}
                     {'  '}
                     <Text className="text-sm font-normal" style={{ color: colors.textSecondary }}>
                       {t('profile.points_label')}
@@ -755,23 +808,25 @@ export default function ProfileScreen() {
             {!user.isPremium && (
               <Pressable
                 onPress={() => { void handleWatchAd(); }}
-                disabled={isOnCooldown || isWatchingAd}
+                disabled={isOnCooldown || isWatchingAd || !isAdReady}
                 accessibilityRole="button"
                 accessibilityLabel={
                   isOnCooldown
                     ? t('profile.points_rewarded_cooldown', { hours: cooldownHoursLeft })
+                    : !isAdReady
+                    ? t('profile.points_watch_ad_loading')
                     : t('profile.points_watch_ad')
                 }
-                accessibilityState={{ disabled: isOnCooldown || isWatchingAd, busy: isWatchingAd }}
+                accessibilityState={{ disabled: isOnCooldown || isWatchingAd || !isAdReady, busy: isWatchingAd }}
                 testID="watch-ad-button"
                 style={{
                   minHeight: 44,
                   borderRadius: 12,
                   borderWidth: 1,
-                  borderColor: isOnCooldown ? colors.border : colors.primary + '99',
+                  borderColor: isOnCooldown || !isAdReady ? colors.border : colors.primary + '99',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  opacity: isOnCooldown ? 0.6 : 1,
+                  opacity: isOnCooldown || !isAdReady ? 0.6 : 1,
                 }}
               >
                 {isWatchingAd ? (
@@ -779,10 +834,12 @@ export default function ProfileScreen() {
                 ) : (
                   <Text
                     className="text-sm font-semibold"
-                    style={{ color: isOnCooldown ? colors.textMuted : colors.primary }}
+                    style={{ color: isOnCooldown || !isAdReady ? colors.textMuted : colors.primary }}
                   >
                     {isOnCooldown
                       ? t('profile.points_rewarded_cooldown', { hours: cooldownHoursLeft })
+                      : !isAdReady
+                      ? t('profile.points_watch_ad_loading')
                       : t('profile.points_watch_ad')}
                   </Text>
                 )}
@@ -857,7 +914,7 @@ export default function ProfileScreen() {
                   <View className="flex-row gap-2">
                     <View className="flex-1 rounded-xl p-3" style={{ backgroundColor: colors.surface }}>
                       <Text className="text-base font-bold" style={{ color: colors.text }}>
-                        {new Intl.NumberFormat().format(statsData.totalXp)}
+                        {formatNumber(statsData.totalXp ?? 0, i18n.language)}
                       </Text>
                       <Text className="text-xs mt-0.5" style={{ color: colors.textSecondary }}>
                         {t('profile.stats_total_xp')}
@@ -865,7 +922,7 @@ export default function ProfileScreen() {
                     </View>
                     <View className="flex-1 rounded-xl p-3" style={{ backgroundColor: colors.surface }}>
                       <Text className="text-base font-bold" style={{ color: colors.text }}>
-                        {new Intl.NumberFormat().format(statsData.totalAchievements)}
+                        {formatNumber(statsData.totalAchievements ?? 0, i18n.language)}
                       </Text>
                       <Text className="text-xs mt-0.5" style={{ color: colors.textSecondary }}>
                         {t('profile.stats_total_achievements')}

@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { useSafeBack } from '../../hooks/useSafeBack';
 import { useTranslation } from 'react-i18next';
 import { useMutation } from '@tanstack/react-query';
 
@@ -13,6 +14,7 @@ import { api } from '../../lib/api';
 
 export default function ForgotPasswordScreen() {
   const { t } = useTranslation();
+  const safeBack = useSafeBack();
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
@@ -78,7 +80,7 @@ export default function ForgotPasswordScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <Pressable
-            onPress={() => router.back()}
+            onPress={safeBack}
             accessibilityRole="button"
             accessibilityLabel={t('common.back')}
             className="mb-8 self-start"

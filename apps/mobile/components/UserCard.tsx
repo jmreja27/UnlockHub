@@ -6,6 +6,7 @@ import type { UserSearchResult } from '@unlockhub/types';
 
 import { getCloudinaryThumb } from '../lib/cloudinary';
 import { useTheme } from '../hooks/useTheme';
+import { formatNumber } from '../lib/formatTimeAgo';
 
 import { AvatarPlaceholder } from './AvatarPlaceholder';
 
@@ -14,7 +15,7 @@ interface Props {
 }
 
 export function UserCard({ user }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const colors = useTheme();
 
   return (
@@ -30,7 +31,7 @@ export function UserCard({ user }: Props) {
     >
       {user.avatar ? (
         <Image
-          source={{ uri: getCloudinaryThumb(user.avatar, 96, 96) }}
+          source={{ uri: getCloudinaryThumb(user.avatar, 96, 96) ?? undefined }}
           style={{ width: 48, height: 48, borderRadius: 24 }}
           contentFit="cover"
           accessibilityElementsHidden
@@ -41,7 +42,7 @@ export function UserCard({ user }: Props) {
       <View className="flex-1 ml-3">
         <Text className="font-semibold text-sm" style={{ color: colors.text }}>@{user.username}</Text>
         <Text className="text-xs mt-0.5" style={{ color: colors.textSecondary }}>
-          {t('search.user_level', { level: user.level })} · {user.xp.toLocaleString()} XP
+          {t('search.user_level', { level: user.level })} · {formatNumber(user.xp, i18n.language)} XP
         </Text>
       </View>
     </Pressable>

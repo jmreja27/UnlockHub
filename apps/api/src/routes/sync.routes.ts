@@ -6,9 +6,13 @@ import {
   getSyncStatusHandler,
   getActiveSyncStatusHandler,
   getAggregateSyncStatusHandler,
+  appOpenSyncHandler,
 } from '../controllers/sync.controller';
 
 const router = Router();
+
+// POST /api/v1/sync/app-open — sync silencioso al abrir la app (cooldown por tier: 3600s free / 900s premium)
+router.post('/app-open', authenticate, appOpenSyncHandler);
 
 // GET  /api/v1/sync/status — estado de todos los syncs activos del usuario
 router.get('/status', authenticate, getActiveSyncStatusHandler);

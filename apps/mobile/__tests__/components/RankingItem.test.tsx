@@ -87,19 +87,20 @@ describe('RankingItem', () => {
     expect(onPress).toHaveBeenCalledTimes(1);
   });
 
-  it('el accessibilityLabel incluye el nombre de usuario y XP', () => {
+  it('el accessibilityLabel usa la clave i18n correcta con interpolaciones', () => {
     const entry = makeEntry({ username: 'test_user', xp: 200, rank: 4 });
     const { getByRole } = render(<RankingItem entry={entry} />);
     const button = getByRole('button');
-    expect(button.props.accessibilityLabel).toContain('test_user');
-    expect(button.props.accessibilityLabel).toContain('200');
+    // El mock de react-i18next devuelve la clave con {{param}} sustituido por el valor
+    expect(button.props.accessibilityLabel).toContain('rankings.item_label');
+    expect(button.props.accessibilityLabel).toBeTruthy();
   });
 
-  it('el accessibilityLabel menciona "Tú" para el usuario actual', () => {
+  it('el accessibilityLabel usa la clave self para el usuario actual', () => {
     const entry = makeEntry({ username: 'yo', rank: 2 });
     const { getByRole } = render(<RankingItem entry={entry} isCurrentUser />);
     const button = getByRole('button');
-    expect(button.props.accessibilityLabel).toContain('Tú');
+    expect(button.props.accessibilityLabel).toContain('rankings.item_label_self');
   });
 
   it('no incluye accessibilityHint cuando no hay onPress', () => {

@@ -1,3 +1,7 @@
+jest.mock('../lib/logger', () => ({
+  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
+}));
+
 jest.mock('../services/user.service', () => ({
   addXp: jest.fn().mockResolvedValue({ newXp: 100, newLevel: 1, leveledUp: false }),
   invalidateUserPublicCache: jest.fn().mockResolvedValue(undefined),
@@ -66,6 +70,7 @@ import { Worker } from 'bullmq';
 import { redis } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 import { getIO } from '../lib/socket';
+import { logger } from '../lib/logger';
 import * as syncService from '../services/sync.service';
 import type { SyncBatchProgress } from '../platforms/platform.interface';
 import { AppError } from '../middleware/errorHandler';
@@ -152,7 +157,7 @@ describe('onBatch callback — emite sync:progress y actualiza Redis', () => {
 
     const onBatch = async (p: SyncBatchProgress): Promise<void> => {
       const percentComplete = p.total > 0 ? Math.round((p.processed / p.total) * 100) : 0;
-      await redis.setex(`sync:progress:user-1:STEAM`, 7200,
+      await redis.setex(`sync:progress:user-1:STEAM`, 900,
         JSON.stringify({ isRunning: true, processed: p.processed, total: p.total, percentComplete, startedAt }));
       mockIO.to('user:user-1').emit('sync:progress', {
         platform: 'STEAM', processed: p.processed, total: p.total,
@@ -163,7 +168,7 @@ describe('onBatch callback — emite sync:progress y actualiza Redis', () => {
     await onBatch(progress);
 
     expect(mockRedis.setex).toHaveBeenCalledWith(
-      'sync:progress:user-1:STEAM', 7200,
+      'sync:progress:user-1:STEAM', 900,
       expect.stringContaining('"processed":20'),
     );
     expect(mockTo).toHaveBeenCalledWith('user:user-1');
@@ -396,21 +401,26 @@ describe('startSyncWorker — lock Redis por usuario (MEJORA-2)', () => {
     expect(mockRedis.del).toHaveBeenCalledWith('sync:user-lock:user-1');
   });
 
-  it('reencola el job con delay cuando el lock del usuario ya está tomado', async () => {
+  it('reencola el job con delay 30s e incrementa lockRetryCount cuando el lock está tomado (primer intento)', async () => {
     MockWorker.mockClear();
     startSyncWorker();
     const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
 
-    // SET NX devuelve null → lock no adquirido (otro sync del mismo usuario activo)
+    // SET NX devuelve null → lock no adquirido
     mockRedis.set.mockResolvedValueOnce(null);
 
-    const result = await processFn({ id: 'job-2', name: 'manual-sync:user-1:STEAM', opts: { priority: 10 }, data: { userId: 'user-1', platformAccountId: 'acc-1', platform: 'STEAM', triggerType: 'manual' } });
+    const result = await processFn({
+      id: 'job-2',
+      name: 'manual-sync:user-1:STEAM',
+      opts: { priority: 10 },
+      data: { userId: 'user-1', platformAccountId: 'acc-1', platform: 'STEAM', triggerType: 'manual' },
+    });
 
-    // El job debe haberse reencolado con delay de 5s
+    // Delay de 30s (LOCK_RETRY_DELAY_MS) y lockRetryCount incrementado a 1
     expect((syncQueue.add as jest.Mock)).toHaveBeenCalledWith(
       'manual-sync:user-1:STEAM',
-      expect.objectContaining({ userId: 'user-1', platform: 'STEAM' }),
-      expect.objectContaining({ delay: 5000 }),
+      expect.objectContaining({ userId: 'user-1', platform: 'STEAM', lockRetryCount: 1 }),
+      expect.objectContaining({ delay: 30_000 }),
     );
     // El job retorna resultado vacío — no procesó nada
     expect((result as { achievementsSynced: number }).achievementsSynced).toBe(0);
@@ -526,5 +536,568 @@ describe('startSyncWorker — addXp persistido cuando hay logros nuevos (BUG-9)'
     expect(mockAddXp).not.toHaveBeenCalled();
     // upsertUserScore debe llamarse para mantener al usuario en los sorted sets de plataforma
     expect(mockUpsertUserScore).toHaveBeenCalledWith('user-1', 500, ['STEAM', 'RA'], 'PUBLIC');
+  });
+});
+
+// ─── Failsafe: techo de reintentos de lock ────────────────────────────────────
+
+describe('startSyncWorker — failsafe de lock (LOCK_MAX_RETRIES)', () => {
+  type JobLike = {
+    id?: string;
+    name: string;
+    opts: { priority?: number };
+    token?: string;
+    extendLock?: jest.Mock;
+    data: { userId: string; platformAccountId: string; platform: string; triggerType: string; lockRetryCount?: number };
+  };
+  type ProcessFn = (job: JobLike) => Promise<unknown>;
+
+  it('abandona el job sin reencolar cuando lockRetryCount alcanza el máximo (3)', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    // Lock no disponible
+    mockRedis.set.mockResolvedValueOnce(null);
+
+    const result = await processFn({
+      id: 'job-failsafe',
+      name: 'manual-sync:user-1:STEAM',
+      opts: {},
+      data: {
+        userId: 'user-1',
+        platformAccountId: 'acc-1',
+        platform: 'STEAM',
+        triggerType: 'manual',
+        lockRetryCount: 3,
+      },
+    });
+
+    // No debe reencolar — techo alcanzado
+    expect((syncQueue.add as jest.Mock)).not.toHaveBeenCalled();
+    // Retorna resultado vacío
+    expect((result as { achievementsSynced: number }).achievementsSynced).toBe(0);
+  });
+
+  it('aún reencola cuando lockRetryCount es 2 (< 3)', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    mockRedis.set.mockResolvedValueOnce(null);
+
+    await processFn({
+      id: 'job-retry2',
+      name: 'manual-sync:user-1:STEAM',
+      opts: {},
+      data: {
+        userId: 'user-1',
+        platformAccountId: 'acc-1',
+        platform: 'STEAM',
+        triggerType: 'manual',
+        lockRetryCount: 2,
+      },
+    });
+
+    expect((syncQueue.add as jest.Mock)).toHaveBeenCalledTimes(1);
+    expect((syncQueue.add as jest.Mock)).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ lockRetryCount: 3 }),
+      expect.objectContaining({ delay: 30_000 }),
+    );
+  });
+
+  it('job sin lockRetryCount (primer intento) reencola con lockRetryCount: 1', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    mockRedis.set.mockResolvedValueOnce(null);
+
+    await processFn({
+      id: 'job-first',
+      name: 'auto-sync:user-1:RA',
+      opts: {},
+      data: { userId: 'user-1', platformAccountId: 'acc-ra', platform: 'RA', triggerType: 'auto' },
+    });
+
+    expect((syncQueue.add as jest.Mock)).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ lockRetryCount: 1 }),
+      expect.any(Object),
+    );
+  });
+});
+
+// ─── Batch job: plataformas en serie con lock único ──────────────────────────
+
+describe('startSyncWorker — batch job (SyncBatchJobData)', () => {
+  const psnAdapter = { platform: 'PSN', syncUser: jest.fn(), syncUserExpress: jest.fn() };
+
+  // Tipo de job batch para las llamadas a processFn
+  type BatchJobLike = {
+    id?: string;
+    name: string;
+    opts: { priority?: number };
+    token?: string;
+    extendLock?: jest.Mock;
+    data: {
+      userId: string;
+      platforms: { platform: string; platformAccountId: string }[];
+      triggerType: string;
+    };
+  };
+  type ProcessFn = (job: BatchJobLike) => Promise<unknown>;
+
+  const steamAccount = {
+    id: 'acc-steam', userId: 'user-1', platform: 'STEAM' as const,
+    externalId: '76561', username: 'u', encryptedToken: 'enc',
+    lastSyncedAt: null, syncCooldownUntil: null, requiresReauth: false,
+    psnProfilePrivate: false, tokenExpiresAt: null,
+    createdAt: new Date(), updatedAt: new Date(),
+  };
+  const raAccount = {
+    id: 'acc-ra', userId: 'user-1', platform: 'RA' as const,
+    externalId: 'ra-user', username: 'u', encryptedToken: 'enc',
+    lastSyncedAt: null, syncCooldownUntil: null, requiresReauth: false,
+    psnProfilePrivate: false, tokenExpiresAt: null,
+    createdAt: new Date(), updatedAt: new Date(),
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGetIO.mockReturnValue(mockIO);
+    mockPrisma.platformAccount.upsert.mockResolvedValue(steamAccount);
+    mockPrisma.user.update.mockResolvedValue({ id: 'user-1' } as never);
+  });
+
+  it('adquiere el lock UNA SOLA VEZ para el batch completo y lo libera en finally', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    // Lock disponible
+    mockRedis.set.mockResolvedValueOnce('OK');
+
+    // STEAM: prevEarnedIds + newAchievements
+    mockPrisma.userAchievement.findMany
+      .mockResolvedValueOnce([]) // STEAM prevEarnedIds
+      .mockResolvedValueOnce([]); // STEAM newAchievements
+
+    (mockSteamAdapter.syncUser as jest.Mock).mockResolvedValueOnce({
+      gamesUpdated: 1, achievementsSynced: 0, syncedAt: new Date().toISOString(),
+    });
+    mockPrisma.user.findUnique.mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' });
+    mockPrisma.platformAccount.findMany.mockResolvedValueOnce([{ platform: 'STEAM' }]);
+
+    await processFn({
+      id: 'batch-1',
+      name: 'sync-bg-user-1',
+      opts: {},
+      token: 'tok-1',
+      extendLock: jest.fn().mockResolvedValue(0),
+      data: {
+        userId: 'user-1',
+        platforms: [{ platform: 'STEAM', platformAccountId: 'acc-steam' }],
+        triggerType: 'auto',
+      },
+    });
+
+    // SET NX llamado exactamente una vez (lock único para el batch)
+    expect(mockRedis.set).toHaveBeenCalledTimes(1);
+    expect(mockRedis.set).toHaveBeenCalledWith('sync:user-lock:user-1', expect.any(String), 'EX', 600, 'NX');
+    // Lock liberado al final
+    expect(mockRedis.del).toHaveBeenCalledWith('sync:user-lock:user-1');
+  });
+
+  it('llama a extendLock antes de cada plataforma del batch', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    mockRedis.set.mockResolvedValueOnce('OK');
+    const extendLock = jest.fn().mockResolvedValue(0);
+
+    // Mock para 2 plataformas en serie: STEAM + RA
+    mockPrisma.platformAccount.findUnique
+      .mockResolvedValueOnce(steamAccount)
+      .mockResolvedValueOnce(raAccount);
+
+    mockPrisma.userAchievement.findMany
+      .mockResolvedValueOnce([]) // STEAM prevEarnedIds
+      .mockResolvedValueOnce([]) // STEAM newAchievements
+      .mockResolvedValueOnce([]) // RA prevEarnedIds
+      .mockResolvedValueOnce([]); // RA newAchievements
+
+    (mockSteamAdapter.syncUser as jest.Mock).mockResolvedValueOnce({
+      gamesUpdated: 0, achievementsSynced: 0, syncedAt: new Date().toISOString(),
+    });
+
+    const { retroAchievementsAdapter: raAdapter } = jest.requireMock('../platforms/retroachievements.adapter') as { retroAchievementsAdapter: { syncUser: jest.Mock } };
+    raAdapter.syncUser.mockResolvedValueOnce({
+      gamesUpdated: 0, achievementsSynced: 0, syncedAt: new Date().toISOString(),
+    });
+
+    mockPrisma.user.findUnique
+      .mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' })
+      .mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' });
+    mockPrisma.platformAccount.findMany
+      .mockResolvedValueOnce([{ platform: 'STEAM' }])
+      .mockResolvedValueOnce([{ platform: 'RA' }]);
+
+    await processFn({
+      id: 'batch-2',
+      name: 'sync-bg-user-1',
+      opts: {},
+      token: 'tok-2',
+      extendLock,
+      data: {
+        userId: 'user-1',
+        platforms: [
+          { platform: 'STEAM', platformAccountId: 'acc-steam' },
+          { platform: 'RA', platformAccountId: 'acc-ra' },
+        ],
+        triggerType: 'auto',
+      },
+    });
+
+    // extendLock llamado una vez por plataforma (2 plataformas = 2 calls)
+    expect(extendLock).toHaveBeenCalledTimes(2);
+    expect(extendLock).toHaveBeenCalledWith('tok-2', 600_000);
+  });
+
+  it('fallo de PSN no cancela RA — continúa con la siguiente plataforma', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    mockRedis.set.mockResolvedValueOnce('OK');
+    const extendLock = jest.fn().mockResolvedValue(0);
+
+    const psnAccount = {
+      ...steamAccount, id: 'acc-psn', platform: 'PSN' as const, externalId: 'psn-user',
+    };
+
+    mockPrisma.platformAccount.findUnique
+      .mockResolvedValueOnce(steamAccount) // STEAM
+      .mockResolvedValueOnce(psnAccount)   // PSN
+      .mockResolvedValueOnce(raAccount);   // RA
+
+    // PSN prevEarnedIds y luego rethrows antes de llegar a newAchievements
+    // STEAM y RA: prevEarnedIds + newAchievements
+    mockPrisma.userAchievement.findMany
+      .mockResolvedValueOnce([]) // STEAM prevEarnedIds
+      .mockResolvedValueOnce([]) // STEAM newAchievements
+      .mockResolvedValueOnce([]) // PSN prevEarnedIds
+      .mockResolvedValueOnce([]) // RA prevEarnedIds
+      .mockResolvedValueOnce([]); // RA newAchievements
+
+    (mockSteamAdapter.syncUser as jest.Mock).mockResolvedValueOnce({
+      gamesUpdated: 2, achievementsSynced: 5, syncedAt: new Date().toISOString(),
+    });
+
+    const { psnAdapter: psnAdapterMock } = jest.requireMock('../platforms/psn.adapter') as { psnAdapter: { syncUser: jest.Mock } };
+    psnAdapterMock.syncUser.mockRejectedValueOnce(new Error('PSN timeout'));
+
+    const { retroAchievementsAdapter: raAdapterMock } = jest.requireMock('../platforms/retroachievements.adapter') as { retroAchievementsAdapter: { syncUser: jest.Mock } };
+    raAdapterMock.syncUser.mockResolvedValueOnce({
+      gamesUpdated: 1, achievementsSynced: 3, syncedAt: new Date().toISOString(),
+    });
+
+    mockPrisma.user.findUnique
+      .mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' }) // STEAM (sin XP)
+      .mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' }); // RA (sin XP)
+    mockPrisma.platformAccount.findMany
+      .mockResolvedValueOnce([{ platform: 'STEAM' }])
+      .mockResolvedValueOnce([{ platform: 'RA' }]);
+
+    const result = await processFn({
+      id: 'batch-3',
+      name: 'sync-bg-user-1',
+      opts: {},
+      token: 'tok-3',
+      extendLock,
+      data: {
+        userId: 'user-1',
+        platforms: [
+          { platform: 'STEAM', platformAccountId: 'acc-steam' },
+          { platform: 'PSN', platformAccountId: 'acc-psn' },
+          { platform: 'RA', platformAccountId: 'acc-ra' },
+        ],
+        triggerType: 'auto',
+      },
+    });
+
+    // El job batch NO falla — retorna resultado agregado de STEAM + RA
+    expect((result as { achievementsSynced: number }).achievementsSynced).toBe(8); // 5 + 3
+    expect((result as { gamesUpdated: number }).gamesUpdated).toBe(3); // 2 + 1
+
+    // sync:error emitido para PSN
+    expect(mockEmit).toHaveBeenCalledWith('sync:error', expect.objectContaining({ platform: 'PSN' }));
+    // sync:complete emitido para STEAM y RA (no para PSN)
+    expect(mockEmit).toHaveBeenCalledWith('sync:complete', expect.objectContaining({ platform: 'STEAM' }));
+    expect(mockEmit).toHaveBeenCalledWith('sync:complete', expect.objectContaining({ platform: 'RA' }));
+  });
+
+  // ─── T104: del de syncProgressKey en finally del batch (safety-net interno) ──
+  it('T104: batch — syncProgressKey borrada en finally aunque adapter de una plataforma falle', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    mockRedis.set.mockResolvedValueOnce('OK');
+    const extendLock = jest.fn().mockResolvedValue(0);
+
+    // Plataforma única (STEAM) — adapter falla
+    mockPrisma.platformAccount.findUnique.mockResolvedValueOnce(steamAccount);
+    mockPrisma.userAchievement.findMany.mockResolvedValueOnce([]); // prevEarnedIds
+
+    (mockSteamAdapter.syncUser as jest.Mock).mockRejectedValueOnce(new Error('Adapter error'));
+
+    await processFn({
+      id: 'batch-t104',
+      name: 'sync-bg-user-1',
+      opts: {},
+      token: 'tok-t104',
+      extendLock,
+      data: {
+        userId: 'user-1',
+        platforms: [{ platform: 'STEAM', platformAccountId: 'acc-steam' }],
+        triggerType: 'auto',
+      },
+    });
+
+    // La clave sync:progress debe borrarse (del desde finally de syncPlatform + safety-net de batch)
+    expect(mockRedis.del).toHaveBeenCalledWith('sync:progress:user-1:STEAM');
+  });
+
+  it('batch con lock ocupado abandona sin reencolar', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    // Lock no disponible
+    mockRedis.set.mockResolvedValueOnce(null);
+
+    const result = await processFn({
+      id: 'batch-locked',
+      name: 'sync-bg-user-1',
+      opts: {},
+      data: {
+        userId: 'user-1',
+        platforms: [{ platform: 'STEAM', platformAccountId: 'acc-steam' }],
+        triggerType: 'auto',
+      },
+    });
+
+    // Batch no reencola — simplemente abandona
+    expect((syncQueue.add as jest.Mock)).not.toHaveBeenCalled();
+    expect((result as { achievementsSynced: number }).achievementsSynced).toBe(0);
+  });
+});
+
+// ─── T102: TTL 900s en ambas escrituras setex ────────────────────────────────
+
+describe('syncPlatform — T102: TTL de sync:progress = 900s (no 7200s)', () => {
+  type JobLike = { data: { userId: string; platformAccountId: string; platform: string; triggerType: string } };
+  type ProcessFn = (job: JobLike) => Promise<unknown>;
+
+  it('usa TTL=900 en el setex inicial (isRunning=true al arrancar)', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    mockRedis.set.mockResolvedValueOnce('OK');
+    mockPrisma.userAchievement.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    (mockSteamAdapter.syncUser as jest.Mock).mockResolvedValueOnce({
+      gamesUpdated: 0, achievementsSynced: 0, syncedAt: new Date().toISOString(),
+    });
+    mockPrisma.user.findUnique.mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' });
+    mockPrisma.platformAccount.findMany.mockResolvedValueOnce([]);
+
+    await processFn({ data: { userId: 'user-1', platformAccountId: 'acc-1', platform: 'STEAM', triggerType: 'manual' } });
+
+    // El primer setex (isRunning: true, processed: 0) debe usar TTL 900
+    expect(mockRedis.setex).toHaveBeenCalledWith(
+      'sync:progress:user-1:STEAM',
+      900,
+      expect.stringContaining('"isRunning":true'),
+    );
+  });
+
+  it('NO usa TTL=7200 en ninguna escritura setex de sync:progress', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    mockRedis.set.mockResolvedValueOnce('OK');
+    mockPrisma.userAchievement.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    (mockSteamAdapter.syncUser as jest.Mock).mockResolvedValueOnce({
+      gamesUpdated: 0, achievementsSynced: 0, syncedAt: new Date().toISOString(),
+    });
+    mockPrisma.user.findUnique.mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' });
+    mockPrisma.platformAccount.findMany.mockResolvedValueOnce([]);
+
+    await processFn({ data: { userId: 'user-1', platformAccountId: 'acc-1', platform: 'STEAM', triggerType: 'manual' } });
+
+    const setexCalls = (mockRedis.setex as jest.Mock).mock.calls;
+    const staleSetex = setexCalls.filter(
+      (call) => typeof call[0] === 'string' && call[0].startsWith('sync:progress') && call[1] === 7200,
+    );
+    expect(staleSetex).toHaveLength(0);
+  });
+});
+
+// ─── T103: logger.info al inicio y fin de cada plataforma ───────────────────
+
+describe('syncPlatform — T103: logs de inicio y fin por plataforma', () => {
+  const mockLogger = logger as jest.Mocked<typeof logger>;
+
+  type JobLike = { data: { userId: string; platformAccountId: string; platform: string; triggerType: string } };
+  type ProcessFn = (job: JobLike) => Promise<unknown>;
+
+  it('emite logger.info con "Sync iniciado" al arrancar la plataforma', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    mockRedis.set.mockResolvedValueOnce('OK');
+    mockPrisma.userAchievement.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    (mockSteamAdapter.syncUser as jest.Mock).mockResolvedValueOnce({
+      gamesUpdated: 2, achievementsSynced: 5, syncedAt: new Date().toISOString(),
+    });
+    mockPrisma.user.findUnique.mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' });
+    mockPrisma.platformAccount.findMany.mockResolvedValueOnce([]);
+
+    await processFn({ data: { userId: 'user-1', platformAccountId: 'acc-1', platform: 'STEAM', triggerType: 'manual' } });
+
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-1', platform: 'STEAM' }),
+      '[SyncWorker] Sync iniciado',
+    );
+  });
+
+  it('emite logger.info con "Sync completado" y métricas al terminar con éxito', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    mockRedis.set.mockResolvedValueOnce('OK');
+    mockPrisma.userAchievement.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    (mockSteamAdapter.syncUser as jest.Mock).mockResolvedValueOnce({
+      gamesUpdated: 3, achievementsSynced: 12, syncedAt: new Date().toISOString(),
+    });
+    mockPrisma.user.findUnique.mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' });
+    mockPrisma.platformAccount.findMany.mockResolvedValueOnce([]);
+
+    await processFn({ data: { userId: 'user-1', platformAccountId: 'acc-1', platform: 'STEAM', triggerType: 'manual' } });
+
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        platform: 'STEAM',
+        gamesUpdated: 3,
+        achievementsSynced: 12,
+      }),
+      '[SyncWorker] Sync completado',
+    );
+  });
+
+  it('NO emite "Sync completado" cuando el adapter falla', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    mockRedis.set.mockResolvedValueOnce('OK');
+    mockPrisma.userAchievement.findMany.mockResolvedValueOnce([]);
+    (mockSteamAdapter.syncUser as jest.Mock).mockRejectedValueOnce(new Error('Timeout'));
+
+    await expect(
+      processFn({ data: { userId: 'user-1', platformAccountId: 'acc-1', platform: 'STEAM', triggerType: 'manual' } }),
+    ).rejects.toThrow();
+
+    const completadoCalls = (mockLogger.info as jest.Mock).mock.calls.filter(
+      (call) => call[1] === '[SyncWorker] Sync completado',
+    );
+    expect(completadoCalls).toHaveLength(0);
+  });
+});
+
+// ─── T104: del de syncProgressKey en finally — cubre código post-adapter ─────
+
+describe('syncPlatform — T104: syncProgressKey borrada en finally en todos los caminos', () => {
+  type JobLike = { data: { userId: string; platformAccountId: string; platform: string; triggerType: string } };
+  type ProcessFn = (job: JobLike) => Promise<unknown>;
+
+  it('borra syncProgressKey cuando el adapter falla (error path)', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    mockRedis.set.mockResolvedValueOnce('OK');
+    mockPrisma.userAchievement.findMany.mockResolvedValueOnce([]);
+    (mockSteamAdapter.syncUser as jest.Mock).mockRejectedValueOnce(new Error('API down'));
+
+    await expect(
+      processFn({ data: { userId: 'user-1', platformAccountId: 'acc-1', platform: 'STEAM', triggerType: 'manual' } }),
+    ).rejects.toThrow();
+
+    expect(mockRedis.del).toHaveBeenCalledWith('sync:progress:user-1:STEAM');
+  });
+
+  it('borra syncProgressKey cuando falla código post-adapter (prisma.platformAccount.upsert)', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    mockRedis.set.mockResolvedValueOnce('OK');
+    mockPrisma.userAchievement.findMany.mockResolvedValueOnce([]);
+
+    // Adapter tiene éxito
+    (mockSteamAdapter.syncUser as jest.Mock).mockResolvedValueOnce({
+      gamesUpdated: 1, achievementsSynced: 5, syncedAt: new Date().toISOString(),
+    });
+    // Pero el upsert post-adapter falla
+    mockPrisma.platformAccount.upsert.mockRejectedValueOnce(new Error('DB timeout'));
+
+    await expect(
+      processFn({ data: { userId: 'user-1', platformAccountId: 'acc-1', platform: 'STEAM', triggerType: 'manual' } }),
+    ).rejects.toThrow('DB timeout');
+
+    // T104: el finally de syncPlatform garantiza el borrado aunque el adapter haya tenido éxito
+    expect(mockRedis.del).toHaveBeenCalledWith('sync:progress:user-1:STEAM');
+  });
+
+  it('borra syncProgressKey en el camino exitoso (success path)', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    mockRedis.set.mockResolvedValueOnce('OK');
+    mockPrisma.userAchievement.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    (mockSteamAdapter.syncUser as jest.Mock).mockResolvedValueOnce({
+      gamesUpdated: 0, achievementsSynced: 0, syncedAt: new Date().toISOString(),
+    });
+    mockPrisma.user.findUnique.mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' });
+    mockPrisma.platformAccount.findMany.mockResolvedValueOnce([]);
+
+    await processFn({ data: { userId: 'user-1', platformAccountId: 'acc-1', platform: 'STEAM', triggerType: 'manual' } });
+
+    expect(mockRedis.del).toHaveBeenCalledWith('sync:progress:user-1:STEAM');
   });
 });

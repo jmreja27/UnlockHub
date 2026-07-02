@@ -1,4 +1,5 @@
 import { Worker } from 'bullmq';
+import type { Job } from 'bullmq';
 import type { Platform } from '@unlockhub/types';
 
 import { AppError } from '../middleware/errorHandler';
@@ -16,7 +17,7 @@ import { createNotification } from '../services/inapp-notification.service';
 import { addXp, invalidateUserPublicCache } from '../services/user.service';
 import { upsertUserScore } from '../services/ranking.service';
 
-import type { SyncJobData, SyncJobResult } from './sync.queue';
+import type { AnySyncJobData, SyncBatchJobData, SyncJobData, SyncJobResult } from './sync.queue';
 import { syncQueue } from './sync.queue';
 
 const ADAPTERS: Record<string, PlatformAdapter> = {
@@ -32,6 +33,15 @@ const PLATFORM_LABELS: Record<string, string> = {
   PSN: 'PlayStation',
   XBOX: 'Xbox',
 };
+
+const LOCK_TTL_SECONDS = 600;
+/** Delay entre reintentos cuando el lock está ocupado (job single-platform). */
+const LOCK_RETRY_DELAY_MS = 30_000;
+/** Número máximo de reintentos de adquisición de lock antes de abandonar el job. */
+const LOCK_MAX_RETRIES = 3;
+/** TTL de la clave sync:progress en Redis. Se renueva en cada callback onBatch (T102).
+ *  15 min cubre el peor caso real por plataforma (PSN+Steam con tope A51 en serie). */
+const SYNC_PROGRESS_TTL_SECONDS = 900;
 
 function syncProgressKey(userId: string, platform: Platform): string {
   return `sync:progress:${userId}:${platform}`;
@@ -49,248 +59,345 @@ function getIOSafe() {
   }
 }
 
-export function startSyncWorker() {
-  const worker = new Worker<SyncJobData, SyncJobResult>(
-    'sync',
-    async (job) => {
-      const { userId, platformAccountId, platform } = job.data;
+function isBatchJob(data: AnySyncJobData): data is SyncBatchJobData {
+  return 'platforms' in data;
+}
 
-      // Lock por usuario — garantiza que solo un sync del mismo userId corra a la vez.
-      // Usuarios distintos siguen en paralelo (la concurrency global del worker no cambia).
-      // TTL de 10 min como failsafe si el proceso muere sin liberar el lock.
-      const lockKey = `sync:user-lock:${userId}`;
-      const LOCK_TTL_SECONDS = 600;
-      const acquired = await redis.set(lockKey, job.id ?? 'locked', 'EX', LOCK_TTL_SECONDS, 'NX');
+/**
+ * Sincroniza una única plataforma para un usuario.
+ * Emite sync:progress y sync:complete/sync:error vía Socket.io.
+ * Limpia la clave de progreso Redis en ambas rutas (éxito y error).
+ * Relanza el error para que el caller pueda decidir si continúa (batch) o falla (single).
+ */
+async function syncPlatform(
+  userId: string,
+  platformAccountId: string,
+  platform: Platform,
+): Promise<{ achievementsSynced: number; gamesUpdated: number }> {
+  const account = await prisma.platformAccount.findUnique({
+    where: { id: platformAccountId },
+  });
+  if (!account) throw new Error(`PlatformAccount ${platformAccountId} no encontrada`);
 
-      if (!acquired) {
-        // Otro sync de este usuario está activo — reencolar con delay y terminar este job.
-        await syncQueue.add(
-          job.name,
-          job.data,
-          { delay: 5000, priority: job.opts.priority },
-        );
-        logger.info({ userId, platform }, '[SyncWorker] Sync reencolado — usuario con sync activo');
-        return { achievementsSynced: 0, gamesUpdated: 0, syncedAt: new Date().toISOString() };
-      }
+  const adapter = ADAPTERS[platform as keyof typeof ADAPTERS];
+  if (!adapter) throw new Error(`Plataforma ${platform} no soportada`);
 
-      try {
-      const account = await prisma.platformAccount.findUnique({
-        where: { id: platformAccountId },
+  const prevEarnedIds = new Set(
+    (
+      await prisma.userAchievement.findMany({
+        where: { userId },
+        select: { achievementId: true },
+      })
+    ).map((a) => a.achievementId),
+  );
+
+  const startedAt = new Date().toISOString();
+  await redis.setex(
+    syncProgressKey(userId, platform),
+    SYNC_PROGRESS_TTL_SECONDS,
+    JSON.stringify({ isRunning: true, processed: 0, total: 0, percentComplete: 0, startedAt }),
+  );
+
+  const io = getIOSafe();
+  logger.info({ userId, platform }, '[SyncWorker] Sync iniciado');
+
+  const onBatch = async (progress: SyncBatchProgress): Promise<void> => {
+    const percentComplete =
+      progress.total > 0 ? Math.round((progress.processed / progress.total) * 100) : 0;
+    await redis.setex(
+      syncProgressKey(userId, platform),
+      SYNC_PROGRESS_TTL_SECONDS,
+      JSON.stringify({
+        isRunning: true,
+        processed: progress.processed,
+        total: progress.total,
+        percentComplete,
+        startedAt,
+      }),
+    );
+    if (io) {
+      io.to(userRoom(userId)).emit('sync:progress', {
+        platform,
+        processed: progress.processed,
+        total: progress.total,
+        newGamesCount: progress.newGamesCount,
+        newAchievementsCount: progress.newAchievementsCount,
+        percentComplete,
       });
-      if (!account) throw new Error(`PlatformAccount ${platformAccountId} no encontrada`);
+    }
+  };
 
-      const adapter = ADAPTERS[platform as keyof typeof ADAPTERS];
-      if (!adapter) throw new Error(`Plataforma ${platform} no soportada`);
-
-      const prevEarnedIds = new Set(
-        (
-          await prisma.userAchievement.findMany({
-            where: { userId },
-            select: { achievementId: true },
-          })
-        ).map((a) => a.achievementId),
-      );
-
-      const startedAt = new Date().toISOString();
-      await redis.setex(
-        syncProgressKey(userId, platform as Platform),
-        7200,
-        JSON.stringify({ isRunning: true, processed: 0, total: 0, percentComplete: 0, startedAt }),
-      );
-
-      const io = getIOSafe();
-
-      const onBatch = async (progress: SyncBatchProgress): Promise<void> => {
-        const percentComplete =
-          progress.total > 0 ? Math.round((progress.processed / progress.total) * 100) : 0;
-        await redis.setex(
-          syncProgressKey(userId, platform as Platform),
-          7200,
-          JSON.stringify({
-            isRunning: true,
-            processed: progress.processed,
-            total: progress.total,
-            percentComplete,
-            startedAt,
-          }),
-        );
-        if (io) {
-          io.to(userRoom(userId)).emit('sync:progress', {
-            platform,
-            processed: progress.processed,
-            total: progress.total,
-            newGamesCount: progress.newGamesCount,
-            newAchievementsCount: progress.newAchievementsCount,
-            percentComplete,
-          });
-        }
-      };
-
-      let result: Awaited<ReturnType<typeof adapter.syncUser>>;
-      try {
-        if (adapter.syncUserBatched) {
-          result = await adapter.syncUserBatched(account, onBatch);
-        } else {
-          result = await adapter.syncUser(account);
-        }
-      } catch (err) {
-        if (err instanceof AppError && err.code === 'PSN_REFRESH_TOKEN_EXPIRED') {
-          await prisma.platformAccount.upsert({
-            where: { userId_platform: { userId: account.userId, platform: account.platform } },
-            update: { requiresReauth: true },
-            create: {
-              userId: account.userId,
-              platform: account.platform,
-              externalId: account.externalId,
-              username: account.username,
-              encryptedToken: account.encryptedToken,
-              requiresReauth: true,
-            },
-          });
-          await createNotification({
-            userId,
-            type: 'PLATFORM_REAUTH_REQUIRED',
-            title: 'Reconecta tu cuenta PSN',
-            body: 'Tu sesión de PlayStation ha expirado. Vuelve a vincular tu cuenta para continuar sincronizando tus trofeos.',
-          });
-          logger.warn({ userId, platform }, '[SyncWorker] Refresh token PSN expirado — requiresReauth marcado');
-        } else if (err instanceof AppError && err.code === 'PSN_PROFILE_PRIVATE') {
-          await prisma.platformAccount.upsert({
-            where: { userId_platform: { userId: account.userId, platform: account.platform } },
-            update: { psnProfilePrivate: true },
-            create: {
-              userId: account.userId,
-              platform: account.platform,
-              externalId: account.externalId,
-              username: account.username,
-              encryptedToken: account.encryptedToken,
-              psnProfilePrivate: true,
-            },
-          });
-          logger.warn({ userId, platform }, '[SyncWorker] Perfil PSN privado — psnProfilePrivate marcado');
-        }
-        await redis.del(syncProgressKey(userId, platform as Platform));
-        if (io) {
-          io.to(userRoom(userId)).emit('sync:error', {
-            platform,
-            error: err instanceof AppError ? err.code : 'SYNC_FAILED',
-            processedBeforeError: 0,
-          });
-        }
-        throw err;
-      }
-
-      await prisma.platformAccount.upsert({
-        where: { userId_platform: { userId: account.userId, platform: account.platform } },
-        update: { lastSyncedAt: new Date(), requiresReauth: false, psnProfilePrivate: false },
-        create: {
-          userId: account.userId,
-          platform: account.platform,
-          externalId: account.externalId,
-          username: account.username,
-          encryptedToken: account.encryptedToken,
-          lastSyncedAt: new Date(),
-        },
-      });
-
-      await prisma.user.update({
-        where: { id: userId },
-        data: { lastSyncAt: new Date() },
-      });
-
-      const newAchievements = await prisma.userAchievement.findMany({
-        where: {
-          userId,
-          achievementId: { notIn: [...prevEarnedIds] },
-        },
-        include: { achievement: { select: { title: true, normalizedPoints: true } } },
-        orderBy: { unlockedAt: 'desc' },
-      });
-
-      const xpEarned = newAchievements.reduce((sum, ua) => sum + ua.achievement.normalizedPoints, 0);
-
-      for (const ua of newAchievements.slice(0, 3)) {
-        await sendPush(
-          userId,
-          '🏆 ¡Nuevo logro desbloqueado!',
-          `${ua.achievement.title} · ${PLATFORM_LABELS[platform] ?? platform} · +${ua.achievement.normalizedPoints} XP`,
-          { achievementId: ua.achievementId, platform },
-        ).catch((err: unknown) => {
-          logger.warn({ err: (err as Error).message }, '[SyncWorker] Push notification fallida');
-        });
-      }
-
-      // Acumular XP de los nuevos logros y actualizar BD + rankings Redis
-      if (xpEarned > 0) {
-        await addXp(userId, xpEarned, 'ACHIEVEMENT');
+  // T104: finally garantiza que la clave sync:progress se borra en TODOS los caminos de salida
+  // (éxito, error del adapter, error en código post-adapter, throw inesperado).
+  try {
+    let result: Awaited<ReturnType<typeof adapter.syncUser>>;
+    try {
+      if (adapter.syncUserBatched) {
+        result = await adapter.syncUserBatched(account, onBatch);
       } else {
-        // Sin nuevos logros — garantizar que el usuario sigue en todos los sorted sets de plataforma.
-        // Cubre usuarios que vincularon plataformas antes de que linkPlatform llamara a upsertUserScore
-        // y que ya no generan XP nuevo en syncs posteriores.
-        const dbUser = await prisma.user.findUnique({
-          where: { id: userId },
-          select: { xp: true, profileVisibility: true },
-        });
-        if (dbUser) {
-          const platformsData = await prisma.platformAccount.findMany({
-            where: { userId },
-            select: { platform: true },
-          });
-          await upsertUserScore(
-            userId,
-            dbUser.xp,
-            platformsData.map((p) => p.platform),
-            dbUser.profileVisibility,
-          );
-        }
+        result = await adapter.syncUser(account);
       }
-
-      // Invalidar caché pública del usuario — sus juegos/logros acaban de actualizarse
-      await invalidateUserPublicCache(userId).catch((err: unknown) => {
-        logger.warn({ err: (err as Error).message }, '[SyncWorker] Error al invalidar caché pública');
-      });
-
-      await redis.del(syncProgressKey(userId, platform as Platform));
+    } catch (err) {
+      if (err instanceof AppError && err.code === 'PSN_REFRESH_TOKEN_EXPIRED') {
+        await prisma.platformAccount.upsert({
+          where: { userId_platform: { userId: account.userId, platform: account.platform } },
+          update: { requiresReauth: true },
+          create: {
+            userId: account.userId,
+            platform: account.platform,
+            externalId: account.externalId,
+            username: account.username,
+            encryptedToken: account.encryptedToken,
+            requiresReauth: true,
+          },
+        });
+        await createNotification({
+          userId,
+          type: 'PLATFORM_REAUTH_REQUIRED',
+          title: 'Reconecta tu cuenta PSN',
+          body: 'Tu sesión de PlayStation ha expirado. Vuelve a vincular tu cuenta para continuar sincronizando tus trofeos.',
+        });
+        logger.warn({ userId, platform }, '[SyncWorker] Refresh token PSN expirado — requiresReauth marcado');
+      } else if (err instanceof AppError && err.code === 'PSN_PROFILE_PRIVATE') {
+        await prisma.platformAccount.upsert({
+          where: { userId_platform: { userId: account.userId, platform: account.platform } },
+          update: { psnProfilePrivate: true },
+          create: {
+            userId: account.userId,
+            platform: account.platform,
+            externalId: account.externalId,
+            username: account.username,
+            encryptedToken: account.encryptedToken,
+            psnProfilePrivate: true,
+          },
+        });
+        logger.warn({ userId, platform }, '[SyncWorker] Perfil PSN privado — psnProfilePrivate marcado');
+      }
       if (io) {
-        io.to(userRoom(userId)).emit('sync:complete', {
+        io.to(userRoom(userId)).emit('sync:error', {
           platform,
-          totalGames: result.gamesUpdated,
-          newAchievements: result.achievementsSynced,
-          xpEarned,
+          error: err instanceof AppError ? err.code : 'SYNC_FAILED',
+          processedBeforeError: 0,
         });
       }
+      throw err;
+    }
 
-      return {
-        achievementsSynced: result.achievementsSynced,
-        gamesUpdated: result.gamesUpdated,
-        syncedAt: result.syncedAt,
-      };
-      } finally {
-        // Liberar el lock del usuario SIEMPRE — incluso si el sync falla.
-        // Sin este finally, un crash dejaría al usuario bloqueado hasta que el TTL expire.
-        await redis.del(lockKey);
-        // Safety net: si el proceso murió antes de que el path normal o el catch borrara
-        // la clave de progreso, la eliminamos aquí para no dejarla 2 horas en Redis.
-        await redis.del(syncProgressKey(userId, platform as Platform)).catch(() => undefined);
+    await prisma.platformAccount.upsert({
+      where: { userId_platform: { userId: account.userId, platform: account.platform } },
+      update: { lastSyncedAt: new Date(), requiresReauth: false, psnProfilePrivate: false },
+      create: {
+        userId: account.userId,
+        platform: account.platform,
+        externalId: account.externalId,
+        username: account.username,
+        encryptedToken: account.encryptedToken,
+        lastSyncedAt: new Date(),
+      },
+    });
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { lastSyncAt: new Date() },
+    });
+
+    const newAchievements = await prisma.userAchievement.findMany({
+      where: {
+        userId,
+        achievementId: { notIn: [...prevEarnedIds] },
+      },
+      include: { achievement: { select: { title: true, normalizedPoints: true } } },
+      orderBy: { unlockedAt: 'desc' },
+    });
+
+    const xpEarned = newAchievements.reduce((sum, ua) => sum + ua.achievement.normalizedPoints, 0);
+
+    for (const ua of newAchievements.slice(0, 3)) {
+      await sendPush(
+        userId,
+        '🏆 ¡Nuevo logro desbloqueado!',
+        `${ua.achievement.title} · ${PLATFORM_LABELS[platform] ?? platform} · +${ua.achievement.normalizedPoints} XP`,
+        { achievementId: ua.achievementId, platform },
+      ).catch((err: unknown) => {
+        logger.warn({ err: (err as Error).message }, '[SyncWorker] Push notification fallida');
+      });
+    }
+
+    if (xpEarned > 0) {
+      await addXp(userId, xpEarned, 'ACHIEVEMENT');
+    } else {
+      const dbUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { xp: true, profileVisibility: true },
+      });
+      if (dbUser) {
+        const platformsData = await prisma.platformAccount.findMany({
+          where: { userId },
+          select: { platform: true },
+        });
+        await upsertUserScore(
+          userId,
+          dbUser.xp,
+          platformsData.map((p) => p.platform),
+          dbUser.profileVisibility,
+        );
+      }
+    }
+
+    await invalidateUserPublicCache(userId).catch((err: unknown) => {
+      logger.warn({ err: (err as Error).message }, '[SyncWorker] Error al invalidar caché pública');
+    });
+
+    if (io) {
+      io.to(userRoom(userId)).emit('sync:complete', {
+        platform,
+        totalGames: result.gamesUpdated,
+        newAchievements: result.achievementsSynced,
+        xpEarned,
+      });
+    }
+
+    logger.info(
+      { userId, platform, gamesUpdated: result.gamesUpdated, achievementsSynced: result.achievementsSynced },
+      '[SyncWorker] Sync completado',
+    );
+
+    return { achievementsSynced: result.achievementsSynced, gamesUpdated: result.gamesUpdated };
+  } finally {
+    await redis.del(syncProgressKey(userId, platform));
+  }
+}
+
+export function startSyncWorker() {
+  const worker = new Worker<AnySyncJobData, SyncJobResult>(
+    'sync',
+    async (job: Job<AnySyncJobData, SyncJobResult>) => {
+      const data = job.data;
+      const { userId } = data;
+      const lockKey = `sync:user-lock:${userId}`;
+
+      if (isBatchJob(data)) {
+        // ── Branch batch (background-sync): un lock, plataformas en serie ──────
+        const acquired = await redis.set(lockKey, job.id ?? 'locked', 'EX', LOCK_TTL_SECONDS, 'NX');
+
+        if (!acquired) {
+          // Batch job con lock ocupado: abandonar — el scheduler nocturno reintentará mañana.
+          // No se reencola para no acumular jobs batch huérfanos.
+          logger.warn({ userId }, '[SyncWorker] Batch job omitido — usuario con sync activo');
+          return { achievementsSynced: 0, gamesUpdated: 0, syncedAt: new Date().toISOString() };
+        }
+
+        let totalAchievements = 0;
+        let totalGames = 0;
+
+        try {
+          for (const { platform, platformAccountId } of data.platforms) {
+            // Extender el lock de BullMQ entre plataformas para evitar que un batch largo
+            // (N plataformas en serie) supere el lockDuration y sea marcado como stalled.
+            // El try/catch garantiza que un fallo de extendLock no interrumpa el batch.
+            try {
+              await job.extendLock(job.token!, LOCK_TTL_SECONDS * 1000);
+            } catch (extendErr: unknown) {
+              logger.warn(
+                { err: (extendErr as Error).message },
+                '[SyncWorker] extendLock fallido — continuando',
+              );
+            }
+
+            try {
+              const result = await syncPlatform(userId, platformAccountId, platform as Platform);
+              totalAchievements += result.achievementsSynced;
+              totalGames += result.gamesUpdated;
+            } catch (platformErr: unknown) {
+              // Fallo independiente por plataforma: log + continuar con la siguiente.
+              // El job batch NO falla aunque una plataforma falle.
+              logger.warn(
+                { userId, platform, err: (platformErr as Error).message },
+                '[SyncWorker] Error en plataforma del batch — continuando con la siguiente',
+              );
+            }
+          }
+        } finally {
+          await redis.del(lockKey);
+          // Safety net: limpiar claves de progreso huérfanas en caso de crash parcial
+          for (const { platform } of data.platforms) {
+            await redis.del(syncProgressKey(userId, platform as Platform)).catch(() => undefined);
+          }
+        }
+
+        return {
+          achievementsSynced: totalAchievements,
+          gamesUpdated: totalGames,
+          syncedAt: new Date().toISOString(),
+        };
+      } else {
+        // ── Branch single-platform (manual, initial, auto-repeat) ────────────
+        const { platformAccountId, platform, lockRetryCount = 0 } = data as SyncJobData;
+        const acquired = await redis.set(lockKey, job.id ?? 'locked', 'EX', LOCK_TTL_SECONDS, 'NX');
+
+        if (!acquired) {
+          if (lockRetryCount >= LOCK_MAX_RETRIES) {
+            // Techo de reintentos alcanzado: abandonar limpiamente sin más reencolados.
+            logger.warn(
+              { userId, platform, lockRetryCount },
+              '[SyncWorker] Sync abandonado — lock no disponible tras máximo de reintentos',
+            );
+            return { achievementsSynced: 0, gamesUpdated: 0, syncedAt: new Date().toISOString() };
+          }
+
+          // Reencolar con delay y contador incrementado (controlado — no bucle infinito)
+          await syncQueue.add(
+            job.name,
+            { ...(data as SyncJobData), lockRetryCount: lockRetryCount + 1 },
+            { delay: LOCK_RETRY_DELAY_MS, priority: job.opts.priority },
+          );
+          logger.info(
+            { userId, platform, attempt: lockRetryCount + 1, maxAttempts: LOCK_MAX_RETRIES },
+            '[SyncWorker] Sync reencolado — lock ocupado',
+          );
+          return { achievementsSynced: 0, gamesUpdated: 0, syncedAt: new Date().toISOString() };
+        }
+
+        try {
+          const result = await syncPlatform(userId, platformAccountId, platform);
+          return {
+            achievementsSynced: result.achievementsSynced,
+            gamesUpdated: result.gamesUpdated,
+            syncedAt: new Date().toISOString(),
+          };
+        } finally {
+          await redis.del(lockKey);
+          await redis.del(syncProgressKey(userId, platform)).catch(() => undefined);
+        }
       }
     },
     {
       connection: createWorkerConnection(),
       concurrency: 5,
-      // 300 juegos PSN / 10 por lote = 30 lotes; cada lote incluye llamadas API → fácilmente > 30s.
-      // lockDuration por defecto = 30s → job marcado como stalled antes de terminar.
-      // 5 min es suficiente para el peor caso; stalledInterval en 30s para detección rápida.
+      // 300 juegos PSN / 10 por lote × N plataformas en serie → puede superar 5 min.
+      // BullMQ renueva el lock automáticamente cada lockDuration/2 ms internamente;
+      // además extendLock se llama explícitamente entre plataformas en el branch batch.
       lockDuration: 300_000,
       stalledInterval: 30_000,
     },
   );
 
   worker.on('completed', (job) => {
-    logger.info({ platform: job.data.platform, userId: job.data.userId }, 'Sync completado');
+    const platform = 'platform' in job.data ? job.data.platform : 'batch';
+    logger.info({ platform, userId: job.data.userId }, 'Sync completado');
   });
 
   worker.on('failed', (job, err) => {
-    logger.error({ platform: job?.data.platform, userId: job?.data.userId, err: err.message }, 'Sync fallido');
+    const platform = job?.data && 'platform' in job.data ? job.data.platform : 'batch';
+    logger.error(
+      {
+        platform,
+        userId: job?.data.userId,
+        err: err.message,
+        details: err instanceof AppError ? err.details : undefined,
+      },
+      'Sync fallido',
+    );
   });
 
   return worker;

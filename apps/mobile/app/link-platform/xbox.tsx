@@ -7,7 +7,6 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -21,6 +20,7 @@ import type { PlatformAccount } from '@unlockhub/types';
 
 import { queryKeys } from '../../lib/queryKeys';
 import { api, ApiRequestError } from '../../lib/api';
+import { useSafeBack } from '../../hooks/useSafeBack';
 
 // Requerido para completar el flujo OAuth2 en mobile correctamente
 WebBrowser.maybeCompleteAuthSession();
@@ -36,6 +36,7 @@ const XBOX_CLIENT_ID = process.env['EXPO_PUBLIC_XBOX_CLIENT_ID'] ?? '';
 export default function LinkXboxScreen() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const safeBack = useSafeBack();
   const [linkError, setLinkError] = useState<string | null>(null);
 
   const redirectUri = makeRedirectUri({ scheme: 'unlockhub', path: 'link-platform/xbox' });
@@ -58,7 +59,7 @@ export default function LinkXboxScreen() {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       void queryClient.invalidateQueries({ queryKey: queryKeys.linkedPlatforms() });
       Alert.alert(t('link_platform.xbox.success'), '', [
-        { text: 'OK', onPress: () => router.back() },
+        { text: 'OK', onPress: safeBack },
       ]);
     },
     onError: (err) => {
@@ -117,7 +118,7 @@ export default function LinkXboxScreen() {
       >
         {/* Cabecera */}
         <Pressable
-          onPress={() => router.back()}
+          onPress={safeBack}
           accessibilityRole="button"
           accessibilityLabel={t('common.back')}
           className="mb-6 self-start"

@@ -21,7 +21,7 @@ jest.mock('expo-router', () => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   const ReactNative = jest.requireActual<typeof import('react-native')>('react-native');
   return {
-    router: { push: jest.fn(), replace: jest.fn(), back: jest.fn(), navigate: jest.fn() },
+    router: { push: jest.fn(), replace: jest.fn(), back: jest.fn(), navigate: jest.fn(), canGoBack: jest.fn().mockReturnValue(true) },
     Link: ReactNative.Pressable,
     useLocalSearchParams: jest.fn(() => ({})),
     useRouter: jest.fn(() => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() })),
@@ -223,6 +223,25 @@ jest.mock('react-native-purchases', () => ({
   PURCHASES_ERROR_CODE: { PURCHASE_CANCELLED_ERROR: 'PURCHASE_CANCELLED_ERROR' },
   LOG_LEVEL: { DEBUG: 'DEBUG', ERROR: 'ERROR' },
 }));
+
+// @react-native-community/datetimepicker — módulo nativo; el mock renderiza un Pressable que
+// dispara onChange con 1995-06-15 al pulsarlo, permitiendo simular selección de fecha en tests.
+jest.mock('@react-native-community/datetimepicker', () => {
+  const React = jest.requireActual<typeof import('react')>('react');
+  const { Pressable } = jest.requireActual<typeof import('react-native')>('react-native');
+  return {
+    __esModule: true,
+    default: ({ onChange }: { onChange: (event: Record<string, unknown>, date?: Date) => void }) =>
+      React.createElement(Pressable, {
+        testID: 'mock-date-time-picker',
+        onPress: () =>
+          onChange(
+            { type: 'set', nativeEvent: { timestamp: new Date(1995, 5, 15).getTime() } },
+            new Date(1995, 5, 15),
+          ),
+      }),
+  };
+});
 
 // @react-native-async-storage/async-storage — módulo nativo, requiere mock en tests
 jest.mock('@react-native-async-storage/async-storage', () => ({

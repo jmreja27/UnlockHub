@@ -456,6 +456,47 @@ describe('LibraryScreen', () => {
     expect(getByTestId('sort-loading-indicator')).toBeTruthy();
   });
 
+  // ── T107: guard de página vacía en fetchAllRemainingPages ─────────────────────
+  // Sin el guard, si el backend reporta hasNextPage=true pero devuelve data:[],
+  // el bucle while es infinito → isFetchingNextPage queda true → spinner colgado.
+
+  it('T107: fetchAllRemainingPages para el bucle cuando la última página devuelve data vacía aunque hasNextPage=true', async () => {
+    // Simula inconsistencia server-side: total no se actualizó pero la página viene vacía
+    // (race condition entre sync que añadió juegos y la query de paginación)
+    const mockFetchNextPage = jest.fn().mockResolvedValue({
+      hasNextPage: true,
+      data: {
+        pages: [
+          { data: sampleGames, total: 50, page: 1, limit: 20, totalEarnedAchievements: 0, totalAvailableAchievements: 0, totalGames: 2, totalCompletedGames: 0 },
+          { data: [], total: 50, page: 2, limit: 20, totalEarnedAchievements: 0, totalAvailableAchievements: 0, totalGames: 2, totalCompletedGames: 0 },
+        ],
+      },
+    });
+
+    mockUseMyGames.mockReturnValue({
+      ...baseMyGamesResult,
+      allGames: sampleGames,
+      isLoading: false,
+      hasNextPage: true,
+      fetchNextPage: mockFetchNextPage,
+    });
+
+    renderWithClient(<LibraryScreen />);
+
+    await waitFor(() => {
+      expect(mockFetchNextPage).toHaveBeenCalled();
+    });
+
+    // Dar tiempo para que cualquier iteración adicional del bucle se ejecute antes de verificar
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+
+    // El guard T107 detecta data:[] y hace break → exactamente 1 llamada total.
+    // Sin el guard, el mock siempre devuelve hasNextPage:true → bucle infinito → N llamadas.
+    expect(mockFetchNextPage).toHaveBeenCalledTimes(1);
+  });
+
   // ── BUG 2: empty state basado en anyPlatformLinked ────────────────────────────
 
   it('BUG-2: muestra empty_title (vincular plataformas) cuando no hay juegos y no hay plataformas vinculadas', () => {

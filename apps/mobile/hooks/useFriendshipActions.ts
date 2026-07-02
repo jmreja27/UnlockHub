@@ -1,4 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Alert } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import type { FriendshipStatusResult } from '@unlockhub/types';
 
 import { api } from '../lib/api';
@@ -17,6 +19,7 @@ import { queryKeys } from '../lib/queryKeys';
  */
 export function useFriendshipActions(username: string) {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
   const statusKey = queryKeys.friendshipStatus(username);
 
   const invalidate = () => {
@@ -37,6 +40,7 @@ export function useFriendshipActions(username: string) {
     },
     onError: (_err, _vars, context) => {
       queryClient.setQueryData(statusKey, context?.previous);
+      Alert.alert(t('common.error_boundary_title'), t('friends.error_send_request'));
     },
     onSettled: invalidate,
   });
@@ -74,7 +78,16 @@ export function useFriendshipActions(username: string) {
 
   const reject = useMutation({
     mutationFn: (friendshipId: string) => api.delete(`/api/v1/friends/${friendshipId}/reject`),
-    onSuccess: invalidate,
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: statusKey });
+      const previous = queryClient.getQueryData<FriendshipStatusResult>(statusKey);
+      queryClient.setQueryData<FriendshipStatusResult>(statusKey, { status: 'none' });
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      queryClient.setQueryData(statusKey, context?.previous);
+    },
+    onSettled: invalidate,
   });
 
   return { sendRequest, cancelOrRemove, accept, reject };

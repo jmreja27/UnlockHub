@@ -10,7 +10,6 @@ import {
   Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
@@ -20,6 +19,7 @@ import type { PlatformAccount } from '@unlockhub/types';
 import { api, ApiRequestError } from '../../lib/api';
 import { queryKeys } from '../../lib/queryKeys';
 import { analytics } from '../../lib/analytics';
+import { useSafeBack } from '../../hooks/useSafeBack';
 
 const STEAM_PRIVACY_URL = 'https://store.steampowered.com/account/';
 
@@ -46,6 +46,13 @@ export default function LinkSteamScreen() {
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [guideExpanded, setGuideExpanded] = useState(false);
 
+  const navigate = useSafeBack();
+
+  function showError(msg: string) {
+    Alert.alert(msg);
+    setFieldError(msg);
+  }
+
   const linkMutation = useMutation({
     mutationFn: (data: { username: string }) =>
       api.post<PlatformAccount>('/api/v1/platforms/steam/link', data),
@@ -57,30 +64,30 @@ export default function LinkSteamScreen() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.syncSummaryBase() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.myGames() });
       Alert.alert(t('link_platform.steam.success'), '', [
-        { text: 'OK', onPress: () => router.back() },
+        { text: 'OK', onPress: navigate },
       ]);
     },
     onError: (err) => {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       if (err instanceof ApiRequestError) {
         if (err.statusCode === 404) {
-          setFieldError(t('link_platform.steam.error_not_found'));
+          showError(t('link_platform.steam.error_not_found'));
           return;
         }
         if (err.statusCode === 400 && err.apiError.code === 'STEAM_PROFILE_PRIVATE') {
-          setFieldError(t('link_platform.steam.error_profile_private'));
+          showError(t('link_platform.steam.error_profile_private'));
           return;
         }
         if (err.statusCode === 409) {
-          setFieldError(t('link_platform.steam.error_already_linked'));
+          showError(t('link_platform.steam.error_already_linked'));
           return;
         }
         if (err.statusCode === 503) {
-          setFieldError(t('link_platform.steam.error_service_unavailable'));
+          showError(t('link_platform.steam.error_service_unavailable'));
           return;
         }
       }
-      setFieldError(t('common.error_generic'));
+      showError(t('common.error_generic'));
     },
   });
 
@@ -102,7 +109,7 @@ export default function LinkSteamScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <Pressable
-          onPress={() => router.back()}
+          onPress={navigate}
           accessibilityRole="button"
           accessibilityLabel={t('common.back')}
           className="mb-6 self-start"

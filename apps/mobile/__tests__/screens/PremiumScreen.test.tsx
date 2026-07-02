@@ -14,7 +14,7 @@ jest.mock('../../lib/api');
 jest.mock('../../lib/featureFlags', () => ({
   FEATURES: { premium: true, pointsRedeem: true, advancedStats: true, challenges: false, wrapped: true, ugcGuides: true, notifications: true },
 }));
-jest.mock('expo-router', () => ({ router: { back: jest.fn(), push: jest.fn() } }));
+jest.mock('expo-router', () => ({ router: { back: jest.fn(), push: jest.fn(), replace: jest.fn(), canGoBack: jest.fn().mockReturnValue(true) } }));
 jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(),
   notificationAsync: jest.fn(),

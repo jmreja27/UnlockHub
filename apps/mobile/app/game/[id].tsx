@@ -15,13 +15,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { FlashList } from '@shopify/flash-list';
-import { useLocalSearchParams, router } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { Friendship } from '@unlockhub/types';
 
 import { useGameDetail, useMyGameAchievements } from '../../hooks/useSearch';
 import { useFriends } from '../../hooks/useFriends';
+import { useSafeBack } from '../../hooks/useSafeBack';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { api } from '../../lib/api';
 import { FEATURES } from '../../lib/featureFlags';
@@ -111,6 +112,12 @@ function AchievementRow({
         queryKey: queryKeys.achievementGuides(achievement.id),
       });
     },
+    onError: () => {
+      Alert.alert(t('common.error_boundary_title'), t('game.guides_upvote_error'));
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.achievementGuides(achievement.id),
+      });
+    },
   });
 
   const reportMutation = useMutation({
@@ -121,6 +128,9 @@ function AchievementRow({
         t('game.guides_report_confirm_title'),
         t('game.guides_report_confirmed'),
       );
+    },
+    onError: () => {
+      Alert.alert(t('common.error_boundary_title'), t('game.guides_report_error'));
     },
   });
 
@@ -272,6 +282,7 @@ export default function GameDetailScreen() {
   const { t } = useTranslation();
   const colors = useTheme();
   const queryClient = useQueryClient();
+  const safeBack = useSafeBack();
   const { user, isAuthenticated } = useSessionStore();
   const currentUserId = user?.id ?? '';
 
@@ -375,7 +386,7 @@ export default function GameDetailScreen() {
         {/* Header */}
         <View className="px-4 pt-2 pb-3">
           <Pressable
-            onPress={() => router.back()}
+            onPress={safeBack}
             className="self-start mb-4"
             accessibilityRole="button"
             accessibilityLabel={t('common.back')}

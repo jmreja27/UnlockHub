@@ -5,20 +5,19 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { User, PlatformAccount } from '@unlockhub/types';
 
 import ProfileScreen from '../../app/(tabs)/profile';
+import { formatNumber } from '../../lib/formatTimeAgo';
 import { useSessionStore } from '../../stores/sessionStore';
 import { useAuth } from '../../hooks/useAuth';
+import { useRewardedAd } from '../../hooks/useRewardedAd';
 
 jest.mock('../../stores/sessionStore');
 jest.mock('../../hooks/useAuth');
 jest.mock('../../hooks/useFeed', () => ({
   useFeed: () => ({ events: [], isLoading: false, isError: false, refetch: jest.fn() }),
 }));
-jest.mock('../../hooks/useRewardedAd', () => ({
-  useRewardedAd: () => ({
-    showForReward: jest.fn().mockResolvedValue(10),
-    isReady: true,
-  }),
-}));
+jest.mock('../../hooks/useRewardedAd');
+
+const mockUseRewardedAd = useRewardedAd as jest.Mock;
 jest.mock('expo-image-picker', () => ({
   requestMediaLibraryPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
   launchImageLibraryAsync: jest.fn().mockResolvedValue({ canceled: true }),
@@ -111,6 +110,10 @@ describe('ProfileScreen', () => {
       logout: jest.fn(),
       isLoggingOut: false,
     });
+    mockUseRewardedAd.mockReturnValue({
+      showForReward: jest.fn().mockResolvedValue(10),
+      isReady: true,
+    });
   });
 
   describe('estado no autenticado', () => {
@@ -159,9 +162,8 @@ describe('ProfileScreen', () => {
 
     it('muestra el XP del usuario', async () => {
       const { getByText } = renderProfile();
-      // toLocaleString() puede devolver '1,500' o '1500' segÃºn el entorno Node.js
-      const formattedXp = (1500).toLocaleString();
-      await waitFor(() => expect(getByText(formattedXp)).toBeTruthy());
+      // El mock global de useTranslation devuelve i18n.language = 'en'
+      await waitFor(() => expect(getByText(formatNumber(1500, 'en'))).toBeTruthy());
     });
 
     it('muestra la racha de dÃ­as', async () => {
@@ -368,6 +370,13 @@ describe('ProfileScreen', () => {
       const patchSpy = jest.fn(() => Promise.resolve({ profileVisibility: 'PRIVATE' }));
       api.patch = patchSpy;
 
+      // getState necesario para que onMutate y onSuccess lean y actualicen el store
+      const setUserMock = jest.fn();
+      (useSessionStore as unknown as { getState: jest.Mock }).getState = jest.fn().mockReturnValue({
+        user: { ...baseUser },
+        setUser: setUserMock,
+      });
+
       const apiGet = jest.fn(() => Promise.resolve([]));
       const { getByTestId } = renderProfile(apiGet);
       await waitFor(() => getByTestId('privacy-option-private'));
@@ -379,6 +388,75 @@ describe('ProfileScreen', () => {
           { profileVisibility: 'PRIVATE' },
         ),
       );
+    });
+
+    describe('BUG-016: privacyMutation — rollback al fallar la API', () => {
+      let setUserMock: jest.Mock;
+
+      beforeEach(() => {
+        setUserMock = jest.fn();
+        (useSessionStore as unknown as { getState: jest.Mock }).getState = jest.fn().mockReturnValue({
+          user: { ...baseUser, profileVisibility: 'PUBLIC' },
+          setUser: setUserMock,
+        });
+      });
+
+      it('(a) rollback: el store restaura la visibilidad anterior cuando la API falla', async () => {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { api } = require('../../lib/api') as { api: { get: jest.Mock; patch: jest.Mock } };
+        api.patch = jest.fn(() => Promise.reject(new Error('Network error')));
+        const { getByTestId } = renderProfile(jest.fn(() => Promise.resolve([])));
+
+        await waitFor(() => getByTestId('privacy-option-private'));
+        fireEvent.press(getByTestId('privacy-option-private'));
+
+        // Primera llamada: update optimista → PRIVATE
+        // Última llamada: rollback → PUBLIC (visibilidad real del backend)
+        await waitFor(() => {
+          expect(setUserMock.mock.calls.length).toBeGreaterThanOrEqual(2);
+          const lastArg = setUserMock.mock.calls[setUserMock.mock.calls.length - 1]?.[0] as {
+            profileVisibility?: string;
+          };
+          expect(lastArg?.profileVisibility).toBe('PUBLIC');
+        });
+      });
+
+      it('(b) mensaje de error: Alert informa al usuario de que el cambio no se aplicó', async () => {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { api } = require('../../lib/api') as { api: { get: jest.Mock; patch: jest.Mock } };
+        api.patch = jest.fn(() => Promise.reject(new Error('Network error')));
+        const alertSpy = jest.spyOn(Alert, 'alert');
+        const { getByTestId } = renderProfile(jest.fn(() => Promise.resolve([])));
+
+        await waitFor(() => getByTestId('privacy-option-private'));
+        fireEvent.press(getByTestId('privacy-option-private'));
+
+        await waitFor(() => {
+          const errorCall = alertSpy.mock.calls.find(
+            (c) => c[0] === 'profile.privacy_error_title',
+          );
+          expect(errorCall).toBeDefined();
+          expect(errorCall?.[1]).toBe('profile.privacy_error_message');
+        });
+      });
+
+      it('(c) resincronización: invalida queryKeys.me() para garantizar estado real del backend', async () => {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { api } = require('../../lib/api') as { api: { get: jest.Mock; patch: jest.Mock } };
+        api.patch = jest.fn(() => Promise.reject(new Error('Network error')));
+        const { client, getByTestId } = renderProfile(jest.fn(() => Promise.resolve([])));
+        const invalidateSpy = jest.spyOn(client, 'invalidateQueries');
+
+        await waitFor(() => getByTestId('privacy-option-private'));
+        fireEvent.press(getByTestId('privacy-option-private'));
+
+        await waitFor(() => {
+          const keys = invalidateSpy.mock.calls.map(
+            (call) => (call[0] as { queryKey?: string[] })?.queryKey?.[0],
+          );
+          expect(keys).toContain('me');
+        });
+      });
     });
 
     it('F36: muestra la sección de puntos cuando el usuario está autenticado', async () => {
@@ -443,6 +521,99 @@ describe('ProfileScreen', () => {
           (call) => (call[0] as { queryKey?: string[] })?.queryKey?.[0],
         );
         expect(keys).toContain('my-points-total');
+      });
+    });
+
+    it('F37: el botón está deshabilitado cuando !isReady (anuncio aún cargando)', async () => {
+      mockUseRewardedAd.mockReturnValue({
+        showForReward: jest.fn().mockResolvedValue(null),
+        isReady: false,
+      });
+      const { getByTestId } = renderProfile();
+      await waitFor(() => {
+        const btn = getByTestId('watch-ad-button');
+        expect(btn.props.accessibilityState?.disabled).toBe(true);
+      });
+    });
+
+    it('F37: cuando showForReward devuelve null (error API) muestra el Alert de error', async () => {
+      mockUseRewardedAd.mockReturnValue({
+        showForReward: jest.fn().mockResolvedValue(null),
+        isReady: true,
+      });
+      const alertSpy = jest.spyOn(Alert, 'alert');
+      const { getByTestId } = renderProfile();
+
+      await waitFor(() => getByTestId('watch-ad-button'));
+      fireEvent.press(getByTestId('watch-ad-button'));
+
+      await waitFor(() => {
+        expect(alertSpy).toHaveBeenCalledWith(
+          'common.error_boundary_title',
+          'profile.points_rewarded_error',
+        );
+      });
+    });
+
+    describe('BUG-015: unlinkMutation.onError', () => {
+      it('muestra Alert de error cuando api.delete falla al desvincular', async () => {
+        const apiGet = jest.fn(() => Promise.resolve([steamAccount]));
+        const apiDelete = jest.fn(() => Promise.reject(new Error('Network error')));
+        const { getByRole } = renderProfile(apiGet, apiDelete);
+        const alertSpy = jest.spyOn(Alert, 'alert');
+
+        // Primera llamada a Alert: diálogo de confirmación — auto-confirmar la acción destructiva
+        alertSpy.mockImplementationOnce((_title, _msg, buttons) => {
+          const confirmBtn = (buttons as { style?: string; onPress?: () => void }[])
+            ?.find((b) => b.style === 'destructive');
+          confirmBtn?.onPress?.();
+        });
+
+        await waitFor(() =>
+          expect(getByRole('button', { name: 'link_platform.steam.unlink' })).toBeTruthy(),
+        );
+        fireEvent.press(getByRole('button', { name: 'link_platform.steam.unlink' }));
+
+        await waitFor(() => expect(apiDelete).toHaveBeenCalled());
+
+        // Segunda llamada a Alert: feedback de error con título específico
+        await waitFor(() => {
+          const errorCall = alertSpy.mock.calls.find((c) => c[0] === 'profile.unlink_error_title');
+          expect(errorCall).toBeDefined();
+          expect(errorCall?.[1]).toBe('profile.unlink_error_message');
+        });
+      });
+    });
+
+    describe('BUG-017: deleteAccountMutation.onError', () => {
+      it('muestra Alert con título "cuenta NO eliminada" cuando api.delete falla', async () => {
+        // Sin cuentas de plataforma para que api.delete solo se use para deleteAccount
+        const apiDelete = jest.fn(() => Promise.reject(new Error('Server error')));
+        const { getByRole } = renderProfile(undefined, apiDelete);
+        const alertSpy = jest.spyOn(Alert, 'alert');
+
+        // Primera llamada a Alert: diálogo de confirmación — auto-confirmar
+        alertSpy.mockImplementationOnce((_title, _msg, buttons) => {
+          const confirmBtn = (buttons as { style?: string; onPress?: () => void }[])
+            ?.find((b) => b.style === 'destructive');
+          confirmBtn?.onPress?.();
+        });
+
+        await waitFor(() =>
+          expect(getByRole('button', { name: 'profile.delete_account' })).toBeTruthy(),
+        );
+        fireEvent.press(getByRole('button', { name: 'profile.delete_account' }));
+
+        await waitFor(() => expect(apiDelete).toHaveBeenCalled());
+
+        // El título inequívoco indica que la cuenta NO fue eliminada
+        await waitFor(() => {
+          const errorCall = alertSpy.mock.calls.find(
+            (c) => c[0] === 'profile.delete_account_error_title',
+          );
+          expect(errorCall).toBeDefined();
+          expect(errorCall?.[1]).toBe('profile.delete_account_error');
+        });
       });
     });
 

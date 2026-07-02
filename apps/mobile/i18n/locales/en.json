@@ -1,6 +1,6 @@
 {
   "common": {
-    "back": "← Back",
+    "back": "Back",
     "retry": "Retry",
     "loading": "Loading...",
     "error_generic": "Something went wrong. Please try again.",
@@ -20,7 +20,7 @@
       "title": "UnlockHub",
       "subtitle": "Your achievements hub",
       "email_label": "Email",
-      "email_placeholder": "you@email.com",
+      "email_placeholder": "name@example.com",
       "email_hint": "Enter your email address",
       "password_label": "Password",
       "password_hint": "Enter your password",
@@ -43,7 +43,7 @@
       "username_placeholder": "gamer_pro_99",
       "username_hint": "Enter a unique username. Only letters, numbers, hyphens and underscores.",
       "email_label": "Email",
-      "email_placeholder": "you@email.com",
+      "email_placeholder": "name@example.com",
       "email_hint": "Enter your email address",
       "password_label": "Password",
       "password_placeholder": "At least 8 characters, one uppercase and one number",
@@ -62,7 +62,9 @@
       "error_password_uppercase": "Password must contain at least one uppercase letter.",
       "error_password_number": "Password must contain at least one number.",
       "birthdate_label": "Date of birth",
-      "birthdate_hint": "Enter your date of birth in YYYY-MM-DD format",
+      "birthdate_placeholder": "DD/MM/YYYY",
+      "birthdate_hint": "Tap to open the date picker",
+      "birthdate_confirm": "Confirm",
       "birthdate_gdpr_note": "You must be at least {{age}} years old to register (GDPR)",
       "error_birthdate_required": "Date of birth is required.",
       "error_birthdate_format": "Format must be YYYY-MM-DD (e.g. 1990-05-14).",
@@ -77,7 +79,7 @@
       "title": "Forgot password",
       "subtitle": "Enter your email and we'll send you a link to reset your password.",
       "email_label": "Email",
-      "email_placeholder": "your@email.com",
+      "email_placeholder": "name@example.com",
       "cta": "Send reset link",
       "loading": "Sending…",
       "success_title": "Check your email",
@@ -165,7 +167,9 @@
     "guides_report_confirmed": "Thanks for your report. We'll review it soon.",
     "guide_placeholder": "Share tips, walkthroughs or hints for this achievement…",
     "guide_submit": "Submit guide",
-    "guide_min_length": "Guide must be at least 20 characters."
+    "guide_min_length": "Guide must be at least 20 characters.",
+    "guides_upvote_error": "Could not register vote. Please try again.",
+    "guides_report_error": "Could not send report. Please try again."
   },
   "home": {
     "title": "Home",
@@ -307,7 +311,8 @@
     "pending_item_label": "Friend request from {{username}}",
     "unauthenticated_title": "Log in to see your friends",
     "unauthenticated_body": "Create an account or log in to add friends and see their activity.",
-    "unauthenticated_cta": "Log in"
+    "unauthenticated_cta": "Log in",
+    "error_send_request": "Could not send friend request. Please try again."
   },
   "challenges": {
     "title": "Weekly Challenge",
@@ -379,7 +384,10 @@
     "filter_steam": "Steam",
     "filter_ra": "RetroAchievements",
     "filter_psn": "PlayStation",
-    "national_no_country": "Set your country in your profile to see the national ranking"
+    "national_no_country": "Set your country in your profile to see the national ranking",
+    "item_label": "Position {{rank}}: {{username}}, {{xp}} XP",
+    "item_label_self": "You: position {{rank}}, {{username}}, {{xp}} XP",
+    "item_hint": "Tap to view this player's profile"
   },
   "notifications": {
     "title": "Notifications",
@@ -390,7 +398,8 @@
     "mark_all_read": "Mark all as read",
     "empty_title": "No notifications",
     "empty_body": "Friend requests, challenges and community achievements will appear here.",
-    "list_label": "Notifications list"
+    "list_label": "Notifications list",
+    "mark_all_error": "Could not mark notifications as read. Please try again."
   },
   "wrapped": {
     "section_title": "Gaming Wrapped",
@@ -462,6 +471,8 @@
     "privacy_private": "Private",
     "privacy_private_desc": "Your profile is not visible to anyone",
     "privacy_saving": "Saving...",
+    "privacy_error_title": "Privacy change failed",
+    "privacy_error_message": "Could not change profile visibility. It remains: {{visibility}}.",
     "sync_prefix": "Sync:",
     "platforms_empty": "You have no linked platforms yet.\nLink them from settings to sync your achievements.",
     "logout": "Log out",
@@ -499,9 +510,16 @@
     "points_label": "pts",
     "points_coming_soon": "Soon you'll be able to redeem your points for exclusive rewards",
     "points_watch_ad": "Watch ad (+10 pts)",
+    "points_watch_ad_loading": "Loading ad...",
     "points_rewarded_cooldown": "Come back in {{hours}} h",
     "points_rewarded_success_title": "Points earned!",
-    "points_rewarded_success_body": "+{{pts}} points added to your balance"
+    "points_rewarded_success_body": "+{{pts}} points added to your balance",
+    "points_rewarded_unavailable_title": "Ad unavailable",
+    "points_rewarded_unavailable_body": "No ads are available right now. Try again in a few minutes.",
+    "points_rewarded_error": "Something went wrong while processing the ad. Please try again.",
+    "unlink_error_title": "Could not unlink",
+    "unlink_error_message": "Could not unlink the platform. Please try again.",
+    "delete_account_error_title": "Your account was NOT deleted"
   },
   "premium": {
     "title": "UnlockHub Premium",

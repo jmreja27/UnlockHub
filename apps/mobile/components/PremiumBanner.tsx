@@ -7,14 +7,11 @@ import { useSubscription } from '../hooks/useSubscription';
 import { useSessionStore } from '../stores/sessionStore';
 import { PLAN_PRICES } from '../lib/iap';
 import { FEATURES } from '../lib/featureFlags';
+import { formatFullDate } from '../lib/formatTimeAgo';
 
 function formatExpiryDate(isoDate: string | null): string {
   if (!isoDate) return '';
-  return new Date(isoDate).toLocaleDateString('es-ES', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
+  return formatFullDate(isoDate);
 }
 
 function FreeBanner() {

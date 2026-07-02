@@ -15,6 +15,7 @@ import { RankingItem } from '../../components/RankingItem';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { AdBanner } from '../../components/AdBanner';
 import { useTheme } from '../../hooks/useTheme';
+import { formatNumber } from '../../lib/formatTimeAgo';
 
 type RankingFilter = 'global' | 'STEAM' | 'RA' | 'PSN';
 
@@ -162,7 +163,7 @@ function RankingList({
 }
 
 export default function RankingsScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const colors = useTheme();
   const router = useRouter();
   const { user } = useSessionStore();
@@ -220,8 +221,8 @@ export default function RankingsScreen() {
           accessible
           accessibilityLabel={
             myRanking.rank
-              ? t('rankings.my_position_aria', { rank: myRanking.rank, xp: (myRanking.xp ?? 0).toLocaleString() })
-              : t('rankings.my_position_unranked_aria', { xp: (myRanking.xp ?? 0).toLocaleString() })
+              ? t('rankings.my_position_aria', { rank: myRanking.rank, xp: formatNumber(myRanking.xp ?? 0, i18n.language) })
+              : t('rankings.my_position_unranked_aria', { xp: formatNumber(myRanking.xp ?? 0, i18n.language) })
           }
         >
           <Text className="text-xs mb-1" style={{ color: colors.textSecondary }}>{t('rankings.my_position_label')}</Text>
@@ -230,7 +231,7 @@ export default function RankingsScreen() {
               {myRanking.rank ? `#${myRanking.rank}` : '—'}
             </Text>
             <Text className="font-semibold" style={{ color: colors.text }}>
-              {(myRanking.xp ?? 0).toLocaleString()} XP
+              {formatNumber(myRanking.xp ?? 0, i18n.language)} XP
             </Text>
           </View>
         </View>

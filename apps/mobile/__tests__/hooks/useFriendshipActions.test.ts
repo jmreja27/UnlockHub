@@ -1,4 +1,5 @@
 import React from 'react';
+import { Alert } from 'react-native';
 import { renderHook, act, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { FriendshipStatusResult } from '@unlockhub/types';
@@ -126,5 +127,79 @@ describe('useFriendshipActions — optimistic updates', () => {
         expect(cached.friendshipId).toBe('f2');
       }
     });
+  });
+
+  it('BUG-020: reject actualiza el caché a none de forma optimista', async () => {
+    const initialStatus: FriendshipStatusResult = { status: 'pending_received', friendshipId: 'f3' };
+    queryClient.setQueryData(STATUS_KEY('otherUser'), initialStatus);
+
+    api.delete.mockReturnValue(new Promise(() => undefined));
+
+    const { result } = renderHook(() => useFriendshipActions('otherUser'), {
+      wrapper: makeWrapper(queryClient),
+    });
+
+    act(() => {
+      result.current.reject.mutate('f3');
+    });
+
+    await waitFor(() => {
+      const cached = queryClient.getQueryData<FriendshipStatusResult>(STATUS_KEY('otherUser'));
+      expect(cached?.status).toBe('none');
+    });
+  });
+
+  it('BUG-020: reject revierte al estado anterior si la mutación falla', async () => {
+    const initialStatus: FriendshipStatusResult = { status: 'pending_received', friendshipId: 'f3' };
+    queryClient.setQueryData(STATUS_KEY('otherUser'), initialStatus);
+
+    api.delete.mockRejectedValue(new Error('Network error'));
+
+    const { result } = renderHook(() => useFriendshipActions('otherUser'), {
+      wrapper: makeWrapper(queryClient),
+    });
+
+    await act(async () => {
+      try {
+        await result.current.reject.mutateAsync('f3');
+      } catch {
+        // Error esperado
+      }
+    });
+
+    await waitFor(() => {
+      const cached = queryClient.getQueryData<FriendshipStatusResult>(STATUS_KEY('otherUser'));
+      expect(cached?.status).toBe('pending_received');
+    });
+  });
+
+  it('BUG-021: sendRequest muestra Alert cuando la mutación falla', async () => {
+    const initialStatus: FriendshipStatusResult = { status: 'none' };
+    queryClient.setQueryData(STATUS_KEY('otherUser'), initialStatus);
+
+    api.post.mockRejectedValue(new Error('Network error'));
+
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+
+    const { result } = renderHook(() => useFriendshipActions('otherUser'), {
+      wrapper: makeWrapper(queryClient),
+    });
+
+    await act(async () => {
+      try {
+        await result.current.sendRequest.mutateAsync();
+      } catch {
+        // Error esperado
+      }
+    });
+
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith(
+        'common.error_boundary_title',
+        'friends.error_send_request',
+      );
+    });
+
+    alertSpy.mockRestore();
   });
 });
