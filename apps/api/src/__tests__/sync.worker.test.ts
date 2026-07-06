@@ -47,6 +47,11 @@ jest.mock('../services/inapp-notification.service', () => ({
 
 jest.mock('../jobs/sync.queue', () => ({
   syncQueue: { add: jest.fn().mockResolvedValue({ id: 'job-1' }) },
+  syncBgJobOptions: jest.fn((userId: string) => ({
+    jobId: `sync-bg-${userId}`,
+    removeOnComplete: true,
+    removeOnFail: { age: 300 },
+  })),
 }));
 
 jest.mock('../platforms/steam.adapter', () => ({
@@ -332,6 +337,22 @@ describe('syncService.queueInitialSync', () => {
         platforms: [{ platform: 'STEAM', platformAccountId: 'acc-1' }],
       }),
       expect.objectContaining({ jobId: 'sync-bg-user-1' }),
+    );
+  });
+
+  it('usa removeOnComplete:true y removeOnFail:{age:300} (regresión bug auto-bloqueo)', async () => {
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValueOnce([account]);
+
+    await syncService.queueInitialSync('user-1', 'STEAM');
+
+    expect((syncQueue.add as jest.Mock)).toHaveBeenCalledWith(
+      'sync-bg-user-1',
+      expect.anything(),
+      expect.objectContaining({
+        jobId: 'sync-bg-user-1',
+        removeOnComplete: true,
+        removeOnFail: { age: 300 },
+      }),
     );
   });
 

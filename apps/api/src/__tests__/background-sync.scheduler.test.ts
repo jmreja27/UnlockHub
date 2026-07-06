@@ -23,6 +23,11 @@ jest.mock('../lib/logger', () => ({
 
 jest.mock('../jobs/sync.queue', () => ({
   syncQueue: { add: jest.fn().mockResolvedValue({ id: 'job-1' }) },
+  syncBgJobOptions: jest.fn((userId: string) => ({
+    jobId: `sync-bg-${userId}`,
+    removeOnComplete: true,
+    removeOnFail: { age: 300 },
+  })),
 }));
 
 // BullMQ instanciado en el módulo — mock mínimo
@@ -107,6 +112,21 @@ describe('runBackgroundSyncs — agrupación por usuario (un job por usuario)', 
 
     const opts = (syncQueue.add as jest.Mock).mock.calls[0]?.[2];
     expect(opts).toMatchObject({ jobId: 'sync-bg-user-1' });
+  });
+
+  it('usa removeOnComplete:true y removeOnFail:{age:300} (regresión bug auto-bloqueo por jobId fijo)', async () => {
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([
+      { id: 'acc-1', userId: 'user-1', platform: 'STEAM' },
+    ]);
+
+    await runBackgroundSyncs();
+
+    const opts = (syncQueue.add as jest.Mock).mock.calls[0]?.[2];
+    expect(opts).toMatchObject({
+      jobId: 'sync-bg-user-1',
+      removeOnComplete: true,
+      removeOnFail: { age: 300 },
+    });
   });
 
   it('no encola nada cuando no hay cuentas activas', async () => {

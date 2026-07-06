@@ -6,7 +6,7 @@ import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 import { STEAM_DAILY_LIMIT, STEAM_BACKGROUND_SYNC_THRESHOLD } from '../config/steamQuota';
 
-import { syncQueue } from './sync.queue';
+import { syncQueue, syncBgJobOptions } from './sync.queue';
 
 const backgroundSyncQueue = new Queue('background-sync', { connection: redis });
 
@@ -77,11 +77,7 @@ export async function runBackgroundSyncs(userId?: string): Promise<void> {
     await syncQueue.add(
       `sync-bg-${userId}`,
       { userId, platforms, triggerType: 'auto' },
-      {
-        jobId: `sync-bg-${userId}`, // deduplicación nativa: solo un job activo por usuario
-        removeOnComplete: { count: 20 },
-        removeOnFail: { count: 10 },
-      },
+      syncBgJobOptions(userId),
     );
     enqueued++;
   }

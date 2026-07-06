@@ -3,7 +3,7 @@ import type { Platform } from '@unlockhub/types';
 
 import { redis } from '../lib/redis';
 import { prisma } from '../lib/prisma';
-import { syncQueue } from '../jobs/sync.queue';
+import { syncQueue, syncBgJobOptions } from '../jobs/sync.queue';
 import { AppError } from '../middleware/errorHandler';
 import { FEATURES } from '../config/features';
 import { STEAM_DAILY_LIMIT, STEAM_MANUAL_SYNC_THRESHOLD } from '../config/steamQuota';
@@ -159,7 +159,7 @@ export async function triggerManualSync(
       platforms: allAccounts.map((a) => ({ platform: a.platform as Platform, platformAccountId: a.id })),
       triggerType: 'manual',
     },
-    { jobId: `sync-bg-${userId}`, removeOnComplete: { count: 20 }, removeOnFail: { count: 10 } },
+    syncBgJobOptions(userId),
   );
 
   return { jobId: job.id, platform, message: 'Sync iniciado correctamente.' };
@@ -410,11 +410,7 @@ export async function queueInitialSync(
       platforms: accounts.map((a) => ({ platform: a.platform as Platform, platformAccountId: a.id })),
       triggerType: 'initial',
     },
-    {
-      jobId: `sync-bg-${userId}`,
-      removeOnComplete: { count: 20 },
-      removeOnFail: { count: 10 },
-    },
+    syncBgJobOptions(userId),
   );
   logger.info({ userId, platform, jobId: job.id }, '[SyncService] Sync inicial encolado (convergente sync-bg)');
   return job.id;
@@ -481,7 +477,7 @@ export async function triggerAppOpenSync(
       platforms: accounts.map((a) => ({ platform: a.platform as Platform, platformAccountId: a.id })),
       triggerType: 'auto',
     },
-    { jobId: `sync-bg-${userId}`, removeOnComplete: { count: 20 }, removeOnFail: { count: 10 } },
+    syncBgJobOptions(userId),
   );
 
   return { queued: true };

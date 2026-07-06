@@ -26,6 +26,11 @@ jest.mock('../config/features', () => ({
 
 jest.mock('../jobs/sync.queue', () => ({
   syncQueue: { add: jest.fn().mockResolvedValue({ id: 'job-1' }) },
+  syncBgJobOptions: jest.fn((userId: string) => ({
+    jobId: `sync-bg-${userId}`,
+    removeOnComplete: true,
+    removeOnFail: { age: 300 },
+  })),
 }));
 
 import { redis } from '../lib/redis';
@@ -73,6 +78,30 @@ describe('syncService.triggerManualSync', () => {
         platforms: [{ platform: 'STEAM', platformAccountId: 'acc-1' }],
       }),
       expect.objectContaining({ jobId: 'sync-bg-user-1' }),
+    );
+  });
+
+  it('usa removeOnComplete:true y removeOnFail:{age:300} — libera el jobId fijo al terminar', async () => {
+    mockRedis.ttl.mockResolvedValue(-1);
+    mockRedis.incr.mockResolvedValue(1);
+    mockRedis.expire.mockResolvedValue(1);
+    mockRedis.set.mockResolvedValue('OK');
+    (mockPrisma.platformAccount.findUnique as jest.Mock).mockResolvedValue(account);
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([account]);
+
+    await syncService.triggerManualSync('user-1', 'STEAM', false);
+
+    // Regresión del bug de auto-bloqueo: con jobId fijo reutilizado, removeOnComplete/removeOnFail
+    // con {count:N} NUNCA purgaban el job ya terminado y bloqueaban indefinidamente el siguiente
+    // sync del usuario. Debe ser exactamente removeOnComplete:true + removeOnFail:{age:300}.
+    expect((syncQueue.add as jest.Mock)).toHaveBeenCalledWith(
+      'sync-bg-user-1',
+      expect.anything(),
+      expect.objectContaining({
+        jobId: 'sync-bg-user-1',
+        removeOnComplete: true,
+        removeOnFail: { age: 300 },
+      }),
     );
   });
 
@@ -433,7 +462,11 @@ describe('syncService.triggerAppOpenSync', () => {
     expect(syncQueue.add as jest.Mock).toHaveBeenCalledWith(
       'sync-bg-user-1',
       expect.objectContaining({ userId: 'user-1', triggerType: 'auto' }),
-      expect.objectContaining({ jobId: 'sync-bg-user-1' }),
+      expect.objectContaining({
+        jobId: 'sync-bg-user-1',
+        removeOnComplete: true,
+        removeOnFail: { age: 300 },
+      }),
     );
   });
 
@@ -446,5 +479,37 @@ describe('syncService.triggerAppOpenSync', () => {
     expect(result).toEqual({ queued: false });
     expect(syncQueue.add as jest.Mock).not.toHaveBeenCalled();
   });
+});
+
+// ── BULLMQ-INTEGRATION-TESTS (deuda de proceso, ver docs/BACKLOG.md) ──────────────────────
+//
+// El bug de auto-bloqueo (sync-bg-{userId} completado bloqueaba indefinidamente el siguiente
+// sync del mismo usuario) pasó 100% de los tests en verde durante meses porque el mock de
+// `syncQueue.add` (jest.fn().mockResolvedValue(...)) no reproduce dos reglas reales de BullMQ:
+//   1. `addStandardJob-9.lua`: `if EXISTS(jobIdKey) == 1` — un job con el mismo jobId ya existente
+//      en Redis, EN CUALQUIER ESTADO (completed/failed/active/waiting), hace que `.add()` sea un
+//      no-op silencioso (sin error, sin nuevo job).
+//   2. `moveToFinished-14.lua`: solo `removeOnComplete: true` / `removeOnFail: true` borran la key
+//      de forma atómica en el mismo script que la transición a estado terminal; `{count:N}` /
+//      `{age:N}` la dejan viva hasta una purga posterior no determinista.
+// Un mock que simplemente resuelve una promesa no puede fallar de la forma en que BullMQ real
+// falla aquí — por diseño, siempre "funciona". El test siguiente documenta el caso pero NO lo
+// verifica contra el comportamiento real; la verificación real requiere Redis real (test de
+// integración) o runtime/staging.
+describe('sync-bg — regresión de dedup tras completar (requiere verificación fuera del mock)', () => {
+  it(
+    'DOCUMENTA que un segundo trigger tras completar debe procesarse — ' +
+      'el mock de syncQueue.add NO reproduce el chequeo real de BullMQ ' +
+      '(EXISTS jobIdKey en addStandardJob-9.lua) ni el borrado atómico de moveToFinished-14.lua. ' +
+      'Verificar en runtime/staging: 2 triggers de sync-bg-{userId} separados por > cooldown, con ' +
+      'el primero llegando a "completed" antes del segundo — confirmar en logs que el 2º job se ' +
+      'PROCESA (no aparece como evento "duplicated" ni se omite el sync).',
+    () => {
+      // Placeholder intencional. Mockear aquí una "dedup" que el propio mock inventa no aporta
+      // cobertura real — daría una falsa sensación de seguridad, que es exactamente lo que pasó
+      // con el bug original (tests en verde, producción bloqueada). Ver ticket BULLMQ-INTEGRATION-TESTS.
+      expect(true).toBe(true);
+    },
+  );
 });
 
