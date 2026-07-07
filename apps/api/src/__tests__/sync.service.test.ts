@@ -481,35 +481,13 @@ describe('syncService.triggerAppOpenSync', () => {
   });
 });
 
-// ── BULLMQ-INTEGRATION-TESTS (deuda de proceso, ver docs/BACKLOG.md) ──────────────────────
+// ── BULLMQ-INTEGRATION-TESTS ───────────────────────────────────────────────────────────────
 //
 // El bug de auto-bloqueo (sync-bg-{userId} completado bloqueaba indefinidamente el siguiente
 // sync del mismo usuario) pasó 100% de los tests en verde durante meses porque el mock de
-// `syncQueue.add` (jest.fn().mockResolvedValue(...)) no reproduce dos reglas reales de BullMQ:
-//   1. `addStandardJob-9.lua`: `if EXISTS(jobIdKey) == 1` — un job con el mismo jobId ya existente
-//      en Redis, EN CUALQUIER ESTADO (completed/failed/active/waiting), hace que `.add()` sea un
-//      no-op silencioso (sin error, sin nuevo job).
-//   2. `moveToFinished-14.lua`: solo `removeOnComplete: true` / `removeOnFail: true` borran la key
-//      de forma atómica en el mismo script que la transición a estado terminal; `{count:N}` /
-//      `{age:N}` la dejan viva hasta una purga posterior no determinista.
-// Un mock que simplemente resuelve una promesa no puede fallar de la forma en que BullMQ real
-// falla aquí — por diseño, siempre "funciona". El test siguiente documenta el caso pero NO lo
-// verifica contra el comportamiento real; la verificación real requiere Redis real (test de
-// integración) o runtime/staging.
-describe('sync-bg — regresión de dedup tras completar (requiere verificación fuera del mock)', () => {
-  it(
-    'DOCUMENTA que un segundo trigger tras completar debe procesarse — ' +
-      'el mock de syncQueue.add NO reproduce el chequeo real de BullMQ ' +
-      '(EXISTS jobIdKey en addStandardJob-9.lua) ni el borrado atómico de moveToFinished-14.lua. ' +
-      'Verificar en runtime/staging: 2 triggers de sync-bg-{userId} separados por > cooldown, con ' +
-      'el primero llegando a "completed" antes del segundo — confirmar en logs que el 2º job se ' +
-      'PROCESA (no aparece como evento "duplicated" ni se omite el sync).',
-    () => {
-      // Placeholder intencional. Mockear aquí una "dedup" que el propio mock inventa no aporta
-      // cobertura real — daría una falsa sensación de seguridad, que es exactamente lo que pasó
-      // con el bug original (tests en verde, producción bloqueada). Ver ticket BULLMQ-INTEGRATION-TESTS.
-      expect(true).toBe(true);
-    },
-  );
-});
+// `syncQueue.add` (jest.fn().mockResolvedValue(...)) no reproduce dos reglas reales de BullMQ
+// (EXISTS jobIdKey en addStandardJob-9.lua, borrado atómico en moveToFinished-14.lua) — un mock
+// que solo resuelve una promesa no puede fallar de la forma en que BullMQ real falla aquí.
+// Cobertura real (Queue/Worker sin mockear, contra Redis real) ahora en:
+// apps/api/src/jobs/__tests__/sync.queue.integration.test.ts — corre via `npm run test:integration`.
 

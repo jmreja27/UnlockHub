@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "test:coverage": "jest --coverage",
+    "test:integration": "jest --config jest.integration.config.js",
     "mock": "node mock-server.js"
   },
   "dependencies": {
