@@ -1200,7 +1200,7 @@ Ver [docs/DECISIONS.md](docs/DECISIONS.md)
 - Prompts a Claude Code siempre empiezan con 'Lee el CLAUDE.md completo antes de hacer cualquier cambio.'
 - Flujo de release: develop → main con --no-ff + tag vX.Y.Z. EAS version source: remote (versionCode gestionado por EAS, ignora app.json).
 - Builds de diagnóstico: usar build local (docs/BUILD_LOCAL.md) para no consumir cuota EAS. Build local apunta a producción cambiando EXPO_PUBLIC_API_URL en .env.local.
-- **OTA (expo-updates): NO activo en producción hasta versionCode 10** — el AAB en Producción actual (versionCode 9, promovido 2026-06-27) fue generado sin `expo-updates`. Hasta entonces, cualquier fix de JS/assets requiere nuevo AAB. Ver OP07 en BACKLOG.md para los pasos exactos de activación.
+- **OTA (expo-updates): NO activo en producción** — el AAB en Producción actual (versionCode 12) fue generado sin `expo-updates`. El próximo build (v1.4.1) será versionCode 13. Hasta que se active OTA, cualquier fix de JS/assets requiere nuevo AAB. Ver OP07 en BACKLOG.md para los pasos exactos de activación.
 
 ---
 
