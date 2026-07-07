@@ -260,3 +260,40 @@ describe('autenticación con usuario eliminado (soft delete)', () => {
     expect(res.body.code).toBe('ACCOUNT_DELETED');
   });
 });
+
+// ─── GET /reset-redirect — T115 ───────────────────────────────────────────────
+// Página intermedia https:// que dispara el deep link unlockhub://reset-password?token=...
+// No requiere auth (público, de un solo uso vía el token) ni toca authService.resetPassword.
+
+describe('GET /api/v1/auth/reset-redirect', () => {
+  const validToken = 'a'.repeat(64); // crypto.randomBytes(32).toString('hex') → 64 hex chars
+
+  it('200 con HTML que embebe el deep link unlockhub:// cuando el token es hex válido', async () => {
+    const res = await request(app).get(`/api/v1/auth/reset-redirect?token=${validToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('text/html');
+    expect(res.text).toContain(`unlockhub://reset-password?token=${validToken}`);
+  });
+
+  it('400 y no refleja el token cuando no es hexadecimal (rechaza intento de inyección)', async () => {
+    const malicious = '<script>alert(1)</script>';
+    const res = await request(app)
+      .get('/api/v1/auth/reset-redirect')
+      .query({ token: malicious });
+
+    expect(res.status).toBe(400);
+    expect(res.text).not.toContain('<script>alert(1)</script>');
+    expect(res.text).not.toContain('unlockhub://');
+  });
+
+  it('400 cuando falta el token', async () => {
+    const res = await request(app).get('/api/v1/auth/reset-redirect');
+    expect(res.status).toBe(400);
+  });
+
+  it('no llama a authService.resetPassword — solo sirve HTML, no valida el token contra la BD', async () => {
+    await request(app).get(`/api/v1/auth/reset-redirect?token=${validToken}`);
+    expect(mockAuthService.resetPassword).not.toHaveBeenCalled();
+  });
+});

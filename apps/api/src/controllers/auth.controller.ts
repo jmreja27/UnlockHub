@@ -129,3 +129,53 @@ export async function resetPasswordHandler(req: Request, res: Response, next: Ne
     next(err);
   }
 }
+
+// El token de reset es siempre crypto.randomBytes(32).toString('hex') — 64 caracteres hexadecimales
+const RESET_TOKEN_HEX_PATTERN = /^[0-9a-f]{64}$/;
+
+// GET /api/v1/auth/reset-redirect — página intermedia https:// que dispara el deep link unlockhub://
+// Necesaria porque algunos clientes de email (Gmail, Outlook) bloquean o reescriben enlaces con
+// esquemas custom (unlockhub://) en el botón/link del email, pero sí permiten https://.
+export function resetRedirectHandler(req: Request, res: Response): void {
+  const rawToken = req.query['token'];
+  const token = typeof rawToken === 'string' ? rawToken : '';
+
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+
+  if (!RESET_TOKEN_HEX_PATTERN.test(token)) {
+    res.status(400).send(`<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="utf-8" /><title>Enlace no válido — UnlockHub</title></head>
+<body style="font-family:sans-serif;text-align:center;padding:48px 16px;background:#0f0f1a;color:#e5e7eb;">
+  <h1 style="color:#6366f1;">UnlockHub</h1>
+  <p>Este enlace de recuperación no es válido.</p>
+</body>
+</html>`);
+    return;
+  }
+
+  const appScheme = process.env['APP_SCHEME'] ?? 'unlockhub';
+  const deepLink = `${appScheme}://reset-password?token=${token}`;
+
+  res.send(`<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Restablecer contraseña — UnlockHub</title>
+  <meta http-equiv="refresh" content="0; url=${deepLink}" />
+</head>
+<body style="font-family:sans-serif;text-align:center;padding:48px 16px;background:#0f0f1a;color:#e5e7eb;">
+  <h1 style="color:#6366f1;margin-bottom:8px;">UnlockHub</h1>
+  <p style="color:#9ca3af;margin-bottom:24px;">Abriendo la aplicación para restablecer tu contraseña...</p>
+  <a href="${deepLink}"
+     style="display:inline-block;background:#6366f1;color:#ffffff;font-weight:600;padding:14px 28px;border-radius:10px;text-decoration:none;font-size:15px;">
+    Abrir en la aplicación
+  </a>
+  <p style="color:#6b7280;font-size:12px;margin-top:32px;">
+    Si no se abre automáticamente, abre este enlace desde tu móvil con UnlockHub instalado.
+  </p>
+  <script>window.location.href = ${JSON.stringify(deepLink)};</script>
+</body>
+</html>`);
+}

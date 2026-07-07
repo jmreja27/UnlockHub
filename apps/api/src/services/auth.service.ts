@@ -120,8 +120,10 @@ export async function forgotPassword(email: string): Promise<void> {
     data: { userId: user.id, tokenHash, expiresAt },
   });
 
-  const APP_SCHEME = process.env['APP_SCHEME'] ?? 'unlockhub';
-  const resetUrl = `${APP_SCHEME}://reset-password?token=${rawToken}`;
+  // Página intermedia https:// que dispara el deep link unlockhub:// dentro de la app —
+  // algunos clientes de email bloquean o reescriben esquemas custom en el enlace/botón.
+  const API_PUBLIC_URL = process.env['API_PUBLIC_URL'] ?? 'https://unlockhub-production.up.railway.app';
+  const resetUrl = `${API_PUBLIC_URL}/api/v1/auth/reset-redirect?token=${rawToken}`;
 
   await sendPasswordResetEmail(user.email, resetUrl);
 }

@@ -11,6 +11,7 @@ import {
   meHandler,
   forgotPasswordHandler,
   resetPasswordHandler,
+  resetRedirectHandler,
 } from '../controllers/auth.controller';
 
 const router = Router();
@@ -23,5 +24,7 @@ router.post('/logout-all', authenticate, logoutAllHandler);
 router.get('/me', authenticate, meHandler);
 router.post('/forgot-password', authRateLimiter, forgotPasswordHandler);
 router.post('/reset-password', authRateLimiter, resetPasswordHandler);
+// Público — sirve la página intermedia https:// que dispara el deep link unlockhub://
+router.get('/reset-redirect', resetRedirectHandler);
 
 export default router;
