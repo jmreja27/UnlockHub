@@ -520,6 +520,7 @@
     "points_rewarded_unavailable_title": "Anuncio no disponible",
     "points_rewarded_unavailable_body": "No hay anuncios disponibles ahora mismo. Inténtalo de nuevo en unos minutos.",
     "points_rewarded_error": "Hubo un problema al procesar el anuncio. Inténtalo de nuevo.",
+    "points_watch_ad_unavailable": "Anuncio no disponible — toca para reintentar",
     "unlink_error_title": "No se pudo desvincular",
     "unlink_error_message": "No se pudo desvincular la plataforma. Inténtalo de nuevo.",
     "delete_account_error_title": "Tu cuenta NO se ha eliminado"
