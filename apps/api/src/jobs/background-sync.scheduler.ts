@@ -39,7 +39,7 @@ export async function runBackgroundSyncs(userId?: string): Promise<void> {
   const accounts = await prisma.platformAccount.findMany({
     where: userId
       ? { userId }
-      : { user: { lastSyncAt: { lte: oneDayAgo } } },
+      : { user: { OR: [{ lastSyncAt: null }, { lastSyncAt: { lte: oneDayAgo } }] } },
     select: {
       id: true,
       userId: true,

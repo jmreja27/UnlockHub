@@ -71,7 +71,12 @@ jest.mock('bullmq', () => ({
   Worker: jest.fn().mockImplementation(() => ({ on: jest.fn(), close: jest.fn() })),
 }));
 
+jest.mock('@sentry/node', () => ({
+  captureMessage: jest.fn(),
+}));
+
 import { Worker } from 'bullmq';
+import * as Sentry from '@sentry/node';
 import { redis } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 import { getIO } from '../lib/socket';
@@ -91,6 +96,7 @@ const mockGetIO = getIO as jest.MockedFunction<typeof getIO>;
 const mockSteamAdapter = steamAdapter as jest.Mocked<typeof steamAdapter>;
 const mockAddXp = addXp as jest.Mock;
 const mockUpsertUserScore = upsertUserScore as jest.Mock;
+const mockCaptureMessage = Sentry.captureMessage as jest.Mock;
 const MockWorker = Worker as jest.MockedClass<typeof Worker>;
 
 const mockEmit = jest.fn();
@@ -921,6 +927,107 @@ describe('startSyncWorker — batch job (SyncBatchJobData)', () => {
     // sync:complete emitido para STEAM y RA (no para PSN)
     expect(mockEmit).toHaveBeenCalledWith('sync:complete', expect.objectContaining({ platform: 'STEAM' }));
     expect(mockEmit).toHaveBeenCalledWith('sync:complete', expect.objectContaining({ platform: 'RA' }));
+  });
+
+  // ─── FIX 1: alerta Sentry cuando el NPSSO del sistema ha expirado ────────────
+  it('FIX 1: PSN_SYSTEM_NPSSO_EXPIRED dispara Sentry.captureMessage y NO cancela RA (el batch continúa igual que con cualquier otro error de plataforma)', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    // SET NX: 1ª llamada = lock del batch (OK), 2ª llamada = dedup de la alerta (OK, primera vez)
+    mockRedis.set.mockResolvedValueOnce('OK').mockResolvedValueOnce('OK');
+    const extendLock = jest.fn().mockResolvedValue(0);
+
+    const psnAccount = {
+      ...steamAccount, id: 'acc-psn', platform: 'PSN' as const, externalId: 'psn-user',
+    };
+
+    mockPrisma.platformAccount.findUnique
+      .mockResolvedValueOnce(psnAccount)   // PSN
+      .mockResolvedValueOnce(raAccount);   // RA
+
+    mockPrisma.userAchievement.findMany
+      .mockResolvedValueOnce([]) // PSN prevEarnedIds
+      .mockResolvedValueOnce([]) // RA prevEarnedIds
+      .mockResolvedValueOnce([]); // RA newAchievements
+
+    const { psnAdapter: psnAdapterMock } = jest.requireMock('../platforms/psn.adapter') as { psnAdapter: { syncUser: jest.Mock } };
+    psnAdapterMock.syncUser.mockRejectedValueOnce(
+      new AppError('El PSN_SYSTEM_NPSSO ha expirado', 'PSN_SYSTEM_NPSSO_EXPIRED', 503),
+    );
+
+    const { retroAchievementsAdapter: raAdapterMock } = jest.requireMock('../platforms/retroachievements.adapter') as { retroAchievementsAdapter: { syncUser: jest.Mock } };
+    raAdapterMock.syncUser.mockResolvedValueOnce({
+      gamesUpdated: 1, achievementsSynced: 3, syncedAt: new Date().toISOString(),
+    });
+
+    mockPrisma.user.findUnique.mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' }); // RA (sin XP)
+    mockPrisma.platformAccount.findMany.mockResolvedValueOnce([{ platform: 'RA' }]);
+
+    const result = await processFn({
+      id: 'batch-npsso',
+      name: 'sync-bg-user-1',
+      opts: {},
+      token: 'tok-npsso',
+      extendLock,
+      data: {
+        userId: 'user-1',
+        platforms: [
+          { platform: 'PSN', platformAccountId: 'acc-psn' },
+          { platform: 'RA', platformAccountId: 'acc-ra' },
+        ],
+        triggerType: 'auto',
+      },
+    });
+
+    // El batch NO falla — RA se procesó igual que en cualquier otro fallo de plataforma
+    expect((result as { achievementsSynced: number }).achievementsSynced).toBe(3);
+    expect(mockEmit).toHaveBeenCalledWith('sync:error', expect.objectContaining({ platform: 'PSN', error: 'PSN_SYSTEM_NPSSO_EXPIRED' }));
+    expect(mockEmit).toHaveBeenCalledWith('sync:complete', expect.objectContaining({ platform: 'RA' }));
+
+    // La alerta Sentry se dispara con tag identificable
+    expect(mockCaptureMessage).toHaveBeenCalledWith(
+      expect.stringContaining('PSN_SYSTEM_NPSSO_EXPIRED'),
+      expect.objectContaining({ level: 'error', tags: expect.objectContaining({ alert: 'psn-npsso-expired' }) }),
+    );
+  });
+
+  it('FIX 1: dedup — si la clave de alerta ya está activa (SET NX falla), NO vuelve a llamar a Sentry', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    // 1ª llamada = lock del batch (OK), 2ª llamada = dedup de la alerta YA ACTIVA (null)
+    mockRedis.set.mockResolvedValueOnce('OK').mockResolvedValueOnce(null);
+    const extendLock = jest.fn().mockResolvedValue(0);
+
+    const psnAccount = {
+      ...steamAccount, id: 'acc-psn', platform: 'PSN' as const, externalId: 'psn-user',
+    };
+    mockPrisma.platformAccount.findUnique.mockResolvedValueOnce(psnAccount);
+    mockPrisma.userAchievement.findMany.mockResolvedValueOnce([]); // PSN prevEarnedIds
+
+    const { psnAdapter: psnAdapterMock } = jest.requireMock('../platforms/psn.adapter') as { psnAdapter: { syncUser: jest.Mock } };
+    psnAdapterMock.syncUser.mockRejectedValueOnce(
+      new AppError('El PSN_SYSTEM_NPSSO ha expirado', 'PSN_SYSTEM_NPSSO_EXPIRED', 503),
+    );
+
+    await processFn({
+      id: 'batch-npsso-dedup',
+      name: 'sync-bg-user-1',
+      opts: {},
+      token: 'tok-npsso-dedup',
+      extendLock,
+      data: {
+        userId: 'user-1',
+        platforms: [{ platform: 'PSN', platformAccountId: 'acc-psn' }],
+        triggerType: 'auto',
+      },
+    });
+
+    expect(mockRedis.set).toHaveBeenCalledWith('alert:npsso-expired', '1', 'EX', 6 * 60 * 60, 'NX');
+    expect(mockCaptureMessage).not.toHaveBeenCalled();
   });
 
   // ─── T104: del de syncProgressKey en finally del batch (safety-net interno) ──

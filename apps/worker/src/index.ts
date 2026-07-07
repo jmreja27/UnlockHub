@@ -1,3 +1,15 @@
+// Sentry debe inicializarse antes que cualquier otro módulo — igual que en apps/api/src/app.ts.
+/* eslint-disable import/order */
+import * as Sentry from '@sentry/node';
+/* eslint-enable import/order */
+
+Sentry.init({
+  dsn: process.env['SENTRY_DSN'],
+  environment: process.env['NODE_ENV'] ?? 'production',
+  tracesSampleRate: 0.1,
+  enabled: !!process.env['SENTRY_DSN'],
+});
+
 import { validateEnv } from '../../api/src/config/env';
 import { startSyncWorker } from '../../api/src/jobs/sync.worker';
 import { startSeedCatalogWorker } from '../../api/src/jobs/seed-catalog.worker';

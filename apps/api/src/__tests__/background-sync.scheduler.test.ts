@@ -244,7 +244,7 @@ describe('runBackgroundSyncs — filtro por userId (force-sync)', () => {
     );
   });
 
-  it('runBackgroundSyncs() sin argumento usa el filtro lastSyncAt y encola todos los usuarios elegibles', async () => {
+  it('runBackgroundSyncs() sin argumento usa el filtro lastSyncAt (lte 24h OR null) y encola todos los usuarios elegibles', async () => {
     (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([
       { id: 'acc-a1', userId: 'user-1', platform: 'STEAM' },
       { id: 'acc-a2', userId: 'user-2', platform: 'RA' },
@@ -254,9 +254,48 @@ describe('runBackgroundSyncs — filtro por userId (force-sync)', () => {
 
     expect(mockPrisma.platformAccount.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { user: expect.objectContaining({ lastSyncAt: expect.any(Object) }) },
+        where: {
+          user: {
+            OR: [{ lastSyncAt: null }, { lastSyncAt: { lte: expect.any(Date) } }],
+          },
+        },
       }),
     );
     expect((syncQueue.add as jest.Mock)).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('runBackgroundSyncs — FIX 3: incluye usuarios con lastSyncAt null (nunca sincronizados)', () => {
+  it('encola el job de un usuario cuyo lastSyncAt es null y tiene al menos una plataforma vinculada', async () => {
+    // El mock de Prisma simula el resultado real de la query: solo devuelve filas de
+    // PlatformAccount, así que un usuario sin ninguna cuenta vinculada nunca puede aparecer aquí
+    // (la tabla platformAccount es la que se consulta, no User) — no hace falta guardarlo aparte.
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([
+      { id: 'acc-null-user', userId: 'user-never-synced', platform: 'RA' },
+    ]);
+
+    await runBackgroundSyncs();
+
+    expect((syncQueue.add as jest.Mock)).toHaveBeenCalledTimes(1);
+    expect((syncQueue.add as jest.Mock)).toHaveBeenCalledWith(
+      'sync-bg-user-never-synced',
+      expect.objectContaining({ userId: 'user-never-synced' }),
+      expect.objectContaining({ jobId: 'sync-bg-user-never-synced' }),
+    );
+  });
+
+  it('sigue incluyendo usuarios con lastSyncAt > 24h (caso previo, sin regresión)', async () => {
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([
+      { id: 'acc-stale', userId: 'user-stale', platform: 'STEAM' },
+    ]);
+
+    await runBackgroundSyncs();
+
+    expect((syncQueue.add as jest.Mock)).toHaveBeenCalledTimes(1);
+    expect((syncQueue.add as jest.Mock)).toHaveBeenCalledWith(
+      'sync-bg-user-stale',
+      expect.objectContaining({ userId: 'user-stale' }),
+      expect.objectContaining({ jobId: 'sync-bg-user-stale' }),
+    );
   });
 });

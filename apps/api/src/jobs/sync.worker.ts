@@ -1,5 +1,6 @@
 import { Worker } from 'bullmq';
 import type { Job } from 'bullmq';
+import * as Sentry from '@sentry/node';
 import type { Platform } from '@unlockhub/types';
 
 import { AppError } from '../middleware/errorHandler';
@@ -33,6 +34,11 @@ const PLATFORM_LABELS: Record<string, string> = {
   PSN: 'PlayStation',
   XBOX: 'Xbox',
 };
+
+/** Clave Redis para deduplicar la alerta Sentry de NPSSO expirado — evita repetirla en cada sync mientras el token siga caído. */
+const NPSSO_ALERT_KEY = 'alert:npsso-expired';
+/** TTL de la dedup de la alerta NPSSO — 6h: suficiente para no saturar Sentry sin retrasar demasiado el re-aviso. */
+const NPSSO_ALERT_TTL_SECONDS = 6 * 60 * 60;
 
 const LOCK_TTL_SECONDS = 600;
 /** Delay entre reintentos cuando el lock está ocupado (job single-platform). */
@@ -172,6 +178,24 @@ async function syncPlatform(
           },
         });
         logger.warn({ userId, platform }, '[SyncWorker] Perfil PSN privado — psnProfilePrivate marcado');
+      } else if (err instanceof AppError && err.code === 'PSN_SYSTEM_NPSSO_EXPIRED') {
+        const shouldAlert = await redis.set(
+          NPSSO_ALERT_KEY,
+          '1',
+          'EX',
+          NPSSO_ALERT_TTL_SECONDS,
+          'NX',
+        );
+        if (shouldAlert) {
+          Sentry.captureMessage('PSN_SYSTEM_NPSSO_EXPIRED: el NPSSO del sistema ha expirado', {
+            level: 'error',
+            tags: { alert: 'psn-npsso-expired' },
+          });
+        }
+        logger.error(
+          { userId, platform },
+          '[SyncWorker] NPSSO del sistema expirado — alerta Sentry enviada (o ya activa por dedup)',
+        );
       }
       if (io) {
         io.to(userRoom(userId)).emit('sync:error', {
