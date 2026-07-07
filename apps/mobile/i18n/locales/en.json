@@ -154,7 +154,10 @@
     "sort_by_rarity": "Sort by rarity",
     "challenge_friend": "Challenge a friend to unlock this achievement",
     "challenge_friend_label": "Challenge a friend",
+    "challenge_button": "Challenge",
+    "challenge_coming_soon": "Challenges will be available soon",
     "challenge_select_friend": "Select a friend to challenge",
+    "challenge_sent": "Challenge sent!",
     "no_friends": "No friends yet. Add some friends first!",
     "guides_expand": "See guides",
     "guides_collapse": "Hide guides",
@@ -517,6 +520,7 @@
     "points_rewarded_unavailable_title": "Ad unavailable",
     "points_rewarded_unavailable_body": "No ads are available right now. Try again in a few minutes.",
     "points_rewarded_error": "Something went wrong while processing the ad. Please try again.",
+    "points_watch_ad_unavailable": "Ad unavailable — tap to retry",
     "unlink_error_title": "Could not unlink",
     "unlink_error_message": "Could not unlink the platform. Please try again.",
     "delete_account_error_title": "Your account was NOT deleted"

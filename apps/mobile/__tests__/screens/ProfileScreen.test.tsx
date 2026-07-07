@@ -113,6 +113,8 @@ describe('ProfileScreen', () => {
     mockUseRewardedAd.mockReturnValue({
       showForReward: jest.fn().mockResolvedValue(10),
       isReady: true,
+      adState: 'ready',
+      retryLoad: jest.fn(),
     });
   });
 
@@ -528,6 +530,8 @@ describe('ProfileScreen', () => {
       mockUseRewardedAd.mockReturnValue({
         showForReward: jest.fn().mockResolvedValue(null),
         isReady: false,
+        adState: 'loading',
+        retryLoad: jest.fn(),
       });
       const { getByTestId } = renderProfile();
       await waitFor(() => {
@@ -536,10 +540,31 @@ describe('ProfileScreen', () => {
       });
     });
 
+    it('BUG-1: el botón queda habilitado y con texto de reintento cuando adState es "unavailable"', async () => {
+      const retryLoad = jest.fn();
+      mockUseRewardedAd.mockReturnValue({
+        showForReward: jest.fn().mockResolvedValue(null),
+        isReady: false,
+        adState: 'unavailable',
+        retryLoad,
+      });
+      const { getByTestId } = renderProfile();
+      await waitFor(() => {
+        const btn = getByTestId('watch-ad-button');
+        expect(btn.props.accessibilityState?.disabled).toBe(false);
+        expect(btn.props.accessibilityLabel).toBe('profile.points_watch_ad_unavailable');
+      });
+
+      fireEvent.press(getByTestId('watch-ad-button'));
+      expect(retryLoad).toHaveBeenCalledTimes(1);
+    });
+
     it('F37: cuando showForReward devuelve null (error API) muestra el Alert de error', async () => {
       mockUseRewardedAd.mockReturnValue({
         showForReward: jest.fn().mockResolvedValue(null),
         isReady: true,
+        adState: 'ready',
+        retryLoad: jest.fn(),
       });
       const alertSpy = jest.spyOn(Alert, 'alert');
       const { getByTestId } = renderProfile();

@@ -1,4 +1,5 @@
 import React from 'react';
+import { Alert } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -65,11 +66,12 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockUseFriends.mockReturnValue({ friends: [] });
   mockUseMyGameAchievements.mockReturnValue({ data: [] });
+  jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
 });
 
-// ── Regresión: el campo del body debe ser friendUserId, no friendId ──────────
+// ── T127/T129: el botón "Retar" muestra el alert "próximamente" y no abre el modal ──
 
-describe('GameDetailScreen — retar a un amigo', () => {
+describe('GameDetailScreen — retar a un amigo (gateado, T129)', () => {
   const friendUserId = 'friend-user-id-0001';
 
   const acceptedFriendship = {
@@ -82,31 +84,30 @@ describe('GameDetailScreen — retar a un amigo', () => {
     receiver: { id: friendUserId, username: 'alice', avatar: null, level: 1, xp: 0 },
   };
 
-  it('envía { friendUserId } (no { friendId }) al endpoint de challenge', async () => {
+  it('muestra el Alert "próximamente" al pulsar Retar y no llama al endpoint de challenge', () => {
     mockUseGameDetail.mockReturnValue({ data: gameWithAchievements, isLoading: false, isError: false });
     mockUseSessionStore.mockReturnValue({ user: { id: 'user-1' }, isAuthenticated: true });
     mockUseFriends.mockReturnValue({ friends: [acceptedFriendship] });
-    mockApiPost.mockResolvedValue({ ok: true });
 
-    const { getAllByLabelText } = renderWithClient(<GameDetailScreen />);
+    const { getAllByLabelText, queryByText } = renderWithClient(<GameDetailScreen />);
 
-    // Pulsar el 🎯 del primer logro no conseguido → abre el modal
     const challengeButtons = getAllByLabelText('game.challenge_friend_label');
     fireEvent.press(challengeButtons[0]);
 
-    // Seleccionar el amigo en el modal
-    await waitFor(() => {
-      const friendButtons = getAllByLabelText('game.challenge_friend alice');
-      fireEvent.press(friendButtons[0]);
-    });
+    expect(Alert.alert).toHaveBeenCalledWith('game.challenge_coming_soon');
+    expect(mockApiPost).not.toHaveBeenCalled();
+    // El modal de selección de amigo no se abre
+    expect(queryByText('game.challenge_select_friend')).toBeNull();
+  });
 
-    // El body enviado debe usar friendUserId, no friendId
-    await waitFor(() => {
-      expect(mockApiPost).toHaveBeenCalledWith(
-        `/api/v1/achievements/${gameWithAchievements.achievements[0]!.id}/challenge`,
-        { friendUserId },
-      );
-    });
+  it('renderiza el botón Retar con el texto corto en lugar del icono de diana', () => {
+    mockUseGameDetail.mockReturnValue({ data: gameWithAchievements, isLoading: false, isError: false });
+    mockUseSessionStore.mockReturnValue({ user: { id: 'user-1' }, isAuthenticated: true });
+    mockUseFriends.mockReturnValue({ friends: [acceptedFriendship] });
+
+    const { getAllByText } = renderWithClient(<GameDetailScreen />);
+
+    expect(getAllByText('game.challenge_button').length).toBeGreaterThan(0);
   });
 });
 

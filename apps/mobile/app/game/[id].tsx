@@ -13,11 +13,13 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { FlashList } from '@shopify/flash-list';
 import { useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import type { Friendship } from '@unlockhub/types';
 
 import { useGameDetail, useMyGameAchievements } from '../../hooks/useSearch';
@@ -176,7 +178,7 @@ function AchievementRow({
         </View>
 
         {/* Botones de acción */}
-        <View style={{ gap: 2 }}>
+        <View className="items-end" style={{ gap: 2 }}>
           <Pressable
             onPress={onShare}
             accessibilityRole="button"
@@ -184,7 +186,7 @@ function AchievementRow({
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             style={{ minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center' }}
           >
-            <Text className="text-gray-500 text-base">⬆</Text>
+            <Ionicons name="share-social-outline" size={22} color={colors.primary} />
           </Pressable>
           {!isEarned && (
             <Pressable
@@ -192,9 +194,12 @@ function AchievementRow({
               accessibilityRole="button"
               accessibilityLabel={t('game.challenge_friend_label')}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              style={{ minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center' }}
+              className="px-2.5 py-1 rounded-lg"
+              style={{ borderWidth: 1, borderColor: colors.border, minHeight: 32, justifyContent: 'center', alignItems: 'center' }}
             >
-              <Text className="text-base">🎯</Text>
+              <Text className="text-xs font-semibold" style={{ color: colors.textSecondary }}>
+                {t('game.challenge_button')}
+              </Text>
             </Pressable>
           )}
         </View>
@@ -324,8 +329,11 @@ export default function GameDetailScreen() {
     mutationFn: ({ achievementId, friendUserId }: { achievementId: string; friendUserId: string }) =>
       api.post<void>(`/api/v1/achievements/${achievementId}/challenge`, { friendUserId }),
     onSuccess: (_data, vars) => {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       void analytics.friendChallenged(vars.achievementId);
-      setChallengeAchievementId(null);
+      Alert.alert(t('game.challenge_sent'), '', [
+        { text: 'OK', onPress: () => setChallengeAchievementId(null) },
+      ]);
     },
     onError: () => Alert.alert(t('common.error_generic')),
   });
@@ -361,9 +369,11 @@ export default function GameDetailScreen() {
     [t],
   );
 
-  const handleChallenge = useCallback((achievementId: string) => {
-    setChallengeAchievementId(achievementId);
-  }, []);
+  // TODO(T129): reconectar con el modal de selección de amigo (setChallengeAchievementId)
+  // cuando los retos estén disponibles. Por ahora solo informa de que es una feature futura.
+  const handleChallenge = useCallback(() => {
+    Alert.alert(t('game.challenge_coming_soon'));
+  }, [t]);
 
   const handleWriteGuide = useCallback((achievementId: string) => {
     setGuideContent('');
@@ -489,7 +499,7 @@ export default function GameDetailScreen() {
                   achievement={achievement}
                   isEarned={isEarned}
                   onShare={() => handleShare(achievement)}
-                  onChallenge={() => handleChallenge(achievement.id)}
+                  onChallenge={handleChallenge}
                   onWriteGuide={() => handleWriteGuide(achievement.id)}
                 />
               );

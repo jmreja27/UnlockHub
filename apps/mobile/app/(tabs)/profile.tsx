@@ -148,7 +148,8 @@ export default function ProfileScreen() {
   });
   const pointsBalance = pointsData?.total ?? 0;
 
-  const { showForReward, isReady: isAdReady } = useRewardedAd();
+  const { showForReward, isReady: isAdReady, adState, retryLoad } = useRewardedAd();
+  const isAdUnavailable = adState === 'unavailable';
   const isOnCooldown = rewardedCooldownEnd > Date.now();
   const cooldownHoursLeft = isOnCooldown
     ? Math.ceil((rewardedCooldownEnd - Date.now()) / (1000 * 60 * 60))
@@ -805,46 +806,54 @@ export default function ProfileScreen() {
             </Text>
 
             {/* Botón rewarded ad — solo para usuarios free */}
-            {!user.isPremium && (
-              <Pressable
-                onPress={() => { void handleWatchAd(); }}
-                disabled={isOnCooldown || isWatchingAd || !isAdReady}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  isOnCooldown
-                    ? t('profile.points_rewarded_cooldown', { hours: cooldownHoursLeft })
-                    : !isAdReady
-                    ? t('profile.points_watch_ad_loading')
-                    : t('profile.points_watch_ad')
-                }
-                accessibilityState={{ disabled: isOnCooldown || isWatchingAd || !isAdReady, busy: isWatchingAd }}
-                testID="watch-ad-button"
-                style={{
-                  minHeight: 44,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: isOnCooldown || !isAdReady ? colors.border : colors.primary + '99',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  opacity: isOnCooldown || !isAdReady ? 0.6 : 1,
-                }}
-              >
-                {isWatchingAd ? (
-                  <ActivityIndicator color={colors.primary} accessibilityLabel={t('common.loading')} />
-                ) : (
-                  <Text
-                    className="text-sm font-semibold"
-                    style={{ color: isOnCooldown || !isAdReady ? colors.textMuted : colors.primary }}
-                  >
-                    {isOnCooldown
-                      ? t('profile.points_rewarded_cooldown', { hours: cooldownHoursLeft })
-                      : !isAdReady
-                      ? t('profile.points_watch_ad_loading')
-                      : t('profile.points_watch_ad')}
-                  </Text>
-                )}
-              </Pressable>
-            )}
+            {!user.isPremium && (() => {
+              const isDisabled = isOnCooldown || isWatchingAd || (!isAdReady && !isAdUnavailable);
+              const isMuted = isOnCooldown || (!isAdReady && !isAdUnavailable);
+              const label = isOnCooldown
+                ? t('profile.points_rewarded_cooldown', { hours: cooldownHoursLeft })
+                : isAdUnavailable
+                ? t('profile.points_watch_ad_unavailable')
+                : !isAdReady
+                ? t('profile.points_watch_ad_loading')
+                : t('profile.points_watch_ad');
+
+              return (
+                <Pressable
+                  onPress={() => {
+                    if (isAdUnavailable) {
+                      retryLoad();
+                      return;
+                    }
+                    void handleWatchAd();
+                  }}
+                  disabled={isDisabled}
+                  accessibilityRole="button"
+                  accessibilityLabel={label}
+                  accessibilityState={{ disabled: isDisabled, busy: isWatchingAd }}
+                  testID="watch-ad-button"
+                  style={{
+                    minHeight: 44,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: isMuted ? colors.border : colors.primary + '99',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: isMuted ? 0.6 : 1,
+                  }}
+                >
+                  {isWatchingAd ? (
+                    <ActivityIndicator color={colors.primary} accessibilityLabel={t('common.loading')} />
+                  ) : (
+                    <Text
+                      className="text-sm font-semibold"
+                      style={{ color: isMuted ? colors.textMuted : colors.primary }}
+                    >
+                      {label}
+                    </Text>
+                  )}
+                </Pressable>
+              );
+            })()}
           </View>
         </View>
 

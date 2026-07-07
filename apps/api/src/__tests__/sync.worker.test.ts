@@ -47,6 +47,11 @@ jest.mock('../services/inapp-notification.service', () => ({
 
 jest.mock('../jobs/sync.queue', () => ({
   syncQueue: { add: jest.fn().mockResolvedValue({ id: 'job-1' }) },
+  syncBgJobOptions: jest.fn((userId: string) => ({
+    jobId: `sync-bg-${userId}`,
+    removeOnComplete: true,
+    removeOnFail: { age: 300 },
+  })),
 }));
 
 jest.mock('../platforms/steam.adapter', () => ({
@@ -66,7 +71,12 @@ jest.mock('bullmq', () => ({
   Worker: jest.fn().mockImplementation(() => ({ on: jest.fn(), close: jest.fn() })),
 }));
 
+jest.mock('@sentry/node', () => ({
+  captureMessage: jest.fn(),
+}));
+
 import { Worker } from 'bullmq';
+import * as Sentry from '@sentry/node';
 import { redis } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 import { getIO } from '../lib/socket';
@@ -86,6 +96,7 @@ const mockGetIO = getIO as jest.MockedFunction<typeof getIO>;
 const mockSteamAdapter = steamAdapter as jest.Mocked<typeof steamAdapter>;
 const mockAddXp = addXp as jest.Mock;
 const mockUpsertUserScore = upsertUserScore as jest.Mock;
+const mockCaptureMessage = Sentry.captureMessage as jest.Mock;
 const MockWorker = Worker as jest.MockedClass<typeof Worker>;
 
 const mockEmit = jest.fn();
@@ -111,6 +122,8 @@ beforeEach(() => {
   mockGetIO.mockReturnValue(mockIO);
   mockPrisma.platformAccount.findUnique.mockResolvedValue(account);
   mockPrisma.platformAccount.upsert.mockResolvedValue(account);
+  // findMany usado por queueInitialSync (llamado desde A22 fallback y runExpressThenQueueFull)
+  (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([account]);
   mockPrisma.user.update.mockResolvedValue({ id: 'user-1' } as never);
   mockPrisma.userAchievement.findMany.mockResolvedValue([]);
 });
@@ -270,18 +283,23 @@ describe('syncService.triggerExpressSync — lock por usuario', () => {
     expect(mockRedis.del).not.toHaveBeenCalledWith('sync:user-lock:user-1');
   });
 
-  // A22 — fallback: lock ocupado → encola full sync en lugar de descartar silenciosamente
-  it('A22: encola queueInitialSync como fallback cuando el lock no está disponible', async () => {
+  // A22 — fallback: lock ocupado → encola batch completo (sync-bg-{userId}) en lugar de descartar silenciosamente
+  it('A22: encola batch sync-bg-{userId} como fallback cuando el lock no está disponible', async () => {
     mockRedis.set.mockResolvedValueOnce(null); // lock no disponible
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValueOnce([account]);
 
     await syncService.triggerExpressSync('user-1', 'STEAM');
 
     expect(mockSteamAdapter.syncUserExpress).not.toHaveBeenCalled();
-    // El job de full sync debe encolarse para que el trabajo no se pierda
+    // El job batch debe encolarse con jobId determinista para que el trabajo no se pierda
     expect((syncQueue.add as jest.Mock)).toHaveBeenCalledWith(
-      'initial-sync:user-1:STEAM',
-      expect.objectContaining({ triggerType: 'initial' }),
-      { priority: 10 },
+      'sync-bg-user-1',
+      expect.objectContaining({
+        userId: 'user-1',
+        triggerType: 'initial',
+        platforms: [{ platform: 'STEAM', platformAccountId: 'acc-1' }],
+      }),
+      expect.objectContaining({ jobId: 'sync-bg-user-1' }),
     );
   });
 
@@ -311,14 +329,88 @@ describe('syncService.triggerExpressSync — lock por usuario', () => {
 });
 
 describe('syncService.queueInitialSync', () => {
-  it('encola el job con triggerType=initial y prioridad alta', async () => {
+  it('encola SyncBatchJobData con sync-bg-{userId} y todas las plataformas del usuario', async () => {
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValueOnce([account]);
+
     const jobId = await syncService.queueInitialSync('user-1', 'STEAM');
+
     expect(jobId).toBe('job-1');
     expect((syncQueue.add as jest.Mock)).toHaveBeenCalledWith(
-      'initial-sync:user-1:STEAM',
-      expect.objectContaining({ triggerType: 'initial' }),
-      { priority: 10 },
+      'sync-bg-user-1',
+      expect.objectContaining({
+        userId: 'user-1',
+        triggerType: 'initial',
+        platforms: [{ platform: 'STEAM', platformAccountId: 'acc-1' }],
+      }),
+      expect.objectContaining({ jobId: 'sync-bg-user-1' }),
     );
+  });
+
+  it('usa removeOnComplete:true y removeOnFail:{age:300} (regresión bug auto-bloqueo)', async () => {
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValueOnce([account]);
+
+    await syncService.queueInitialSync('user-1', 'STEAM');
+
+    expect((syncQueue.add as jest.Mock)).toHaveBeenCalledWith(
+      'sync-bg-user-1',
+      expect.anything(),
+      expect.objectContaining({
+        jobId: 'sync-bg-user-1',
+        removeOnComplete: true,
+        removeOnFail: { age: 300 },
+      }),
+    );
+  });
+
+  it('devuelve undefined si el usuario no tiene plataformas vinculadas', async () => {
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValueOnce([]);
+
+    const jobId = await syncService.queueInitialSync('user-1', 'STEAM');
+
+    expect(jobId).toBeUndefined();
+    expect((syncQueue.add as jest.Mock)).not.toHaveBeenCalled();
+  });
+});
+
+describe('syncService.runExpressThenQueueFull', () => {
+  it('llama express sync y queueInitialSync en secuencia cuando express tiene éxito', async () => {
+    mockRedis.set.mockResolvedValueOnce('OK'); // lock adquirido
+    (mockSteamAdapter.syncUserExpress as jest.Mock).mockResolvedValueOnce({
+      gamesUpdated: 5, achievementsSynced: 30, syncedAt: new Date().toISOString(),
+    });
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValueOnce([account]);
+
+    await syncService.runExpressThenQueueFull('user-1', 'STEAM');
+
+    expect(mockSteamAdapter.syncUserExpress).toHaveBeenCalledWith(account);
+    expect((syncQueue.add as jest.Mock)).toHaveBeenCalledWith(
+      'sync-bg-user-1',
+      expect.objectContaining({ userId: 'user-1', triggerType: 'initial' }),
+      expect.objectContaining({ jobId: 'sync-bg-user-1' }),
+    );
+  });
+
+  it('llama queueInitialSync igualmente si triggerExpressSync lanza (infra error)', async () => {
+    // Simular fallo de infraestructura en findUnique (antes del lock)
+    mockPrisma.platformAccount.findUnique.mockRejectedValueOnce(new Error('DB timeout'));
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValueOnce([account]);
+
+    await syncService.runExpressThenQueueFull('user-1', 'STEAM');
+
+    // A pesar del error en express, queueInitialSync debe haberse llamado
+    expect((syncQueue.add as jest.Mock)).toHaveBeenCalledWith(
+      'sync-bg-user-1',
+      expect.objectContaining({ userId: 'user-1', triggerType: 'initial' }),
+      expect.objectContaining({ jobId: 'sync-bg-user-1' }),
+    );
+  });
+
+  it('no lanza aunque tanto express como queueInitialSync fallen', async () => {
+    mockPrisma.platformAccount.findUnique.mockRejectedValueOnce(new Error('DB error'));
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValueOnce([]);
+
+    // findMany devuelve [] → queueInitialSync retorna undefined sin encolar → no lanza
+    await expect(syncService.runExpressThenQueueFull('user-1', 'STEAM')).resolves.toBeUndefined();
   });
 });
 
@@ -632,8 +724,6 @@ describe('startSyncWorker — failsafe de lock (LOCK_MAX_RETRIES)', () => {
 // ─── Batch job: plataformas en serie con lock único ──────────────────────────
 
 describe('startSyncWorker — batch job (SyncBatchJobData)', () => {
-  const psnAdapter = { platform: 'PSN', syncUser: jest.fn(), syncUserExpress: jest.fn() };
-
   // Tipo de job batch para las llamadas a processFn
   type BatchJobLike = {
     id?: string;
@@ -837,6 +927,107 @@ describe('startSyncWorker — batch job (SyncBatchJobData)', () => {
     // sync:complete emitido para STEAM y RA (no para PSN)
     expect(mockEmit).toHaveBeenCalledWith('sync:complete', expect.objectContaining({ platform: 'STEAM' }));
     expect(mockEmit).toHaveBeenCalledWith('sync:complete', expect.objectContaining({ platform: 'RA' }));
+  });
+
+  // ─── FIX 1: alerta Sentry cuando el NPSSO del sistema ha expirado ────────────
+  it('FIX 1: PSN_SYSTEM_NPSSO_EXPIRED dispara Sentry.captureMessage y NO cancela RA (el batch continúa igual que con cualquier otro error de plataforma)', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    // SET NX: 1ª llamada = lock del batch (OK), 2ª llamada = dedup de la alerta (OK, primera vez)
+    mockRedis.set.mockResolvedValueOnce('OK').mockResolvedValueOnce('OK');
+    const extendLock = jest.fn().mockResolvedValue(0);
+
+    const psnAccount = {
+      ...steamAccount, id: 'acc-psn', platform: 'PSN' as const, externalId: 'psn-user',
+    };
+
+    mockPrisma.platformAccount.findUnique
+      .mockResolvedValueOnce(psnAccount)   // PSN
+      .mockResolvedValueOnce(raAccount);   // RA
+
+    mockPrisma.userAchievement.findMany
+      .mockResolvedValueOnce([]) // PSN prevEarnedIds
+      .mockResolvedValueOnce([]) // RA prevEarnedIds
+      .mockResolvedValueOnce([]); // RA newAchievements
+
+    const { psnAdapter: psnAdapterMock } = jest.requireMock('../platforms/psn.adapter') as { psnAdapter: { syncUser: jest.Mock } };
+    psnAdapterMock.syncUser.mockRejectedValueOnce(
+      new AppError('El PSN_SYSTEM_NPSSO ha expirado', 'PSN_SYSTEM_NPSSO_EXPIRED', 503),
+    );
+
+    const { retroAchievementsAdapter: raAdapterMock } = jest.requireMock('../platforms/retroachievements.adapter') as { retroAchievementsAdapter: { syncUser: jest.Mock } };
+    raAdapterMock.syncUser.mockResolvedValueOnce({
+      gamesUpdated: 1, achievementsSynced: 3, syncedAt: new Date().toISOString(),
+    });
+
+    mockPrisma.user.findUnique.mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' }); // RA (sin XP)
+    mockPrisma.platformAccount.findMany.mockResolvedValueOnce([{ platform: 'RA' }]);
+
+    const result = await processFn({
+      id: 'batch-npsso',
+      name: 'sync-bg-user-1',
+      opts: {},
+      token: 'tok-npsso',
+      extendLock,
+      data: {
+        userId: 'user-1',
+        platforms: [
+          { platform: 'PSN', platformAccountId: 'acc-psn' },
+          { platform: 'RA', platformAccountId: 'acc-ra' },
+        ],
+        triggerType: 'auto',
+      },
+    });
+
+    // El batch NO falla — RA se procesó igual que en cualquier otro fallo de plataforma
+    expect((result as { achievementsSynced: number }).achievementsSynced).toBe(3);
+    expect(mockEmit).toHaveBeenCalledWith('sync:error', expect.objectContaining({ platform: 'PSN', error: 'PSN_SYSTEM_NPSSO_EXPIRED' }));
+    expect(mockEmit).toHaveBeenCalledWith('sync:complete', expect.objectContaining({ platform: 'RA' }));
+
+    // La alerta Sentry se dispara con tag identificable
+    expect(mockCaptureMessage).toHaveBeenCalledWith(
+      expect.stringContaining('PSN_SYSTEM_NPSSO_EXPIRED'),
+      expect.objectContaining({ level: 'error', tags: expect.objectContaining({ alert: 'psn-npsso-expired' }) }),
+    );
+  });
+
+  it('FIX 1: dedup — si la clave de alerta ya está activa (SET NX falla), NO vuelve a llamar a Sentry', async () => {
+    MockWorker.mockClear();
+    startSyncWorker();
+    const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
+
+    // 1ª llamada = lock del batch (OK), 2ª llamada = dedup de la alerta YA ACTIVA (null)
+    mockRedis.set.mockResolvedValueOnce('OK').mockResolvedValueOnce(null);
+    const extendLock = jest.fn().mockResolvedValue(0);
+
+    const psnAccount = {
+      ...steamAccount, id: 'acc-psn', platform: 'PSN' as const, externalId: 'psn-user',
+    };
+    mockPrisma.platformAccount.findUnique.mockResolvedValueOnce(psnAccount);
+    mockPrisma.userAchievement.findMany.mockResolvedValueOnce([]); // PSN prevEarnedIds
+
+    const { psnAdapter: psnAdapterMock } = jest.requireMock('../platforms/psn.adapter') as { psnAdapter: { syncUser: jest.Mock } };
+    psnAdapterMock.syncUser.mockRejectedValueOnce(
+      new AppError('El PSN_SYSTEM_NPSSO ha expirado', 'PSN_SYSTEM_NPSSO_EXPIRED', 503),
+    );
+
+    await processFn({
+      id: 'batch-npsso-dedup',
+      name: 'sync-bg-user-1',
+      opts: {},
+      token: 'tok-npsso-dedup',
+      extendLock,
+      data: {
+        userId: 'user-1',
+        platforms: [{ platform: 'PSN', platformAccountId: 'acc-psn' }],
+        triggerType: 'auto',
+      },
+    });
+
+    expect(mockRedis.set).toHaveBeenCalledWith('alert:npsso-expired', '1', 'EX', 6 * 60 * 60, 'NX');
+    expect(mockCaptureMessage).not.toHaveBeenCalled();
   });
 
   // ─── T104: del de syncProgressKey en finally del batch (safety-net interno) ──

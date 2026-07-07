@@ -15,6 +15,9 @@ const config = {
   },
   roots: ['<rootDir>/src'],
   testMatch: ['**/__tests__/**/*.test.ts', '**/*.test.ts'],
+  // Los tests *.integration.test.ts requieren Redis real — corren aparte via `npm run test:integration`
+  // (ver jest.integration.config.js) para que `npm test` nunca dependa de infraestructura externa.
+  testPathIgnorePatterns: ['/node_modules/', '\\.integration\\.test\\.ts$'],
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov'],
   collectCoverageFrom: [

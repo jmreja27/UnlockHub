@@ -191,8 +191,25 @@ describe('authService.forgotPassword', () => {
     expect(prisma.passwordResetToken.create).toHaveBeenCalled();
     expect(emailService.sendPasswordResetEmail).toHaveBeenCalledWith(
       'test@example.com',
-      expect.stringContaining('reset-password'),
+      expect.stringContaining('reset-redirect'),
     );
+  });
+
+  // T115 — el email debe apuntar a la página https:// de redirección, no al scheme
+  // unlockhub:// directo (algunos clientes de email bloquean/reescriben esquemas custom).
+  it('la URL del email es https:// (endpoint reset-redirect), no unlockhub:// directo', async () => {
+    mockUserRepo.findUserByEmail.mockResolvedValue(baseUser);
+
+    await authService.forgotPassword('test@example.com');
+
+    const [, resetUrl] = (emailService.sendPasswordResetEmail as jest.Mock).mock.calls[0] as [
+      string,
+      string,
+    ];
+
+    expect(resetUrl.startsWith('https://')).toBe(true);
+    expect(resetUrl).toContain('/api/v1/auth/reset-redirect?token=');
+    expect(resetUrl).not.toMatch(/^unlockhub:\/\//);
   });
 });
 

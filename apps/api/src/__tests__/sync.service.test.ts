@@ -26,6 +26,11 @@ jest.mock('../config/features', () => ({
 
 jest.mock('../jobs/sync.queue', () => ({
   syncQueue: { add: jest.fn().mockResolvedValue({ id: 'job-1' }) },
+  syncBgJobOptions: jest.fn((userId: string) => ({
+    jobId: `sync-bg-${userId}`,
+    removeOnComplete: true,
+    removeOnFail: { age: 300 },
+  })),
 }));
 
 import { redis } from '../lib/redis';
@@ -73,6 +78,30 @@ describe('syncService.triggerManualSync', () => {
         platforms: [{ platform: 'STEAM', platformAccountId: 'acc-1' }],
       }),
       expect.objectContaining({ jobId: 'sync-bg-user-1' }),
+    );
+  });
+
+  it('usa removeOnComplete:true y removeOnFail:{age:300} — libera el jobId fijo al terminar', async () => {
+    mockRedis.ttl.mockResolvedValue(-1);
+    mockRedis.incr.mockResolvedValue(1);
+    mockRedis.expire.mockResolvedValue(1);
+    mockRedis.set.mockResolvedValue('OK');
+    (mockPrisma.platformAccount.findUnique as jest.Mock).mockResolvedValue(account);
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([account]);
+
+    await syncService.triggerManualSync('user-1', 'STEAM', false);
+
+    // Regresión del bug de auto-bloqueo: con jobId fijo reutilizado, removeOnComplete/removeOnFail
+    // con {count:N} NUNCA purgaban el job ya terminado y bloqueaban indefinidamente el siguiente
+    // sync del usuario. Debe ser exactamente removeOnComplete:true + removeOnFail:{age:300}.
+    expect((syncQueue.add as jest.Mock)).toHaveBeenCalledWith(
+      'sync-bg-user-1',
+      expect.anything(),
+      expect.objectContaining({
+        jobId: 'sync-bg-user-1',
+        removeOnComplete: true,
+        removeOnFail: { age: 300 },
+      }),
     );
   });
 
@@ -433,7 +462,11 @@ describe('syncService.triggerAppOpenSync', () => {
     expect(syncQueue.add as jest.Mock).toHaveBeenCalledWith(
       'sync-bg-user-1',
       expect.objectContaining({ userId: 'user-1', triggerType: 'auto' }),
-      expect.objectContaining({ jobId: 'sync-bg-user-1' }),
+      expect.objectContaining({
+        jobId: 'sync-bg-user-1',
+        removeOnComplete: true,
+        removeOnFail: { age: 300 },
+      }),
     );
   });
 
@@ -447,4 +480,14 @@ describe('syncService.triggerAppOpenSync', () => {
     expect(syncQueue.add as jest.Mock).not.toHaveBeenCalled();
   });
 });
+
+// ── BULLMQ-INTEGRATION-TESTS ───────────────────────────────────────────────────────────────
+//
+// El bug de auto-bloqueo (sync-bg-{userId} completado bloqueaba indefinidamente el siguiente
+// sync del mismo usuario) pasó 100% de los tests en verde durante meses porque el mock de
+// `syncQueue.add` (jest.fn().mockResolvedValue(...)) no reproduce dos reglas reales de BullMQ
+// (EXISTS jobIdKey en addStandardJob-9.lua, borrado atómico en moveToFinished-14.lua) — un mock
+// que solo resuelve una promesa no puede fallar de la forma en que BullMQ real falla aquí.
+// Cobertura real (Queue/Worker sin mockear, contra Redis real) ahora en:
+// apps/api/src/jobs/__tests__/sync.queue.integration.test.ts — corre via `npm run test:integration`.
 

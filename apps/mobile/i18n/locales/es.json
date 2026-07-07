@@ -154,7 +154,10 @@
     "sort_by_rarity": "Ordenar por rareza",
     "challenge_friend": "Retar a un amigo a desbloquear este logro",
     "challenge_friend_label": "Retar a un amigo",
+    "challenge_button": "Retar",
+    "challenge_coming_soon": "Los retos estarán disponibles próximamente",
     "challenge_select_friend": "Selecciona un amigo para retar",
+    "challenge_sent": "¡Reto enviado!",
     "no_friends": "Aún no tienes amigos. ¡Añade alguno primero!",
     "guides_expand": "Ver guías",
     "guides_collapse": "Ocultar guías",
@@ -517,6 +520,7 @@
     "points_rewarded_unavailable_title": "Anuncio no disponible",
     "points_rewarded_unavailable_body": "No hay anuncios disponibles ahora mismo. Inténtalo de nuevo en unos minutos.",
     "points_rewarded_error": "Hubo un problema al procesar el anuncio. Inténtalo de nuevo.",
+    "points_watch_ad_unavailable": "Anuncio no disponible — toca para reintentar",
     "unlink_error_title": "No se pudo desvincular",
     "unlink_error_message": "No se pudo desvincular la plataforma. Inténtalo de nuevo.",
     "delete_account_error_title": "Tu cuenta NO se ha eliminado"

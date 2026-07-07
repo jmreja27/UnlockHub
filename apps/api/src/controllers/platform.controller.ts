@@ -7,7 +7,7 @@ import {
 } from '@unlockhub/validators';
 
 import * as platformService from '../services/platform.service';
-import { triggerExpressSync, queueInitialSync } from '../services/sync.service';
+import { runExpressThenQueueFull } from '../services/sync.service';
 import { logger } from '../lib/logger';
 import type { AuthenticatedRequest } from '../middleware/authenticate';
 import { AppError } from '../middleware/errorHandler';
@@ -15,8 +15,6 @@ import { getSystemPsnAuth, lookupPsnUser, checkPsnProfilePrivacy } from '../plat
 import { resolveVanityUrl, checkSteamProfilePublic } from '../platforms/steam.adapter';
 import { lookupRaUser } from '../platforms/retroachievements.adapter';
 import { exchangeXboxCodeForTokens } from '../platforms/xbox.adapter';
-
-const EXPRESS_SYNC_TIMEOUT_MS = 25_000;
 
 // POST /api/v1/platforms/steam/link — vincular cuenta de Steam por username o SteamID64
 export async function linkSteamHandler(
@@ -37,15 +35,10 @@ export async function linkSteamHandler(
     // Steam no requiere token de usuario — el sistema usa STEAM_API_KEY
     const account = await platformService.linkPlatform(userId, 'STEAM', steamId, username, '');
 
-    await Promise.race([
-      triggerExpressSync(userId, 'STEAM'),
-      new Promise<void>((resolve) => setTimeout(resolve, EXPRESS_SYNC_TIMEOUT_MS)),
-    ]);
-    queueInitialSync(userId, 'STEAM').catch((err: unknown) => {
-      logger.error({ err: (err as Error).message, userId, platform: 'STEAM' }, '[Platform] queueInitialSync fallido');
-    });
-
     res.status(201).json(account);
+    runExpressThenQueueFull(userId, 'STEAM').catch((err: unknown) => {
+      logger.error({ err: (err as Error).message, userId, platform: 'STEAM' }, '[Platform] runExpressThenQueueFull fallido');
+    });
   } catch (err) {
     next(err);
   }
@@ -82,15 +75,10 @@ export async function linkRetroAchievementsHandler(
     // RA no requiere token de usuario — el sistema usa RA_SYSTEM_KEY
     const account = await platformService.linkPlatform(userId, 'RA', username, username, '');
 
-    await Promise.race([
-      triggerExpressSync(userId, 'RA'),
-      new Promise<void>((resolve) => setTimeout(resolve, EXPRESS_SYNC_TIMEOUT_MS)),
-    ]);
-    queueInitialSync(userId, 'RA').catch((err: unknown) => {
-      logger.error({ err: (err as Error).message, userId, platform: 'RA' }, '[Platform] queueInitialSync fallido');
-    });
-
     res.status(201).json(account);
+    runExpressThenQueueFull(userId, 'RA').catch((err: unknown) => {
+      logger.error({ err: (err as Error).message, userId, platform: 'RA' }, '[Platform] runExpressThenQueueFull fallido');
+    });
   } catch (err) {
     next(err);
   }
@@ -144,15 +132,10 @@ export async function linkPsnHandler(
       '',  // PSN no usa token de usuario — el sistema usa PSN_SYSTEM_NPSSO
     );
 
-    await Promise.race([
-      triggerExpressSync(userId, 'PSN'),
-      new Promise<void>((resolve) => setTimeout(resolve, EXPRESS_SYNC_TIMEOUT_MS)),
-    ]);
-    queueInitialSync(userId, 'PSN').catch((err: unknown) => {
-      logger.error({ err: (err as Error).message, userId, platform: 'PSN' }, '[Platform] queueInitialSync fallido');
-    });
-
     res.status(201).json(account);
+    runExpressThenQueueFull(userId, 'PSN').catch((err: unknown) => {
+      logger.error({ err: (err as Error).message, userId, platform: 'PSN' }, '[Platform] runExpressThenQueueFull fallido');
+    });
   } catch (err) {
     next(err);
   }
