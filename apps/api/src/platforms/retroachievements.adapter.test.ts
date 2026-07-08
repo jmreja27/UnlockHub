@@ -422,6 +422,31 @@ describe('retroAchievementsAdapter.syncUser', () => {
     expect(result.syncedAt).toBeTruthy();
   });
 
+  it('F46 Fase 2 — centinela: unlockedAt usa el DateEarned de la API, nunca Date.now()', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-07-08T12:00:00Z'));
+
+    try {
+      mockAxios.get
+        .mockResolvedValueOnce({ data: mockCompletedGames })
+        .mockResolvedValueOnce({ data: mockRaGameProgress });
+
+      await retroAchievementsAdapter.syncUser(mockPlatformAccount);
+
+      // Logro '101' tiene DateEarned: '2024-01-15 10:30:00' — fecha histórica fija, distinta de "ahora"
+      const call = (mockPrisma.userAchievement.upsert as jest.Mock).mock.calls.find(
+        (c) => c[0].create.unlockedAt.getTime() === new Date('2024-01-15 10:30:00').getTime(),
+      )?.[0];
+
+      expect(call).toBeDefined();
+      const expectedDate = new Date('2024-01-15 10:30:00');
+      expect(call.update.unlockedAt).toEqual(expectedDate);
+      expect(call.create.unlockedAt).toEqual(expectedDate);
+      expect(call.update.unlockedAt.getTime()).not.toBe(Date.now());
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('actualiza la fecha de última sincronización en la cuenta', async () => {
     mockAxios.get
       .mockResolvedValueOnce({ data: mockCompletedGames })

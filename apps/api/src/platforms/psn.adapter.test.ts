@@ -41,6 +41,7 @@ import { redis } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 
 import { PsnAdapter, getSystemPsnAuth, lookupPsnUser, checkPsnProfilePrivacy, exchangeNpssoForPsnTokens } from './psn.adapter';
+import { normalizeAchievementPoints } from './achievement-points';
 
 const mocked = {
   exchangeNpssoForAccessCode: psnApi.exchangeNpssoForAccessCode as jest.MockedFunction<typeof psnApi.exchangeNpssoForAccessCode>,
@@ -386,6 +387,148 @@ describe('PsnAdapter.syncUser', () => {
       code: 'PSN_SYSTEM_NOT_CONFIGURED',
       statusCode: 503,
     });
+  });
+});
+
+// ─── Tests: PsnAdapter.syncUser — F46 Fase 2: centinela recálculo XP y unlockedAt ──
+
+describe('PsnAdapter.syncUser — F46 Fase 2: recálculo de XP y centinela unlockedAt', () => {
+  let adapter: PsnAdapter;
+
+  function makeTitleTrophies(trophyEarnedRate: string) {
+    return {
+      trophySetVersion: '01.00',
+      hasTrophyGroups: false,
+      totalItemCount: 1,
+      trophies: [
+        {
+          trophyId: 1,
+          trophyHidden: false,
+          trophyType: 'bronze',
+          trophyName: 'First Bronze',
+          trophyDetail: 'Earn your first bronze',
+          trophyIconUrl: 'https://example.com/trophy1.png',
+          trophyEarnedRate,
+          trophyGroupId: 'default',
+        },
+      ],
+    };
+  }
+
+  function makeEarnedTrophies(trophyEarnedRate: string, earnedDateTime: string | undefined) {
+    return {
+      trophySetVersion: '01.00',
+      hasTrophyGroups: false,
+      totalItemCount: 1,
+      lastUpdatedDateTime: '2025-01-01T00:00:00Z',
+      trophies: [
+        {
+          trophyId: 1,
+          trophyHidden: false,
+          trophyType: 'bronze' as const,
+          earned: !!earnedDateTime,
+          earnedDateTime,
+          trophyEarnedRate,
+        },
+      ],
+    };
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    adapter = new PsnAdapter();
+    process.env.PSN_SYSTEM_NPSSO = 'test-system-npsso';
+    setupSystemTokenCached();
+
+    (mocked.prisma.game.upsert as jest.Mock).mockResolvedValue({ id: 'db-game-1' });
+    (mocked.prisma.achievement.upsert as jest.Mock).mockResolvedValue({ id: 'db-ach-1' });
+    (mocked.prisma.userAchievement.upsert as jest.Mock).mockResolvedValue({});
+    mocked.getUserTitles.mockResolvedValue({ trophyTitles: [mockTitle], totalItemCount: 1 });
+  });
+
+  afterEach(() => {
+    delete process.env.PSN_SYSTEM_NPSSO;
+  });
+
+  it('recalcula normalizedPoints con la rareza fresca de la API en cada sync (no reutiliza el valor viejo)', async () => {
+    // Primer sync: trophyEarnedRate 75.5%
+    mocked.getTitleTrophies.mockResolvedValueOnce(makeTitleTrophies('75.5'));
+    mocked.getUserTrophiesEarnedForTitle.mockResolvedValueOnce(makeEarnedTrophies('75.5', undefined));
+
+    await adapter.syncUser(mockPlatformAccount);
+
+    const firstUpdate = (mocked.prisma.achievement.upsert as jest.Mock).mock.calls[0]?.[0].update;
+    expect(firstUpdate.normalizedPoints).toBe(normalizeAchievementPoints(75.5));
+
+    jest.clearAllMocks();
+    process.env.PSN_SYSTEM_NPSSO = 'test-system-npsso';
+    setupSystemTokenCached();
+    (mocked.prisma.game.upsert as jest.Mock).mockResolvedValue({ id: 'db-game-1' });
+    (mocked.prisma.achievement.upsert as jest.Mock).mockResolvedValue({ id: 'db-ach-1' });
+    (mocked.prisma.userAchievement.upsert as jest.Mock).mockResolvedValue({});
+    mocked.getUserTitles.mockResolvedValue({ trophyTitles: [mockTitle], totalItemCount: 1 });
+
+    // Segundo sync (re-sync): la rareza fluctuó a 3.2% — debe reflejar el valor NUEVO
+    mocked.getTitleTrophies.mockResolvedValueOnce(makeTitleTrophies('3.2'));
+    mocked.getUserTrophiesEarnedForTitle.mockResolvedValueOnce(makeEarnedTrophies('3.2', undefined));
+
+    await adapter.syncUser(mockPlatformAccount);
+
+    const secondUpdate = (mocked.prisma.achievement.upsert as jest.Mock).mock.calls[0]?.[0].update;
+    expect(secondUpdate.normalizedPoints).toBe(normalizeAchievementPoints(3.2));
+    // Centinela: si el update dejara de recalcular, este valor no reflejaría la nueva rareza.
+    expect(secondUpdate.normalizedPoints).not.toBe(firstUpdate.normalizedPoints);
+  });
+
+  it('centinela: unlockedAt usa el earnedDateTime de la API, nunca Date.now()', async () => {
+    const fixedEarnedDateTime = '2023-11-14T22:13:20.000Z';
+    jest.useFakeTimers().setSystemTime(new Date('2026-07-08T12:00:00Z'));
+
+    try {
+      mocked.getTitleTrophies.mockResolvedValueOnce(makeTitleTrophies('50'));
+      mocked.getUserTrophiesEarnedForTitle.mockResolvedValueOnce(makeEarnedTrophies('50', fixedEarnedDateTime));
+
+      await adapter.syncUser(mockPlatformAccount);
+
+      const call = (mocked.prisma.userAchievement.upsert as jest.Mock).mock.calls[0]?.[0];
+      const expectedDate = new Date(fixedEarnedDateTime);
+
+      expect(call.update.unlockedAt).toEqual(expectedDate);
+      expect(call.create.unlockedAt).toEqual(expectedDate);
+      expect(call.update.unlockedAt.getTime()).not.toBe(Date.now());
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('centinela: dos syncs consecutivos con el mismo earnedDateTime producen el mismo unlockedAt (no avanza)', async () => {
+    const fixedEarnedDateTime = '2023-11-14T22:13:20.000Z';
+
+    mocked.getTitleTrophies.mockResolvedValueOnce(makeTitleTrophies('50'));
+    mocked.getUserTrophiesEarnedForTitle.mockResolvedValueOnce(makeEarnedTrophies('50', fixedEarnedDateTime));
+    await adapter.syncUser(mockPlatformAccount);
+    const firstUnlockedAt = (mocked.prisma.userAchievement.upsert as jest.Mock).mock.calls[0]?.[0].update.unlockedAt;
+
+    jest.clearAllMocks();
+    process.env.PSN_SYSTEM_NPSSO = 'test-system-npsso';
+    setupSystemTokenCached();
+    (mocked.prisma.game.upsert as jest.Mock).mockResolvedValue({ id: 'db-game-1' });
+    (mocked.prisma.achievement.upsert as jest.Mock).mockResolvedValue({ id: 'db-ach-1' });
+    (mocked.prisma.userAchievement.upsert as jest.Mock).mockResolvedValue({});
+    mocked.getUserTitles.mockResolvedValue({ trophyTitles: [mockTitle], totalItemCount: 1 });
+
+    // Avanzamos el reloj del sistema para simular que el re-sync ocurre "más tarde"
+    jest.useFakeTimers().setSystemTime(new Date('2030-01-01T00:00:00Z'));
+    try {
+      mocked.getTitleTrophies.mockResolvedValueOnce(makeTitleTrophies('50'));
+      mocked.getUserTrophiesEarnedForTitle.mockResolvedValueOnce(makeEarnedTrophies('50', fixedEarnedDateTime));
+      await adapter.syncUser(mockPlatformAccount);
+      const secondUnlockedAt = (mocked.prisma.userAchievement.upsert as jest.Mock).mock.calls[0]?.[0].update.unlockedAt;
+
+      expect(secondUnlockedAt).toEqual(firstUnlockedAt);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
 

@@ -20,6 +20,7 @@ jest.mock('../lib/prisma', () => ({
 const mockAxios = axios as jest.Mocked<typeof axios>;
 
 import { resolveVanityUrl, checkSteamProfilePublic, SteamAdapter } from '../platforms/steam.adapter';
+import { normalizeAchievementPoints } from '../platforms/achievement-points';
 import { prisma } from '../lib/prisma';
 import { redis } from '../lib/redis';
 
@@ -189,6 +190,121 @@ describe('SteamAdapter — rawValue/rarity/iconUrl en upsert', () => {
     const upsertCall = mockPrisma.achievement.upsert.mock.calls[0]?.[0];
     expect(upsertCall.create.iconUrl).toBe(fullUrl);
     expect(upsertCall.create.iconUrl).not.toContain('media.steampowered.com');
+  });
+});
+
+// ─── SteamAdapter — F46 Fase 2: centinela recálculo XP y unlockedAt ──────────
+
+describe('SteamAdapter — F46 Fase 2: recálculo de XP y centinela unlockedAt', () => {
+  function setupSyncMocksFull(rarityPercent: number, unlocktime: number) {
+    mockAxios.get.mockResolvedValueOnce({
+      data: {
+        response: {
+          games: [{
+            appid: 203160,
+            name: 'Test Game',
+            img_icon_url: 'icon123',
+            has_community_visible_stats: true,
+            playtime_forever: 100,
+          }],
+        },
+      },
+    });
+    mockAxios.get.mockResolvedValueOnce({
+      data: {
+        playerstats: {
+          success: true,
+          achievements: [{ apiname: 'ACH_1', achieved: unlocktime > 0 ? 1 : 0, unlocktime }],
+        },
+      },
+    });
+    mockAxios.get.mockResolvedValueOnce({
+      data: {
+        game: {
+          availableGameStats: {
+            achievements: [{ name: 'ACH_1', displayName: 'Achievement 1', icon: '', icongray: '' }],
+          },
+        },
+      },
+    });
+    mockAxios.get.mockResolvedValueOnce({
+      data: {
+        achievementpercentages: {
+          achievements: [{ name: 'ACH_1', percent: rarityPercent }],
+        },
+      },
+    });
+
+    mockPrisma.game.upsert.mockResolvedValue({ id: 'game-1' } as never);
+    mockPrisma.achievement.upsert.mockResolvedValue({ id: 'ach-1' } as never);
+  }
+
+  it('recalcula normalizedPoints con la rareza fresca de la API en cada sync (no reutiliza el valor viejo)', async () => {
+    // Primer sync: rareza 50% → curva del helper
+    setupSyncMocksFull(50, 0);
+    const adapter = new SteamAdapter();
+    await adapter.syncUser({ externalId: '76561198000000001', userId: 'user-1' } as never);
+
+    const firstUpdate = mockPrisma.achievement.upsert.mock.calls[0]?.[0].update;
+    expect(firstUpdate.normalizedPoints).toBe(normalizeAchievementPoints(50));
+
+    jest.clearAllMocks();
+    process.env['STEAM_API_KEY'] = STEAM_API_KEY;
+
+    // Segundo sync (re-sync): la rareza fluctuó a 2% — debe reflejar el valor NUEVO
+    setupSyncMocksFull(2, 0);
+    await adapter.syncUser({ externalId: '76561198000000001', userId: 'user-1' } as never);
+
+    const secondUpdate = mockPrisma.achievement.upsert.mock.calls[0]?.[0].update;
+    expect(secondUpdate.normalizedPoints).toBe(normalizeAchievementPoints(2));
+    // Centinela: si el update dejara de recalcular (p.ej. quedara pegado al valor del primer sync),
+    // este valor sería igual al anterior en lugar de reflejar la nueva rareza.
+    expect(secondUpdate.normalizedPoints).not.toBe(firstUpdate.normalizedPoints);
+  });
+
+  it('centinela: unlockedAt usa el timestamp de la API (unlocktime), nunca Date.now()', async () => {
+    const fixedUnlockTime = 1_700_000_000; // 2023-11-14T22:13:20Z — fecha fija, distinta de "ahora"
+    jest.useFakeTimers().setSystemTime(new Date('2026-07-08T12:00:00Z'));
+
+    try {
+      setupSyncMocksFull(50, fixedUnlockTime);
+      const adapter = new SteamAdapter();
+      await adapter.syncUser({ externalId: '76561198000000001', userId: 'user-1' } as never);
+
+      const firstCall = mockPrisma.userAchievement.upsert.mock.calls[0]?.[0];
+      const expectedDate = new Date(fixedUnlockTime * 1000);
+
+      // La fecha escrita es la de la plataforma, no la fecha "actual" del sync.
+      expect(firstCall.update.unlockedAt).toEqual(expectedDate);
+      expect(firstCall.create.unlockedAt).toEqual(expectedDate);
+      expect(firstCall.update.unlockedAt.getTime()).not.toBe(Date.now());
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('centinela: dos syncs consecutivos con el mismo unlocktime producen el mismo unlockedAt (no avanza)', async () => {
+    const fixedUnlockTime = 1_700_000_000;
+
+    setupSyncMocksFull(50, fixedUnlockTime);
+    const adapter = new SteamAdapter();
+    await adapter.syncUser({ externalId: '76561198000000001', userId: 'user-1' } as never);
+    const firstUnlockedAt = mockPrisma.userAchievement.upsert.mock.calls[0]?.[0].update.unlockedAt;
+
+    jest.clearAllMocks();
+    process.env['STEAM_API_KEY'] = STEAM_API_KEY;
+
+    // Avanzamos el reloj del sistema para simular que el re-sync ocurre "más tarde"
+    jest.useFakeTimers().setSystemTime(new Date('2030-01-01T00:00:00Z'));
+    try {
+      setupSyncMocksFull(50, fixedUnlockTime);
+      await adapter.syncUser({ externalId: '76561198000000001', userId: 'user-1' } as never);
+      const secondUnlockedAt = mockPrisma.userAchievement.upsert.mock.calls[0]?.[0].update.unlockedAt;
+
+      expect(secondUnlockedAt).toEqual(firstUnlockedAt);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
 
