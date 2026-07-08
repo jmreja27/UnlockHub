@@ -138,8 +138,8 @@ describe('SteamAdapter.getUserAchievements', () => {
     expect(pistol).toBeDefined();
     expect(pistol?.title).toBe('Pistol Round Winner');
     expect(pistol?.platform).toBe('STEAM');
-    // rareza 50% → normalizedPoints = round((1 - 50/100) * 100) = 50
-    expect(pistol?.normalizedPoints).toBe(50);
+    // rareza 50% → curva F46: ≤50% → 15
+    expect(pistol?.normalizedPoints).toBe(15);
     expect(pistol?.rarity).toBe(50);
   });
 
@@ -204,7 +204,7 @@ describe('SteamAdapter.getUserAchievements', () => {
   });
 });
 
-describe('Normalización de puntos (normalizePoints)', () => {
+describe('Normalización de puntos (normalizeAchievementPoints — curva F46)', () => {
   let adapter: SteamAdapter;
 
   beforeEach(() => {
@@ -230,35 +230,46 @@ describe('Normalización de puntos (normalizePoints)', () => {
       .mockResolvedValueOnce({ data: { achievementpercentages: { achievements: singleRarity } } });
   };
 
-  it('rareza 0% → 100 puntos (logro extremadamente raro)', async () => {
+  it('rareza 0% → 150 puntos (curva F46: ≤1% → 150, logro extremadamente raro)', async () => {
     buildMocksWithRarity(0);
+    const achievements = await adapter.getUserAchievements(STEAM_ID, API_KEY);
+    expect(achievements[0]?.normalizedPoints).toBe(150);
+  });
+
+  it('rareza 100% → 5 puntos (curva F46: >50% → 5, logro trivial)', async () => {
+    buildMocksWithRarity(100);
+    const achievements = await adapter.getUserAchievements(STEAM_ID, API_KEY);
+    expect(achievements[0]?.normalizedPoints).toBe(5);
+  });
+
+  it('rareza 50% → 15 puntos (curva F46: ≤50% → 15, logro de dificultad media)', async () => {
+    buildMocksWithRarity(50);
+    const achievements = await adapter.getUserAchievements(STEAM_ID, API_KEY);
+    expect(achievements[0]?.normalizedPoints).toBe(15);
+  });
+
+  it('rareza 99% → 5 puntos (curva F46: >50% → 5)', async () => {
+    buildMocksWithRarity(99);
+    const achievements = await adapter.getUserAchievements(STEAM_ID, API_KEY);
+    expect(achievements[0]?.normalizedPoints).toBe(5);
+  });
+
+  it('rareza 25% → 15 puntos (curva F46: ≤50% → 15)', async () => {
+    buildMocksWithRarity(25);
+    const achievements = await adapter.getUserAchievements(STEAM_ID, API_KEY);
+    expect(achievements[0]?.normalizedPoints).toBe(15);
+  });
+
+  it('rareza 3% → 100 puntos (curva F46: ≤5% → 100)', async () => {
+    buildMocksWithRarity(3);
     const achievements = await adapter.getUserAchievements(STEAM_ID, API_KEY);
     expect(achievements[0]?.normalizedPoints).toBe(100);
   });
 
-  it('rareza 100% → 1 punto mínimo (logro trivial)', async () => {
-    buildMocksWithRarity(100);
+  it('rareza 8% → 60 puntos (curva F46: ≤10% → 60)', async () => {
+    buildMocksWithRarity(8);
     const achievements = await adapter.getUserAchievements(STEAM_ID, API_KEY);
-    expect(achievements[0]?.normalizedPoints).toBe(1);
-  });
-
-  it('rareza 50% → 50 puntos (logro de dificultad media)', async () => {
-    buildMocksWithRarity(50);
-    const achievements = await adapter.getUserAchievements(STEAM_ID, API_KEY);
-    expect(achievements[0]?.normalizedPoints).toBe(50);
-  });
-
-  it('rareza 99% → 1 punto mínimo (nunca menos de 1)', async () => {
-    buildMocksWithRarity(99);
-    const achievements = await adapter.getUserAchievements(STEAM_ID, API_KEY);
-    // round((1 - 99/100) * 100) = round(1) = 1, ya en el mínimo
-    expect(achievements[0]?.normalizedPoints).toBe(1);
-  });
-
-  it('rareza 25% → 75 puntos', async () => {
-    buildMocksWithRarity(25);
-    const achievements = await adapter.getUserAchievements(STEAM_ID, API_KEY);
-    expect(achievements[0]?.normalizedPoints).toBe(75);
+    expect(achievements[0]?.normalizedPoints).toBe(60);
   });
 });
 

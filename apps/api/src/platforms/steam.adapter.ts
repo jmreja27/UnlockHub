@@ -10,6 +10,7 @@ import { STEAM_MAX_GAMES_PER_SYNC } from '../config/steamQuota';
 
 import type { PlatformAdapter, SyncBatchCallback } from './platform.interface';
 import { getCachedGameMeta, setCachedGameMeta } from './game-cache';
+import { normalizeAchievementPoints } from './achievement-points';
 
 // Clave del sistema — todas las llamadas a Steam usan esta key del servidor
 const STEAM_SYSTEM_API_KEY = process.env['STEAM_API_KEY'] ?? '';
@@ -76,15 +77,6 @@ async function incrementSteamApiCounter(): Promise<void> {
     // Primera llamada del día — fijar TTL de 48h para no acumular claves indefinidamente
     await redis.expire(key, 48 * 3600);
   }
-}
-
-/**
- * Normaliza los puntos de un logro en función de su rareza.
- * Fórmula: Math.round((1 - rarity/100) * 100), mínimo 1, máximo 100.
- */
-function normalizePoints(rarityPercent: number): number {
-  const raw = Math.round((1 - rarityPercent / 100) * 100);
-  return Math.max(1, Math.min(100, raw));
 }
 
 /**
@@ -215,8 +207,7 @@ export class SteamAdapter implements PlatformAdapter {
         const schemaDef = schemaMap.get(pa.apiname);
         const rawRarity = rarityMap.get(pa.apiname) ?? 100;
         const rarityValue = parseFloat(String(rawRarity));
-        const rarityPercent = isNaN(rarityValue) ? 100 : rarityValue;
-        const normalized = normalizePoints(rarityPercent);
+        const normalized = normalizeAchievementPoints(rarityValue);
 
         allAchievements.push({
           id: `steam:${appId}:${pa.apiname}`,
@@ -440,8 +431,7 @@ export class SteamAdapter implements PlatformAdapter {
         const schemaDef = schemaMap.get(pa.apiname);
         const rawRarity = rarityMap.get(pa.apiname) ?? 100;
         const rarityValue = parseFloat(String(rawRarity));
-        const rarityPercent = isNaN(rarityValue) ? 100 : rarityValue;
-        const normalized = normalizePoints(rarityPercent);
+        const normalized = normalizeAchievementPoints(rarityValue);
 
         const dbAchievement = await prisma.achievement.upsert({
           where: { platform_gameId_externalId: { platform: 'STEAM', gameId: dbGame.id, externalId: pa.apiname } },
@@ -733,7 +723,6 @@ export async function fetchSteamAchievementDefinitions(
   return schemaRaw.map((ach) => {
     const rawRarity = rarityMap.get(ach.name) ?? 100;
     const rarityValue = parseFloat(String(rawRarity));
-    const rarityPercent = isNaN(rarityValue) ? 100 : rarityValue;
     return {
       externalId: ach.name,
       title: ach.displayName,
@@ -744,7 +733,7 @@ export async function fetchSteamAchievementDefinitions(
           : `${STEAM_STORE_CDN}/${appId}/${ach.icon}.jpg`
         : null,
       rarity: isNaN(rarityValue) ? null : rarityValue,
-      normalizedPoints: normalizePoints(rarityPercent),
+      normalizedPoints: normalizeAchievementPoints(rarityValue),
     };
   });
 }

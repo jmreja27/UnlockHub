@@ -24,6 +24,7 @@ import { AppError } from '../middleware/errorHandler';
 
 import type { PlatformAdapter, SyncBatchCallback } from './platform.interface';
 import { getCachedGameMeta, setCachedGameMeta } from './game-cache';
+import { normalizeAchievementPoints } from './achievement-points';
 
 // ─── Constantes ────────────────────────────────────────────────────────────────
 
@@ -40,14 +41,6 @@ const TTL_SYSTEM_TOKEN  = 55 * 60;  // 55 minutos — tokens PSN expiran en 60 m
 // por lo que el timeout se implementa vía Promise.race.
 // Sin timeout, PSN colgada bloquea un slot de worker BullMQ hasta lockDuration (5 min).
 const PSN_REQUEST_TIMEOUT_MS = 15_000;
-
-// Puntos normalizados por tipo de trofeo PSN
-const TROPHY_POINTS: Record<string, number> = {
-  bronze:   15,
-  silver:   30,
-  gold:     90,
-  platinum: 300,
-};
 
 // Clave Redis del access token del sistema
 const REDIS_SYSTEM_TOKEN_KEY = 'psn:system:access_token';
@@ -83,18 +76,6 @@ function extractAccountIdFromIdToken(idToken: string): string {
     throw new AppError('No se encontró accountId en el idToken PSN', 'PSN_AUTH_ERROR', 502);
   }
   return payload.sub;
-}
-
-/**
- * Devuelve puntos normalizados en función del tipo de trofeo y la rareza.
- */
-function normalizePoints(trophyType: string, earnedRate?: string): number {
-  const base = TROPHY_POINTS[trophyType.toLowerCase()] ?? 15;
-  if (!earnedRate) return base;
-  const rarity = parseFloat(earnedRate);
-  if (isNaN(rarity) || rarity < 0 || rarity > 100) return base;
-  const multiplier = 1 + (1 - rarity / 100);
-  return Math.round(base * multiplier);
 }
 
 /**
@@ -291,6 +272,7 @@ export class PsnAdapter implements PlatformAdapter {
     for (const title of titles) {
       const trophies = await this.fetchMergedTrophies(auth, title, accountId);
       for (const t of trophies) {
+        const rarityValue = t.trophyEarnedRate ? parseFloat(t.trophyEarnedRate) : NaN;
         results.push({
           id: `psn:${title.npCommunicationId}:${t.trophyId}`,
           gameId: title.npCommunicationId,
@@ -299,9 +281,9 @@ export class PsnAdapter implements PlatformAdapter {
           title: t.trophyName ?? String(t.trophyId),
           description: t.trophyDetail ?? null,
           iconUrl: t.trophyIconUrl ?? null,
-          rawValue: t.trophyEarnedRate ? parseFloat(t.trophyEarnedRate) : null,
-          normalizedPoints: normalizePoints(t.trophyType, t.trophyEarnedRate),
-          rarity: t.trophyEarnedRate ? parseFloat(t.trophyEarnedRate) : null,
+          rawValue: isNaN(rarityValue) ? null : rarityValue,
+          normalizedPoints: normalizeAchievementPoints(rarityValue),
+          rarity: isNaN(rarityValue) ? null : rarityValue,
           externalUrl: null,
         });
       }
@@ -439,6 +421,8 @@ export class PsnAdapter implements PlatformAdapter {
     let achievementsSynced = 0;
 
     for (const t of trophies) {
+      const rarityValue = t.trophyEarnedRate ? parseFloat(t.trophyEarnedRate) : NaN;
+      const normalized = normalizeAchievementPoints(rarityValue);
       const dbAchievement = await prisma.achievement.upsert({
         where: { platform_gameId_externalId: { platform: 'PSN', gameId: dbGame.id, externalId: `${title.npCommunicationId}:${t.trophyId}` } },
         create: {
@@ -448,17 +432,17 @@ export class PsnAdapter implements PlatformAdapter {
           title: t.trophyName ?? String(t.trophyId),
           description: t.trophyDetail ?? null,
           iconUrl: t.trophyIconUrl ?? null,
-          rawValue: t.trophyEarnedRate ? parseFloat(t.trophyEarnedRate) : null,
-          normalizedPoints: normalizePoints(t.trophyType, t.trophyEarnedRate),
-          rarity: t.trophyEarnedRate ? parseFloat(t.trophyEarnedRate) : null,
+          rawValue: isNaN(rarityValue) ? null : rarityValue,
+          normalizedPoints: normalized,
+          rarity: isNaN(rarityValue) ? null : rarityValue,
           externalUrl: `https://psnprofiles.com/${account.username}`,
         },
         update: {
           title: t.trophyName ?? String(t.trophyId),
           description: t.trophyDetail ?? null,
-          rawValue: t.trophyEarnedRate ? parseFloat(t.trophyEarnedRate) : null,
-          normalizedPoints: normalizePoints(t.trophyType, t.trophyEarnedRate),
-          rarity: t.trophyEarnedRate ? parseFloat(t.trophyEarnedRate) : null,
+          rawValue: isNaN(rarityValue) ? null : rarityValue,
+          normalizedPoints: normalized,
+          rarity: isNaN(rarityValue) ? null : rarityValue,
         },
       });
 

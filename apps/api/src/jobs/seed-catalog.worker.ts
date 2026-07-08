@@ -16,6 +16,7 @@ import type { Job } from 'bullmq';
 import { createWorkerConnection } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
+import { normalizeAchievementPoints } from '../platforms/achievement-points';
 
 import type { SeedCatalogJobData, SeedCatalogJobResult } from './seed-catalog.queue';
 
@@ -82,11 +83,6 @@ interface RaGameExtended {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function normalizeSteamPoints(rarityPercent: number): number {
-  const raw = Math.round((1 - rarityPercent / 100) * 100);
-  return Math.max(1, Math.min(100, raw));
 }
 
 function normalizeRaPoints(points: number | undefined): number {
@@ -209,7 +205,7 @@ async function seedSteamGames(
             description: ach.description ?? null,
             iconUrl: ach.icon ? `${STEAM_STORE_CDN}/${appId}/${ach.icon}.jpg` : null,
             rawValue: rarityPercent,
-            normalizedPoints: normalizeSteamPoints(rarityPercent),
+            normalizedPoints: normalizeAchievementPoints(rarityPercent),
             rarity: rarityPercent,
             externalUrl: `https://store.steampowered.com/app/${appId}`,
           },
@@ -217,7 +213,7 @@ async function seedSteamGames(
             title: ach.displayName ?? ach.name,
             description: ach.description ?? null,
             rawValue: rarityPercent,
-            normalizedPoints: normalizeSteamPoints(rarityPercent),
+            normalizedPoints: normalizeAchievementPoints(rarityPercent),
             rarity: rarityPercent,
           },
         });
