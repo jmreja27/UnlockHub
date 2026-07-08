@@ -538,12 +538,29 @@ Al borrar una cuenta:
 
 No modificar estas fórmulas sin actualizar este documento y regenerar los valores existentes en BD.
 
+**Fórmula actual (vigente en producción):**
+
 | Plataforma | Valor original | Fórmula → XP UnlockHub |
 |---|---|---|
 | **Steam** | % jugadores con el logro (rareza) | `≤5% → 100 XP`, `≤15% → 50 XP`, `≤30% → 25 XP`, `>30% → 10 XP` |
 | **RetroAchievements** | Puntos RA (1–500) | `Math.round(puntosRA / 5)`, mínimo 5 XP |
 | **PSN** | Tipo de trofeo | Bronce → 15 XP, Plata → 30 XP, Oro → 90 XP, Platino → 300 XP |
 | **Xbox** | Gamerscore (0–1000) | `Math.round(gamerscore / 10)`, mínimo 5 XP |
+
+**Fórmula nueva — diseñada, pendiente implementar (F46, ver docs/BACKLOG.md):** reemplaza Steam y PSN por una curva de rareza común basada en `%` de jugadores con el logro, con multiplicador de tipo de trofeo solo para PSN. RA se queda como está (sin rareza comparable).
+
+```
+normalizedPoints = base_rareza × multiplicador_tipo
+
+base_rareza (común Steam/PSN, sobre % de jugadores con el logro):
+  ≤1% → 150 | ≤5% → 100 | ≤10% → 60 | ≤20% → 35 | ≤50% → 15 | >50% → 5
+
+multiplicador_tipo (solo PSN):
+  Bronce ×1 | Plata ×1.5 | Oro ×2 | Platino ×3
+  (Steam sin tipos → ×1 efectivo; RA sin cambios)
+```
+
+Se recalcula en cada sync (la rareza fluctúa con el tiempo — el XP refleja la dificultad vigente del logro). Incluye recálculo histórico de todos los usuarios al desplegar Fase 3 del plan. Ver F46 en `docs/BACKLOG.md` para el diseño completo y el plan de implementación por fases.
 
 ### Sistema de escudo de racha
 
