@@ -538,29 +538,20 @@ Al borrar una cuenta:
 
 No modificar estas fórmulas sin actualizar este documento y regenerar los valores existentes en BD.
 
-**Fórmula actual (vigente en producción):**
+**Fórmula actual (vigente en producción, F46 Opción A):**
 
 | Plataforma | Valor original | Fórmula → XP UnlockHub |
 |---|---|---|
-| **Steam** | % jugadores con el logro (rareza) | `≤5% → 100 XP`, `≤15% → 50 XP`, `≤30% → 25 XP`, `>30% → 10 XP` |
+| **Steam** | % jugadores con el logro (rareza real) | Curva de rareza (`achievement-points.ts` → `normalizeAchievementPoints`): `≤1% → 150`, `≤5% → 100`, `≤10% → 60`, `≤20% → 35`, `≤50% → 15`, `>50% → 5` |
 | **RetroAchievements** | Puntos RA (1–500) | `Math.round(puntosRA / 5)`, mínimo 5 XP |
-| **PSN** | Tipo de trofeo | Bronce → 15 XP, Plata → 30 XP, Oro → 90 XP, Platino → 300 XP |
+| **PSN** | Tipo de trofeo (fallback) — rareza real no viable con psn-api, ver más abajo | `achievement-points.ts` → `normalizePsnAchievementPoints`: Bronce → 10 XP, Plata → 20 XP, Oro → 50 XP, Platino → 100 XP |
 | **Xbox** | Gamerscore (0–1000) | `Math.round(gamerscore / 10)`, mínimo 5 XP |
 
-**Fórmula nueva — diseñada, pendiente implementar (F46, ver docs/BACKLOG.md):** reemplaza Steam y PSN por una curva de rareza común basada en `%` de jugadores con el logro, con multiplicador de tipo de trofeo solo para PSN. RA se queda como está (sin rareza comparable).
+**F46 cerrado (2026-07-08) — Opción A confirmada.** Se descartó la Opción B (rareza real también para PSN) porque `psn-api` no devuelve `trophyEarnedRate` de forma fiable — la API PS5 requiere contexto de un usuario que haya jugado el título, así que en la práctica siempre llega `null`. En vez de forzarla, PSN usa el tipo de trofeo como XP, recalibrado para no exceder el techo de la curva de Steam (150) — antes era Bronce 15/Plata 30/Oro 90/Platino 300, lo que hacía que un Platino común valiera el doble que el logro Steam más raro.
 
-```
-normalizedPoints = base_rareza × multiplicador_tipo
+**Costura para Opción B futura, sin refactor**: `normalizePsnAchievementPoints(rarityPercent, trophyType)` en `achievement-points.ts` ya acepta un `rarityPercent` opcional — si en el futuro se obtiene una rareza real de PSN por otra vía, se le pasa ahí y la función aplica automáticamente la MISMA curva que Steam (`normalizeAchievementPoints`), ignorando el tipo de trofeo. Hoy `psn.adapter.ts` siempre pasa `NaN`/`null` (el caso real de `trophyEarnedRate` ausente), así que siempre cae al fallback por tipo. Sin flags, sin interfaces nuevas — un test en `achievement-points.test.ts` cubre explícitamente esa rama para el día que se active.
 
-base_rareza (común Steam/PSN, sobre % de jugadores con el logro):
-  ≤1% → 150 | ≤5% → 100 | ≤10% → 60 | ≤20% → 35 | ≤50% → 15 | >50% → 5
-
-multiplicador_tipo (solo PSN):
-  Bronce ×1 | Plata ×1.5 | Oro ×2 | Platino ×3
-  (Steam sin tipos → ×1 efectivo; RA sin cambios)
-```
-
-Se recalcula en cada sync (la rareza fluctúa con el tiempo — el XP refleja la dificultad vigente del logro). Incluye recálculo histórico de todos los usuarios al desplegar Fase 3 del plan. Ver F46 en `docs/BACKLOG.md` para el diseño completo y el plan de implementación por fases.
+Se recalcula en cada sync (igual que antes de F46). Ver F46 en `docs/BACKLOG.md` para el historial de diseño completo.
 
 ### Sistema de escudo de racha
 
@@ -1271,6 +1262,8 @@ Ver [docs/BACKLOG.md](docs/BACKLOG.md)
 ---
 
 ## Última revisión de código
+
+**Fecha**: 2026-07-08 (feat(scoring): F46 fase 3 — PSN pivota a Opción A, curva de rareza confirmada no viable) — Verificado en esta sesión que `psn-api` no devuelve `trophyEarnedRate` de forma fiable (limitación ya anotada en la sección PSN de este documento) — se descarta la Opción B (rareza real para PSN) para el lanzamiento y se confirma Opción A: PSN calcula XP por tipo de trofeo. `achievement-points.ts`: nueva `normalizePsnAchievementPoints(rarityPercent, trophyType)` — si `rarityPercent` es válido usa la misma curva que Steam (`normalizeAchievementPoints`, costura lista para cuando/si llega rareza real de PSN por otra vía); si no (el caso siempre hoy), fallback a tabla por tipo recalibrada: Bronce 10/Plata 20/Oro 50/Platino 100 (antes 15/30/90/300 — el valor viejo de Platino excedía el techo de la curva Steam, 150, descompensando el ranking cross-plataforma). `psn.adapter.ts`: los 2 call-sites de `normalizeAchievementPoints` migrados a `normalizePsnAchievementPoints(rarityValue, t.trophyType)`. Steam sin cambios (ya usaba rareza real desde F46 fase 1). Tests: 12 nuevos en `achievement-points.test.ts` (fallback por tipo, rareza fuera de rango, y la rama de rareza real para la costura futura); tests existentes de `psn.adapter.test.ts` sin cambios (usan mocks con rareza válida, delegan igual a la curva). Fórmula documentada en la sección "Sistema de XP" de este documento. **Tests: 726 API (+12) · sin cambios mobile · 0 TS/lint.** No desplegado (solo develop).
 
 **Fecha**: 2026-07-02 (docs — T123 actualizado con nuevos síntomas + nuevo T127 challenges) — Solo docs, 0 código. Nuevos bugs de dispositivo observados en continuación de la prueba cerrada v1.4.0. **T123 actualizado**: spinner colgado en el filtro "Último jugado" de la biblioteca + pull-to-refresh que no se quita en varias pantallas — confirmado que son manifestaciones del mismo problema ya diagnosticado en T107 (`fetchAllRemainingPages` persigue un `total` que cambia con syncs activos), agravado por los syncs disparados tras vincular (T124). Solución de fondo sigue siendo T114 (sync selectivo) + paginación/sort server-side. **T127 (nuevo, 🟡)**: dos bugs en retos a amigos (challenges) — avatares vacíos al retar + sin feedback de confirmación tras retar. `FEATURES.challenges` está gateado (`= false`) — confirmar el estado del gate en el build de testers antes de priorizar el fix. Ver `docs/BACKLOG.md` (T123, T127) y `docs/SESSION_LOG.md` para detalle completo. Tests: sin cambios (673 API · 487 mobile).
 

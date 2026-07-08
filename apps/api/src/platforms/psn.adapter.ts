@@ -24,7 +24,7 @@ import { AppError } from '../middleware/errorHandler';
 
 import type { PlatformAdapter, SyncBatchCallback } from './platform.interface';
 import { getCachedGameMeta, setCachedGameMeta } from './game-cache';
-import { normalizeAchievementPoints } from './achievement-points';
+import { normalizePsnAchievementPoints } from './achievement-points';
 
 // ─── Constantes ────────────────────────────────────────────────────────────────
 
@@ -282,7 +282,7 @@ export class PsnAdapter implements PlatformAdapter {
           description: t.trophyDetail ?? null,
           iconUrl: t.trophyIconUrl ?? null,
           rawValue: isNaN(rarityValue) ? null : rarityValue,
-          normalizedPoints: normalizeAchievementPoints(rarityValue),
+          normalizedPoints: normalizePsnAchievementPoints(rarityValue, t.trophyType),
           rarity: isNaN(rarityValue) ? null : rarityValue,
           externalUrl: null,
         });
@@ -422,7 +422,7 @@ export class PsnAdapter implements PlatformAdapter {
 
     for (const t of trophies) {
       const rarityValue = t.trophyEarnedRate ? parseFloat(t.trophyEarnedRate) : NaN;
-      const normalized = normalizeAchievementPoints(rarityValue);
+      const normalized = normalizePsnAchievementPoints(rarityValue, t.trophyType);
       const dbAchievement = await prisma.achievement.upsert({
         where: { platform_gameId_externalId: { platform: 'PSN', gameId: dbGame.id, externalId: `${title.npCommunicationId}:${t.trophyId}` } },
         create: {

@@ -1,4 +1,4 @@
-import { normalizeAchievementPoints } from './achievement-points';
+import { normalizeAchievementPoints, normalizePsnAchievementPoints } from './achievement-points';
 
 describe('normalizeAchievementPoints — curva de rareza F46 Fase 1 (Opción A, sin multiplicador)', () => {
   it('rareza ≤1% → 150 (ultra raro)', () => {
@@ -88,6 +88,54 @@ describe('normalizeAchievementPoints — curva de rareza F46 Fase 1 (Opción A, 
       const fromPsnCallSite = normalizeAchievementPoints(rarity);
       expect(fromSteamCallSite).toBe(fromPsnCallSite);
       expect(fromSteamCallSite).toBe(100);
+    });
+  });
+});
+
+describe('normalizePsnAchievementPoints — F46 Opción A confirmada (fallback por tipo + costura de rareza futura)', () => {
+  describe('caso actual — sin rareza (psn-api no la devuelve de forma fiable) → fallback por tipo de trofeo', () => {
+    it('bronze → 10', () => {
+      expect(normalizePsnAchievementPoints(null, 'bronze')).toBe(10);
+      expect(normalizePsnAchievementPoints(undefined, 'bronze')).toBe(10);
+      expect(normalizePsnAchievementPoints(NaN, 'bronze')).toBe(10);
+    });
+
+    it('silver → 20', () => {
+      expect(normalizePsnAchievementPoints(null, 'silver')).toBe(20);
+    });
+
+    it('gold → 50', () => {
+      expect(normalizePsnAchievementPoints(null, 'gold')).toBe(50);
+    });
+
+    it('platinum → 100 (no excede el techo de Steam, 150)', () => {
+      expect(normalizePsnAchievementPoints(null, 'platinum')).toBe(100);
+    });
+
+    it('rareza fuera de rango (negativa o >100) también cae al fallback por tipo', () => {
+      expect(normalizePsnAchievementPoints(-5, 'gold')).toBe(50);
+      expect(normalizePsnAchievementPoints(150, 'gold')).toBe(50);
+    });
+  });
+
+  describe('costura Opción B futura — si llega rareza real, usa la curva de Steam en lugar del tipo', () => {
+    it('rareza válida ignora el trophyType y aplica la misma curva que Steam', () => {
+      expect(normalizePsnAchievementPoints(0.5, 'bronze')).toBe(150);
+      expect(normalizePsnAchievementPoints(3, 'bronze')).toBe(100);
+      expect(normalizePsnAchievementPoints(8, 'silver')).toBe(60);
+      expect(normalizePsnAchievementPoints(15, 'gold')).toBe(35);
+      expect(normalizePsnAchievementPoints(40, 'platinum')).toBe(15);
+      expect(normalizePsnAchievementPoints(75, 'platinum')).toBe(5);
+    });
+
+    it('un platino raro (rareza real ≤1%) vale lo mismo que un logro Steam igual de raro', () => {
+      const rarity = 0.8;
+      expect(normalizePsnAchievementPoints(rarity, 'platinum')).toBe(normalizeAchievementPoints(rarity));
+    });
+
+    it('bordes exactos de rareza se respetan igual que en Steam (0 y 100)', () => {
+      expect(normalizePsnAchievementPoints(0, 'bronze')).toBe(150);
+      expect(normalizePsnAchievementPoints(100, 'bronze')).toBe(5);
     });
   });
 });
