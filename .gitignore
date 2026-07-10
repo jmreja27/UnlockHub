@@ -21,6 +21,8 @@ ios/
 .env.production
 .env.staging
 .env.development
+.env.ops
+.env.*
 !.env.example
 !.env.*.example
 

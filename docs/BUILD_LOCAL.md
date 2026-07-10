@@ -1,4 +1,82 @@
-# BUILD_LOCAL — APK debug local (Expo SDK 55 + RN 0.83.6)
+# BUILD_LOCAL — Entorno local (backend + APK debug)
+
+Guía con dos partes independientes:
+1. **Backend local** (API + Worker + Docker) — para desarrollar contra Postgres/Redis en tu máquina, sin tocar producción.
+2. **APK debug standalone** (Expo SDK 55 + RN 0.83.6) — para generar un APK sin Metro.
+
+---
+
+## Parte 1 — Backend local (API + Worker + Docker)
+
+Última verificación: 2026-07-10.
+
+### Flujo completo
+
+```bash
+# 1. Levantar Postgres + Redis en Docker
+cd C:\Users\Juanjo\Desktop\UnlockHub
+docker-compose up -d
+docker ps   # confirmar STATUS "healthy" en unlockhub-postgres-1 y unlockhub-redis-1
+
+# 2. Construir los paquetes compartidos (necesario tras un clone limpio o npm install)
+npm run build --workspace=packages/validators --workspace=packages/types
+# Sin este paso, "npm run dev:api" falla con:
+#   Error: Cannot find module '...\node_modules\@unlockhub\validators\dist\index.js'
+# porque el "main" de esos package.json apunta a dist/ (no versionado, ver .gitignore) y
+# nada lo compila automáticamente al arrancar en modo dev — solo con "npm run build".
+
+# 3. Migrar y sembrar la BD LOCAL (usa apps/api/.env, nunca .env.ops)
+npm run db:migrate --workspace=apps/api
+npm run db:seed --workspace=apps/api
+
+# 4. Arrancar API y worker (en dos terminales, o en background)
+npm run dev:api      # http://localhost:3000 — carga apps/api/.env vía --env-file-if-exists
+npm run dev:worker    # carga el mismo apps/api/.env (ruta relativa ../api/.env)
+
+# 5. Verificar
+curl http://localhost:3000/health
+```
+
+Cuenta de prueba tras el seed: `demo@unlockhub.test` / `Demo1234!`.
+
+### El fichero `apps/api/.env` (LOCAL — no confundir con `.env.ops`)
+
+- `apps/api/.env`: entorno de **desarrollo local**. `DATABASE_URL`/`REDIS_URL` apuntan a `localhost` (Docker). Ignorado por git (`.gitignore` regla `.env`, línea 18).
+- `apps/api/.env.ops`: entorno de **operaciones sobre producción** (Railway). Nunca se carga automáticamente por `npm run dev` — solo se usa explícitamente al ejecutar un script puntual contra producción (ver más abajo). También ignorado por git.
+- `CLOUDINARY_URL` debe dejarse **sin definir** en `.env` local (comentado, no `CLOUDINARY_URL=`) — el schema Zod usa `z.string().url().optional()`, que acepta `undefined` pero rechaza `""` como URL inválida.
+- Credenciales de plataformas (`STEAM_API_KEY`, `RA_SYSTEM_USER`/`KEY`, `PSN_SYSTEM_NPSSO`, `XBOX_CLIENT_*`) son opcionales en el schema (`z.string().optional()`) — pueden dejarse vacías en local; el sync de esas plataformas simplemente no funcionará hasta configurarlas.
+
+### Scripts añadidos/ajustados para esta separación
+
+| Script | Ubicación | Cambio |
+|---|---|---|
+| `dev` | `apps/api/package.json` | `tsx watch --env-file-if-exists=.env src/index.ts` — usa `--env-file-if-exists` (no `--env-file`) para que producción (que no tiene `.env`, solo variables de Railway) no falle al arrancar si el fichero no existe. |
+| `start` | `apps/api/package.json` | Sin cambios — `node dist/index.js`, el que usa Railway. |
+| `dev` | `apps/worker/package.json` | `tsx watch --env-file-if-exists=../api/.env src/index.ts` — reutiliza el mismo `.env` de `apps/api` (ruta relativa desde `apps/worker`). |
+| `start` | `apps/worker/package.json` | Sin cambios — `tsx src/index.ts`, el que usa Railway. |
+| `dev:worker` | root `package.json` | Nuevo — `npm run dev --workspace=apps/worker`, análogo a `dev:api` y `dev:mobile`. |
+
+### Conectar el móvil (emulador) al backend local
+
+En `apps/mobile/.env`, apuntar `EXPO_PUBLIC_API_URL` a `http://10.0.2.2:3000` (nunca `localhost` desde el emulador Android — ver quirks en la sección de APK más abajo). Revertir a la URL de producción (`https://unlockhub-production.up.railway.app`) para builds/pruebas contra producción.
+
+### Ejecutar scripts de operación (`scripts/backfill-*`, etc.) contra PRODUCCIÓN
+
+Estos scripts son las únicas piezas de código que deben tocar producción, y **siempre de forma explícita** — nunca cargan `.env.ops` por defecto. `tsx` (ya instalado como devDependency en `apps/api`) soporta el mismo flag nativo de Node `--env-file`:
+
+```bash
+# Ejecutar SIEMPRE desde apps/api/ (@prisma/client solo está en apps/api/node_modules)
+cd apps/api
+npx tsx --env-file=.env.ops ../../scripts/backfill-game-console.ts
+```
+
+Nota deliberada: se usa `--env-file` (no `--env-file-if-exists`) para estos scripts — si `.env.ops` no existe o la ruta está mal escrita, debe fallar ruidosamente en vez de ejecutarse silenciosamente sin credenciales de producción.
+
+Regla: nunca renombrar ni copiar `.env.ops` a `.env` para "probar rápido" — eso elimina la barrera explícita entre desarrollo y producción. Si un script necesita ejecutarse contra producción, se pasa `.env.ops` por su nombre completo en el propio comando.
+
+---
+
+## Parte 2 — APK debug local (Expo SDK 55 + RN 0.83.6)
 
 Guía para generar un APK debug standalone (sin Metro) desde el monorepo en Windows.
 Última verificación: 2026-06-04 — BUILD SUCCESSFUL en 22m 22s, APK debug 204.9 MB.
