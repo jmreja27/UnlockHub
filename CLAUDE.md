@@ -838,6 +838,18 @@ io.adapter(createAdapter(pubClient, subClient));
 
 ## Reglas generales de desarrollo
 
+> ## ⚠️ NORMA (app EN PRODUCCIÓN): desarrollo y pruebas SIEMPRE en LOCAL
+>
+> - Todo desarrollo, prueba, experimento o migración de prueba se ejecuta contra el entorno local (Docker: Postgres + Redis local; API y worker con `npm run dev`, que cargan `apps/api/.env` local). Ver [BUILD_LOCAL.md](docs/BUILD_LOCAL.md) para arrancarlo.
+> - Producción se toca **SOLO** en dos casos, ambos deliberados:
+>   1. **Deploy de código ya probado**, vía el flujo git normal (merge a `main` → build / push a `develop` → Railway auto-deploy). Nunca código sin probar.
+>   2. **Operaciones manuales puntuales y conscientes** (ej. scripts backfill), pasando `.env.ops` **EXPLÍCITAMENTE** (`npx tsx --env-file=.env.ops script.ts`). Nunca por defecto.
+> - **NUNCA** desarrollar, experimentar o "probar a ver qué pasa" contra la BD/Redis de producción. Hay usuarios reales; un error corrompe sus datos sin vuelta atrás fácil.
+> - El default es seguro por diseño: `apps/api/.env` (local) es lo que cargan Prisma y la app por defecto; `.env.ops` (producción) solo se usa si se pasa explícitamente. **NO inviertas esto.**
+> - Antes de cualquier operación que toque datos (migración, backfill, recálculo): probarla en local primero, verificar el resultado, y solo entonces —si aplica— ejecutarla contra producción de forma consciente.
+
+---
+
 - **EAS Build — REGLA ABSOLUTA**: Nunca lanzar `eas build` sin que el desarrollador lo pida explícitamente en ese mismo mensaje.
 - **EAS Build — verificar assets antes de lanzar**: Antes de cualquier build EAS de producción, confirmar que los assets de `assets/` (icono, splash, adaptive icon) son los finales de la marca — dimensiones correctas (icono 1024×1024, splash sin texto cortado), sin canal alfa en el icono PNG (Play Store lo rechaza), sin placeholders ni mockups. Un build con assets incorrectos consume cuota EAS y puede requerir nueva revisión de Play Store.
 - **TypeScript strict** en todo el código. Sin `any`. Sin excepciones.
@@ -874,6 +886,8 @@ io.adapter(createAdapter(pubClient, subClient));
 ---
 
 ## Entornos
+
+> **⚠️ Recordatorio — app en producción con usuarios reales**: desarrollo y pruebas SIEMPRE contra el entorno local de abajo. Producción se toca solo con deploy de código ya probado o con `.env.ops` explícito para operaciones puntuales. Ver la norma completa en "Reglas generales de desarrollo" arriba.
 
 ### Local — backend completo (API + Worker + Docker)
 

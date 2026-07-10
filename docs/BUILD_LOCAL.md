@@ -1,5 +1,17 @@
 # BUILD_LOCAL — Entorno local (backend + APK debug)
 
+> ## ⚠️ NORMA (app EN PRODUCCIÓN): desarrollo y pruebas SIEMPRE en LOCAL
+>
+> - Todo desarrollo, prueba, experimento o migración de prueba se ejecuta contra el entorno local (Docker: Postgres + Redis local; API y worker con `npm run dev`, que cargan `apps/api/.env` local) — la Parte 1 de esta guía es exactamente cómo arrancarlo.
+> - Producción se toca **SOLO** en dos casos, ambos deliberados:
+>   1. **Deploy de código ya probado**, vía el flujo git normal (merge a `main` → build / push a `develop` → Railway auto-deploy). Nunca código sin probar.
+>   2. **Operaciones manuales puntuales y conscientes** (ej. scripts backfill), pasando `.env.ops` **EXPLÍCITAMENTE** (`npx tsx --env-file=.env.ops script.ts` — ver la sección correspondiente más abajo). Nunca por defecto.
+> - **NUNCA** desarrollar, experimentar o "probar a ver qué pasa" contra la BD/Redis de producción. Hay usuarios reales; un error corrompe sus datos sin vuelta atrás fácil.
+> - El default es seguro por diseño: `apps/api/.env` (local) es lo que cargan Prisma y la app por defecto; `.env.ops` (producción) solo se usa si se pasa explícitamente. **NO inviertas esto.**
+> - Antes de cualquier operación que toque datos (migración, backfill, recálculo): probarla en local primero, verificar el resultado, y solo entonces —si aplica— ejecutarla contra producción de forma consciente.
+
+---
+
 Guía con dos partes independientes:
 1. **Backend local** (API + Worker + Docker) — para desarrollar contra Postgres/Redis en tu máquina, sin tocar producción.
 2. **APK debug standalone** (Expo SDK 55 + RN 0.83.6) — para generar un APK sin Metro.
