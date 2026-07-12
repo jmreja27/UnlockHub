@@ -3,6 +3,7 @@ import type { GamingWrapped, Platform } from '@unlockhub/types';
 
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
+import { isPsnPlatinumAchievement } from '../platforms/achievement-points';
 
 type UserAchievementFull = Prisma.UserAchievementGetPayload<{
   select: {
@@ -14,6 +15,7 @@ type UserAchievementFull = Prisma.UserAchievementGetPayload<{
         rarity: true;
         normalizedPoints: true;
         platform: true;
+        trophyType: true;
         game: {
           select: {
             id: true;
@@ -58,6 +60,7 @@ async function loadUserAchievements(
           rarity: true,
           normalizedPoints: true,
           platform: true,
+          trophyType: true,
           game: {
             select: {
               id: true,
@@ -214,10 +217,13 @@ async function computeExtendedStats(
     }
   }
 
-  // platinumsEarned: logros PSN con normalizedPoints === 300 desbloqueados en el año
+  // platinumsEarned: trofeos platino PSN desbloqueados en el año (ver isPsnPlatinumAchievement)
   let platinumsEarned = 0;
   for (const ua of userAchievements) {
-    if (ua.achievement.platform === 'PSN' && ua.achievement.normalizedPoints === 300) {
+    if (
+      ua.achievement.platform === 'PSN' &&
+      isPsnPlatinumAchievement(ua.achievement.trophyType, ua.achievement.normalizedPoints)
+    ) {
       platinumsEarned++;
     }
   }

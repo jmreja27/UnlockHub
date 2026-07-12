@@ -642,14 +642,16 @@ describe('userService.getMyGames', () => {
   // hasPlatinum/platinumEarned se resuelven con prisma.achievement.findMany /
   // prisma.userAchievement.findMany, acotados a los juegos PSN de la página — no a toda
   // la biblioteca como antes (mismo resultado para los juegos devueltos, menos trabajo).
+  //
+  // T136: la detección usa isPsnPlatinumAchievement (trophyType, con fallback transitorio
+  // a normalizedPoints === 300 || 100 mientras trophyType no esté poblado — ver T137).
 
-  it('PSN: hasPlatinum=true cuando hay un achievement con normalizedPoints=300 en el juego', async () => {
+  it('PSN: hasPlatinum=true por trophyType="platinum" (detección robusta)', async () => {
     const row = makeRow({ id: 'psn-1', title: 'God of War', platform: 'PSN', totalAchievements: 52 });
     mockQueryRaw([row], computeAggregates([row]));
-    // prisma.achievement.findMany devuelve todos los achievements del juego PSN, incluyendo el platino
     (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([
-      { gameId: 'psn-1', normalizedPoints: 30 },
-      { gameId: 'psn-1', normalizedPoints: 300 }, // platino disponible
+      { gameId: 'psn-1', normalizedPoints: 30, trophyType: 'gold' },
+      { gameId: 'psn-1', normalizedPoints: 100, trophyType: 'platinum' }, // platino disponible, XP post-F46
     ]);
     (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([]); // platino no ganado
 
@@ -659,24 +661,62 @@ describe('userService.getMyGames', () => {
     expect(result.data[0]?.platinumEarned).toBe(false);
   });
 
-  it('PSN: platinumEarned=true cuando el usuario ha ganado el achievement con 300 pts', async () => {
+  it('PSN: platinumEarned=true cuando el usuario ha ganado el achievement con trophyType="platinum"', async () => {
     const row = makeRow(
       { id: 'psn-1', title: 'God of War', platform: 'PSN', totalAchievements: 2 },
       { earnedAchievements: 2 },
     );
     mockQueryRaw([row], computeAggregates([row]));
     (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([
-      { gameId: 'psn-1', normalizedPoints: 30 },
-      { gameId: 'psn-1', normalizedPoints: 300 },
+      { gameId: 'psn-1', normalizedPoints: 30, trophyType: 'gold' },
+      { gameId: 'psn-1', normalizedPoints: 100, trophyType: 'platinum' },
     ]);
     (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
-      { achievement: { gameId: 'psn-1' } },
+      { achievement: { gameId: 'psn-1', normalizedPoints: 100, trophyType: 'platinum' } },
     ]);
 
     const result = await userService.getMyGames('user-1');
 
     expect(result.data[0]?.platinumEarned).toBe(true);
     expect(result.data[0]?.hasPlatinum).toBe(true);
+  });
+
+  it('PSN: fallback transitorio — trophyType null + normalizedPoints=100 (XP nuevo post-F46) → hasPlatinum/platinumEarned true', async () => {
+    const row = makeRow(
+      { id: 'psn-1', title: 'God of War', platform: 'PSN', totalAchievements: 2 },
+      { earnedAchievements: 2 },
+    );
+    mockQueryRaw([row], computeAggregates([row]));
+    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([
+      { gameId: 'psn-1', normalizedPoints: 100, trophyType: null },
+    ]);
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
+      { achievement: { gameId: 'psn-1', normalizedPoints: 100, trophyType: null } },
+    ]);
+
+    const result = await userService.getMyGames('user-1');
+
+    expect(result.data[0]?.hasPlatinum).toBe(true);
+    expect(result.data[0]?.platinumEarned).toBe(true);
+  });
+
+  it('PSN: fallback transitorio — trophyType null + normalizedPoints=300 (XP viejo pre-F46, histórico) → hasPlatinum/platinumEarned true', async () => {
+    const row = makeRow(
+      { id: 'psn-1', title: 'God of War', platform: 'PSN', totalAchievements: 2 },
+      { earnedAchievements: 2 },
+    );
+    mockQueryRaw([row], computeAggregates([row]));
+    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([
+      { gameId: 'psn-1', normalizedPoints: 300, trophyType: null },
+    ]);
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
+      { achievement: { gameId: 'psn-1', normalizedPoints: 300, trophyType: null } },
+    ]);
+
+    const result = await userService.getMyGames('user-1');
+
+    expect(result.data[0]?.hasPlatinum).toBe(true);
+    expect(result.data[0]?.platinumEarned).toBe(true);
   });
 
   it('PSN: isCompleted=true cuando earnedAchievements === totalAchievements', async () => {
@@ -686,11 +726,11 @@ describe('userService.getMyGames', () => {
     );
     mockQueryRaw([row], computeAggregates([row]));
     (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([
-      { gameId: 'psn-1', normalizedPoints: 30 },
-      { gameId: 'psn-1', normalizedPoints: 300 },
+      { gameId: 'psn-1', normalizedPoints: 30, trophyType: 'gold' },
+      { gameId: 'psn-1', normalizedPoints: 100, trophyType: 'platinum' },
     ]);
     (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
-      { achievement: { gameId: 'psn-1' } },
+      { achievement: { gameId: 'psn-1', normalizedPoints: 100, trophyType: 'platinum' } },
     ]);
 
     const result = await userService.getMyGames('user-1');
@@ -698,13 +738,13 @@ describe('userService.getMyGames', () => {
     expect(result.data[0]?.isCompleted).toBe(true);
   });
 
-  it('PSN: hasPlatinum=false cuando ningún achievement del juego tiene 300 pts', async () => {
+  it('PSN: hasPlatinum=false cuando ningún achievement del juego es platino ni cae en el fallback', async () => {
     const row = makeRow({ id: 'psn-1', title: 'Some Game', platform: 'PSN', totalAchievements: 10 });
     mockQueryRaw([row], computeAggregates([row]));
-    // Sin achievement de 300 pts — no hay platino en este juego
+    // Sin trophyType='platinum' ni normalizedPoints en {100,300} — no hay platino en este juego
     (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([
-      { gameId: 'psn-1', normalizedPoints: 30 },
-      { gameId: 'psn-1', normalizedPoints: 90 },
+      { gameId: 'psn-1', normalizedPoints: 30, trophyType: 'gold' },
+      { gameId: 'psn-1', normalizedPoints: 90, trophyType: 'gold' },
     ]);
     (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([]);
 

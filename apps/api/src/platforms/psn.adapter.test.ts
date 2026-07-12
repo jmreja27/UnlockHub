@@ -362,6 +362,23 @@ describe('PsnAdapter.syncUser', () => {
     );
   });
 
+  it('persiste trophyType en create y update del upsert de Achievement (T136)', async () => {
+    mocked.getUserTitles.mockResolvedValue({ trophyTitles: [mockTitle], totalItemCount: 1 });
+    mocked.getTitleTrophies.mockResolvedValue(mockTitleTrophies);
+    mocked.getUserTrophiesEarnedForTitle.mockResolvedValue(mockEarnedTrophies);
+
+    await adapter.syncUser(mockPlatformAccount);
+
+    const calls = (mocked.prisma.achievement.upsert as jest.Mock).mock.calls;
+    const platinumCall = calls.find((c) => c[0].where.platform_gameId_externalId.externalId.endsWith(':2'));
+    const bronzeCall = calls.find((c) => c[0].where.platform_gameId_externalId.externalId.endsWith(':1'));
+
+    expect(platinumCall?.[0].create.trophyType).toBe('platinum');
+    expect(platinumCall?.[0].update.trophyType).toBe('platinum');
+    expect(bronzeCall?.[0].create.trophyType).toBe('bronze');
+    expect(bronzeCall?.[0].update.trophyType).toBe('bronze');
+  });
+
   it('no actualiza encryptedToken en BD (el sistema gestiona su propio token)', async () => {
     mocked.getUserTitles.mockResolvedValue({ trophyTitles: [], totalItemCount: 0 });
 

@@ -144,11 +144,20 @@ describe('getWrapped', () => {
 
 const PSN_GAME = { id: 'psn1', title: 'Bloodborne', iconUrl: null, platform: 'PSN' };
 const PSN_PLATINUM = {
-  id: 'ap1', title: 'Platinum', iconUrl: null, rarity: null, normalizedPoints: 300,
+  id: 'ap1', title: 'Platinum', iconUrl: null, rarity: null, normalizedPoints: 100, trophyType: 'platinum',
+  gameId: 'psn1', platform: 'PSN', game: PSN_GAME,
+};
+// Histórico: sincronizado antes de que trophyType existiera como columna — cubierto por el fallback (T136/T137).
+const PSN_PLATINUM_LEGACY_NO_TROPHY_TYPE = {
+  id: 'ap1b', title: 'Platinum (legacy)', iconUrl: null, rarity: null, normalizedPoints: 300, trophyType: null,
+  gameId: 'psn1', platform: 'PSN', game: PSN_GAME,
+};
+const PSN_PLATINUM_NEW_XP_NO_TROPHY_TYPE = {
+  id: 'ap1c', title: 'Platinum (sin recalcular trophyType)', iconUrl: null, rarity: null, normalizedPoints: 100, trophyType: null,
   gameId: 'psn1', platform: 'PSN', game: PSN_GAME,
 };
 const PSN_BRONZE = {
-  id: 'ap2', title: 'Trophy 1', iconUrl: null, rarity: 50, normalizedPoints: 15,
+  id: 'ap2', title: 'Trophy 1', iconUrl: null, rarity: 50, normalizedPoints: 15, trophyType: 'bronze',
   gameId: 'psn1', platform: 'PSN', game: PSN_GAME,
 };
 const STEAM_ACH = {
@@ -172,13 +181,27 @@ describe('getWrapped — estadísticas extendidas', () => {
     expect(result.completedGamesByPlatform).toEqual({ steam: 0, ra: 0, psn: 0 });
   });
 
-  it('cuenta platinumsEarned: solo PSN con normalizedPoints === 300', async () => {
+  it('cuenta platinumsEarned: solo PSN con trophyType === platinum (detección robusta, T136)', async () => {
     const ua1 = { ...makeUA(), achievement: PSN_PLATINUM };
     const ua2 = { ...makeUA(), achievement: PSN_BRONZE };
     const ua3 = { ...makeUA(), achievement: STEAM_ACH };
     mockUAFindMany.mockResolvedValue([ua1, ua2, ua3]);
     const result = await getWrapped('u1', 2024);
     expect(result.platinumsEarned).toBe(1); // solo PSN_PLATINUM
+  });
+
+  it('cuenta platinumsEarned vía fallback transitorio: trophyType null + normalizedPoints=300 (XP histórico pre-F46)', async () => {
+    const ua1 = { ...makeUA(), achievement: PSN_PLATINUM_LEGACY_NO_TROPHY_TYPE };
+    mockUAFindMany.mockResolvedValue([ua1]);
+    const result = await getWrapped('u1', 2024);
+    expect(result.platinumsEarned).toBe(1);
+  });
+
+  it('cuenta platinumsEarned vía fallback transitorio: trophyType null + normalizedPoints=100 (XP nuevo post-F46, trophyType aún no recalculado)', async () => {
+    const ua1 = { ...makeUA(), achievement: PSN_PLATINUM_NEW_XP_NO_TROPHY_TYPE };
+    mockUAFindMany.mockResolvedValue([ua1]);
+    const result = await getWrapped('u1', 2024);
+    expect(result.platinumsEarned).toBe(1);
   });
 
   it('calcula longestStreakInYear: días consecutivos con logros', async () => {

@@ -6,6 +6,7 @@ import { AppError } from '../middleware/errorHandler';
 import { prisma } from '../lib/prisma';
 import { redis } from '../lib/redis';
 import { cloudinary } from '../lib/cloudinary';
+import { isPsnPlatinumAchievement } from '../platforms/achievement-points';
 
 import { upsertUserScore, removeUserFromRankings } from './ranking.service';
 
@@ -539,28 +540,27 @@ export async function getMyGames(
     ? await Promise.all([
         prisma.achievement.findMany({
           where: { gameId: { in: psnGameIds }, platform: 'PSN' },
-          select: { gameId: true, normalizedPoints: true },
+          select: { gameId: true, normalizedPoints: true, trophyType: true },
         }),
         prisma.userAchievement.findMany({
-          where: {
-            userId,
-            achievement: { gameId: { in: psnGameIds }, platform: 'PSN', normalizedPoints: 300 },
-          },
-          select: { achievement: { select: { gameId: true } } },
+          where: { userId, achievement: { gameId: { in: psnGameIds }, platform: 'PSN' } },
+          select: { achievement: { select: { gameId: true, normalizedPoints: true, trophyType: true } } },
         }),
       ])
     : [[], []];
 
   const psnHasPlatinumMap = new Map<string, boolean>();
   for (const ach of psnAllAchievements) {
-    if (ach.normalizedPoints === 300) {
+    if (isPsnPlatinumAchievement(ach.trophyType, ach.normalizedPoints)) {
       psnHasPlatinumMap.set(ach.gameId, true);
     }
   }
 
   const psnEarnedPlatinumMap = new Map<string, boolean>();
   for (const ua of psnEarnedAchievements) {
-    psnEarnedPlatinumMap.set(ua.achievement.gameId, true);
+    if (isPsnPlatinumAchievement(ua.achievement.trophyType, ua.achievement.normalizedPoints)) {
+      psnEarnedPlatinumMap.set(ua.achievement.gameId, true);
+    }
   }
 
   const data: LibraryGame[] = rows.map((g) => {

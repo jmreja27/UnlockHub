@@ -1,4 +1,4 @@
-import { normalizeAchievementPoints, normalizePsnAchievementPoints } from './achievement-points';
+import { normalizeAchievementPoints, normalizePsnAchievementPoints, isPsnPlatinumAchievement } from './achievement-points';
 
 describe('normalizeAchievementPoints — curva de rareza F46 Fase 1 (Opción A, sin multiplicador)', () => {
   it('rareza ≤1% → 150 (ultra raro)', () => {
@@ -137,5 +137,37 @@ describe('normalizePsnAchievementPoints — F46 Opción A confirmada (fallback p
       expect(normalizePsnAchievementPoints(0, 'bronze')).toBe(150);
       expect(normalizePsnAchievementPoints(100, 'bronze')).toBe(5);
     });
+  });
+});
+
+describe('isPsnPlatinumAchievement — detección robusta de platino tras regresión T136', () => {
+  it('trophyType === "platinum" → true (detección robusta, ignora el XP)', () => {
+    expect(isPsnPlatinumAchievement('platinum', 100)).toBe(true);
+    expect(isPsnPlatinumAchievement('platinum', 999)).toBe(true);
+  });
+
+  it('trophyType poblado pero distinto de platinum → false, sin caer al fallback de XP', () => {
+    expect(isPsnPlatinumAchievement('gold', 300)).toBe(false);
+    expect(isPsnPlatinumAchievement('gold', 100)).toBe(false);
+    expect(isPsnPlatinumAchievement('bronze', 300)).toBe(false);
+  });
+
+  it('fallback transitorio: trophyType null + normalizedPoints === 100 (XP post-F46) → true', () => {
+    expect(isPsnPlatinumAchievement(null, 100)).toBe(true);
+  });
+
+  it('fallback transitorio: trophyType null + normalizedPoints === 300 (XP pre-F46, histórico) → true', () => {
+    expect(isPsnPlatinumAchievement(null, 300)).toBe(true);
+  });
+
+  it('trophyType undefined se trata igual que null (fallback aplica)', () => {
+    expect(isPsnPlatinumAchievement(undefined, 300)).toBe(true);
+    expect(isPsnPlatinumAchievement(undefined, 100)).toBe(true);
+  });
+
+  it('sin platino: trophyType null y normalizedPoints fuera de {100,300} → false', () => {
+    expect(isPsnPlatinumAchievement(null, 50)).toBe(false);
+    expect(isPsnPlatinumAchievement(null, 10)).toBe(false);
+    expect(isPsnPlatinumAchievement(null, 20)).toBe(false);
   });
 });

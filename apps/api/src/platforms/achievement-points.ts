@@ -60,3 +60,25 @@ export function normalizePsnAchievementPoints(
   if (hasRarity) return normalizeAchievementPoints(rarityPercent);
   return PSN_TROPHY_TYPE_POINTS[trophyType];
 }
+
+/**
+ * Identifica un trofeo de platino PSN de forma robusta, independiente del valor de XP.
+ *
+ * Detección principal: `trophyType === 'platinum'` (persistido en `Achievement.trophyType`
+ * desde el sync, ver `psn.adapter.ts`).
+ *
+ * Fallback transitorio: `normalizedPoints === 300` (valor pre-F46) o `=== 100`
+ * (valor post-F46) para los `Achievement` PSN sincronizados antes de que `trophyType`
+ * existiera como columna — `trophyType` es `null` en esos registros hasta el próximo
+ * resync. Cubre ambos estados de la transición sin depender de cuál fue el último en
+ * recalcularse. Eliminar cuando `trophyType` esté poblado en todos los `Achievement`
+ * PSN (backfill junto a F46 Fase 3) — ver T137.
+ */
+export function isPsnPlatinumAchievement(
+  trophyType: string | null | undefined,
+  normalizedPoints: number,
+): boolean {
+  if (trophyType === 'platinum') return true;
+  if (trophyType) return false;
+  return normalizedPoints === 300 || normalizedPoints === 100;
+}

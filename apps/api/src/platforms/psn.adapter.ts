@@ -436,6 +436,7 @@ export class PsnAdapter implements PlatformAdapter {
           normalizedPoints: normalized,
           rarity: isNaN(rarityValue) ? null : rarityValue,
           externalUrl: `https://psnprofiles.com/${account.username}`,
+          trophyType: t.trophyType ?? null,
         },
         update: {
           title: t.trophyName ?? String(t.trophyId),
@@ -443,6 +444,7 @@ export class PsnAdapter implements PlatformAdapter {
           rawValue: isNaN(rarityValue) ? null : rarityValue,
           normalizedPoints: normalized,
           rarity: isNaN(rarityValue) ? null : rarityValue,
+          trophyType: t.trophyType ?? null,
         },
       });
 
