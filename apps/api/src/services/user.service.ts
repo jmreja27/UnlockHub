@@ -1,5 +1,6 @@
 import type { User, PublicUser, PlatformAccount, PointReason, Platform, ProfileVisibility } from '@unlockhub/types';
 import type { ProfileVisibility as PrismaProfileVisibility } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 import { AppError } from '../middleware/errorHandler';
 import { prisma } from '../lib/prisma';
@@ -14,6 +15,10 @@ const userGamesCacheKey = (username: string, platform: string, page: number, lim
   `user-games:${username}:${platform}:${page}:${limit}`;
 const userGameAchCacheKey = (username: string, gameId: string, requestingUserId: string) =>
   `user-game-ach:${username}:${gameId}:${requestingUserId}`;
+const myGamesListCacheKey = (userId: string, platform: string, page: number, limit: number) =>
+  `my-games:${userId}:${platform}:${page}:${limit}`;
+const myGamesAggregatesCacheKey = (userId: string, platform: string) =>
+  `my-games-aggregates:${userId}:${platform}`;
 
 /**
  * Invalida toda la caché pública del usuario (juegos y logros de sus juegos).
@@ -384,13 +389,82 @@ type LibraryGame = {
   isCompleted: boolean;
 };
 
+interface LibraryGameRow {
+  id: string;
+  title: string;
+  platform: string;
+  iconUrl: string | null;
+  totalAchievements: number;
+  earnedAchievements: number;
+  lastActivityAt: Date;
+}
+
+interface LibraryAggregatesRow {
+  totalGames: number;
+  totalEarnedAchievements: number;
+  totalAvailableAchievements: number;
+  totalCompletedGames: number;
+}
+
+const EMPTY_AGGREGATES: LibraryAggregatesRow = {
+  totalGames: 0,
+  totalEarnedAchievements: 0,
+  totalAvailableAchievements: 0,
+  totalCompletedGames: 0,
+};
+
+/**
+ * Calcula los aggregate stats (totales sobre TODA la colección, no solo la página) con una
+ * única query GROUP BY + agregado externo — evita traer cada UserAchievement a Node para sumar.
+ * Cacheada por (userId, platform) — la reusan las N páginas de una misma biblioteca.
+ */
+async function getMyGamesAggregates(
+  userId: string,
+  platformKey: string,
+  platformParam: Platform | null,
+): Promise<LibraryAggregatesRow> {
+  const cacheKey = myGamesAggregatesCacheKey(userId, platformKey);
+  const cached = await redis.get(cacheKey);
+  if (cached !== null) {
+    return JSON.parse(cached) as LibraryAggregatesRow;
+  }
+
+  const rows = await prisma.$queryRaw<LibraryAggregatesRow[]>(Prisma.sql`
+    SELECT
+      COUNT(*)::int AS "totalGames",
+      COALESCE(SUM(sub."earnedAchievements"), 0)::int AS "totalEarnedAchievements",
+      COALESCE(SUM(sub."totalAchievements"), 0)::int AS "totalAvailableAchievements",
+      COALESCE(SUM(
+        CASE WHEN sub."totalAchievements" > 0 AND sub."earnedAchievements" = sub."totalAchievements"
+          THEN 1 ELSE 0 END
+      ), 0)::int AS "totalCompletedGames"
+    FROM (
+      SELECT g.id, g."totalAchievements", COUNT(ua.id)::int AS "earnedAchievements"
+      FROM "UserAchievement" ua
+      JOIN "Achievement" a ON a.id = ua."achievementId"
+      JOIN "Game" g ON g.id = a."gameId"
+      WHERE ua."userId" = ${userId}
+        AND (${platformParam}::"Platform" IS NULL OR a.platform = ${platformParam}::"Platform")
+      GROUP BY g.id
+    ) sub
+  `);
+
+  const aggregates = rows[0] ?? EMPTY_AGGREGATES;
+  await redis.setex(cacheKey, USER_GAMES_CACHE_TTL, JSON.stringify(aggregates));
+  await redis.sadd(USER_GAMES_KEYS_SET(userId), cacheKey);
+  await redis.expire(USER_GAMES_KEYS_SET(userId), USER_GAMES_CACHE_TTL * 4);
+
+  return aggregates;
+}
+
 // Devuelve los juegos con logros del usuario, agrupados por juego con stats de completado.
-// Soporta paginación via page/limit — la agregación ocurre en memoria para evitar
-// GROUP BY complejo en Prisma. Suficiente para la escala esperada por usuario.
+// Paginación real en SQL (JOIN + GROUP BY + ORDER BY + LIMIT/OFFSET) — reemplaza el patrón
+// anterior de traer TODO el historial de logros del usuario a Node y paginar en memoria
+// (T123: cada página hacía un findMany sin límite sobre el historial completo).
 //
-// Los aggregate stats (totalEarnedAchievements, totalAvailableAchievements) se calculan
-// sobre TODOS los juegos (antes de paginar) para que el header del cliente los muestre
-// correctamente aunque no todas las páginas estén cargadas.
+// Los aggregate stats (totalEarnedAchievements, totalAvailableAchievements, etc.) se calculan
+// con una query GROUP BY separada, cacheada por (userId, platform) — se calculan una vez y las
+// reusan todas las páginas de una misma biblioteca en vez de recalcularse en cada llamada.
 export async function getMyGames(
   userId: string,
   platform?: Platform,
@@ -406,38 +480,50 @@ export async function getMyGames(
   totalGames: number;
   totalCompletedGames: number;
 }> {
-  const [userAchievements, platformAccounts] = await Promise.all([
-    prisma.userAchievement.findMany({
-      where: {
-        userId,
-        achievement: platform ? { platform } : undefined,
-      },
-      select: {
-        achievementId: true,
-        unlockedAt: true,
-        achievement: {
-          select: {
-            gameId: true,
-            platform: true,
-            // normalizedPoints === 300 identifica el trofeo platino en PSN (ver CLAUDE.md)
-            normalizedPoints: true,
-            game: {
-              select: {
-                id: true,
-                title: true,
-                platform: true,
-                iconUrl: true,
-                totalAchievements: true,
-              },
-            },
-          },
-        },
-      },
-    }),
+  const platformKey = platform ?? 'all';
+  const listCacheKey = myGamesListCacheKey(userId, platformKey, page, limit);
+
+  const cachedList = await redis.get(listCacheKey);
+  if (cachedList !== null) {
+    return JSON.parse(cachedList) as {
+      data: LibraryGame[];
+      total: number;
+      page: number;
+      limit: number;
+      totalEarnedAchievements: number;
+      totalAvailableAchievements: number;
+      totalGames: number;
+      totalCompletedGames: number;
+    };
+  }
+
+  const platformParam = platform ?? null;
+  const offset = (page - 1) * limit;
+
+  const [rows, platformAccounts, aggregates] = await Promise.all([
+    prisma.$queryRaw<LibraryGameRow[]>(Prisma.sql`
+      SELECT
+        g.id AS "id",
+        g.title AS "title",
+        g.platform AS "platform",
+        g."iconUrl" AS "iconUrl",
+        g."totalAchievements" AS "totalAchievements",
+        COUNT(ua.id)::int AS "earnedAchievements",
+        MAX(ua."unlockedAt") AS "lastActivityAt"
+      FROM "UserAchievement" ua
+      JOIN "Achievement" a ON a.id = ua."achievementId"
+      JOIN "Game" g ON g.id = a."gameId"
+      WHERE ua."userId" = ${userId}
+        AND (${platformParam}::"Platform" IS NULL OR a.platform = ${platformParam}::"Platform")
+      GROUP BY g.id
+      ORDER BY MAX(ua."unlockedAt") DESC, g.id ASC
+      LIMIT ${limit} OFFSET ${offset}
+    `),
     prisma.platformAccount.findMany({
       where: { userId },
       select: { platform: true, lastSyncedAt: true },
     }),
+    getMyGamesAggregates(userId, platformKey, platformParam),
   ]);
 
   const syncMap = new Map<string, string | null>();
@@ -445,24 +531,26 @@ export async function getMyGames(
     syncMap.set(pa.platform, pa.lastSyncedAt?.toISOString() ?? null);
   }
 
-  // Para PSN: mapear juego → achievements del usuario (para calcular hasPlatinum y platinumEarned)
-  // Se necesitan todos los achievements del juego para saber si hay platino disponible
-  const psnGameIds = new Set(
-    userAchievements
-      .filter((ua) => ua.achievement.platform === 'PSN')
-      .map((ua) => ua.achievement.gameId),
-  );
+  // PSN platino: solo hace falta resolverlo para los juegos PSN de ESTA página (máx `limit`),
+  // no para toda la biblioteca — a diferencia de la versión anterior, que lo calculaba para
+  // todos los juegos PSN del usuario aunque solo se devolviera una página.
+  const psnGameIds = rows.filter((r) => r.platform === 'PSN').map((r) => r.id);
+  const [psnAllAchievements, psnEarnedAchievements] = psnGameIds.length > 0
+    ? await Promise.all([
+        prisma.achievement.findMany({
+          where: { gameId: { in: psnGameIds }, platform: 'PSN' },
+          select: { gameId: true, normalizedPoints: true },
+        }),
+        prisma.userAchievement.findMany({
+          where: {
+            userId,
+            achievement: { gameId: { in: psnGameIds }, platform: 'PSN', normalizedPoints: 300 },
+          },
+          select: { achievement: { select: { gameId: true } } },
+        }),
+      ])
+    : [[], []];
 
-  // Obtener todos los achievements PSN de los juegos (no solo los desbloqueados)
-  // para saber si el juego tiene un trofeo platino
-  const psnAllAchievements = psnGameIds.size > 0
-    ? await prisma.achievement.findMany({
-        where: { gameId: { in: Array.from(psnGameIds) }, platform: 'PSN' },
-        select: { gameId: true, normalizedPoints: true },
-      })
-    : [];
-
-  // Map gameId → ¿tiene trofeo platino disponible? (algún achievement con 300 pts)
   const psnHasPlatinumMap = new Map<string, boolean>();
   for (const ach of psnAllAchievements) {
     if (ach.normalizedPoints === 300) {
@@ -470,52 +558,13 @@ export async function getMyGames(
     }
   }
 
-  // Map gameId → ¿el usuario ha ganado el platino?
   const psnEarnedPlatinumMap = new Map<string, boolean>();
-  for (const ua of userAchievements) {
-    if (ua.achievement.platform === 'PSN' && ua.achievement.normalizedPoints === 300) {
-      psnEarnedPlatinumMap.set(ua.achievement.gameId, true);
-    }
+  for (const ua of psnEarnedAchievements) {
+    psnEarnedPlatinumMap.set(ua.achievement.gameId, true);
   }
 
-  const gameMap = new Map<
-    string,
-    {
-      id: string;
-      title: string;
-      platform: string;
-      iconUrl: string | null;
-      totalAchievements: number;
-      earnedAchievements: number;
-      lastActivityAt: Date | null;
-    }
-  >();
-
-  for (const ua of userAchievements) {
-    const { gameId, game } = ua.achievement;
-    const entry = gameMap.get(gameId);
-    if (!entry) {
-      gameMap.set(gameId, {
-        id: game.id,
-        title: game.title,
-        platform: game.platform,
-        iconUrl: game.iconUrl,
-        totalAchievements: game.totalAchievements,
-        earnedAchievements: 1,
-        lastActivityAt: ua.unlockedAt,
-      });
-    } else {
-      entry.earnedAchievements++;
-      // Mantener el MAX(unlockedAt) para reflejar la actividad más reciente por juego
-      if (ua.unlockedAt > (entry.lastActivityAt ?? new Date(0))) {
-        entry.lastActivityAt = ua.unlockedAt;
-      }
-    }
-  }
-
-  const allGames: LibraryGame[] = Array.from(gameMap.values()).map((g) => {
-    const isCompleted =
-      g.totalAchievements > 0 && g.earnedAchievements === g.totalAchievements;
+  const data: LibraryGame[] = rows.map((g) => {
+    const isCompleted = g.totalAchievements > 0 && g.earnedAchievements === g.totalAchievements;
     const hasPlatinum = g.platform === 'PSN' ? (psnHasPlatinumMap.get(g.id) ?? false) : false;
     const platinumEarned = g.platform === 'PSN' ? (psnEarnedPlatinumMap.get(g.id) ?? false) : false;
 
@@ -531,36 +580,29 @@ export async function getMyGames(
           ? Math.round((g.earnedAchievements / g.totalAchievements) * 100)
           : 0,
       lastSyncedAt: syncMap.get(g.platform) ?? null,
-      lastActivityAt: g.lastActivityAt?.toISOString() ?? null,
+      lastActivityAt: g.lastActivityAt.toISOString(),
       hasPlatinum,
       platinumEarned,
       isCompleted,
     };
   });
 
-  // Aggregate stats sobre todos los juegos (antes de paginar) — BUG-10
-  const totalEarnedAchievements = allGames.reduce((sum, g) => sum + g.earnedAchievements, 0);
-  const totalAvailableAchievements = allGames.reduce((sum, g) => sum + g.totalAchievements, 0);
-  const totalGames = allGames.length;
-  const totalCompletedGames = allGames.filter((g) => g.isCompleted).length;
-
-  // Orden por defecto: actividad más reciente primero (MAX unlockedAt del juego).
-  // La biblioteca propia re-ordena en cliente; la pública muestra este orden directamente.
-  const sorted = allGames.sort((a, b) => {
-    const aDate = a.lastActivityAt ? new Date(a.lastActivityAt).getTime() : 0;
-    const bDate = b.lastActivityAt ? new Date(b.lastActivityAt).getTime() : 0;
-    return bDate - aDate;
-  });
-
-  const total = sorted.length;
-  const start = (page - 1) * limit;
-  const data = sorted.slice(start, start + limit);
-
-  return {
-    data, total, page, limit,
-    totalEarnedAchievements, totalAvailableAchievements,
-    totalGames, totalCompletedGames,
+  const result = {
+    data,
+    total: aggregates.totalGames,
+    page,
+    limit,
+    totalEarnedAchievements: aggregates.totalEarnedAchievements,
+    totalAvailableAchievements: aggregates.totalAvailableAchievements,
+    totalGames: aggregates.totalGames,
+    totalCompletedGames: aggregates.totalCompletedGames,
   };
+
+  await redis.setex(listCacheKey, USER_GAMES_CACHE_TTL, JSON.stringify(result));
+  await redis.sadd(USER_GAMES_KEYS_SET(userId), listCacheKey);
+  await redis.expire(USER_GAMES_KEYS_SET(userId), USER_GAMES_CACHE_TTL * 4);
+
+  return result;
 }
 
 /**

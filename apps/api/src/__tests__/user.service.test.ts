@@ -31,6 +31,7 @@ jest.mock('../lib/prisma', () => ({
     achievement: {
       findMany: jest.fn(),
     },
+    $queryRaw: jest.fn(),
     activityEvent: {
       updateMany: jest.fn(),
     },
@@ -61,6 +62,7 @@ jest.mock('../lib/redis', () => ({
   redis: {
     get: jest.fn().mockResolvedValue(null),   // siempre cache miss en tests
     set: jest.fn().mockResolvedValue('OK'),
+    setex: jest.fn().mockResolvedValue('OK'),
     sadd: jest.fn().mockResolvedValue(1),
     expire: jest.fn().mockResolvedValue(1),
     smembers: jest.fn().mockResolvedValue([]),
@@ -70,12 +72,70 @@ jest.mock('../lib/redis', () => ({
 
 
 import { prisma } from '../lib/prisma';
+import { redis } from '../lib/redis';
 import { cloudinary } from '../lib/cloudinary';
 import { upsertUserScore, removeUserFromRankings } from '../services/ranking.service';
 
 const mockPrisma = prisma as jest.Mocked<typeof prisma>;
 const mockUpsertUserScore = upsertUserScore as jest.Mock;
 const mockRemoveUserFromRankings = removeUserFromRankings as jest.Mock;
+const mockRedisGet = redis.get as jest.Mock;
+const mockRedisSetex = redis.setex as jest.Mock;
+const mockRedisSadd = redis.sadd as jest.Mock;
+
+// ─── Helpers compartidos para mockear getMyGames vía $queryRaw ─────────────────
+// Usados por el describe de getMyGames y por getUserGames (que llama a getMyGames
+// internamente) — ver T123: getMyGames pagina en SQL en vez de traer todo a Node.
+
+const GAMES_TEST_DEFAULT_DATE = new Date('2024-06-01T00:00:00.000Z');
+
+// Fila tal como la devuelve la query SQL de listado — ya agrupada/agregada por Postgres
+// (COUNT/MAX), no logros individuales como en la implementación anterior.
+const makeRow = (
+  game: { id: string; title: string; platform?: string; iconUrl?: string | null; totalAchievements: number },
+  overrides: { earnedAchievements?: number; lastActivityAt?: Date } = {},
+) => ({
+  id: game.id,
+  title: game.title,
+  platform: game.platform ?? 'STEAM',
+  iconUrl: game.iconUrl ?? null,
+  totalAchievements: game.totalAchievements,
+  earnedAchievements: overrides.earnedAchievements ?? 1,
+  lastActivityAt: overrides.lastActivityAt ?? GAMES_TEST_DEFAULT_DATE,
+});
+
+type LibraryRow = ReturnType<typeof makeRow>;
+
+interface LibraryAggregatesTestRow {
+  totalGames: number;
+  totalEarnedAchievements: number;
+  totalAvailableAchievements: number;
+  totalCompletedGames: number;
+}
+
+// Agregados equivalentes a los que calcularía la query GROUP BY sobre un set de filas dado.
+const computeAggregates = (rows: LibraryRow[]): LibraryAggregatesTestRow => ({
+  totalGames: rows.length,
+  totalEarnedAchievements: rows.reduce((sum, r) => sum + r.earnedAchievements, 0),
+  totalAvailableAchievements: rows.reduce((sum, r) => sum + r.totalAchievements, 0),
+  totalCompletedGames: rows.filter(
+    (r) => r.totalAchievements > 0 && r.earnedAchievements === r.totalAchievements,
+  ).length,
+});
+
+// prisma.$queryRaw se usa para DOS queries distintas dentro de getMyGames (listado paginado
+// y agregados) — se distinguen inspeccionando el SQL generado por Prisma.sql (la de agregados
+// es la única que selecciona "totalGames").
+function mockQueryRaw(listRows: LibraryRow[], aggregates: LibraryAggregatesTestRow) {
+  (mockPrisma.$queryRaw as unknown as jest.Mock).mockImplementation(
+    (query: { sql: string }) => {
+      if (query.sql.includes('"totalGames"')) {
+        return Promise.resolve([aggregates]);
+      }
+      return Promise.resolve(listRows);
+    },
+  );
+}
 
 // Usuario base para los tests
 const baseUser = {
@@ -417,30 +477,36 @@ describe('userService.addXp', () => {
 });
 
 // ─── getMyGames ───────────────────────────────────────────────────────────────
+//
+// T123 fix: getMyGames ya no hace un findMany sin límite + agregación en memoria.
+// La agrupación por juego, el orden y la paginación ocurren en SQL ($queryRaw);
+// los agregados (totales sin paginar) son otra query SQL, cacheada en Redis.
+// Los tests mockean prisma.$queryRaw en lugar de prisma.userAchievement.findMany —
+// las aserciones de VALOR (mismo contrato de respuesta) no cambian.
 
 describe('userService.getMyGames', () => {
-  const syncDate = new Date('2024-06-01T00:00:00.000Z');
+  const syncDate = GAMES_TEST_DEFAULT_DATE;
 
-  // Helper actualizado: incluye achievementId, platform y normalizedPoints para soportar
-  // la lógica de platino PSN y el mapeo completo del select de Prisma
-  const makeUserAchievement = (
-    gameId: string,
-    game: object,
-    overrides: { platform?: string; normalizedPoints?: number; achievementId?: string } = {},
-  ) => ({
-    achievementId: overrides.achievementId ?? `ach-${gameId}-${Math.random()}`,
-    achievement: {
-      gameId,
-      platform: overrides.platform ?? 'STEAM',
-      normalizedPoints: overrides.normalizedPoints ?? 10,
-      game,
-    },
+  beforeEach(() => {
+    mockRedisGet.mockResolvedValue(null); // cache miss por defecto en todos los tests
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
+    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([]);
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    // jest.clearAllMocks() (beforeEach global) limpia mock.calls pero NO las implementaciones
+    // custom — los tests CENTINELA de más abajo sustituyen redis.get/setex/sadd/smembers por
+    // fakes con estado (Map/Set) para simular caché real. Sin este reset, esas implementaciones
+    // se filtrarían a los describes siguientes (getUserGames, getMyGameAchievements...).
+    mockRedisGet.mockResolvedValue(null);
+    mockRedisSetex.mockResolvedValue('OK');
+    mockRedisSadd.mockResolvedValue(1);
+    (redis.smembers as jest.Mock).mockResolvedValue([]);
   });
 
   it('devuelve lista vacía cuando el usuario no tiene logros', async () => {
-    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([]);
-    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
-    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([]);
+    mockQueryRaw([], computeAggregates([]));
 
     const result = await userService.getMyGames('user-1');
 
@@ -449,16 +515,14 @@ describe('userService.getMyGames', () => {
   });
 
   it('agrupa logros por juego y cuenta los ganados', async () => {
-    const game = { id: 'game-1', title: 'Portal', platform: 'STEAM', iconUrl: null, totalAchievements: 4 };
-    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
-      makeUserAchievement('game-1', game),
-      makeUserAchievement('game-1', game),
-      makeUserAchievement('game-1', game),
-    ]);
+    const row = makeRow(
+      { id: 'game-1', title: 'Portal', totalAchievements: 4 },
+      { earnedAchievements: 3 },
+    );
+    mockQueryRaw([row], computeAggregates([row]));
     (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([
       { platform: 'STEAM', lastSyncedAt: syncDate },
     ]);
-    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([]);
 
     const result = await userService.getMyGames('user-1');
 
@@ -469,104 +533,86 @@ describe('userService.getMyGames', () => {
   });
 
   it('calcula completionPct correctamente', async () => {
-    const game = { id: 'g1', title: 'Hollow Knight', platform: 'STEAM', iconUrl: null, totalAchievements: 10 };
-    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue(
-      Array.from({ length: 5 }, () => makeUserAchievement('g1', game)),
+    const row = makeRow(
+      { id: 'g1', title: 'Hollow Knight', totalAchievements: 10 },
+      { earnedAchievements: 5 },
     );
-    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
-    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([]);
+    mockQueryRaw([row], computeAggregates([row]));
 
     const result = await userService.getMyGames('user-1');
     expect(result.data[0]?.completionPct).toBe(50);
   });
 
   it('filtra por plataforma cuando se especifica', async () => {
-    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([]);
-    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
-    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([]);
+    mockQueryRaw([], computeAggregates([]));
 
     await userService.getMyGames('user-1', 'STEAM');
 
-    expect(mockPrisma.userAchievement.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { userId: 'user-1', achievement: { platform: 'STEAM' } },
-      }),
-    );
+    // La query de listado (la que no selecciona "totalGames") debe llevar 'STEAM' entre
+    // sus parámetros bindeados — sustituye a la aserción anterior sobre el `where` de Prisma.
+    const listCall = (mockPrisma.$queryRaw as unknown as jest.Mock).mock.calls
+      .map(([query]: [{ sql: string; values: unknown[] }]) => query)
+      .find((query) => !query.sql.includes('"totalGames"'));
+    expect(listCall?.values).toContain('STEAM');
   });
 
   it('sin plataforma no filtra por achievement.platform', async () => {
-    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([]);
-    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
-    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([]);
+    mockQueryRaw([], computeAggregates([]));
 
     await userService.getMyGames('user-1');
 
-    expect(mockPrisma.userAchievement.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { userId: 'user-1', achievement: undefined },
-      }),
+    const listCall = (mockPrisma.$queryRaw as unknown as jest.Mock).mock.calls
+      .map(([query]: [{ sql: string; values: unknown[] }]) => query)
+      .find((query) => !query.sql.includes('"totalGames"'));
+    // Sin plataforma se bindea `null` en vez de un código de plataforma — el `IS NULL OR`
+    // en SQL hace que no se aplique ningún filtro.
+    expect(listCall?.values).toContain(null);
+    expect(listCall?.values).not.toEqual(
+      expect.arrayContaining(['STEAM', 'RA', 'XBOX', 'PSN']),
     );
   });
 
   it('incluye lastSyncedAt de la cuenta de plataforma correspondiente', async () => {
-    const game = { id: 'g1', title: 'Portal', platform: 'STEAM', iconUrl: null, totalAchievements: 1 };
-    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([makeUserAchievement('g1', game)]);
+    const row = makeRow({ id: 'g1', title: 'Portal', totalAchievements: 1 });
+    mockQueryRaw([row], computeAggregates([row]));
     (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([
       { platform: 'STEAM', lastSyncedAt: syncDate },
     ]);
-    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([]);
 
     const result = await userService.getMyGames('user-1');
     expect(result.data[0]?.lastSyncedAt).toBe(syncDate.toISOString());
   });
 
   it('devuelve null para lastSyncedAt si la plataforma no está vinculada', async () => {
-    const game = { id: 'g1', title: 'Sonic', platform: 'RA', iconUrl: null, totalAchievements: 5 };
-    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([makeUserAchievement('g1', game, { platform: 'RA' })]);
-    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
-    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([]);
+    const row = makeRow({ id: 'g1', title: 'Sonic', platform: 'RA', totalAchievements: 5 });
+    mockQueryRaw([row], computeAggregates([row]));
 
     const result = await userService.getMyGames('user-1');
     expect(result.data[0]?.lastSyncedAt).toBeNull();
   });
 
   it('devuelve juegos ordenados por lastActivityAt DESC (BUG-D)', async () => {
-    const makeGame = (id: string, title: string) => ({
-      id, title, platform: 'STEAM', iconUrl: null, totalAchievements: 1,
-    });
-    // Hollow Knight: logro más reciente (2024-06-03), Elden Ring: 2024-06-02, Zelda: 2024-06-01
-    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
-      { ...makeUserAchievement('g3', makeGame('g3', 'Zelda')), unlockedAt: new Date('2024-06-01') },
-      { ...makeUserAchievement('g1', makeGame('g1', 'Elden Ring')), unlockedAt: new Date('2024-06-02') },
-      { ...makeUserAchievement('g2', makeGame('g2', 'Hollow Knight')), unlockedAt: new Date('2024-06-03') },
-    ]);
-    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
-    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([]);
+    // El ORDER BY MAX(unlockedAt) DESC, g.id ASC ahora lo resuelve Postgres — el mock
+    // simplemente devuelve las filas ya en el orden que la query real produciría.
+    const rows = [
+      makeRow({ id: 'g2', title: 'Hollow Knight', totalAchievements: 1 }, { lastActivityAt: new Date('2024-06-03') }),
+      makeRow({ id: 'g1', title: 'Elden Ring', totalAchievements: 1 }, { lastActivityAt: new Date('2024-06-02') }),
+      makeRow({ id: 'g3', title: 'Zelda', totalAchievements: 1 }, { lastActivityAt: new Date('2024-06-01') }),
+    ];
+    mockQueryRaw(rows, computeAggregates(rows));
 
     const result = await userService.getMyGames('user-1');
-    // Más reciente primero
     expect(result.data.map((g) => g.title)).toEqual(['Hollow Knight', 'Elden Ring', 'Zelda']);
   });
 
   // ─── BUG-10: aggregate stats ─────────────────────────────────────────────────
 
   it('BUG-10: totalEarnedAchievements suma todos los logros ganados de todos los juegos', async () => {
-    const gameA = { id: 'g1', title: 'A', platform: 'STEAM', iconUrl: null, totalAchievements: 10 };
-    const gameB = { id: 'g2', title: 'B', platform: 'RA', iconUrl: null, totalAchievements: 20 };
-    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
-      // 3 logros en juego A
-      makeUserAchievement('g1', gameA),
-      makeUserAchievement('g1', gameA),
-      makeUserAchievement('g1', gameA),
-      // 5 logros en juego B
-      makeUserAchievement('g2', gameB, { platform: 'RA' }),
-      makeUserAchievement('g2', gameB, { platform: 'RA' }),
-      makeUserAchievement('g2', gameB, { platform: 'RA' }),
-      makeUserAchievement('g2', gameB, { platform: 'RA' }),
-      makeUserAchievement('g2', gameB, { platform: 'RA' }),
-    ]);
-    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
-    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([]);
+    const rows = [
+      makeRow({ id: 'g1', title: 'A', totalAchievements: 10 }, { earnedAchievements: 3 }),
+      makeRow({ id: 'g2', title: 'B', platform: 'RA', totalAchievements: 20 }, { earnedAchievements: 5 }),
+    ];
+    mockQueryRaw(rows, computeAggregates(rows));
 
     const result = await userService.getMyGames('user-1');
 
@@ -575,14 +621,14 @@ describe('userService.getMyGames', () => {
   });
 
   it('BUG-10: los aggregate stats se calculan antes de la paginación', async () => {
-    // 25 logros en 25 juegos distintos — limit 20 debería devolver solo 20 pero stats de los 25
-    const userAchievements = Array.from({ length: 25 }, (_, i) => {
-      const game = { id: `g${i}`, title: `Game ${i}`, platform: 'STEAM', iconUrl: null, totalAchievements: 2 };
-      return makeUserAchievement(`g${i}`, game);
-    });
-    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue(userAchievements);
-    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
-    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([]);
+    // 25 juegos con 1 logro cada uno (2 disponibles) — la página 1 (limit 20) solo devuelve
+    // 20 filas (lo que haría LIMIT 20 en SQL), pero los agregados cubren los 25 porque vienen
+    // de una query GROUP BY independiente, sin LIMIT.
+    const allRows = Array.from({ length: 25 }, (_, i) =>
+      makeRow({ id: `g${i}`, title: `Game ${i}`, totalAchievements: 2 }, { earnedAchievements: 1 }),
+    );
+    const pageRows = allRows.slice(0, 20);
+    mockQueryRaw(pageRows, computeAggregates(allRows));
 
     const result = await userService.getMyGames('user-1', undefined, 1, 20);
 
@@ -593,18 +639,19 @@ describe('userService.getMyGames', () => {
   });
 
   // ─── Estados PSN: hasPlatinum, platinumEarned, isCompleted ───────────────────
+  // hasPlatinum/platinumEarned se resuelven con prisma.achievement.findMany /
+  // prisma.userAchievement.findMany, acotados a los juegos PSN de la página — no a toda
+  // la biblioteca como antes (mismo resultado para los juegos devueltos, menos trabajo).
 
   it('PSN: hasPlatinum=true cuando hay un achievement con normalizedPoints=300 en el juego', async () => {
-    const psnGame = { id: 'psn-1', title: 'God of War', platform: 'PSN', iconUrl: null, totalAchievements: 52 };
-    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
-      makeUserAchievement('psn-1', psnGame, { platform: 'PSN', normalizedPoints: 30 }),
-    ]);
-    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
+    const row = makeRow({ id: 'psn-1', title: 'God of War', platform: 'PSN', totalAchievements: 52 });
+    mockQueryRaw([row], computeAggregates([row]));
     // prisma.achievement.findMany devuelve todos los achievements del juego PSN, incluyendo el platino
     (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([
       { gameId: 'psn-1', normalizedPoints: 30 },
       { gameId: 'psn-1', normalizedPoints: 300 }, // platino disponible
     ]);
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([]); // platino no ganado
 
     const result = await userService.getMyGames('user-1');
 
@@ -613,15 +660,17 @@ describe('userService.getMyGames', () => {
   });
 
   it('PSN: platinumEarned=true cuando el usuario ha ganado el achievement con 300 pts', async () => {
-    const psnGame = { id: 'psn-1', title: 'God of War', platform: 'PSN', iconUrl: null, totalAchievements: 2 };
-    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
-      makeUserAchievement('psn-1', psnGame, { platform: 'PSN', normalizedPoints: 30, achievementId: 'ach-bronze' }),
-      makeUserAchievement('psn-1', psnGame, { platform: 'PSN', normalizedPoints: 300, achievementId: 'ach-platinum' }),
-    ]);
-    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
+    const row = makeRow(
+      { id: 'psn-1', title: 'God of War', platform: 'PSN', totalAchievements: 2 },
+      { earnedAchievements: 2 },
+    );
+    mockQueryRaw([row], computeAggregates([row]));
     (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([
       { gameId: 'psn-1', normalizedPoints: 30 },
       { gameId: 'psn-1', normalizedPoints: 300 },
+    ]);
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
+      { achievement: { gameId: 'psn-1' } },
     ]);
 
     const result = await userService.getMyGames('user-1');
@@ -631,15 +680,17 @@ describe('userService.getMyGames', () => {
   });
 
   it('PSN: isCompleted=true cuando earnedAchievements === totalAchievements', async () => {
-    const psnGame = { id: 'psn-1', title: 'God of War', platform: 'PSN', iconUrl: null, totalAchievements: 2 };
-    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
-      makeUserAchievement('psn-1', psnGame, { platform: 'PSN', normalizedPoints: 30 }),
-      makeUserAchievement('psn-1', psnGame, { platform: 'PSN', normalizedPoints: 300 }),
-    ]);
-    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
+    const row = makeRow(
+      { id: 'psn-1', title: 'God of War', platform: 'PSN', totalAchievements: 2 },
+      { earnedAchievements: 2 },
+    );
+    mockQueryRaw([row], computeAggregates([row]));
     (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([
       { gameId: 'psn-1', normalizedPoints: 30 },
       { gameId: 'psn-1', normalizedPoints: 300 },
+    ]);
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
+      { achievement: { gameId: 'psn-1' } },
     ]);
 
     const result = await userService.getMyGames('user-1');
@@ -648,16 +699,14 @@ describe('userService.getMyGames', () => {
   });
 
   it('PSN: hasPlatinum=false cuando ningún achievement del juego tiene 300 pts', async () => {
-    const psnGame = { id: 'psn-1', title: 'Some Game', platform: 'PSN', iconUrl: null, totalAchievements: 10 };
-    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
-      makeUserAchievement('psn-1', psnGame, { platform: 'PSN', normalizedPoints: 30 }),
-    ]);
-    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
+    const row = makeRow({ id: 'psn-1', title: 'Some Game', platform: 'PSN', totalAchievements: 10 });
+    mockQueryRaw([row], computeAggregates([row]));
     // Sin achievement de 300 pts — no hay platino en este juego
     (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([
       { gameId: 'psn-1', normalizedPoints: 30 },
       { gameId: 'psn-1', normalizedPoints: 90 },
     ]);
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([]);
 
     const result = await userService.getMyGames('user-1');
 
@@ -666,28 +715,25 @@ describe('userService.getMyGames', () => {
   });
 
   it('Steam: hasPlatinum=false y platinumEarned=false siempre (no es PSN)', async () => {
-    const steamGame = { id: 'steam-1', title: 'Portal', platform: 'STEAM', iconUrl: null, totalAchievements: 10 };
-    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
-      makeUserAchievement('steam-1', steamGame, { platform: 'STEAM', normalizedPoints: 100 }),
-    ]);
-    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
-    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([]);
+    const row = makeRow({ id: 'steam-1', title: 'Portal', totalAchievements: 10 });
+    mockQueryRaw([row], computeAggregates([row]));
 
     const result = await userService.getMyGames('user-1');
 
     expect(result.data[0]?.hasPlatinum).toBe(false);
     expect(result.data[0]?.platinumEarned).toBe(false);
+    // Sin juegos PSN en la página, no hace falta resolver platino — no se llama a ninguna
+    // de las dos queries de platino.
+    expect(mockPrisma.achievement.findMany).not.toHaveBeenCalled();
+    expect(mockPrisma.userAchievement.findMany).not.toHaveBeenCalled();
   });
 
   it('isCompleted=true para juegos no-PSN cuando se han ganado todos los logros', async () => {
-    const steamGame = { id: 'steam-1', title: 'Portal', platform: 'STEAM', iconUrl: null, totalAchievements: 3 };
-    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
-      makeUserAchievement('steam-1', steamGame),
-      makeUserAchievement('steam-1', steamGame),
-      makeUserAchievement('steam-1', steamGame),
-    ]);
-    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
-    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([]);
+    const row = makeRow(
+      { id: 'steam-1', title: 'Portal', totalAchievements: 3 },
+      { earnedAchievements: 3 },
+    );
+    mockQueryRaw([row], computeAggregates([row]));
 
     const result = await userService.getMyGames('user-1');
 
@@ -696,12 +742,8 @@ describe('userService.getMyGames', () => {
   });
 
   it('isCompleted=false cuando totalAchievements es 0', async () => {
-    const game = { id: 'g1', title: 'Game', platform: 'STEAM', iconUrl: null, totalAchievements: 0 };
-    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
-      makeUserAchievement('g1', game),
-    ]);
-    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
-    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([]);
+    const row = makeRow({ id: 'g1', title: 'Game', totalAchievements: 0 }, { earnedAchievements: 1 });
+    mockQueryRaw([row], computeAggregates([row]));
 
     const result = await userService.getMyGames('user-1');
 
@@ -711,17 +753,12 @@ describe('userService.getMyGames', () => {
   // ─── totalGames / totalCompletedGames ─────────────────────────────────────────
 
   it('totalGames devuelve el número de juegos distintos', async () => {
-    const gameA = { id: 'g1', title: 'A', platform: 'STEAM', iconUrl: null, totalAchievements: 5 };
-    const gameB = { id: 'g2', title: 'B', platform: 'RA', iconUrl: null, totalAchievements: 10 };
-    const gameC = { id: 'g3', title: 'C', platform: 'STEAM', iconUrl: null, totalAchievements: 3 };
-    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
-      makeUserAchievement('g1', gameA),
-      makeUserAchievement('g1', gameA),
-      makeUserAchievement('g2', gameB, { platform: 'RA' }),
-      makeUserAchievement('g3', gameC),
-    ]);
-    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
-    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([]);
+    const rows = [
+      makeRow({ id: 'g1', title: 'A', totalAchievements: 5 }, { earnedAchievements: 2 }),
+      makeRow({ id: 'g2', title: 'B', platform: 'RA', totalAchievements: 10 }),
+      makeRow({ id: 'g3', title: 'C', totalAchievements: 3 }),
+    ];
+    mockQueryRaw(rows, computeAggregates(rows));
 
     const result = await userService.getMyGames('user-1');
 
@@ -730,15 +767,11 @@ describe('userService.getMyGames', () => {
 
   it('totalCompletedGames cuenta solo juegos donde earnedAchievements === totalAchievements', async () => {
     // gameA completado (2/2), gameB incompleto (1/5)
-    const gameA = { id: 'g1', title: 'A', platform: 'STEAM', iconUrl: null, totalAchievements: 2 };
-    const gameB = { id: 'g2', title: 'B', platform: 'STEAM', iconUrl: null, totalAchievements: 5 };
-    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
-      makeUserAchievement('g1', gameA),
-      makeUserAchievement('g1', gameA),
-      makeUserAchievement('g2', gameB),
-    ]);
-    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
-    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([]);
+    const rows = [
+      makeRow({ id: 'g1', title: 'A', totalAchievements: 2 }, { earnedAchievements: 2 }),
+      makeRow({ id: 'g2', title: 'B', totalAchievements: 5 }, { earnedAchievements: 1 }),
+    ];
+    mockQueryRaw(rows, computeAggregates(rows));
 
     const result = await userService.getMyGames('user-1');
 
@@ -747,14 +780,11 @@ describe('userService.getMyGames', () => {
   });
 
   it('totalCompletedGames=0 cuando ningún juego está completado', async () => {
-    const gameA = { id: 'g1', title: 'A', platform: 'STEAM', iconUrl: null, totalAchievements: 10 };
-    const gameB = { id: 'g2', title: 'B', platform: 'RA', iconUrl: null, totalAchievements: 20 };
-    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
-      makeUserAchievement('g1', gameA),
-      makeUserAchievement('g2', gameB, { platform: 'RA' }),
-    ]);
-    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
-    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([]);
+    const rows = [
+      makeRow({ id: 'g1', title: 'A', totalAchievements: 10 }, { earnedAchievements: 1 }),
+      makeRow({ id: 'g2', title: 'B', platform: 'RA', totalAchievements: 20 }, { earnedAchievements: 1 }),
+    ];
+    mockQueryRaw(rows, computeAggregates(rows));
 
     const result = await userService.getMyGames('user-1');
 
@@ -762,17 +792,11 @@ describe('userService.getMyGames', () => {
   });
 
   it('totalCompletedGames === totalGames cuando todos los juegos están completados', async () => {
-    const gameA = { id: 'g1', title: 'A', platform: 'STEAM', iconUrl: null, totalAchievements: 2 };
-    const gameB = { id: 'g2', title: 'B', platform: 'RA', iconUrl: null, totalAchievements: 3 };
-    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
-      makeUserAchievement('g1', gameA),
-      makeUserAchievement('g1', gameA),
-      makeUserAchievement('g2', gameB, { platform: 'RA' }),
-      makeUserAchievement('g2', gameB, { platform: 'RA' }),
-      makeUserAchievement('g2', gameB, { platform: 'RA' }),
-    ]);
-    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
-    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([]);
+    const rows = [
+      makeRow({ id: 'g1', title: 'A', totalAchievements: 2 }, { earnedAchievements: 2 }),
+      makeRow({ id: 'g2', title: 'B', platform: 'RA', totalAchievements: 3 }, { earnedAchievements: 3 }),
+    ];
+    mockQueryRaw(rows, computeAggregates(rows));
 
     const result = await userService.getMyGames('user-1');
 
@@ -783,22 +807,16 @@ describe('userService.getMyGames', () => {
 
   it('totalGames/totalCompletedGames se calculan antes de la paginación', async () => {
     // 25 juegos, 5 completados (1 logro cada uno con totalAchievements=1), 20 incompletos
-    const completedGames = Array.from({ length: 5 }, (_, i) => {
-      const game = { id: `c${i}`, title: `Completed ${i}`, platform: 'STEAM', iconUrl: null, totalAchievements: 1 };
-      return makeUserAchievement(`c${i}`, game);
-    });
-    const incompleteGames = Array.from({ length: 20 }, (_, i) => {
-      const game = { id: `p${i}`, title: `Partial ${i}`, platform: 'STEAM', iconUrl: null, totalAchievements: 10 };
-      return makeUserAchievement(`p${i}`, game);
-    });
-    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
-      ...completedGames,
-      ...incompleteGames,
-    ]);
-    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
-    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([]);
+    const completedRows = Array.from({ length: 5 }, (_, i) =>
+      makeRow({ id: `c${i}`, title: `Completed ${i}`, totalAchievements: 1 }, { earnedAchievements: 1 }),
+    );
+    const incompleteRows = Array.from({ length: 20 }, (_, i) =>
+      makeRow({ id: `p${i}`, title: `Partial ${i}`, totalAchievements: 10 }, { earnedAchievements: 1 }),
+    );
+    const allRows = [...completedRows, ...incompleteRows];
+    // página 1, limit 20 — la query real solo devolvería 20 filas (LIMIT 20)
+    mockQueryRaw(allRows.slice(0, 20), computeAggregates(allRows));
 
-    // página 1, limit 20 — solo devuelve 20 juegos pero stats cubren los 25
     const result = await userService.getMyGames('user-1', undefined, 1, 20);
 
     expect(result.data).toHaveLength(20);
@@ -807,37 +825,106 @@ describe('userService.getMyGames', () => {
   });
 
   it('no devuelve juegos de una plataforma sin UserAchievements (plataforma desvinculada)', async () => {
-    // Solo hay UserAchievements de PSN — Steam no tiene ninguno (como si se hubiera desvinculado)
-    const psnGame = { id: 'psn-game-1', title: 'God of War', platform: 'PSN', iconUrl: null, totalAchievements: 36 };
-    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
-      makeUserAchievement('psn-game-1', psnGame, { platform: 'PSN', normalizedPoints: 15 }),
-    ]);
+    // Solo hay filas de PSN — Steam no aparece (como si se hubiera desvinculado); el JOIN
+    // de la query SQL solo devuelve juegos con al menos un UserAchievement.
+    const row = makeRow({ id: 'psn-game-1', title: 'God of War', platform: 'PSN', totalAchievements: 36 });
+    mockQueryRaw([row], computeAggregates([row]));
     (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([
       { platform: 'PSN', lastSyncedAt: null },
     ]);
-    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([]);
 
     const result = await userService.getMyGames('user-1');
 
     expect(result.data).toHaveLength(1);
     expect(result.data[0]?.platform).toBe('PSN');
-    // Steam no tiene UserAchievements → no aparece en la biblioteca
     expect(result.data.some((g) => g.platform === 'STEAM')).toBe(false);
   });
 
   it('solo devuelve juegos para los que el usuario tiene al menos un UserAchievement', async () => {
-    // Sin UserAchievements → sin juegos, aunque haya PlatformAccounts vinculadas
-    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([]);
+    // Sin filas → sin juegos, aunque haya PlatformAccounts vinculadas
+    mockQueryRaw([], computeAggregates([]));
     (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([
       { platform: 'STEAM', lastSyncedAt: null },
       { platform: 'PSN', lastSyncedAt: null },
     ]);
-    (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([]);
 
     const result = await userService.getMyGames('user-1');
 
     expect(result.data).toHaveLength(0);
     expect(result.totalGames).toBe(0);
+  });
+
+  // ─── Centinelas T123 — anti-regresión del bug original ───────────────────────
+
+  it('CENTINELA: una página distinta de 1 no dispara un findMany sin límite sobre el historial', async () => {
+    // Este es el patrón exacto que causaba T123: userAchievement.findMany({ where: { userId } })
+    // sin límite, recorriendo TODO el historial de logros del usuario en cada página. Tras el
+    // fix, la lista y los agregados salen de $queryRaw — userAchievement.findMany ya no se
+    // usa para construir la biblioteca (solo queda para resolver platino PSN cuando aplica,
+    // y aquí no hay juegos PSN en la página).
+    const row = makeRow({ id: 'g1', title: 'Portal', totalAchievements: 4 }, { earnedAchievements: 2 });
+    mockQueryRaw([row], computeAggregates([row]));
+
+    await userService.getMyGames('user-1', undefined, 2, 20);
+
+    expect(mockPrisma.userAchievement.findMany).not.toHaveBeenCalled();
+  });
+
+  it('CENTINELA: los agregados se sirven de caché en la 2ª página — no se recalculan', async () => {
+    // Fake de Redis con estado real (en vez del mock global que siempre devuelve cache miss)
+    // para probar que la clave de agregados, una vez escrita por la página 1, se reutiliza
+    // en la página 2 sin volver a ejecutar la query GROUP BY.
+    const store = new Map<string, string>();
+    mockRedisGet.mockImplementation((key: string) => Promise.resolve(store.get(key) ?? null));
+    mockRedisSetex.mockImplementation((key: string, _ttl: number, value: string) => {
+      store.set(key, value);
+      return Promise.resolve('OK');
+    });
+
+    let aggregatesQueryCalls = 0;
+    (mockPrisma.$queryRaw as unknown as jest.Mock).mockImplementation((query: { sql: string }) => {
+      if (query.sql.includes('"totalGames"')) {
+        aggregatesQueryCalls++;
+        return Promise.resolve([computeAggregates([])]);
+      }
+      return Promise.resolve([]);
+    });
+
+    await userService.getMyGames('user-1', undefined, 1, 20);
+    await userService.getMyGames('user-1', undefined, 2, 20);
+
+    // Las dos páginas comparten clave de agregados (my-games-aggregates:user-1:all) — la
+    // query GROUP BY de agregados solo debe ejecutarse una vez, no dos.
+    expect(aggregatesQueryCalls).toBe(1);
+  });
+
+  it('CENTINELA: tras invalidar (sync), las claves de lista y de agregados se limpian', async () => {
+    const store = new Set<string>();
+    mockRedisSadd.mockImplementation((setKey: string, member: string) => {
+      if (setKey === 'user-cache-keys:user-1') store.add(member);
+      return Promise.resolve(1);
+    });
+    (redis.smembers as jest.Mock).mockImplementation((setKey: string) =>
+      Promise.resolve(setKey === 'user-cache-keys:user-1' ? Array.from(store) : []),
+    );
+    const delMock = redis.del as jest.Mock;
+    delMock.mockClear();
+
+    mockQueryRaw([], computeAggregates([]));
+    await userService.getMyGames('user-1', undefined, 1, 20);
+
+    // Ambas claves quedaron registradas en el set de tracking que ya usa getUserGames.
+    expect(store).toContain('my-games:user-1:all:1:20');
+    expect(store).toContain('my-games-aggregates:user-1:all');
+
+    await userService.invalidateUserPublicCache('user-1');
+
+    // invalidateUserPublicCache borra TODAS las claves del set — incluye ambas, sin código
+    // de invalidación nuevo específico para getMyGames.
+    const delArgs = delMock.mock.calls.flatMap((call: unknown[]) => call);
+    expect(delArgs).toEqual(
+      expect.arrayContaining(['my-games:user-1:all:1:20', 'my-games-aggregates:user-1:all']),
+    );
   });
 });
 
@@ -899,20 +986,16 @@ describe('userService.getMyGameAchievements', () => {
 describe('userService.getUserGames', () => {
   const publicUser = { id: 'u-target', profileVisibility: 'PUBLIC', deletedAt: null };
 
-  const makeUA = (gameId: string, title: string) => ({
-    achievementId: `ach-${gameId}`,
-    unlockedAt: new Date('2024-01-01'),
-    achievement: {
-      gameId,
-      platform: 'STEAM',
-      normalizedPoints: 50,
-      game: { id: gameId, title, platform: 'STEAM', iconUrl: null, totalAchievements: 5 },
-    },
+  beforeEach(() => {
+    // getUserGames delega en getMyGames (paginación SQL) — mismo cache-miss por defecto
+    // que en el describe de getMyGames, para que cada test parta de estado limpio.
+    mockRedisGet.mockResolvedValue(null);
   });
 
   it('devuelve juegos del usuario visitado cuando el perfil es PUBLIC', async () => {
     (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(publicUser);
-    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([makeUA('g1', 'Portal')]);
+    const row = makeRow({ id: 'g1', title: 'Portal', totalAchievements: 5 });
+    mockQueryRaw([row], computeAggregates([row]));
     (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
     (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([]);
 
@@ -962,7 +1045,7 @@ describe('userService.getUserGames', () => {
   it('permite acceso FRIENDS_ONLY cuando hay amistad ACCEPTED', async () => {
     (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'u-target', profileVisibility: 'FRIENDS_ONLY' });
     (mockPrisma.friendship.findFirst as jest.Mock).mockResolvedValue({ id: 'fs-1' });
-    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([]);
+    mockQueryRaw([], computeAggregates([]));
     (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([]);
     (mockPrisma.achievement.findMany as jest.Mock).mockResolvedValue([]);
 
