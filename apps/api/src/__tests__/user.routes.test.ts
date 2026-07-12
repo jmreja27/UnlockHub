@@ -8,6 +8,12 @@ jest.mock('../middleware/rateLimiter', () => ({
   globalRateLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),
   authRateLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
+// authenticate.ts consulta prisma.user.findUnique para el check de soft-delete GDPR.
+// Sin este mock, la BD es inalcanzable en el entorno de test y el middleware falla-cerrado
+// (503 AUTH_CHECK_FAILED) — antes pasaba por accidente vía el fail-open ya eliminado (T135).
+jest.mock('../lib/prisma', () => ({
+  prisma: { user: { findUnique: jest.fn() } },
+}));
 
 import request from 'supertest';
 
@@ -15,8 +21,10 @@ import * as userService from '../services/user.service';
 import app from '../app';
 import { signAccessToken } from '../lib/jwt';
 import { AppError } from '../middleware/errorHandler';
+import { prisma } from '../lib/prisma';
 
 const mockUserService = userService as jest.Mocked<typeof userService>;
+const mockPrismaUserFindUnique = prisma.user.findUnique as jest.Mock;
 
 const baseProfile = {
   id: 'user-1',
@@ -42,6 +50,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   process.env['JWT_ACCESS_SECRET'] = 'test_secret_at_least_32_characters_long_x';
   validToken = signAccessToken({ sub: 'user-1', email: 'test@example.com', isPremium: false });
+  // authenticate.ts: cuenta existe y no está borrada — camino de éxito por defecto
+  mockPrismaUserFindUnique.mockResolvedValue({ id: 'user-1' });
 });
 
 // ─── GET /me ──────────────────────────────────────────────────────────────────

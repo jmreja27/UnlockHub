@@ -119,6 +119,11 @@ describe('authenticate', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     process.env['JWT_ACCESS_SECRET'] = 'test_secret_at_least_32_characters_long_x';
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   it('llama a next con AppError UNAUTHORIZED si no hay header Authorization', () => {
@@ -150,7 +155,7 @@ describe('authenticate', () => {
     (mockPrismaMiddleware.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1' });
 
     authenticate(req, res, next);
-    await Promise.resolve(); // flush microtasks de la Promise de prisma
+    await jest.runAllTimersAsync();
 
     expect(next).toHaveBeenCalledWith();
     expect((req as unknown as Record<string, unknown>).user).toMatchObject({ id: 'user-1', email: 'a@b.com', isPremium: true });
@@ -166,12 +171,12 @@ describe('authenticate', () => {
     (mockPrismaMiddleware.user.findUnique as jest.Mock).mockResolvedValue(null);
 
     authenticate(req, res, next);
-    await Promise.resolve();
+    await jest.runAllTimersAsync();
 
     expect(next).toHaveBeenCalledWith(expect.objectContaining({ code: 'ACCOUNT_DELETED' }));
   });
 
-  it('continúa sin bloquear si la BD lanza error transitorio', async () => {
+  it('FAIL-CLOSED (T135): deniega con 503 AUTH_CHECK_FAILED si la BD falla persistentemente tras agotar reintentos', async () => {
     const token = signAccessToken({ sub: 'user-2', email: 'b@b.com', isPremium: false });
     const req = mockReq({ authorization: `Bearer ${token}` });
     const res = mockRes();
@@ -180,14 +185,33 @@ describe('authenticate', () => {
     (mockPrismaMiddleware.user.findUnique as jest.Mock).mockRejectedValue(new Error('DB timeout'));
 
     authenticate(req, res, next);
-    // La propagación de rechazo por .then().catch() requiere dos rondas de microtasks:
-    // 1ª ronda: rechazo de findUnique atraviesa .then() → p2 rechazada
-    // 2ª ronda: p2 rechazada dispara .catch() → next() llamado
-    await Promise.resolve();
-    await Promise.resolve();
+    await jest.runAllTimersAsync();
 
-    // Ante error de BD, la request no se bloquea (fail-open: seguridad vs disponibilidad)
+    // Nunca debe autenticar sin haber podido verificar la cuenta — este test falla si
+    // alguien reintroduce el fail-open (antes: next() sin error y req.user relleno igualmente).
+    expect(mockPrismaMiddleware.user.findUnique).toHaveBeenCalledTimes(3); // 1 intento + 2 reintentos
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'AUTH_CHECK_FAILED', statusCode: 503 }),
+    );
+    expect((req as unknown as Record<string, unknown>).user).toBeUndefined();
+  });
+
+  it('reintenta ante un fallo transitorio de BD y autentica si el siguiente intento tiene éxito', async () => {
+    const token = signAccessToken({ sub: 'user-3', email: 'c@b.com', isPremium: false });
+    const req = mockReq({ authorization: `Bearer ${token}` });
+    const res = mockRes();
+    const next = jest.fn();
+
+    (mockPrismaMiddleware.user.findUnique as jest.Mock)
+      .mockRejectedValueOnce(new Error('DB hiccup transitorio'))
+      .mockResolvedValueOnce({ id: 'user-3' });
+
+    authenticate(req, res, next);
+    await jest.runAllTimersAsync();
+
+    expect(mockPrismaMiddleware.user.findUnique).toHaveBeenCalledTimes(2);
     expect(next).toHaveBeenCalledWith();
+    expect((req as unknown as Record<string, unknown>).user).toMatchObject({ id: 'user-3' });
   });
 });
 

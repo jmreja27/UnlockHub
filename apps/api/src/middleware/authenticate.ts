@@ -1,9 +1,40 @@
 import type { Request, Response, NextFunction } from 'express';
+import * as Sentry from '@sentry/node';
 
 import { verifyAccessToken } from '../lib/jwt';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 import { AppError } from './errorHandler';
+
+/** Delays entre reintentos cuando la query de verificación de cuenta falla (BD caída/hipo transitorio). */
+const AUTH_CHECK_RETRY_DELAYS_MS = [50, 150];
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Reintenta la comprobación de soft-delete ante fallos transitorios de BD.
+// Devuelve el usuario (o null si está borrado/no existe) — nunca "se salta" el check:
+// si todos los intentos fallan, propaga el error para que el caller falle CERRADO.
+async function findActiveUserWithRetry(userId: string): Promise<{ id: string } | null> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= AUTH_CHECK_RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      return await prisma.user.findUnique({
+        where: { id: userId, deletedAt: null },
+        select: { id: true },
+      });
+    } catch (err) {
+      lastError = err;
+      const retryDelay = AUTH_CHECK_RETRY_DELAYS_MS[attempt];
+      if (retryDelay !== undefined) {
+        await delay(retryDelay);
+      }
+    }
+  }
+  throw lastError;
+}
 
 export interface AuthenticatedRequest extends Request {
   user: {
@@ -39,8 +70,7 @@ export function authenticate(req: Request, _res: Response, next: NextFunction): 
   }
 
   // Verificar que el usuario no está eliminado (soft delete GDPR)
-  prisma.user
-    .findUnique({ where: { id: payload.sub, deletedAt: null }, select: { id: true } })
+  findActiveUserWithRetry(payload.sub)
     .then((dbUser) => {
       if (!dbUser) {
         next(new AppError('Cuenta eliminada o no encontrada', 'ACCOUNT_DELETED', 401));
@@ -53,14 +83,20 @@ export function authenticate(req: Request, _res: Response, next: NextFunction): 
       };
       next();
     })
-    .catch(() => {
-      // Error de BD transitorio — continuar sin bloquear la request
-      (req as AuthenticatedRequest).user = {
-        id: payload.sub,
-        email: payload.email,
-        isPremium: payload.isPremium,
-      };
-      next();
+    .catch((err) => {
+      // BD inalcanzable tras reintentos — fail CLOSED, nunca autenticar sin verificar la cuenta.
+      logger.error(
+        { err, userId: payload.sub },
+        '[authenticate] Fallo persistente verificando cuenta en BD — denegando por fail-closed',
+      );
+      Sentry.captureException(err, { tags: { scope: 'authenticate' }, extra: { userId: payload.sub } });
+      next(
+        new AppError(
+          'Servicio de autenticación no disponible temporalmente',
+          'AUTH_CHECK_FAILED',
+          503,
+        ),
+      );
     });
 }
 

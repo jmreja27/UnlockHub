@@ -8,6 +8,12 @@ jest.mock('../middleware/rateLimiter', () => ({
   globalRateLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),
   authRateLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
+// authenticate.ts consulta prisma.user.findUnique para el check de soft-delete GDPR.
+// Sin este mock, la BD es inalcanzable en el entorno de test y el middleware falla-cerrado
+// (503 AUTH_CHECK_FAILED tras reintentos, que además timeoutea el test) — T135.
+jest.mock('../lib/prisma', () => ({
+  prisma: { user: { findUnique: jest.fn() } },
+}));
 
 import request from 'supertest';
 
@@ -15,10 +21,12 @@ import * as searchService from '../services/search.service';
 import * as gamesService from '../services/games.service';
 import app from '../app';
 import { signAccessToken } from '../lib/jwt';
+import { prisma } from '../lib/prisma';
 
 const mockGamesService = gamesService as jest.Mocked<typeof gamesService>;
 
 const mockSearchService = searchService as jest.Mocked<typeof searchService>;
+const mockPrismaUserFindUnique = prisma.user.findUnique as jest.Mock;
 
 const makeAchievement = (overrides = {}) => ({
   id: 'ach1',
@@ -47,6 +55,8 @@ beforeEach(() => {
   process.env['JWT_ACCESS_SECRET'] = 'test_secret_at_least_32_characters_long_x';
   process.env['JWT_REFRESH_SECRET'] = 'test_refresh_secret_at_least_32_chars_xx';
   process.env['ENCRYPTION_KEY'] = '0'.repeat(64);
+  // authenticate.ts: cuenta existe y no está borrada — camino de éxito por defecto
+  mockPrismaUserFindUnique.mockResolvedValue({ id: 'user-1' });
 });
 
 describe('GET /api/v1/games/:id/achievements — sin JWT', () => {
