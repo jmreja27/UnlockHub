@@ -1359,3 +1359,13 @@ Ver [docs/BACKLOG.md](docs/BACKLOG.md)
 **Fecha**: 2026-06-03 (sesión 53) — Auditoría de seguridad de datos en BD. Vulnerabilidades encontradas y corregidas: **CRÍTICA**: `xbox.adapter.ts` doble cifrado AES-256-GCM en `exchangeXboxCodeForTokens` — `linkPlatform` volvía a cifrar un token ya cifrado, causando que todos los syncs Xbox fallaran con "Token Xbox corrupto". Fix: devolver `tokenJson` sin cifrar (responsabilidad del cifrado delegada a `linkPlatform`). **MEDIA-1**: `search.service.ts` — `searchUsers` no filtraba `deletedAt: null` — usuarios soft-deleted aparecían en búsquedas durante 30 días. Fix: añadido `deletedAt: null` al `where`. **MEDIA-2**: `user.service.ts` — `deleteAccount` no revocaba `RefreshToken`s — usuario podía obtener nuevos access tokens tras borrar su cuenta. Fix: `refreshToken.updateMany({ revokedAt: new Date() })` añadido a la transacción atómica. Informacionales documentados (sin corrección): `passwordHash` cargado en memoria sin `select` explícito, `findUserByUsername` sin filtro `deletedAt` interno, placeholder `ENCRYPTION_KEY` en `.env.example` es hex válido. Ficheros modificados: `xbox.adapter.ts`, `platform.controller.ts`, `search.service.ts`, `user.service.ts`. 0 errores TS/lint.
 
 Historial completo en [docs/SESSION_LOG.md](docs/SESSION_LOG.md)
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).

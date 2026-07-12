@@ -82,3 +82,6 @@ web-build/
 # Prisma
 prisma/migrations/*.sql.bak
 /app.json
+
+# graphify — grafo de conocimiento generado, no versionar
+graphify-out/
