@@ -112,6 +112,9 @@ export interface SyncResult {
   achievementsSynced: number;
   gamesUpdated: number;
   syncedAt: string;
+  // T114 — instrumentación de timings, opcional para no romper consumidores existentes.
+  // Suma de fetchMs/writeMs de todos los juegos/títulos procesados en esta llamada.
+  timing?: { fetchMs: number; writeMs: number };
 }
 
 export interface RankingEntry {

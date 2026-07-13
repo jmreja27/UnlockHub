@@ -325,6 +325,8 @@ export class SteamAdapter implements PlatformAdapter {
     let achievementsSynced = 0;
     let gamesUpdated = 0;
     let processed = 0;
+    let fetchMs = 0;
+    let writeMs = 0;
 
     for (let i = 0; i < capped.length; i += BATCH_SIZE) {
       const batch = capped.slice(i, i + BATCH_SIZE);
@@ -332,6 +334,8 @@ export class SteamAdapter implements PlatformAdapter {
 
       achievementsSynced += batchResult.achievementsSynced;
       gamesUpdated += batchResult.gamesUpdated;
+      fetchMs += batchResult.timing?.fetchMs ?? 0;
+      writeMs += batchResult.timing?.writeMs ?? 0;
       processed += batch.length;
 
       await onBatch({
@@ -347,6 +351,7 @@ export class SteamAdapter implements PlatformAdapter {
       achievementsSynced,
       gamesUpdated,
       syncedAt: new Date().toISOString(),
+      timing: { fetchMs, writeMs },
     };
   }
 
@@ -377,17 +382,23 @@ export class SteamAdapter implements PlatformAdapter {
   ): Promise<SyncResult> {
     let achievementsSynced = 0;
     let gamesUpdated = 0;
+    let totalFetchMs = 0;
+    let totalWriteMs = 0;
 
     for (const steamGame of games) {
       const appId = String(steamGame.appid);
 
+      const fetchStartedAt = Date.now();
       const [playerAchievements, schema, rarityMap] = await Promise.all([
         this.fetchPlayerAchievements(steamId, apiKey, appId),
         this.fetchGameSchema(apiKey, appId),
         this.fetchRarityMap(appId),
       ]);
+      const fetchMs = Date.now() - fetchStartedAt;
 
       if (schema.length === 0 || playerAchievements.length === 0) continue;
+
+      const writeStartedAt = Date.now();
 
       const schemaMap = new Map(schema.map((s) => [s.name, s]));
 
@@ -473,6 +484,16 @@ export class SteamAdapter implements PlatformAdapter {
           achievementsSynced++;
         }
       }
+
+      const writeMs = Date.now() - writeStartedAt;
+      totalFetchMs += fetchMs;
+      totalWriteMs += writeMs;
+
+      // T114 — instrumentación de timings por juego. Una línea por juego, no por logro.
+      logger.debug(
+        { platform: 'STEAM', gameId: appId, achievements: playerAchievements.length, fetchMs, writeMs, totalMs: fetchMs + writeMs },
+        '[SteamAdapter] Timing de juego',
+      );
     }
 
     return {
@@ -480,6 +501,7 @@ export class SteamAdapter implements PlatformAdapter {
       achievementsSynced,
       gamesUpdated,
       syncedAt: new Date().toISOString(),
+      timing: { fetchMs: totalFetchMs, writeMs: totalWriteMs },
     };
   }
 

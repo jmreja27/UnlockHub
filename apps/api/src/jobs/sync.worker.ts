@@ -137,6 +137,7 @@ async function syncPlatform(
   // (éxito, error del adapter, error en código post-adapter, throw inesperado).
   try {
     let result: Awaited<ReturnType<typeof adapter.syncUser>>;
+    const syncStartedAt = Date.now();
     try {
       if (adapter.syncUserBatched) {
         result = await adapter.syncUserBatched(account, onBatch);
@@ -284,6 +285,24 @@ async function syncPlatform(
     logger.info(
       { userId, platform, gamesUpdated: result.gamesUpdated, achievementsSynced: result.achievementsSynced },
       '[SyncWorker] Sync completado',
+    );
+
+    // T114 — reparto de tiempo del sync completo (red vs escritura vs overhead no cubierto por la instrumentación).
+    const totalSyncMs = Date.now() - syncStartedAt;
+    const totalFetchMs = result.timing?.fetchMs ?? 0;
+    const totalWriteMs = result.timing?.writeMs ?? 0;
+    logger.info(
+      {
+        userId,
+        platform,
+        games: result.gamesUpdated,
+        achievements: result.achievementsSynced,
+        totalFetchMs,
+        totalWriteMs,
+        totalMs: totalSyncMs,
+        overheadMs: totalSyncMs - totalFetchMs - totalWriteMs,
+      },
+      '[SyncWorker] Reparto de tiempo del sync',
     );
 
     return { achievementsSynced: result.achievementsSynced, gamesUpdated: result.gamesUpdated };

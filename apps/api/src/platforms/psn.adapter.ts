@@ -21,6 +21,7 @@ import { encrypt, decrypt } from '../lib/crypto';
 import { prisma } from '../lib/prisma';
 import { redis } from '../lib/redis';
 import { AppError } from '../middleware/errorHandler';
+import { logger } from '../lib/logger';
 
 import type { PlatformAdapter, SyncBatchCallback } from './platform.interface';
 import { getCachedGameMeta, setCachedGameMeta } from './game-cache';
@@ -340,6 +341,8 @@ export class PsnAdapter implements PlatformAdapter {
     let achievementsSynced = 0;
     let gamesUpdated = 0;
     let processed = 0;
+    let fetchMs = 0;
+    let writeMs = 0;
 
     for (let i = 0; i < titles.length; i += BATCH_SIZE) {
       const batch = titles.slice(i, i + BATCH_SIZE);
@@ -347,6 +350,8 @@ export class PsnAdapter implements PlatformAdapter {
 
       achievementsSynced += batchResult.achievementsSynced;
       gamesUpdated += batchResult.gamesUpdated;
+      fetchMs += batchResult.timing?.fetchMs ?? 0;
+      writeMs += batchResult.timing?.writeMs ?? 0;
       processed += batch.length;
 
       await onBatch({
@@ -362,6 +367,7 @@ export class PsnAdapter implements PlatformAdapter {
       achievementsSynced,
       gamesUpdated,
       syncedAt: new Date().toISOString(),
+      timing: { fetchMs, writeMs },
     };
   }
 
@@ -375,9 +381,13 @@ export class PsnAdapter implements PlatformAdapter {
     title: TrophyTitle,
     auth: AuthorizationPayload,
     account: PlatformAccount,
-  ): Promise<{ achievementsSynced: number; gamesUpdated: number }> {
+  ): Promise<{ achievementsSynced: number; gamesUpdated: number; fetchMs: number; writeMs: number }> {
+    const fetchStartedAt = Date.now();
     const trophies = await this.fetchMergedTrophies(auth, title, account.externalId);
-    if (trophies.length === 0) return { achievementsSynced: 0, gamesUpdated: 0 };
+    const fetchMs = Date.now() - fetchStartedAt;
+    if (trophies.length === 0) return { achievementsSynced: 0, gamesUpdated: 0, fetchMs, writeMs: 0 };
+
+    const writeStartedAt = Date.now();
 
     const totalAchievements =
       title.definedTrophies.bronze +
@@ -462,7 +472,15 @@ export class PsnAdapter implements PlatformAdapter {
       }
     }
 
-    return { achievementsSynced, gamesUpdated: 1 };
+    const writeMs = Date.now() - writeStartedAt;
+
+    // T114 — instrumentación de timings por título. Una línea por título, no por logro.
+    logger.debug(
+      { platform: 'PSN', gameId: title.npCommunicationId, achievements: trophies.length, fetchMs, writeMs, totalMs: fetchMs + writeMs },
+      '[PsnAdapter] Timing de título',
+    );
+
+    return { achievementsSynced, gamesUpdated: 1, fetchMs, writeMs };
   }
 
   /**
@@ -476,6 +494,8 @@ export class PsnAdapter implements PlatformAdapter {
   ): Promise<SyncResult> {
     let achievementsSynced = 0;
     let gamesUpdated = 0;
+    let fetchMs = 0;
+    let writeMs = 0;
 
     for (let i = 0; i < titles.length; i += PSN_PROCESS_CONCURRENCY) {
       const chunk = titles.slice(i, i + PSN_PROCESS_CONCURRENCY);
@@ -487,12 +507,20 @@ export class PsnAdapter implements PlatformAdapter {
         if (result.status === 'fulfilled') {
           achievementsSynced += result.value.achievementsSynced;
           gamesUpdated += result.value.gamesUpdated;
+          fetchMs += result.value.fetchMs;
+          writeMs += result.value.writeMs;
         }
         // título rechazado: el fallo queda aislado y no cancela el lote
       }
     }
 
-    return { platform: 'PSN', achievementsSynced, gamesUpdated, syncedAt: new Date().toISOString() };
+    return {
+      platform: 'PSN',
+      achievementsSynced,
+      gamesUpdated,
+      syncedAt: new Date().toISOString(),
+      timing: { fetchMs, writeMs },
+    };
   }
 
   // ─── Métodos privados ─────────────────────────────────────────────────────

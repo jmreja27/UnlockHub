@@ -209,9 +209,10 @@ async function processRaGame(
   gameEntry: RaCompletedGame,
   username: string,
   userId: string,
-): Promise<{ gamesUpdated: number; achievementsSynced: number }> {
+): Promise<{ gamesUpdated: number; achievementsSynced: number; fetchMs: number; writeMs: number }> {
   const progressCacheKey = `ra:game:${gameId}:${username}`;
 
+  const fetchStartedAt = Date.now();
   let gameProgress: RaGameProgress | null = null;
   try {
     const url = `${RA_API_BASE}/API_GetGameInfoAndUserProgress.php`;
@@ -224,11 +225,14 @@ async function processRaGame(
   } catch {
     gameProgress = await getStaleCache<RaGameProgress>(progressCacheKey);
   }
+  const fetchMs = Date.now() - fetchStartedAt;
 
-  if (!gameProgress) return { gamesUpdated: 0, achievementsSynced: 0 };
+  if (!gameProgress) return { gamesUpdated: 0, achievementsSynced: 0, fetchMs, writeMs: 0 };
   if (!gameProgress.Achievements || Object.keys(gameProgress.Achievements).length === 0) {
-    return { gamesUpdated: 0, achievementsSynced: 0 };
+    return { gamesUpdated: 0, achievementsSynced: 0, fetchMs, writeMs: 0 };
   }
+
+  const writeStartedAt = Date.now();
 
   const gameTitle = gameProgress.Title ?? gameEntry.Title ?? 'Juego sin título';
   const gameIconUrl = gameProgress.ImageIcon
@@ -310,7 +314,22 @@ async function processRaGame(
     }
   }
 
-  return { gamesUpdated: 1, achievementsSynced };
+  const writeMs = Date.now() - writeStartedAt;
+
+  // T114 — instrumentación de timings por juego. Una línea por juego, no por logro.
+  logger.debug(
+    {
+      platform: 'RA',
+      gameId,
+      achievements: Object.keys(gameProgress.Achievements).length,
+      fetchMs,
+      writeMs,
+      totalMs: fetchMs + writeMs,
+    },
+    '[RaAdapter] Timing de juego',
+  );
+
+  return { gamesUpdated: 1, achievementsSynced, fetchMs, writeMs };
 }
 
 // ─── Fetch de definiciones de logros sin progreso de usuario ─────────────────
@@ -520,6 +539,8 @@ export const retroAchievementsAdapter: PlatformAdapter = {
 
     let achievementsSynced = 0;
     let gamesUpdated = 0;
+    let fetchMs = 0;
+    let writeMs = 0;
 
     // Procesamiento paralelo con aislamiento por juego
     for (let i = 0; i < entries.length; i += RA_PROCESS_CONCURRENCY) {
@@ -531,6 +552,8 @@ export const retroAchievementsAdapter: PlatformAdapter = {
         if (result.status === 'fulfilled') {
           achievementsSynced += result.value.achievementsSynced;
           gamesUpdated += result.value.gamesUpdated;
+          fetchMs += result.value.fetchMs;
+          writeMs += result.value.writeMs;
         }
         // juego fallido: aislado, no cancela el resto del lote
       }
@@ -549,7 +572,7 @@ export const retroAchievementsAdapter: PlatformAdapter = {
       },
     });
 
-    return { platform: 'RA', achievementsSynced, gamesUpdated, syncedAt: new Date().toISOString() };
+    return { platform: 'RA', achievementsSynced, gamesUpdated, syncedAt: new Date().toISOString(), timing: { fetchMs, writeMs } };
   },
 
   async syncUserExpress(account: PlatformAccount): Promise<SyncResult> {
@@ -563,6 +586,8 @@ export const retroAchievementsAdapter: PlatformAdapter = {
 
     let achievementsSynced = 0;
     let gamesUpdated = 0;
+    let fetchMs = 0;
+    let writeMs = 0;
 
     // Procesamiento paralelo con aislamiento por juego — igual que syncUser/syncUserBatched
     for (let i = 0; i < entries.length; i += RA_PROCESS_CONCURRENCY) {
@@ -575,6 +600,8 @@ export const retroAchievementsAdapter: PlatformAdapter = {
         if (result?.status === 'fulfilled') {
           achievementsSynced += result.value.achievementsSynced;
           gamesUpdated += result.value.gamesUpdated;
+          fetchMs += result.value.fetchMs;
+          writeMs += result.value.writeMs;
         } else if (result?.status === 'rejected') {
           const gameId = chunk[j]?.[0] ?? 'unknown';
           logger.warn({ gameId, err: result.reason }, '[RA] syncUserExpress: error en juego individual — continuando');
@@ -582,7 +609,7 @@ export const retroAchievementsAdapter: PlatformAdapter = {
       }
     }
 
-    return { platform: 'RA', achievementsSynced, gamesUpdated, syncedAt: new Date().toISOString() };
+    return { platform: 'RA', achievementsSynced, gamesUpdated, syncedAt: new Date().toISOString(), timing: { fetchMs, writeMs } };
   },
 
   async syncUserBatched(account: PlatformAccount, onBatch: SyncBatchCallback): Promise<SyncResult> {
@@ -594,6 +621,8 @@ export const retroAchievementsAdapter: PlatformAdapter = {
     let achievementsSynced = 0;
     let gamesUpdated = 0;
     let processed = 0;
+    let fetchMs = 0;
+    let writeMs = 0;
 
     for (let i = 0; i < entries.length; i += BATCH_SIZE_RA) {
       const batch = entries.slice(i, i + BATCH_SIZE_RA);
@@ -610,6 +639,8 @@ export const retroAchievementsAdapter: PlatformAdapter = {
           if (result.status === 'fulfilled') {
             batchGames += result.value.gamesUpdated;
             batchAchievements += result.value.achievementsSynced;
+            fetchMs += result.value.fetchMs;
+            writeMs += result.value.writeMs;
           }
           // juego fallido: aislado, no cancela el resto del lote
         }
@@ -635,6 +666,6 @@ export const retroAchievementsAdapter: PlatformAdapter = {
       },
     });
 
-    return { platform: 'RA', achievementsSynced, gamesUpdated, syncedAt: new Date().toISOString() };
+    return { platform: 'RA', achievementsSynced, gamesUpdated, syncedAt: new Date().toISOString(), timing: { fetchMs, writeMs } };
   },
 };
