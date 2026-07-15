@@ -11,6 +11,10 @@ jest.mock('../lib/prisma', () => ({
     achievement: { upsert: jest.fn() },
     userAchievement: { upsert: jest.fn() },
     platformAccount: { upsert: jest.fn() },
+    // T114 — batching RA: processRaGame usa $queryRaw (FASE 1, achievements + RETURNING)
+    // y $executeRaw (FASE 2, userAchievements) en lugar de los upserts individuales de arriba.
+    $queryRaw: jest.fn(),
+    $executeRaw: jest.fn(),
   },
 }));
 
@@ -78,6 +82,10 @@ beforeEach(() => {
   (mockPrisma.achievement.upsert as jest.Mock).mockResolvedValue({ id: 'ach-db-1' });
   (mockPrisma.userAchievement.upsert as jest.Mock).mockResolvedValue({});
   (mockPrisma.platformAccount.upsert as jest.Mock).mockResolvedValue({});
+  // FASE 1 del batch (RETURNING id/externalId) — `validGameProgress` tiene un único logro
+  // con ID numérico 1, así que externalId resuelve a String(ach.ID ?? achId) === '1'.
+  (mockPrisma.$queryRaw as jest.Mock).mockResolvedValue([{ id: 'ach-db-1', externalId: '1' }]);
+  (mockPrisma.$executeRaw as jest.Mock).mockResolvedValue(1);
 });
 
 describe('retroAchievementsAdapter.syncUserExpress', () => {

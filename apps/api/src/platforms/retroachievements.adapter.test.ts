@@ -24,6 +24,10 @@ jest.mock('../lib/prisma', () => ({
     platformAccount: {
       upsert: jest.fn(),
     },
+    // T114 — batching RA: processRaGame usa $queryRaw (FASE 1: Achievement + RETURNING)
+    // y $executeRaw (FASE 2: UserAchievement) en vez de los upserts individuales de arriba.
+    $queryRaw: jest.fn(),
+    $executeRaw: jest.fn(),
   },
 }));
 jest.mock('../lib/crypto', () => ({
@@ -404,6 +408,13 @@ describe('retroAchievementsAdapter.syncUser', () => {
     mockPrisma.achievement.upsert.mockResolvedValue(mockDbAchievement as never);
     mockPrisma.userAchievement.upsert.mockResolvedValue({} as never);
     mockPrisma.platformAccount.upsert.mockResolvedValue({} as never);
+    // T114 — FASE 1 del batch (RETURNING id/externalId) para los 3 logros de mockRaGameProgress.
+    (mockPrisma.$queryRaw as jest.Mock).mockResolvedValue([
+      { id: 'db-ach-101', externalId: '101' },
+      { id: 'db-ach-102', externalId: '102' },
+      { id: 'db-ach-103', externalId: '103' },
+    ]);
+    (mockPrisma.$executeRaw as jest.Mock).mockResolvedValue(1);
   });
 
   it('sincroniza correctamente y devuelve SyncResult', async () => {
@@ -432,16 +443,18 @@ describe('retroAchievementsAdapter.syncUser', () => {
 
       await retroAchievementsAdapter.syncUser(mockPlatformAccount);
 
-      // Logro '101' tiene DateEarned: '2024-01-15 10:30:00' — fecha histórica fija, distinta de "ahora"
-      const call = (mockPrisma.userAchievement.upsert as jest.Mock).mock.calls.find(
-        (c) => c[0].create.unlockedAt.getTime() === new Date('2024-01-15 10:30:00').getTime(),
-      )?.[0];
-
+      // T114 — el batch de FASE 2 pasa por $executeRaw(Prisma.sql`...`), no por userAchievement.upsert.
+      // Prisma.sql produce un objeto { values: [...] } con los parámetros en orden — buscamos ahí
+      // la fecha histórica fija del logro 101, distinta de "ahora" (2026-07-08).
+      const call = (mockPrisma.$executeRaw as jest.Mock).mock.calls[0]?.[0] as { values: unknown[] };
       expect(call).toBeDefined();
+
       const expectedDate = new Date('2024-01-15 10:30:00');
-      expect(call.update.unlockedAt).toEqual(expectedDate);
-      expect(call.create.unlockedAt).toEqual(expectedDate);
-      expect(call.update.unlockedAt.getTime()).not.toBe(Date.now());
+      const dateValues = call.values.filter((v): v is Date => v instanceof Date);
+      const match = dateValues.find((d) => d.getTime() === expectedDate.getTime());
+
+      expect(match).toBeDefined();
+      expect(dateValues.some((d) => d.getTime() === Date.now())).toBe(false);
     } finally {
       jest.useRealTimers();
     }
@@ -509,11 +522,14 @@ describe('retroAchievementsAdapter.syncUser', () => {
       .mockResolvedValueOnce({ data: mockCompletedGames })
       .mockResolvedValueOnce({ data: mockRaGameProgress });
 
-    await retroAchievementsAdapter.syncUser(mockPlatformAccount);
+    const result = await retroAchievementsAdapter.syncUser(mockPlatformAccount);
 
-    // El logro 102 no tiene DateEarned → no debe crear UserAchievement
-    // Los logros 101 y 103 sí → 2 upserts de UserAchievement
-    expect(mockPrisma.userAchievement.upsert).toHaveBeenCalledTimes(2);
+    // El logro 102 no tiene DateEarned → no entra en el batch de FASE 2.
+    // Los logros 101 y 103 sí → 1 sola llamada a $executeRaw con 2 filas (8 valores: 2 × [id, userId, achievementId, unlockedAt]).
+    expect(result.achievementsSynced).toBe(2);
+    expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(1);
+    const call = (mockPrisma.$executeRaw as jest.Mock).mock.calls[0]?.[0] as { values: unknown[] };
+    expect(call.values).toHaveLength(8);
   });
 
   it('procesa múltiples juegos en paralelo — gamesUpdated refleja todos los procesados', async () => {

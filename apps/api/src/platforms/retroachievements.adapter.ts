@@ -1,4 +1,7 @@
+import { randomUUID } from 'crypto';
+
 import axios from 'axios';
+import { Prisma } from '@prisma/client';
 import type { PlatformAccount } from '@prisma/client';
 import type { Achievement, Game, SyncResult } from '@unlockhub/types';
 
@@ -29,7 +32,8 @@ const RA_SYSTEM_KEY = process.env['RA_SYSTEM_KEY'] ?? '';
 
 // ─── Tipos internos de la API de RetroAchievements ───────────────────────────
 
-interface RaAchievementEntry {
+// Exportado para el test de integración de equivalencia (T114) — construye fixtures del mismo tipo.
+export interface RaAchievementEntry {
   ID: number | string;
   Title: string;
   Description?: string;
@@ -204,6 +208,135 @@ async function fetchRaUniqueGames(username: string): Promise<Map<string, RaCompl
   return uniqueGames;
 }
 
+// ─── T114 Ataque A — batching de escrituras (solo RA, rollout por plataforma) ─
+//
+// Reemplaza el `for` secuencial (2 await por logro: achievement.upsert + userAchievement.upsert)
+// por 2 fases en lote con SQL crudo. Datos de producción (T114): las escrituras dominan el sync
+// 35-37:1 sobre la red — el batching ataca directamente ese cuello de botella.
+//
+// El CÁLCULO se queda en TypeScript: normalizePoints/buildBadgeUrl se llaman exactamente igual
+// que en el código secuencial que sustituye, ANTES de construir el SQL — el batch solo persiste
+// valores ya calculados, nunca reimplementa la fórmula de puntos en SQL.
+
+interface RaAchievementRow {
+  id: string;
+  externalId: string;
+  title: string;
+  description: string | null;
+  iconUrl: string | null;
+  rawValue: number | null;
+  normalizedPoints: number;
+  externalUrl: string;
+  unlockedAt: Date | null;
+}
+
+/**
+ * Hace upsert en lote de todos los logros de un juego RA + los UserAchievement de los ganados.
+ * Devuelve el número de logros marcados como ganados en este sync (== achievementsSynced).
+ *
+ * Trade-off aceptado (documentado en T114): con INSERT multi-fila, una fila inválida aborta la
+ * sentencia ENTERA — de "N-1 logros se guardan, 1 falla" (comportamiento del `for` secuencial)
+ * pasamos a "0 logros se guardan, el juego se reintenta en el siguiente sync". Esto es aceptable
+ * porque el JUEGO ya es la unidad de fallo en el diseño actual: si `fetchMergedTrophies`/el fetch
+ * de progreso falla, el juego entero se pierde igual (ver `processRaGame` — aislamiento por juego
+ * vía `Promise.allSettled`, no por logro individual).
+ */
+// Exportado para el test de integración de equivalencia (T114) — llamado directamente contra BD real.
+export async function batchUpsertRaAchievements(
+  achievements: Record<string, RaAchievementEntry>,
+  gameId: string,
+  userId: string,
+): Promise<number> {
+  // Dedupe por externalId (última entrada gana) — el `for` secuencial anterior no podía chocar
+  // consigo mismo (cada upsert era independiente), pero un INSERT ... VALUES (...), (...) con el
+  // mismo conflict target repetido dos veces en el mismo lote SÍ falla en Postgres
+  // ("ON CONFLICT DO UPDATE command cannot affect row a second time"). No debería ocurrir en datos
+  // reales de RA (las claves del objeto Achievements ya son únicas), pero es una nueva superficie
+  // de fallo que el código viejo no tenía — se cierra aquí en vez de dejarla como riesgo latente.
+  const byExternalId = new Map<string, RaAchievementRow>();
+  for (const [achId, ach] of Object.entries(achievements)) {
+    const externalId = String(ach.ID ?? achId);
+    const earnedDateRaw = ach.DateEarned ?? ach.DateEarnedHardcore;
+    const unlockedAt =
+      earnedDateRaw && earnedDateRaw !== '' && earnedDateRaw !== '0000-00-00 00:00:00'
+        ? new Date(earnedDateRaw)
+        : null;
+
+    byExternalId.set(externalId, {
+      id: randomUUID(),
+      externalId,
+      title: ach.Title,
+      description: ach.Description ?? null,
+      iconUrl: buildBadgeUrl(ach.BadgeName),
+      rawValue: ach.Points ?? null,
+      normalizedPoints: normalizePoints(ach.Points),
+      externalUrl: `https://retroachievements.org/achievement/${externalId}`,
+      unlockedAt,
+    });
+  }
+  const rows = [...byExternalId.values()];
+
+  const now = new Date();
+
+  // ── FASE 1 — Achievement en lote ──────────────────────────────────────────
+  // Conflict target por LISTA DE COLUMNAS explícita (no por nombre de constraint — más robusto
+  // ante un rename del índice). Debe coincidir EXACTAMENTE con @@unique([platform, gameId,
+  // externalId]) del schema. Ojo al case-sensitivity: "gameId"/"externalId" entre comillas, no
+  // gameid/externalid — Postgres los trataría como columnas distintas (inexistentes) sin comillas.
+  const achievementValues = Prisma.join(
+    rows.map(
+      (row) =>
+        Prisma.sql`(${row.id}, ${gameId}, 'RA'::"Platform", ${row.externalId}, ${row.title}, ${row.description}, ${row.iconUrl}, ${row.rawValue}, ${row.normalizedPoints}, ${null}, ${row.externalUrl}, ${now}, ${now})`,
+    ),
+  );
+
+  const upserted = await prisma.$queryRaw<Array<{ id: string; externalId: string }>>(Prisma.sql`
+    INSERT INTO "Achievement"
+      ("id", "gameId", "platform", "externalId", "title", "description", "iconUrl", "rawValue", "normalizedPoints", "rarity", "externalUrl", "createdAt", "updatedAt")
+    VALUES ${achievementValues}
+    ON CONFLICT ("platform", "gameId", "externalId") DO UPDATE SET
+      "title" = EXCLUDED."title",
+      "description" = EXCLUDED."description",
+      "iconUrl" = EXCLUDED."iconUrl",
+      "rawValue" = EXCLUDED."rawValue",
+      "normalizedPoints" = EXCLUDED."normalizedPoints",
+      "externalUrl" = EXCLUDED."externalUrl",
+      "updatedAt" = EXCLUDED."updatedAt"
+    RETURNING "id", "externalId"
+  `);
+  // "rarity" y "trophyType" se insertan solo en el INSERT (RA nunca los usa, quedan NULL) y se
+  // OMITEN del DO UPDATE SET a propósito — igual que el `update:` de Prisma que sustituye, que
+  // nunca tocaba esos dos campos en un re-sync.
+
+  const achievementIdByExternalId = new Map(upserted.map((r) => [r.externalId, r.id]));
+
+  // ── FASE 2 — UserAchievement en lote (solo logros ganados) ────────────────
+  const earnedRows = rows
+    .filter((row) => row.unlockedAt !== null)
+    .flatMap((row) => {
+      const achievementId = achievementIdByExternalId.get(row.externalId);
+      // Defensivo: RETURNING devuelve una fila por cada input, así que esto no debería pasar nunca.
+      if (!achievementId) return [];
+      return [{ id: randomUUID(), achievementId, unlockedAt: row.unlockedAt as Date }];
+    });
+
+  if (earnedRows.length === 0) return 0;
+
+  const userAchievementValues = Prisma.join(
+    earnedRows.map(
+      (row) => Prisma.sql`(${row.id}, ${userId}, ${row.achievementId}, ${row.unlockedAt})`,
+    ),
+  );
+
+  await prisma.$executeRaw(Prisma.sql`
+    INSERT INTO "UserAchievement" ("id", "userId", "achievementId", "unlockedAt")
+    VALUES ${userAchievementValues}
+    ON CONFLICT ("userId", "achievementId") DO UPDATE SET "unlockedAt" = EXCLUDED."unlockedAt"
+  `);
+
+  return earnedRows.length;
+}
+
 async function processRaGame(
   gameId: string,
   gameEntry: RaCompletedGame,
@@ -274,45 +407,7 @@ async function processRaGame(
     });
   }
 
-  let achievementsSynced = 0;
-
-  for (const [achId, ach] of Object.entries(gameProgress.Achievements)) {
-    const achievementExternalId = String(ach.ID ?? achId);
-
-    const dbAchievement = await prisma.achievement.upsert({
-      where: { platform_gameId_externalId: { platform: 'RA', gameId: dbGame.id, externalId: achievementExternalId } },
-      create: {
-        gameId: dbGame.id,
-        platform: 'RA',
-        externalId: achievementExternalId,
-        title: ach.Title,
-        description: ach.Description ?? null,
-        iconUrl: buildBadgeUrl(ach.BadgeName),
-        rawValue: ach.Points ?? null,
-        normalizedPoints: normalizePoints(ach.Points),
-        rarity: null,
-        externalUrl: `https://retroachievements.org/achievement/${achievementExternalId}`,
-      },
-      update: {
-        title: ach.Title,
-        description: ach.Description ?? null,
-        iconUrl: buildBadgeUrl(ach.BadgeName),
-        rawValue: ach.Points ?? null,
-        normalizedPoints: normalizePoints(ach.Points),
-        externalUrl: `https://retroachievements.org/achievement/${achievementExternalId}`,
-      },
-    });
-
-    const earnedDate = ach.DateEarned ?? ach.DateEarnedHardcore;
-    if (earnedDate && earnedDate !== '' && earnedDate !== '0000-00-00 00:00:00') {
-      await prisma.userAchievement.upsert({
-        where: { userId_achievementId: { userId, achievementId: dbAchievement.id } },
-        create: { userId, achievementId: dbAchievement.id, unlockedAt: new Date(earnedDate) },
-        update: { unlockedAt: new Date(earnedDate) },
-      });
-      achievementsSynced++;
-    }
-  }
+  const achievementsSynced = await batchUpsertRaAchievements(gameProgress.Achievements, dbGame.id, userId);
 
   const writeMs = Date.now() - writeStartedAt;
 
