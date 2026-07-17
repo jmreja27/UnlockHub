@@ -25,6 +25,10 @@ jest.mock('../lib/prisma', () => ({
     achievement: { upsert: jest.fn() },
     userAchievement: { upsert: jest.fn() },
     platformAccount: { update: jest.fn() },
+    // T114 Ataque A (PSN) — processSingleTitle usa batchUpsertPsnAchievements ($queryRaw FASE 1
+    // Achievement + RETURNING, $executeRaw FASE 2 UserAchievement) en vez de los upserts de arriba.
+    $queryRaw: jest.fn(),
+    $executeRaw: jest.fn(),
   },
 }));
 
@@ -184,6 +188,66 @@ function setupSystemTokenExpired(): void {
   (mocked.redis.setex as jest.Mock).mockResolvedValue('OK');
 }
 
+// T114 Ataque A (PSN) — decodifica las filas insertadas por batchUpsertPsnAchievements a partir
+// del objeto Prisma.sql real (no mockeado) pasado a $queryRaw. Orden de columnas interpoladas en
+// la FASE 1 (platform va como literal SQL, no como parámetro, así que no aparece en `.values`):
+// id, gameId, externalId, title, description, iconUrl, rawValue, normalizedPoints, rarity,
+// externalUrl, trophyType, createdAt, updatedAt — 13 parámetros por fila.
+const PSN_ACHIEVEMENT_PARAMS_PER_ROW = 13;
+
+interface ParsedPsnAchievementRow {
+  id: string;
+  gameId: string;
+  externalId: string;
+  title: string;
+  description: string | null;
+  iconUrl: string | null;
+  rawValue: number | null;
+  normalizedPoints: number;
+  rarity: number | null;
+  externalUrl: string;
+  trophyType: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+function parseInsertedAchievementRows(sqlArg: { values: unknown[] }): ParsedPsnAchievementRow[] {
+  const rows: ParsedPsnAchievementRow[] = [];
+  for (let i = 0; i < sqlArg.values.length; i += PSN_ACHIEVEMENT_PARAMS_PER_ROW) {
+    const v = sqlArg.values.slice(i, i + PSN_ACHIEVEMENT_PARAMS_PER_ROW);
+    rows.push({
+      id: v[0] as string,
+      gameId: v[1] as string,
+      externalId: v[2] as string,
+      title: v[3] as string,
+      description: v[4] as string | null,
+      iconUrl: v[5] as string | null,
+      rawValue: v[6] as number | null,
+      normalizedPoints: v[7] as number,
+      rarity: v[8] as number | null,
+      externalUrl: v[9] as string,
+      trophyType: v[10] as string | null,
+      createdAt: v[11] as Date,
+      updatedAt: v[12] as Date,
+    });
+  }
+  return rows;
+}
+
+/**
+ * Mock por defecto de $queryRaw/$executeRaw — simula el RETURNING de la FASE 1 (echo de id +
+ * externalId de cada fila insertada) y acepta la FASE 2 sin más. Llamar en cada beforeEach que
+ * ejercite syncUser/syncUserBatched/syncUserExpress.
+ */
+function setupBatchMocksDefault(): void {
+  (mocked.prisma.$queryRaw as jest.Mock).mockImplementation((sqlArg: { values: unknown[] }) =>
+    Promise.resolve(
+      parseInsertedAchievementRows(sqlArg).map((r) => ({ id: r.id, externalId: r.externalId })),
+    ),
+  );
+  (mocked.prisma.$executeRaw as jest.Mock).mockResolvedValue(1);
+}
+
 // ─── Tests: getSystemPsnAuth ──────────────────────────────────────────────────
 
 describe('getSystemPsnAuth', () => {
@@ -328,6 +392,7 @@ describe('PsnAdapter.syncUser', () => {
     (mocked.prisma.game.upsert as jest.Mock).mockResolvedValue({ id: 'db-game-1' });
     (mocked.prisma.achievement.upsert as jest.Mock).mockResolvedValue({ id: 'db-ach-1' });
     (mocked.prisma.userAchievement.upsert as jest.Mock).mockResolvedValue({});
+    setupBatchMocksDefault();
   });
 
   afterEach(() => {
@@ -362,21 +427,24 @@ describe('PsnAdapter.syncUser', () => {
     );
   });
 
-  it('persiste trophyType en create y update del upsert de Achievement (T136)', async () => {
+  it('persiste trophyType en el INSERT batcheado de Achievement (T136, T114)', async () => {
     mocked.getUserTitles.mockResolvedValue({ trophyTitles: [mockTitle], totalItemCount: 1 });
     mocked.getTitleTrophies.mockResolvedValue(mockTitleTrophies);
     mocked.getUserTrophiesEarnedForTitle.mockResolvedValue(mockEarnedTrophies);
 
     await adapter.syncUser(mockPlatformAccount);
 
-    const calls = (mocked.prisma.achievement.upsert as jest.Mock).mock.calls;
-    const platinumCall = calls.find((c) => c[0].where.platform_gameId_externalId.externalId.endsWith(':2'));
-    const bronzeCall = calls.find((c) => c[0].where.platform_gameId_externalId.externalId.endsWith(':1'));
+    const sqlArg = (mocked.prisma.$queryRaw as jest.Mock).mock.calls[0]?.[0] as { values: unknown[] };
+    const rows = parseInsertedAchievementRows(sqlArg);
+    const platinumRow = rows.find((r) => r.externalId.endsWith(':2'));
+    const bronzeRow = rows.find((r) => r.externalId.endsWith(':1'));
 
-    expect(platinumCall?.[0].create.trophyType).toBe('platinum');
-    expect(platinumCall?.[0].update.trophyType).toBe('platinum');
-    expect(bronzeCall?.[0].create.trophyType).toBe('bronze');
-    expect(bronzeCall?.[0].update.trophyType).toBe('bronze');
+    expect(platinumRow?.trophyType).toBe('platinum');
+    expect(bronzeRow?.trophyType).toBe('bronze');
+    // Igual que rarity — ambos van en el mismo INSERT/DO UPDATE SET (a diferencia de RA, que
+    // los omite del DO UPDATE SET porque nunca los usa).
+    expect(platinumRow?.rarity).toBeCloseTo(5.2);
+    expect(bronzeRow?.rarity).toBeCloseTo(75.5);
   });
 
   it('no actualiza encryptedToken en BD (el sistema gestiona su propio token)', async () => {
@@ -460,6 +528,7 @@ describe('PsnAdapter.syncUser — F46 Fase 2: recálculo de XP y centinela unloc
     (mocked.prisma.game.upsert as jest.Mock).mockResolvedValue({ id: 'db-game-1' });
     (mocked.prisma.achievement.upsert as jest.Mock).mockResolvedValue({ id: 'db-ach-1' });
     (mocked.prisma.userAchievement.upsert as jest.Mock).mockResolvedValue({});
+    setupBatchMocksDefault();
     mocked.getUserTitles.mockResolvedValue({ trophyTitles: [mockTitle], totalItemCount: 1 });
   });
 
@@ -474,8 +543,9 @@ describe('PsnAdapter.syncUser — F46 Fase 2: recálculo de XP y centinela unloc
 
     await adapter.syncUser(mockPlatformAccount);
 
-    const firstUpdate = (mocked.prisma.achievement.upsert as jest.Mock).mock.calls[0]?.[0].update;
-    expect(firstUpdate.normalizedPoints).toBe(normalizeAchievementPoints(75.5));
+    const firstSqlArg = (mocked.prisma.$queryRaw as jest.Mock).mock.calls[0]?.[0] as { values: unknown[] };
+    const firstRow = parseInsertedAchievementRows(firstSqlArg)[0];
+    expect(firstRow?.normalizedPoints).toBe(normalizeAchievementPoints(75.5));
 
     jest.clearAllMocks();
     process.env.PSN_SYSTEM_NPSSO = 'test-system-npsso';
@@ -483,6 +553,7 @@ describe('PsnAdapter.syncUser — F46 Fase 2: recálculo de XP y centinela unloc
     (mocked.prisma.game.upsert as jest.Mock).mockResolvedValue({ id: 'db-game-1' });
     (mocked.prisma.achievement.upsert as jest.Mock).mockResolvedValue({ id: 'db-ach-1' });
     (mocked.prisma.userAchievement.upsert as jest.Mock).mockResolvedValue({});
+    setupBatchMocksDefault();
     mocked.getUserTitles.mockResolvedValue({ trophyTitles: [mockTitle], totalItemCount: 1 });
 
     // Segundo sync (re-sync): la rareza fluctuó a 3.2% — debe reflejar el valor NUEVO
@@ -491,10 +562,11 @@ describe('PsnAdapter.syncUser — F46 Fase 2: recálculo de XP y centinela unloc
 
     await adapter.syncUser(mockPlatformAccount);
 
-    const secondUpdate = (mocked.prisma.achievement.upsert as jest.Mock).mock.calls[0]?.[0].update;
-    expect(secondUpdate.normalizedPoints).toBe(normalizeAchievementPoints(3.2));
-    // Centinela: si el update dejara de recalcular, este valor no reflejaría la nueva rareza.
-    expect(secondUpdate.normalizedPoints).not.toBe(firstUpdate.normalizedPoints);
+    const secondSqlArg = (mocked.prisma.$queryRaw as jest.Mock).mock.calls[0]?.[0] as { values: unknown[] };
+    const secondRow = parseInsertedAchievementRows(secondSqlArg)[0];
+    expect(secondRow?.normalizedPoints).toBe(normalizeAchievementPoints(3.2));
+    // Centinela: si el INSERT dejara de recalcular, este valor no reflejaría la nueva rareza.
+    expect(secondRow?.normalizedPoints).not.toBe(firstRow?.normalizedPoints);
   });
 
   it('centinela: unlockedAt usa el earnedDateTime de la API, nunca Date.now()', async () => {
@@ -507,12 +579,16 @@ describe('PsnAdapter.syncUser — F46 Fase 2: recálculo de XP y centinela unloc
 
       await adapter.syncUser(mockPlatformAccount);
 
-      const call = (mocked.prisma.userAchievement.upsert as jest.Mock).mock.calls[0]?.[0];
-      const expectedDate = new Date(fixedEarnedDateTime);
+      // T114 — el batch de FASE 2 pasa por $executeRaw(Prisma.sql`...`), no por userAchievement.upsert.
+      const call = (mocked.prisma.$executeRaw as jest.Mock).mock.calls[0]?.[0] as { values: unknown[] };
+      expect(call).toBeDefined();
 
-      expect(call.update.unlockedAt).toEqual(expectedDate);
-      expect(call.create.unlockedAt).toEqual(expectedDate);
-      expect(call.update.unlockedAt.getTime()).not.toBe(Date.now());
+      const expectedDate = new Date(fixedEarnedDateTime);
+      const dateValues = call.values.filter((v): v is Date => v instanceof Date);
+      const match = dateValues.find((d) => d.getTime() === expectedDate.getTime());
+
+      expect(match).toBeDefined();
+      expect(dateValues.some((d) => d.getTime() === Date.now())).toBe(false);
     } finally {
       jest.useRealTimers();
     }
@@ -524,7 +600,8 @@ describe('PsnAdapter.syncUser — F46 Fase 2: recálculo de XP y centinela unloc
     mocked.getTitleTrophies.mockResolvedValueOnce(makeTitleTrophies('50'));
     mocked.getUserTrophiesEarnedForTitle.mockResolvedValueOnce(makeEarnedTrophies('50', fixedEarnedDateTime));
     await adapter.syncUser(mockPlatformAccount);
-    const firstUnlockedAt = (mocked.prisma.userAchievement.upsert as jest.Mock).mock.calls[0]?.[0].update.unlockedAt;
+    const firstCall = (mocked.prisma.$executeRaw as jest.Mock).mock.calls[0]?.[0] as { values: unknown[] };
+    const firstUnlockedAt = firstCall.values[3] as Date;
 
     jest.clearAllMocks();
     process.env.PSN_SYSTEM_NPSSO = 'test-system-npsso';
@@ -532,6 +609,7 @@ describe('PsnAdapter.syncUser — F46 Fase 2: recálculo de XP y centinela unloc
     (mocked.prisma.game.upsert as jest.Mock).mockResolvedValue({ id: 'db-game-1' });
     (mocked.prisma.achievement.upsert as jest.Mock).mockResolvedValue({ id: 'db-ach-1' });
     (mocked.prisma.userAchievement.upsert as jest.Mock).mockResolvedValue({});
+    setupBatchMocksDefault();
     mocked.getUserTitles.mockResolvedValue({ trophyTitles: [mockTitle], totalItemCount: 1 });
 
     // Avanzamos el reloj del sistema para simular que el re-sync ocurre "más tarde"
@@ -540,7 +618,8 @@ describe('PsnAdapter.syncUser — F46 Fase 2: recálculo de XP y centinela unloc
       mocked.getTitleTrophies.mockResolvedValueOnce(makeTitleTrophies('50'));
       mocked.getUserTrophiesEarnedForTitle.mockResolvedValueOnce(makeEarnedTrophies('50', fixedEarnedDateTime));
       await adapter.syncUser(mockPlatformAccount);
-      const secondUnlockedAt = (mocked.prisma.userAchievement.upsert as jest.Mock).mock.calls[0]?.[0].update.unlockedAt;
+      const secondCall = (mocked.prisma.$executeRaw as jest.Mock).mock.calls[0]?.[0] as { values: unknown[] };
+      const secondUnlockedAt = secondCall.values[3] as Date;
 
       expect(secondUnlockedAt).toEqual(firstUnlockedAt);
     } finally {
@@ -624,6 +703,7 @@ describe('PsnAdapter — processTitles: paralelismo y aislamiento de fallos', ()
     (mocked.prisma.game.upsert as jest.Mock).mockResolvedValue({ id: 'db-game-1' });
     (mocked.prisma.achievement.upsert as jest.Mock).mockResolvedValue({ id: 'db-ach-1' });
     (mocked.prisma.userAchievement.upsert as jest.Mock).mockResolvedValue({});
+    setupBatchMocksDefault();
   });
 
   afterEach(() => {

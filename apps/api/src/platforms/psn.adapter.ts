@@ -1,3 +1,5 @@
+import { randomUUID } from 'crypto';
+
 import {
   exchangeNpssoForAccessCode,
   exchangeAccessCodeForAuthTokens,
@@ -14,6 +16,7 @@ import type {
   Trophy,
   UserThinTrophy,
 } from 'psn-api';
+import { Prisma } from '@prisma/client';
 import type { PlatformAccount } from '@prisma/client';
 import type { Achievement, Game, SyncResult } from '@unlockhub/types';
 
@@ -258,6 +261,141 @@ export async function exchangeNpssoForPsnTokens(npsso: string): Promise<{
   };
 }
 
+// ─── T114 Ataque A — batching de escrituras (PSN, tras validar RA en producción) ─
+//
+// Mismo patrón que retroachievements.adapter.ts::batchUpsertRaAchievements — reemplaza el `for`
+// secuencial (2 await por trofeo: achievement.upsert + userAchievement.upsert) por 2 fases en
+// lote con SQL crudo. El CÁLCULO se queda en TypeScript: normalizePsnAchievementPoints se llama
+// exactamente igual que en el código secuencial que sustituye, ANTES de construir el SQL.
+//
+// Diferencia clave frente a RA: PSN SÍ actualiza "rarity" y "trophyType" en cada re-sync (el
+// `update:` de Prisma que sustituye los tocaba), así que a diferencia del SQL de RA (que los omite
+// del DO UPDATE SET) aquí van incluidos en ambas fases del upsert.
+
+// Exportado para el test de integración de equivalencia (T114) — construye fixtures del mismo tipo.
+export type PsnMergedTrophy = Trophy & Pick<UserThinTrophy, 'earned' | 'earnedDateTime'>;
+
+interface PsnAchievementRow {
+  id: string;
+  externalId: string;
+  title: string;
+  description: string | null;
+  iconUrl: string | null;
+  rawValue: number | null;
+  normalizedPoints: number;
+  rarity: number | null;
+  trophyType: string | null;
+  externalUrl: string;
+  unlockedAt: Date | null;
+}
+
+/**
+ * Hace upsert en lote de todos los trofeos de un título PSN + los UserAchievement de los ganados.
+ * Devuelve el número de trofeos marcados como ganados en este sync (== achievementsSynced).
+ *
+ * Trade-off aceptado (igual que RA, T114): con INSERT multi-fila, una fila inválida aborta la
+ * sentencia ENTERA — de "N-1 trofeos se guardan, 1 falla" pasamos a "0 trofeos se guardan, el
+ * título se reintenta en el siguiente sync". Aceptable porque el TÍTULO ya es la unidad de fallo
+ * en el diseño actual — el aislamiento es por título vía `Promise.allSettled` en `processTitles`,
+ * no por trofeo individual.
+ */
+// Exportado para el test de integración de equivalencia (T114) — llamado directamente contra BD real.
+export async function batchUpsertPsnAchievements(
+  trophies: PsnMergedTrophy[],
+  gameId: string,
+  userId: string,
+  npCommunicationId: string,
+  psnUsername: string,
+): Promise<number> {
+  // Dedupe por externalId (última entrada gana) — mismo motivo que RA: un INSERT ... VALUES
+  // (...), (...) con el mismo conflict target repetido dos veces en el lote falla en Postgres.
+  // No debería ocurrir en datos reales (trophyId ya es único dentro de un título), pero se cierra
+  // aquí en vez de dejarlo como riesgo latente.
+  const byExternalId = new Map<string, PsnAchievementRow>();
+  for (const t of trophies) {
+    const externalId = `${npCommunicationId}:${t.trophyId}`;
+    const rarityValue = t.trophyEarnedRate ? parseFloat(t.trophyEarnedRate) : NaN;
+    const normalized = normalizePsnAchievementPoints(rarityValue, t.trophyType);
+    const unlockedAt = t.earned && t.earnedDateTime ? new Date(t.earnedDateTime) : null;
+
+    byExternalId.set(externalId, {
+      id: randomUUID(),
+      externalId,
+      title: t.trophyName ?? String(t.trophyId),
+      description: t.trophyDetail ?? null,
+      iconUrl: t.trophyIconUrl ?? null,
+      rawValue: isNaN(rarityValue) ? null : rarityValue,
+      normalizedPoints: normalized,
+      rarity: isNaN(rarityValue) ? null : rarityValue,
+      trophyType: t.trophyType ?? null,
+      externalUrl: `https://psnprofiles.com/${psnUsername}`,
+      unlockedAt,
+    });
+  }
+  const rows = [...byExternalId.values()];
+  if (rows.length === 0) return 0;
+
+  const now = new Date();
+
+  // ── FASE 1 — Achievement en lote ──────────────────────────────────────────
+  // Conflict target por LISTA DE COLUMNAS explícita — debe coincidir EXACTAMENTE con
+  // @@unique([platform, gameId, externalId]) del schema. Ojo al case-sensitivity: "gameId"/
+  // "externalId" entre comillas, no gameid/externalid.
+  const achievementValues = Prisma.join(
+    rows.map(
+      (row) =>
+        Prisma.sql`(${row.id}, ${gameId}, 'PSN'::"Platform", ${row.externalId}, ${row.title}, ${row.description}, ${row.iconUrl}, ${row.rawValue}, ${row.normalizedPoints}, ${row.rarity}, ${row.externalUrl}, ${row.trophyType}, ${now}, ${now})`,
+    ),
+  );
+
+  const upserted = await prisma.$queryRaw<Array<{ id: string; externalId: string }>>(Prisma.sql`
+    INSERT INTO "Achievement"
+      ("id", "gameId", "platform", "externalId", "title", "description", "iconUrl", "rawValue", "normalizedPoints", "rarity", "externalUrl", "trophyType", "createdAt", "updatedAt")
+    VALUES ${achievementValues}
+    ON CONFLICT ("platform", "gameId", "externalId") DO UPDATE SET
+      "title" = EXCLUDED."title",
+      "description" = EXCLUDED."description",
+      "iconUrl" = EXCLUDED."iconUrl",
+      "rawValue" = EXCLUDED."rawValue",
+      "normalizedPoints" = EXCLUDED."normalizedPoints",
+      "rarity" = EXCLUDED."rarity",
+      "externalUrl" = EXCLUDED."externalUrl",
+      "trophyType" = EXCLUDED."trophyType",
+      "updatedAt" = EXCLUDED."updatedAt"
+    RETURNING "id", "externalId"
+  `);
+  // A diferencia de RA: "rarity" y "trophyType" SÍ están en el DO UPDATE SET — PSN los recalcula
+  // en cada re-sync (igual que el `update:` de Prisma que sustituye), RA nunca los usa.
+
+  const achievementIdByExternalId = new Map(upserted.map((r) => [r.externalId, r.id]));
+
+  // ── FASE 2 — UserAchievement en lote (solo trofeos ganados) ───────────────
+  const earnedRows = rows
+    .filter((row) => row.unlockedAt !== null)
+    .flatMap((row) => {
+      const achievementId = achievementIdByExternalId.get(row.externalId);
+      // Defensivo: RETURNING devuelve una fila por cada input, así que esto no debería pasar nunca.
+      if (!achievementId) return [];
+      return [{ id: randomUUID(), achievementId, unlockedAt: row.unlockedAt as Date }];
+    });
+
+  if (earnedRows.length === 0) return 0;
+
+  const userAchievementValues = Prisma.join(
+    earnedRows.map(
+      (row) => Prisma.sql`(${row.id}, ${userId}, ${row.achievementId}, ${row.unlockedAt})`,
+    ),
+  );
+
+  await prisma.$executeRaw(Prisma.sql`
+    INSERT INTO "UserAchievement" ("id", "userId", "achievementId", "unlockedAt")
+    VALUES ${userAchievementValues}
+    ON CONFLICT ("userId", "achievementId") DO UPDATE SET "unlockedAt" = EXCLUDED."unlockedAt"
+  `);
+
+  return earnedRows.length;
+}
+
 // ─── PSN Adapter ──────────────────────────────────────────────────────────────
 
 export class PsnAdapter implements PlatformAdapter {
@@ -428,49 +566,13 @@ export class PsnAdapter implements PlatformAdapter {
       });
     }
 
-    let achievementsSynced = 0;
-
-    for (const t of trophies) {
-      const rarityValue = t.trophyEarnedRate ? parseFloat(t.trophyEarnedRate) : NaN;
-      const normalized = normalizePsnAchievementPoints(rarityValue, t.trophyType);
-      const dbAchievement = await prisma.achievement.upsert({
-        where: { platform_gameId_externalId: { platform: 'PSN', gameId: dbGame.id, externalId: `${title.npCommunicationId}:${t.trophyId}` } },
-        create: {
-          gameId: dbGame.id,
-          platform: 'PSN',
-          externalId: `${title.npCommunicationId}:${t.trophyId}`,
-          title: t.trophyName ?? String(t.trophyId),
-          description: t.trophyDetail ?? null,
-          iconUrl: t.trophyIconUrl ?? null,
-          rawValue: isNaN(rarityValue) ? null : rarityValue,
-          normalizedPoints: normalized,
-          rarity: isNaN(rarityValue) ? null : rarityValue,
-          externalUrl: `https://psnprofiles.com/${account.username}`,
-          trophyType: t.trophyType ?? null,
-        },
-        update: {
-          title: t.trophyName ?? String(t.trophyId),
-          description: t.trophyDetail ?? null,
-          rawValue: isNaN(rarityValue) ? null : rarityValue,
-          normalizedPoints: normalized,
-          rarity: isNaN(rarityValue) ? null : rarityValue,
-          trophyType: t.trophyType ?? null,
-        },
-      });
-
-      if (t.earned && t.earnedDateTime) {
-        await prisma.userAchievement.upsert({
-          where: { userId_achievementId: { userId: account.userId, achievementId: dbAchievement.id } },
-          create: {
-            userId: account.userId,
-            achievementId: dbAchievement.id,
-            unlockedAt: new Date(t.earnedDateTime),
-          },
-          update: { unlockedAt: new Date(t.earnedDateTime) },
-        });
-        achievementsSynced++;
-      }
-    }
+    const achievementsSynced = await batchUpsertPsnAchievements(
+      trophies,
+      dbGame.id,
+      account.userId,
+      title.npCommunicationId,
+      account.username,
+    );
 
     const writeMs = Date.now() - writeStartedAt;
 
