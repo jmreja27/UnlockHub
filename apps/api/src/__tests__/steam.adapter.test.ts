@@ -14,6 +14,10 @@ jest.mock('../lib/prisma', () => ({
     game: { upsert: jest.fn() },
     achievement: { upsert: jest.fn() },
     userAchievement: { upsert: jest.fn() },
+    // T114 — batching Steam: processGames usa $queryRaw (FASE 1, achievements + RETURNING)
+    // y $executeRaw (FASE 2, userAchievements) en lugar de los upserts individuales de arriba.
+    $queryRaw: jest.fn(),
+    $executeRaw: jest.fn(),
   },
 }));
 
@@ -150,7 +154,13 @@ describe('SteamAdapter — rawValue/rarity/iconUrl en upsert', () => {
     });
 
     mockPrisma.game.upsert.mockResolvedValue({ id: 'game-1' } as never);
-    mockPrisma.achievement.upsert.mockResolvedValue({ id: 'ach-1' } as never);
+    // T114 — el batch reemplaza achievement.upsert/userAchievement.upsert por $queryRaw (FASE 1,
+    // RETURNING id/externalId) + $executeRaw (FASE 2). Orden de `.values` del Prisma.Sql resultante
+    // (ver batchUpsertSteamAchievements): [id, gameId, externalId, title, description, iconUrl,
+    // rawValue, normalizedPoints, rarity, externalUrl, createdAt, updatedAt] — 'STEAM'::"Platform"
+    // es literal SQL, no un parámetro, así que no aparece en `.values`.
+    mockPrisma.$queryRaw.mockResolvedValue([{ id: 'ach-1', externalId: 'ACH_1' }] as never);
+    mockPrisma.$executeRaw.mockResolvedValue(1 as never);
   }
 
   it('convierte rawValue y rarity a Float cuando la API devuelve string numérico', async () => {
@@ -159,12 +169,10 @@ describe('SteamAdapter — rawValue/rarity/iconUrl en upsert', () => {
     const adapter = new SteamAdapter();
     await adapter.syncUser({ externalId: '76561198000000001', userId: 'user-1' } as never);
 
-    const upsertCall = mockPrisma.achievement.upsert.mock.calls[0]?.[0];
-    expect(typeof upsertCall.create.rawValue).toBe('number');
-    expect(upsertCall.create.rawValue).toBe(54.6);
-    expect(upsertCall.create.rarity).toBe(54.6);
-    expect(upsertCall.update.rawValue).toBe(54.6);
-    expect(upsertCall.update.rarity).toBe(54.6);
+    const values = (mockPrisma.$queryRaw.mock.calls[0]?.[0] as unknown as { values: unknown[] }).values;
+    expect(typeof values[6]).toBe('number'); // rawValue
+    expect(values[6]).toBe(54.6);
+    expect(values[8]).toBe(54.6); // rarity
   });
 
   it('rawValue y rarity son null cuando la API devuelve valor no numérico', async () => {
@@ -173,11 +181,9 @@ describe('SteamAdapter — rawValue/rarity/iconUrl en upsert', () => {
     const adapter = new SteamAdapter();
     await adapter.syncUser({ externalId: '76561198000000001', userId: 'user-1' } as never);
 
-    const upsertCall = mockPrisma.achievement.upsert.mock.calls[0]?.[0];
-    expect(upsertCall.create.rawValue).toBeNull();
-    expect(upsertCall.create.rarity).toBeNull();
-    expect(upsertCall.update.rawValue).toBeNull();
-    expect(upsertCall.update.rarity).toBeNull();
+    const values = (mockPrisma.$queryRaw.mock.calls[0]?.[0] as unknown as { values: unknown[] }).values;
+    expect(values[6]).toBeNull(); // rawValue
+    expect(values[8]).toBeNull(); // rarity
   });
 
   it('iconUrl no se duplica cuando la API devuelve una URL completa en el schema', async () => {
@@ -187,9 +193,9 @@ describe('SteamAdapter — rawValue/rarity/iconUrl en upsert', () => {
     const adapter = new SteamAdapter();
     await adapter.syncUser({ externalId: '76561198000000001', userId: 'user-1' } as never);
 
-    const upsertCall = mockPrisma.achievement.upsert.mock.calls[0]?.[0];
-    expect(upsertCall.create.iconUrl).toBe(fullUrl);
-    expect(upsertCall.create.iconUrl).not.toContain('media.steampowered.com');
+    const values = (mockPrisma.$queryRaw.mock.calls[0]?.[0] as unknown as { values: unknown[] }).values;
+    expect(values[5]).toBe(fullUrl); // iconUrl
+    expect(values[5]).not.toContain('media.steampowered.com');
   });
 });
 
@@ -236,7 +242,9 @@ describe('SteamAdapter — F46 Fase 2: recálculo de XP y centinela unlockedAt',
     });
 
     mockPrisma.game.upsert.mockResolvedValue({ id: 'game-1' } as never);
-    mockPrisma.achievement.upsert.mockResolvedValue({ id: 'ach-1' } as never);
+    // T114 — ver nota equivalente en el describe de rawValue/rarity/iconUrl más arriba.
+    mockPrisma.$queryRaw.mockResolvedValue([{ id: 'ach-1', externalId: 'ACH_1' }] as never);
+    mockPrisma.$executeRaw.mockResolvedValue(1 as never);
   }
 
   it('recalcula normalizedPoints con la rareza fresca de la API en cada sync (no reutiliza el valor viejo)', async () => {
@@ -245,21 +253,22 @@ describe('SteamAdapter — F46 Fase 2: recálculo de XP y centinela unlockedAt',
     const adapter = new SteamAdapter();
     await adapter.syncUser({ externalId: '76561198000000001', userId: 'user-1' } as never);
 
-    const firstUpdate = mockPrisma.achievement.upsert.mock.calls[0]?.[0].update;
-    expect(firstUpdate.normalizedPoints).toBe(normalizeAchievementPoints(50));
+    const firstValues = (mockPrisma.$queryRaw.mock.calls[0]?.[0] as unknown as { values: unknown[] }).values;
+    expect(firstValues[7]).toBe(normalizeAchievementPoints(50)); // normalizedPoints
 
     jest.clearAllMocks();
     process.env['STEAM_API_KEY'] = STEAM_API_KEY;
+    mockPrisma.$executeRaw.mockResolvedValue(1 as never);
 
     // Segundo sync (re-sync): la rareza fluctuó a 2% — debe reflejar el valor NUEVO
     setupSyncMocksFull(2, 0);
     await adapter.syncUser({ externalId: '76561198000000001', userId: 'user-1' } as never);
 
-    const secondUpdate = mockPrisma.achievement.upsert.mock.calls[0]?.[0].update;
-    expect(secondUpdate.normalizedPoints).toBe(normalizeAchievementPoints(2));
-    // Centinela: si el update dejara de recalcular (p.ej. quedara pegado al valor del primer sync),
+    const secondValues = (mockPrisma.$queryRaw.mock.calls[0]?.[0] as unknown as { values: unknown[] }).values;
+    expect(secondValues[7]).toBe(normalizeAchievementPoints(2));
+    // Centinela: si el batch dejara de recalcular (p.ej. quedara pegado al valor del primer sync),
     // este valor sería igual al anterior en lugar de reflejar la nueva rareza.
-    expect(secondUpdate.normalizedPoints).not.toBe(firstUpdate.normalizedPoints);
+    expect(secondValues[7]).not.toBe(firstValues[7]);
   });
 
   it('centinela: unlockedAt usa el timestamp de la API (unlocktime), nunca Date.now()', async () => {
@@ -271,13 +280,13 @@ describe('SteamAdapter — F46 Fase 2: recálculo de XP y centinela unlockedAt',
       const adapter = new SteamAdapter();
       await adapter.syncUser({ externalId: '76561198000000001', userId: 'user-1' } as never);
 
-      const firstCall = mockPrisma.userAchievement.upsert.mock.calls[0]?.[0];
+      // FASE 2 (UserAchievement) — orden de `.values`: [id, userId, achievementId, unlockedAt]
+      const executeValues = (mockPrisma.$executeRaw.mock.calls[0]?.[0] as unknown as { values: unknown[] }).values;
       const expectedDate = new Date(fixedUnlockTime * 1000);
 
       // La fecha escrita es la de la plataforma, no la fecha "actual" del sync.
-      expect(firstCall.update.unlockedAt).toEqual(expectedDate);
-      expect(firstCall.create.unlockedAt).toEqual(expectedDate);
-      expect(firstCall.update.unlockedAt.getTime()).not.toBe(Date.now());
+      expect(executeValues[3]).toEqual(expectedDate);
+      expect((executeValues[3] as Date).getTime()).not.toBe(Date.now());
     } finally {
       jest.useRealTimers();
     }
@@ -289,7 +298,7 @@ describe('SteamAdapter — F46 Fase 2: recálculo de XP y centinela unlockedAt',
     setupSyncMocksFull(50, fixedUnlockTime);
     const adapter = new SteamAdapter();
     await adapter.syncUser({ externalId: '76561198000000001', userId: 'user-1' } as never);
-    const firstUnlockedAt = mockPrisma.userAchievement.upsert.mock.calls[0]?.[0].update.unlockedAt;
+    const firstUnlockedAt = (mockPrisma.$executeRaw.mock.calls[0]?.[0] as unknown as { values: unknown[] }).values[3];
 
     jest.clearAllMocks();
     process.env['STEAM_API_KEY'] = STEAM_API_KEY;
@@ -299,7 +308,7 @@ describe('SteamAdapter — F46 Fase 2: recálculo de XP y centinela unlockedAt',
     try {
       setupSyncMocksFull(50, fixedUnlockTime);
       await adapter.syncUser({ externalId: '76561198000000001', userId: 'user-1' } as never);
-      const secondUnlockedAt = mockPrisma.userAchievement.upsert.mock.calls[0]?.[0].update.unlockedAt;
+      const secondUnlockedAt = (mockPrisma.$executeRaw.mock.calls[0]?.[0] as unknown as { values: unknown[] }).values[3];
 
       expect(secondUnlockedAt).toEqual(firstUnlockedAt);
     } finally {
@@ -343,8 +352,9 @@ describe('SteamAdapter — tope STEAM_MAX_GAMES_PER_SYNC', () => {
     // Reset completo de axios para evitar sangrado de implementaciones entre suites
     mockAxios.get.mockReset();
     mockPrisma.game.upsert.mockResolvedValue({ id: 'game-id' } as never);
-    mockPrisma.achievement.upsert.mockResolvedValue({ id: 'ach-id' } as never);
-    mockPrisma.userAchievement.upsert.mockResolvedValue({} as never);
+    // T114 — ver nota equivalente en el describe de rawValue/rarity/iconUrl más arriba.
+    mockPrisma.$queryRaw.mockResolvedValue([{ id: 'ach-id', externalId: 'ACH_1' }] as never);
+    mockPrisma.$executeRaw.mockResolvedValue(1 as never);
   });
 
   afterEach(() => {

@@ -1,4 +1,7 @@
+import { randomUUID } from 'crypto';
+
 import axios from 'axios';
+import { Prisma } from '@prisma/client';
 import type { PlatformAccount } from '@prisma/client';
 import type { Achievement, Game, SyncResult } from '@unlockhub/types';
 
@@ -43,13 +46,15 @@ interface SteamOwnedGame {
   rtime_last_played?: number;
 }
 
-interface SteamPlayerAchievement {
+// Exportado para el test de integración de equivalencia (T114) — construye fixtures del mismo tipo.
+export interface SteamPlayerAchievement {
   apiname: string;
   achieved: number;       // 0 | 1
   unlocktime: number;     // Unix timestamp
 }
 
-interface SteamSchemaAchievement {
+// Exportado para el test de integración de equivalencia (T114) — construye fixtures del mismo tipo.
+export interface SteamSchemaAchievement {
   name: string;           // Corresponde a apiname
   displayName: string;
   description?: string;
@@ -171,6 +176,140 @@ export async function checkSteamProfilePublic(steamId: string): Promise<void> {
       { steamId },
     );
   }
+}
+
+// ─── T114 Ataque A — batching de escrituras (Steam, último adapter — RA y PSN ya en producción) ─
+//
+// Mismo patrón que retroachievements.adapter.ts::batchUpsertRaAchievements y
+// psn.adapter.ts::batchUpsertPsnAchievements — reemplaza el `for` secuencial (2 await por logro:
+// achievement.upsert + userAchievement.upsert) por 2 fases en lote con SQL crudo. El CÁLCULO se
+// queda en TypeScript: normalizeAchievementPoints se llama exactamente igual que en el código
+// secuencial que sustituye, ANTES de construir el SQL — el batch solo persiste valores ya calculados.
+//
+// Frente a RA: igual que RA, Steam NUNCA toca "trophyType" (concepto exclusivo de PSN) — se omite
+// del INSERT (queda NULL) y del DO UPDATE SET. A diferencia de RA, Steam SÍ actualiza "rarity" en
+// cada re-sync (como PSN) — el `update:` de Prisma que sustituye siempre lo tocaba.
+
+interface SteamAchievementRow {
+  id: string;
+  externalId: string;
+  title: string;
+  description: string | null;
+  iconUrl: string | null;
+  rawValue: number | null;
+  normalizedPoints: number;
+  rarity: number | null;
+  externalUrl: string;
+  unlockedAt: Date | null;
+}
+
+/**
+ * Hace upsert en lote de todos los logros de un juego Steam + los UserAchievement de los ganados.
+ * Devuelve el número de logros marcados como ganados en este sync (== achievementsSynced).
+ *
+ * Trade-off aceptado (igual que RA/PSN, T114): con INSERT multi-fila, una fila inválida aborta la
+ * sentencia ENTERA — de "N-1 logros se guardan, 1 falla" pasamos a "0 logros se guardan, el juego
+ * se reintenta en el siguiente sync". Aceptable porque el JUEGO ya es la unidad de fallo en el
+ * diseño actual de Steam: `processGames` no tiene aislamiento por logro ni por juego (sin
+ * try/catch ni Promise.allSettled) — un throw en cualquier escritura ya abortaba el resto del
+ * bucle antes de este cambio, igual que ahora.
+ */
+// Exportado para el test de integración de equivalencia (T114) — llamado directamente contra BD real.
+export async function batchUpsertSteamAchievements(
+  playerAchievements: SteamPlayerAchievement[],
+  schemaMap: Map<string, SteamSchemaAchievement>,
+  rarityMap: Map<string, number>,
+  gameId: string,
+  appId: string,
+  userId: string,
+): Promise<number> {
+  // Dedupe por externalId (última entrada gana) — mismo motivo que RA/PSN: un INSERT ... VALUES
+  // (...), (...) con el mismo conflict target repetido dos veces en el lote falla en Postgres.
+  const byExternalId = new Map<string, SteamAchievementRow>();
+  for (const pa of playerAchievements) {
+    const schemaDef = schemaMap.get(pa.apiname);
+    const rawRarity = rarityMap.get(pa.apiname) ?? 100;
+    const rarityValue = parseFloat(String(rawRarity));
+    const normalized = normalizeAchievementPoints(rarityValue);
+
+    byExternalId.set(pa.apiname, {
+      id: randomUUID(),
+      externalId: pa.apiname,
+      title: schemaDef?.displayName ?? pa.apiname,
+      description: schemaDef?.description ?? null,
+      iconUrl: schemaDef?.icon
+        ? (schemaDef.icon.startsWith('http')
+            ? schemaDef.icon
+            : `${STEAM_STORE_CDN}/${appId}/${schemaDef.icon}.jpg`)
+        : null,
+      rawValue: isNaN(rarityValue) ? null : rarityValue,
+      normalizedPoints: normalized,
+      rarity: isNaN(rarityValue) ? null : rarityValue,
+      externalUrl: `https://store.steampowered.com/app/${appId}`,
+      unlockedAt: pa.achieved === 1 ? new Date(pa.unlocktime * 1000) : null,
+    });
+  }
+  const rows = [...byExternalId.values()];
+  if (rows.length === 0) return 0;
+
+  const now = new Date();
+
+  // ── FASE 1 — Achievement en lote ──────────────────────────────────────────
+  // Conflict target por LISTA DE COLUMNAS explícita — debe coincidir EXACTAMENTE con
+  // @@unique([platform, gameId, externalId]) del schema. Ojo al case-sensitivity: "gameId"/
+  // "externalId" entre comillas, no gameid/externalid.
+  const achievementValues = Prisma.join(
+    rows.map(
+      (row) =>
+        Prisma.sql`(${row.id}, ${gameId}, 'STEAM'::"Platform", ${row.externalId}, ${row.title}, ${row.description}, ${row.iconUrl}, ${row.rawValue}, ${row.normalizedPoints}, ${row.rarity}, ${row.externalUrl}, ${now}, ${now})`,
+    ),
+  );
+
+  const upserted = await prisma.$queryRaw<Array<{ id: string; externalId: string }>>(Prisma.sql`
+    INSERT INTO "Achievement"
+      ("id", "gameId", "platform", "externalId", "title", "description", "iconUrl", "rawValue", "normalizedPoints", "rarity", "externalUrl", "createdAt", "updatedAt")
+    VALUES ${achievementValues}
+    ON CONFLICT ("platform", "gameId", "externalId") DO UPDATE SET
+      "title" = EXCLUDED."title",
+      "description" = EXCLUDED."description",
+      "iconUrl" = EXCLUDED."iconUrl",
+      "rawValue" = EXCLUDED."rawValue",
+      "normalizedPoints" = EXCLUDED."normalizedPoints",
+      "rarity" = EXCLUDED."rarity",
+      "externalUrl" = EXCLUDED."externalUrl",
+      "updatedAt" = EXCLUDED."updatedAt"
+    RETURNING "id", "externalId"
+  `);
+  // "trophyType" se omite del INSERT (queda NULL, columna nullable sin valor) y del DO UPDATE SET
+  // a propósito — Steam nunca lo usa, igual que el `update:` de Prisma que sustituye nunca lo tocaba.
+
+  const achievementIdByExternalId = new Map(upserted.map((r) => [r.externalId, r.id]));
+
+  // ── FASE 2 — UserAchievement en lote (solo logros ganados) ────────────────
+  const earnedRows = rows
+    .filter((row) => row.unlockedAt !== null)
+    .flatMap((row) => {
+      const achievementId = achievementIdByExternalId.get(row.externalId);
+      // Defensivo: RETURNING devuelve una fila por cada input, así que esto no debería pasar nunca.
+      if (!achievementId) return [];
+      return [{ id: randomUUID(), achievementId, unlockedAt: row.unlockedAt as Date }];
+    });
+
+  if (earnedRows.length === 0) return 0;
+
+  const userAchievementValues = Prisma.join(
+    earnedRows.map(
+      (row) => Prisma.sql`(${row.id}, ${userId}, ${row.achievementId}, ${row.unlockedAt})`,
+    ),
+  );
+
+  await prisma.$executeRaw(Prisma.sql`
+    INSERT INTO "UserAchievement" ("id", "userId", "achievementId", "unlockedAt")
+    VALUES ${userAchievementValues}
+    ON CONFLICT ("userId", "achievementId") DO UPDATE SET "unlockedAt" = EXCLUDED."unlockedAt"
+  `);
+
+  return earnedRows.length;
 }
 
 // ─── Steam Adapter ────────────────────────────────────────────────────────────
@@ -438,52 +577,14 @@ export class SteamAdapter implements PlatformAdapter {
 
       gamesUpdated++;
 
-      for (const pa of playerAchievements) {
-        const schemaDef = schemaMap.get(pa.apiname);
-        const rawRarity = rarityMap.get(pa.apiname) ?? 100;
-        const rarityValue = parseFloat(String(rawRarity));
-        const normalized = normalizeAchievementPoints(rarityValue);
-
-        const dbAchievement = await prisma.achievement.upsert({
-          where: { platform_gameId_externalId: { platform: 'STEAM', gameId: dbGame.id, externalId: pa.apiname } },
-          create: {
-            gameId: dbGame.id,
-            platform: 'STEAM',
-            externalId: pa.apiname,
-            title: schemaDef?.displayName ?? pa.apiname,
-            description: schemaDef?.description ?? null,
-            iconUrl: schemaDef?.icon
-              ? (schemaDef.icon.startsWith('http')
-                  ? schemaDef.icon
-                  : `${STEAM_STORE_CDN}/${appId}/${schemaDef.icon}.jpg`)
-              : null,
-            rawValue: isNaN(rarityValue) ? null : rarityValue,
-            normalizedPoints: normalized,
-            rarity: isNaN(rarityValue) ? null : rarityValue,
-            externalUrl: `https://store.steampowered.com/app/${appId}`,
-          },
-          update: {
-            title: schemaDef?.displayName ?? pa.apiname,
-            description: schemaDef?.description ?? null,
-            rawValue: isNaN(rarityValue) ? null : rarityValue,
-            normalizedPoints: normalized,
-            rarity: isNaN(rarityValue) ? null : rarityValue,
-          },
-        });
-
-        if (pa.achieved === 1) {
-          await prisma.userAchievement.upsert({
-            where: { userId_achievementId: { userId, achievementId: dbAchievement.id } },
-            create: {
-              userId,
-              achievementId: dbAchievement.id,
-              unlockedAt: new Date(pa.unlocktime * 1000),
-            },
-            update: { unlockedAt: new Date(pa.unlocktime * 1000) },
-          });
-          achievementsSynced++;
-        }
-      }
+      achievementsSynced += await batchUpsertSteamAchievements(
+        playerAchievements,
+        schemaMap,
+        rarityMap,
+        dbGame.id,
+        appId,
+        userId,
+      );
 
       const writeMs = Date.now() - writeStartedAt;
       totalFetchMs += fetchMs;
