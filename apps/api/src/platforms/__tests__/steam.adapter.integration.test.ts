@@ -321,12 +321,12 @@ describe('steam.adapter — batching Steam contra Postgres real (T114)', () => {
   });
 
   it('(d) NIVEL FUNCIÓN — batchUpsertSteamAchievements no tiene efectos colaterales cruzados entre llamadas independientes a nivel de BD', async () => {
-    // OJO: este test aísla las dos llamadas con un Promise.allSettled PROPIO DEL TEST — no
-    // reproduce cómo Steam las invoca en producción. `processGames` es un `for` SECUENCIAL sin
-    // Promise.allSettled y sin try/catch por juego (a diferencia de RA/PSN, que sí aíslan) — ver
-    // el test (d2) para el comportamiento real de producción. Este test (d) solo verifica que la
-    // función en sí, cuando el caller la aísla, no arrastra el fallo de una llamada a otra a nivel
-    // de escritura en BD (sin transacción compartida, sin fuga de estado entre invocaciones).
+    // OJO: este test aísla las dos llamadas con un Promise.allSettled PROPIO DEL TEST. Desde T139,
+    // `processGames` también aísla por juego (try/catch secuencial) — ver el test (d2) más abajo
+    // (histórico) y "SteamAdapter.syncUser — aislamiento por juego (T139)" en steam.adapter.test.ts
+    // para el comportamiento real de producción. Este test (d) verifica que la función en sí, cuando
+    // el caller la aísla, no arrastra el fallo de una llamada a otra a nivel de escritura en BD (sin
+    // transacción compartida, sin fuga de estado entre invocaciones).
     //
     // gameId inexistente (no sembrado en este test) → viola la FK de "Achievement" → la sentencia
     // completa de ESTE juego falla (trade-off documentado: INSERT multi-fila aborta entero), pero
@@ -349,28 +349,16 @@ describe('steam.adapter — batching Steam contra Postgres real (T114)', () => {
     expect(rows).toHaveLength(3);
   });
 
-  it('(d2) NIVEL PRODUCCIÓN — fragilidad preexistente: en el `for` secuencial de processGames, un juego que lanza SÍ aborta los siguientes (sin try/catch, sin Promise.allSettled)', async () => {
-    // Reproduce el patrón REAL de processGames (steam.adapter.ts): un `for` secuencial con
-    // `await` directo, sin Promise.allSettled ni try/catch por juego. Esto NO es una regresión de
-    // T114 — el `for` de upserts individuales que este batch sustituye tampoco tenía aislamiento
-    // (ver comparación con HEAD anterior a T114). Es una fragilidad preexistente en Steam, ausente
-    // en RA/PSN. Ticket de mejora deliberada en el backlog (fuera de scope de T114).
-    const bogusGameId = randomUUID();
-
-    async function sequentialLikeProcessGames(): Promise<void> {
-      // Primer "juego" — gameId inexistente, viola la FK y lanza.
-      await batchUpsertSteamAchievements(makePlayerAchievements(), makeSchemaMap(), makeRarityMap(), bogusGameId, APP_ID, userId);
-      // Segundo "juego" — válido, pero en el `for` real NUNCA se alcanza si el anterior lanza.
-      await batchUpsertSteamAchievements(makePlayerAchievements(), makeSchemaMap(), makeRarityMap(), gameId, APP_ID, userId);
-    }
-
-    await expect(sequentialLikeProcessGames()).rejects.toThrow();
-
-    // El juego válido, que iba DESPUÉS del que falla, nunca llegó a escribirse — confirma que el
-    // fallo del primero abortó el procesamiento del segundo, igual que en producción.
-    const rows = await prisma.achievement.findMany({ where: { gameId } });
-    expect(rows).toHaveLength(0);
-  });
+  // (d2) — histórico: hasta T139, `processGames` (steam.adapter.ts) era un `for` secuencial sin
+  // try/catch ni Promise.allSettled, así que un juego que lanzaba abortaba los siguientes (fragilidad
+  // preexistente, ausente en RA/PSN). T139 extrajo `processGame` (conteo local, solo se devuelve tras
+  // éxito completo) y envolvió la llamada en `processGames` en un try/catch por juego — Steam ahora
+  // aísla igual que RA/PSN. El test que verifica el comportamiento NUEVO (un juego falla, el
+  // siguiente se procesa y cuenta correctamente) vive en `steam.adapter.test.ts` — describe
+  // "SteamAdapter.syncUser — aislamiento por juego (T139)", caso "(d2) T139: un juego que lanza
+  // queda aislado, los siguientes se procesan" — como test unitario contra `syncUser` con axios y
+  // Prisma mockeados, no aquí, porque reproducir el aislamiento real requiere invocar `syncUser`
+  // (llamadas a la Steam API vía axios), no solo `batchUpsertSteamAchievements` contra BD real.
 
   it('(e) dedupe por externalId — el mismo apiname repetido en el input no rompe el INSERT (última entrada gana)', async () => {
     const duplicated: SteamPlayerAchievement[] = [

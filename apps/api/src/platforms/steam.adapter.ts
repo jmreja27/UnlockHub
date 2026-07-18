@@ -209,10 +209,9 @@ interface SteamAchievementRow {
  *
  * Trade-off aceptado (igual que RA/PSN, T114): con INSERT multi-fila, una fila inválida aborta la
  * sentencia ENTERA — de "N-1 logros se guardan, 1 falla" pasamos a "0 logros se guardan, el juego
- * se reintenta en el siguiente sync". Aceptable porque el JUEGO ya es la unidad de fallo en el
- * diseño actual de Steam: `processGames` no tiene aislamiento por logro ni por juego (sin
- * try/catch ni Promise.allSettled) — un throw en cualquier escritura ya abortaba el resto del
- * bucle antes de este cambio, igual que ahora.
+ * se reintenta en el siguiente sync". Aceptable porque el JUEGO ya es la unidad de fallo: desde
+ * T139, `processGames` aísla por juego (try/catch secuencial alrededor de `processGame`) — un
+ * throw en esta función ya no aborta el resto del lote, solo el juego actual.
  */
 // Exportado para el test de integración de equivalencia (T114) — llamado directamente contra BD real.
 export async function batchUpsertSteamAchievements(
@@ -513,6 +512,91 @@ export class SteamAdapter implements PlatformAdapter {
 
   // ── Lógica de procesamiento compartida ────────────────────────────────────
 
+  /**
+   * Procesa un único juego Steam: fetch + upsert de Game/Achievement/UserAchievement.
+   * T139: gamesUpdated/achievementsSynced se calculan en variables locales y solo se
+   * devuelven en el return final, tras éxito completo (game.upsert Y batchUpsert). Si
+   * algo lanza, la función rechaza sin devolver conteo parcial — mismo contrato que
+   * `processRaGame` — así el caller nunca cuenta un juego que falló a medias.
+   */
+  private async processGame(
+    steamGame: SteamOwnedGame,
+    steamId: string,
+    apiKey: string,
+    userId: string,
+  ): Promise<{ gamesUpdated: number; achievementsSynced: number; fetchMs: number; writeMs: number }> {
+    const appId = String(steamGame.appid);
+
+    const fetchStartedAt = Date.now();
+    const [playerAchievements, schema, rarityMap] = await Promise.all([
+      this.fetchPlayerAchievements(steamId, apiKey, appId),
+      this.fetchGameSchema(apiKey, appId),
+      this.fetchRarityMap(appId),
+    ]);
+    const fetchMs = Date.now() - fetchStartedAt;
+
+    if (schema.length === 0 || playerAchievements.length === 0) {
+      return { gamesUpdated: 0, achievementsSynced: 0, fetchMs, writeMs: 0 };
+    }
+
+    const writeStartedAt = Date.now();
+
+    const schemaMap = new Map(schema.map((s) => [s.name, s]));
+
+    const steamIconUrl = steamGame.img_icon_url
+      ? `${STEAM_STORE_CDN}/${appId}/${steamGame.img_icon_url}.jpg`
+      : null;
+
+    // Caché de metadatos de juego (24h) — evita un game.upsert por app en cada sync
+    let dbGame: { id: string };
+    const cachedMeta = await getCachedGameMeta('STEAM', appId);
+    if (cachedMeta) {
+      dbGame = { id: cachedMeta.id };
+    } else {
+      dbGame = await prisma.game.upsert({
+        where: { platform_externalId: { platform: 'STEAM', externalId: appId } },
+        create: {
+          platform: 'STEAM',
+          externalId: appId,
+          title: steamGame.name,
+          iconUrl: steamIconUrl,
+          headerUrl: `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/header.jpg`,
+          totalAchievements: schema.length,
+        },
+        update: {
+          title: steamGame.name,
+          totalAchievements: schema.length,
+        },
+      });
+      await setCachedGameMeta('STEAM', appId, {
+        id: dbGame.id,
+        title: steamGame.name,
+        iconUrl: steamIconUrl,
+        totalAchievements: schema.length,
+        console: null,
+      });
+    }
+
+    const achievementsSynced = await batchUpsertSteamAchievements(
+      playerAchievements,
+      schemaMap,
+      rarityMap,
+      dbGame.id,
+      appId,
+      userId,
+    );
+
+    const writeMs = Date.now() - writeStartedAt;
+
+    // T114 — instrumentación de timings por juego. Una línea por juego, no por logro.
+    logger.debug(
+      { platform: 'STEAM', gameId: appId, achievements: playerAchievements.length, fetchMs, writeMs, totalMs: fetchMs + writeMs },
+      '[SteamAdapter] Timing de juego',
+    );
+
+    return { gamesUpdated: 1, achievementsSynced, fetchMs, writeMs };
+  }
+
   private async processGames(
     games: SteamOwnedGame[],
     steamId: string,
@@ -524,77 +608,22 @@ export class SteamAdapter implements PlatformAdapter {
     let totalFetchMs = 0;
     let totalWriteMs = 0;
 
+    // T139 — aislamiento por juego: un juego que falla (fetch o escritura) se loguea y
+    // se salta, sin abortar el resto del lote. Secuencial (no Promise.allSettled) — el
+    // caller solo acumula lo que processGame devuelve tras éxito completo.
     for (const steamGame of games) {
-      const appId = String(steamGame.appid);
-
-      const fetchStartedAt = Date.now();
-      const [playerAchievements, schema, rarityMap] = await Promise.all([
-        this.fetchPlayerAchievements(steamId, apiKey, appId),
-        this.fetchGameSchema(apiKey, appId),
-        this.fetchRarityMap(appId),
-      ]);
-      const fetchMs = Date.now() - fetchStartedAt;
-
-      if (schema.length === 0 || playerAchievements.length === 0) continue;
-
-      const writeStartedAt = Date.now();
-
-      const schemaMap = new Map(schema.map((s) => [s.name, s]));
-
-      const steamIconUrl = steamGame.img_icon_url
-        ? `${STEAM_STORE_CDN}/${appId}/${steamGame.img_icon_url}.jpg`
-        : null;
-
-      // Caché de metadatos de juego (24h) — evita un game.upsert por app en cada sync
-      let dbGame: { id: string };
-      const cachedMeta = await getCachedGameMeta('STEAM', appId);
-      if (cachedMeta) {
-        dbGame = { id: cachedMeta.id };
-      } else {
-        dbGame = await prisma.game.upsert({
-          where: { platform_externalId: { platform: 'STEAM', externalId: appId } },
-          create: {
-            platform: 'STEAM',
-            externalId: appId,
-            title: steamGame.name,
-            iconUrl: steamIconUrl,
-            headerUrl: `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/header.jpg`,
-            totalAchievements: schema.length,
-          },
-          update: {
-            title: steamGame.name,
-            totalAchievements: schema.length,
-          },
-        });
-        await setCachedGameMeta('STEAM', appId, {
-          id: dbGame.id,
-          title: steamGame.name,
-          iconUrl: steamIconUrl,
-          totalAchievements: schema.length,
-          console: null,
-        });
+      try {
+        const r = await this.processGame(steamGame, steamId, apiKey, userId);
+        achievementsSynced += r.achievementsSynced;
+        gamesUpdated += r.gamesUpdated;
+        totalFetchMs += r.fetchMs;
+        totalWriteMs += r.writeMs;
+      } catch (err) {
+        logger.warn(
+          { platform: 'STEAM', appId: String(steamGame.appid), err },
+          '[SteamAdapter] Error en juego individual — continuando',
+        );
       }
-
-      gamesUpdated++;
-
-      achievementsSynced += await batchUpsertSteamAchievements(
-        playerAchievements,
-        schemaMap,
-        rarityMap,
-        dbGame.id,
-        appId,
-        userId,
-      );
-
-      const writeMs = Date.now() - writeStartedAt;
-      totalFetchMs += fetchMs;
-      totalWriteMs += writeMs;
-
-      // T114 — instrumentación de timings por juego. Una línea por juego, no por logro.
-      logger.debug(
-        { platform: 'STEAM', gameId: appId, achievements: playerAchievements.length, fetchMs, writeMs, totalMs: fetchMs + writeMs },
-        '[SteamAdapter] Timing de juego',
-      );
     }
 
     return {

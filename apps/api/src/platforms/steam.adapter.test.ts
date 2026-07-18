@@ -15,7 +15,15 @@ jest.mock('../lib/redis', () => ({
     expire: jest.fn().mockResolvedValue(1),
   },
 }));
-jest.mock('../lib/prisma', () => ({ prisma: {} }));
+jest.mock('../lib/prisma', () => ({
+  prisma: {
+    game: { upsert: jest.fn() },
+    // T139 — processGame usa batchUpsertSteamAchievements ($queryRaw FASE 1 Achievement +
+    // RETURNING, $executeRaw FASE 2 UserAchievement), no upserts individuales.
+    $queryRaw: jest.fn(),
+    $executeRaw: jest.fn(),
+  },
+}));
 jest.mock('../lib/crypto', () => ({
   decrypt: jest.fn((val: string) => val),
 }));
@@ -25,6 +33,10 @@ const mockedAxios = axios as jest.Mocked<typeof axios>;
 // Importar el mock de Redis para poder controlarlo en los tests
 import { redis } from '../lib/redis';
 const mockedRedis = redis as jest.Mocked<typeof redis>;
+
+// Importar el mock de Prisma para poder controlarlo en los tests de syncUser (T139)
+import { prisma } from '../lib/prisma';
+const mockedPrisma = prisma as jest.Mocked<typeof prisma>;
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -364,5 +376,109 @@ describe('resolveVanityUrl — resolución via API', () => {
       code: 'STEAM_USER_NOT_FOUND',
       statusCode: 404,
     });
+  });
+});
+
+// ─── SteamAdapter.syncUser — aislamiento por juego (T139) ─────────────────────
+//
+// (d2) reescrito: antes documentaba que un juego que lanza abortaba los siguientes (fragilidad
+// preexistente). T139 extrajo `processGame` (conteo local, solo se devuelve tras éxito completo)
+// y envolvió la llamada en processGames en un try/catch por juego — ahora Steam aísla igual que
+// RA/PSN. Este test verifica el comportamiento nuevo, no el viejo.
+
+describe('SteamAdapter.syncUser — aislamiento por juego (T139)', () => {
+  const gameA = {
+    appid: 111,
+    name: 'Game A (falla)',
+    img_icon_url: 'icon-a',
+    has_community_visible_stats: true,
+  };
+  const gameB = {
+    appid: 222,
+    name: 'Game B (éxito)',
+    img_icon_url: 'icon-b',
+    has_community_visible_stats: true,
+  };
+
+  function playerAchievementsFor(name: string) {
+    return [{ apiname: `ACH_${name}`, achieved: 1, unlocktime: 1700000000 }];
+  }
+  function schemaFor(name: string) {
+    return [
+      {
+        name: `ACH_${name}`,
+        displayName: `Logro ${name}`,
+        description: 'desc',
+        icon: 'icon',
+        icongray: 'icon_gray',
+      },
+    ];
+  }
+  function rarityFor(name: string) {
+    return [{ name: `ACH_${name}`, percent: 10 }];
+  }
+
+  function mockGameApiCalls(name: string): void {
+    mockedAxios.get
+      // GetPlayerAchievements
+      .mockResolvedValueOnce({
+        data: { playerstats: { success: true, achievements: playerAchievementsFor(name) } },
+      })
+      // GetSchemaForGame
+      .mockResolvedValueOnce({
+        data: { game: { availableGameStats: { achievements: schemaFor(name) } } },
+      })
+      // GetGlobalAchievementPercentagesForApp
+      .mockResolvedValueOnce({
+        data: { achievementpercentages: { achievements: rarityFor(name) } },
+      });
+  }
+
+  beforeEach(() => {
+    mockedRedis.get.mockResolvedValue(null);
+    mockedRedis.setex.mockResolvedValue('OK');
+    (mockedPrisma.$queryRaw as jest.Mock).mockImplementation((sqlArg: { values: unknown[] }) => {
+      // FASE 1 — 12 parámetros por fila (id, gameId, externalId, title, description, iconUrl,
+      // rawValue, normalizedPoints, rarity, externalUrl, createdAt, updatedAt) — ver
+      // batchUpsertSteamAchievements (platform va como literal SQL, no aparece en `.values`).
+      const rows: Array<{ id: string; externalId: string }> = [];
+      for (let i = 0; i < sqlArg.values.length; i += 12) {
+        rows.push({ id: `ach-${i}`, externalId: sqlArg.values[i + 2] as string });
+      }
+      return Promise.resolve(rows);
+    });
+    (mockedPrisma.$executeRaw as jest.Mock).mockResolvedValue(1);
+  });
+
+  it('(d2) T139: un juego que lanza queda aislado, los siguientes se procesan', async () => {
+    const adapter = new SteamAdapter();
+
+    mockedAxios.get.mockResolvedValueOnce({
+      data: { response: { games: [gameA, gameB] } },
+    });
+    mockGameApiCalls('A');
+    mockGameApiCalls('B');
+
+    (mockedPrisma.game.upsert as jest.Mock)
+      .mockRejectedValueOnce(new Error('DB connection lost — game A'))
+      .mockResolvedValueOnce({ id: 'db-game-b' });
+
+    const account = {
+      externalId: STEAM_ID,
+      userId: 'user-1',
+    } as unknown as Parameters<SteamAdapter['syncUser']>[0];
+
+    const result = await adapter.syncUser(account);
+
+    // No lanza — el fallo del juego A queda aislado dentro de processGames.
+    expect(result.platform).toBe('STEAM');
+    // Solo el juego B, que tuvo éxito completo, cuenta — el conteo es local a processGame y solo
+    // se suma tras un return exitoso (fix del bug de conteo prematuro de T139).
+    expect(result.gamesUpdated).toBe(1);
+    expect(result.achievementsSynced).toBe(1);
+
+    // El juego B sí llegó a escribirse — el fallo de A no abortó el resto del lote.
+    expect(mockedPrisma.game.upsert).toHaveBeenCalledTimes(2);
+    expect(mockedPrisma.$queryRaw).toHaveBeenCalledTimes(1);
   });
 });
