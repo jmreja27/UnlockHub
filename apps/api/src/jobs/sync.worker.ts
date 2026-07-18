@@ -311,109 +311,113 @@ async function syncPlatform(
   }
 }
 
+export async function processSyncJob(
+  job: Job<AnySyncJobData, SyncJobResult>,
+): Promise<SyncJobResult> {
+  const data = job.data;
+  const { userId } = data;
+  const lockKey = `sync:user-lock:${userId}`;
+
+  if (isBatchJob(data)) {
+    // ── Branch batch (background-sync): un lock, plataformas en serie ──────
+    const acquired = await redis.set(lockKey, job.id ?? 'locked', 'EX', LOCK_TTL_SECONDS, 'NX');
+
+    if (!acquired) {
+      // Batch job con lock ocupado: abandonar — el scheduler nocturno reintentará mañana.
+      // No se reencola para no acumular jobs batch huérfanos.
+      logger.warn({ userId }, '[SyncWorker] Batch job omitido — usuario con sync activo');
+      return { achievementsSynced: 0, gamesUpdated: 0, syncedAt: new Date().toISOString() };
+    }
+
+    let totalAchievements = 0;
+    let totalGames = 0;
+
+    try {
+      for (const { platform, platformAccountId } of data.platforms) {
+        // Extender el lock de BullMQ entre plataformas para evitar que un batch largo
+        // (N plataformas en serie) supere el lockDuration y sea marcado como stalled.
+        // El try/catch garantiza que un fallo de extendLock no interrumpa el batch.
+        try {
+          await job.extendLock(job.token!, LOCK_TTL_SECONDS * 1000);
+        } catch (extendErr: unknown) {
+          logger.warn(
+            { err: (extendErr as Error).message },
+            '[SyncWorker] extendLock fallido — continuando',
+          );
+        }
+
+        try {
+          const result = await syncPlatform(userId, platformAccountId, platform as Platform);
+          totalAchievements += result.achievementsSynced;
+          totalGames += result.gamesUpdated;
+        } catch (platformErr: unknown) {
+          // Fallo independiente por plataforma: log + continuar con la siguiente.
+          // El job batch NO falla aunque una plataforma falle.
+          logger.warn(
+            { userId, platform, err: (platformErr as Error).message },
+            '[SyncWorker] Error en plataforma del batch — continuando con la siguiente',
+          );
+        }
+      }
+    } finally {
+      await redis.del(lockKey);
+      // Safety net: limpiar claves de progreso huérfanas en caso de crash parcial
+      for (const { platform } of data.platforms) {
+        await redis.del(syncProgressKey(userId, platform as Platform)).catch(() => undefined);
+      }
+    }
+
+    return {
+      achievementsSynced: totalAchievements,
+      gamesUpdated: totalGames,
+      syncedAt: new Date().toISOString(),
+    };
+  } else {
+    // ── Branch single-platform (manual, initial, auto-repeat) ────────────
+    const { platformAccountId, platform, lockRetryCount = 0 } = data as SyncJobData;
+    const acquired = await redis.set(lockKey, job.id ?? 'locked', 'EX', LOCK_TTL_SECONDS, 'NX');
+
+    if (!acquired) {
+      if (lockRetryCount >= LOCK_MAX_RETRIES) {
+        // Techo de reintentos alcanzado: abandonar limpiamente sin más reencolados.
+        logger.warn(
+          { userId, platform, lockRetryCount },
+          '[SyncWorker] Sync abandonado — lock no disponible tras máximo de reintentos',
+        );
+        return { achievementsSynced: 0, gamesUpdated: 0, syncedAt: new Date().toISOString() };
+      }
+
+      // Reencolar con delay y contador incrementado (controlado — no bucle infinito)
+      await syncQueue.add(
+        job.name,
+        { ...(data as SyncJobData), lockRetryCount: lockRetryCount + 1 },
+        { delay: LOCK_RETRY_DELAY_MS, priority: job.opts.priority },
+      );
+      logger.info(
+        { userId, platform, attempt: lockRetryCount + 1, maxAttempts: LOCK_MAX_RETRIES },
+        '[SyncWorker] Sync reencolado — lock ocupado',
+      );
+      return { achievementsSynced: 0, gamesUpdated: 0, syncedAt: new Date().toISOString() };
+    }
+
+    try {
+      const result = await syncPlatform(userId, platformAccountId, platform);
+      return {
+        achievementsSynced: result.achievementsSynced,
+        gamesUpdated: result.gamesUpdated,
+        syncedAt: new Date().toISOString(),
+      };
+    } finally {
+      await redis.del(lockKey);
+      await redis.del(syncProgressKey(userId, platform)).catch(() => undefined);
+    }
+  }
+}
+
 export function startSyncWorker() {
   const worker = new Worker<AnySyncJobData, SyncJobResult>(
     'sync',
-    async (job: Job<AnySyncJobData, SyncJobResult>) => {
-      const data = job.data;
-      const { userId } = data;
-      const lockKey = `sync:user-lock:${userId}`;
-
-      if (isBatchJob(data)) {
-        // ── Branch batch (background-sync): un lock, plataformas en serie ──────
-        const acquired = await redis.set(lockKey, job.id ?? 'locked', 'EX', LOCK_TTL_SECONDS, 'NX');
-
-        if (!acquired) {
-          // Batch job con lock ocupado: abandonar — el scheduler nocturno reintentará mañana.
-          // No se reencola para no acumular jobs batch huérfanos.
-          logger.warn({ userId }, '[SyncWorker] Batch job omitido — usuario con sync activo');
-          return { achievementsSynced: 0, gamesUpdated: 0, syncedAt: new Date().toISOString() };
-        }
-
-        let totalAchievements = 0;
-        let totalGames = 0;
-
-        try {
-          for (const { platform, platformAccountId } of data.platforms) {
-            // Extender el lock de BullMQ entre plataformas para evitar que un batch largo
-            // (N plataformas en serie) supere el lockDuration y sea marcado como stalled.
-            // El try/catch garantiza que un fallo de extendLock no interrumpa el batch.
-            try {
-              await job.extendLock(job.token!, LOCK_TTL_SECONDS * 1000);
-            } catch (extendErr: unknown) {
-              logger.warn(
-                { err: (extendErr as Error).message },
-                '[SyncWorker] extendLock fallido — continuando',
-              );
-            }
-
-            try {
-              const result = await syncPlatform(userId, platformAccountId, platform as Platform);
-              totalAchievements += result.achievementsSynced;
-              totalGames += result.gamesUpdated;
-            } catch (platformErr: unknown) {
-              // Fallo independiente por plataforma: log + continuar con la siguiente.
-              // El job batch NO falla aunque una plataforma falle.
-              logger.warn(
-                { userId, platform, err: (platformErr as Error).message },
-                '[SyncWorker] Error en plataforma del batch — continuando con la siguiente',
-              );
-            }
-          }
-        } finally {
-          await redis.del(lockKey);
-          // Safety net: limpiar claves de progreso huérfanas en caso de crash parcial
-          for (const { platform } of data.platforms) {
-            await redis.del(syncProgressKey(userId, platform as Platform)).catch(() => undefined);
-          }
-        }
-
-        return {
-          achievementsSynced: totalAchievements,
-          gamesUpdated: totalGames,
-          syncedAt: new Date().toISOString(),
-        };
-      } else {
-        // ── Branch single-platform (manual, initial, auto-repeat) ────────────
-        const { platformAccountId, platform, lockRetryCount = 0 } = data as SyncJobData;
-        const acquired = await redis.set(lockKey, job.id ?? 'locked', 'EX', LOCK_TTL_SECONDS, 'NX');
-
-        if (!acquired) {
-          if (lockRetryCount >= LOCK_MAX_RETRIES) {
-            // Techo de reintentos alcanzado: abandonar limpiamente sin más reencolados.
-            logger.warn(
-              { userId, platform, lockRetryCount },
-              '[SyncWorker] Sync abandonado — lock no disponible tras máximo de reintentos',
-            );
-            return { achievementsSynced: 0, gamesUpdated: 0, syncedAt: new Date().toISOString() };
-          }
-
-          // Reencolar con delay y contador incrementado (controlado — no bucle infinito)
-          await syncQueue.add(
-            job.name,
-            { ...(data as SyncJobData), lockRetryCount: lockRetryCount + 1 },
-            { delay: LOCK_RETRY_DELAY_MS, priority: job.opts.priority },
-          );
-          logger.info(
-            { userId, platform, attempt: lockRetryCount + 1, maxAttempts: LOCK_MAX_RETRIES },
-            '[SyncWorker] Sync reencolado — lock ocupado',
-          );
-          return { achievementsSynced: 0, gamesUpdated: 0, syncedAt: new Date().toISOString() };
-        }
-
-        try {
-          const result = await syncPlatform(userId, platformAccountId, platform);
-          return {
-            achievementsSynced: result.achievementsSynced,
-            gamesUpdated: result.gamesUpdated,
-            syncedAt: new Date().toISOString(),
-          };
-        } finally {
-          await redis.del(lockKey);
-          await redis.del(syncProgressKey(userId, platform)).catch(() => undefined);
-        }
-      }
-    },
+    processSyncJob,
     {
       connection: createWorkerConnection(),
       concurrency: 5,
