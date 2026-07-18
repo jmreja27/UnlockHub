@@ -3,7 +3,7 @@ import type { Platform } from '@unlockhub/types';
 
 import { redis } from '../lib/redis';
 import { prisma } from '../lib/prisma';
-import { syncQueue, syncBgJobOptions } from '../jobs/sync.queue';
+import { enqueueOrMergeSyncBatch } from '../jobs/sync.queue';
 import { AppError } from '../middleware/errorHandler';
 import { FEATURES } from '../config/features';
 import { STEAM_DAILY_LIMIT, STEAM_MANUAL_SYNC_THRESHOLD } from '../config/steamQuota';
@@ -151,15 +151,11 @@ export async function triggerManualSync(
   });
 
   // Converge en sync-bg-{userId} (jobId determinista) → deduplicación nativa BullMQ.
-  // Si hay un batch en WAITING, el manual se absorbe en él (se sincroniza todo, no solo la plataforma pedida).
-  const job = await syncQueue.add(
-    `sync-bg-${userId}`,
-    {
-      userId,
-      platforms: allAccounts.map((a) => ({ platform: a.platform as Platform, platformAccountId: a.id })),
-      triggerType: 'manual',
-    },
-    syncBgJobOptions(userId),
+  // Si hay un batch en WAITING, el manual se fusiona en él (T141) — se sincroniza todo, no solo la plataforma pedida.
+  const job = await enqueueOrMergeSyncBatch(
+    userId,
+    allAccounts.map((a) => ({ platform: a.platform as Platform, platformAccountId: a.id })),
+    'manual',
   );
 
   return { jobId: job.id, platform, message: 'Sync iniciado correctamente.' };
@@ -403,14 +399,10 @@ export async function queueInitialSync(
   });
   if (accounts.length === 0) return undefined;
 
-  const job = await syncQueue.add(
-    `sync-bg-${userId}`,
-    {
-      userId,
-      platforms: accounts.map((a) => ({ platform: a.platform as Platform, platformAccountId: a.id })),
-      triggerType: 'initial',
-    },
-    syncBgJobOptions(userId),
+  const job = await enqueueOrMergeSyncBatch(
+    userId,
+    accounts.map((a) => ({ platform: a.platform as Platform, platformAccountId: a.id })),
+    'initial',
   );
   logger.info({ userId, platform, jobId: job.id }, '[SyncService] Sync inicial encolado (convergente sync-bg)');
   return job.id;
@@ -470,14 +462,10 @@ export async function triggerAppOpenSync(
     return { queued: false };
   }
 
-  await syncQueue.add(
-    `sync-bg-${userId}`,
-    {
-      userId,
-      platforms: accounts.map((a) => ({ platform: a.platform as Platform, platformAccountId: a.id })),
-      triggerType: 'auto',
-    },
-    syncBgJobOptions(userId),
+  await enqueueOrMergeSyncBatch(
+    userId,
+    accounts.map((a) => ({ platform: a.platform as Platform, platformAccountId: a.id })),
+    'auto',
   );
 
   return { queued: true };

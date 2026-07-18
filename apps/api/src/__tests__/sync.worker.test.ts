@@ -45,14 +45,26 @@ jest.mock('../services/inapp-notification.service', () => ({
   createNotification: jest.fn().mockResolvedValue(undefined),
 }));
 
-jest.mock('../jobs/sync.queue', () => ({
-  syncQueue: { add: jest.fn().mockResolvedValue({ id: 'job-1' }) },
-  syncBgJobOptions: jest.fn((userId: string) => ({
+jest.mock('../jobs/sync.queue', () => {
+  const syncQueueMock = { add: jest.fn().mockResolvedValue({ id: 'job-1' }), getJob: jest.fn().mockResolvedValue(null) };
+  const syncBgJobOptionsMock = jest.fn((userId: string) => ({
     jobId: `sync-bg-${userId}`,
     removeOnComplete: true,
     removeOnFail: { age: 300 },
-  })),
-}));
+  }));
+  // Shim de test: sin job existente mockeado (getJob → null), enqueueOrMergeSyncBatch
+  // se comporta como el .add() directo que sustituyó (T141) — preserva las aserciones
+  // existentes sobre syncQueue.add sin reimplementar la lógica real de merge aquí.
+  const enqueueOrMergeSyncBatchMock = jest.fn(
+    async (userId: string, platforms: unknown, triggerType: string) =>
+      syncQueueMock.add(`sync-bg-${userId}`, { userId, platforms, triggerType }, syncBgJobOptionsMock(userId)),
+  );
+  return {
+    syncQueue: syncQueueMock,
+    syncBgJobOptions: syncBgJobOptionsMock,
+    enqueueOrMergeSyncBatch: enqueueOrMergeSyncBatchMock,
+  };
+});
 
 jest.mock('../platforms/steam.adapter', () => ({
   steamAdapter: { platform: 'STEAM', syncUser: jest.fn(), syncUserBatched: undefined, syncUserExpress: jest.fn() },
