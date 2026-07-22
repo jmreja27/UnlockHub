@@ -551,7 +551,7 @@ No modificar estas fórmulas sin actualizar este documento y regenerar los valor
 
 **Costura para Opción B futura, sin refactor**: `normalizePsnAchievementPoints(rarityPercent, trophyType)` en `achievement-points.ts` ya acepta un `rarityPercent` opcional — si en el futuro se obtiene una rareza real de PSN por otra vía, se le pasa ahí y la función aplica automáticamente la MISMA curva que Steam (`normalizeAchievementPoints`), ignorando el tipo de trofeo. Hoy `psn.adapter.ts` siempre pasa `NaN`/`null` (el caso real de `trophyEarnedRate` ausente), así que siempre cae al fallback por tipo. Sin flags, sin interfaces nuevas — un test en `achievement-points.test.ts` cubre explícitamente esa rama para el día que se active.
 
-Se recalcula en cada sync (igual que antes de F46). Ver F46 en `docs/BACKLOG.md` para el historial de diseño completo.
+Se recalcula en cada sync (igual que antes de F46). **F46 Fase 3 (recálculo histórico) ejecutada en producción el 2026-07-22** — la fórmula vigente ya está aplicada retroactivamente a los `Achievement` Steam existentes y a `User.xp`/`level`/rankings de todos los usuarios, no solo a logros nuevos. Ver F46 en `docs/BACKLOG.md` para el detalle completo (números reales, validación de la caída de XP, idempotencia verificada).
 
 ### Sistema de escudo de racha
 
@@ -1252,7 +1252,7 @@ Ver [docs/DECISIONS.md](docs/DECISIONS.md)
 |---|---|---|
 | **Fase 1 — MVP** | Monorepo, auth, Steam + RA, logros, rankings, perfil, i18n, AdMob | ✅ Completa |
 | **Fase 2 — Social** | Amigos, feed, retos, puntos, racha, push notifications, Wrapped, perfil público, búsqueda | ✅ Completa |
-| **Fase 3 — Producción** | Railway, Sentry, GDPR, escudo de racha, notificaciones, Wrapped mensual, canje puntos, stats, guías UGC, dashboard admin, tests k6, Play Store, premium diferido a Fase 4 | ✅ **En producción** (versionCode 12 live desde 2026-06-27; v1.4.1/versionCode 13 en closed testing, producción solicitada) — hardening y bugfixes post-lanzamiento en curso (ver BACKLOG), F46 fase 3 (recálculo histórico) pendiente |
+| **Fase 3 — Producción** | Railway, Sentry, GDPR, escudo de racha, notificaciones, Wrapped mensual, canje puntos, stats, guías UGC, dashboard admin, tests k6, Play Store, premium diferido a Fase 4 | ✅ **En producción** (versionCode 12 live desde 2026-06-27; v1.4.1/versionCode 13 en closed testing, producción solicitada) — hardening y bugfixes post-lanzamiento en curso (ver BACKLOG), F46 completo (fase 3 ejecutada en producción el 2026-07-22) |
 | **Fase 4 — Avanzado** | Torneos internos, App Store iOS, Xbox | 🔲 Futuro |
 
 > **Aviso legal Fase 4**: Torneos con recompensas económicas pueden clasificarse como juegos de azar en España (Ley 13/2011). Solo recompensas en puntos/días premium hasta consultar con abogado.
