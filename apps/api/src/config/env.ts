@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { logger } from '../lib/logger';
 
-const envSchema = z.object({
+export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().default(3000),
   DATABASE_URL: z.string().url(),
@@ -21,7 +21,10 @@ const envSchema = z.object({
   // Registrar una cuenta en retroachievements.org → Settings → Keys → Web API Key
   RA_SYSTEM_USER: z.string().optional(),
   RA_SYSTEM_KEY: z.string().optional(),
-  CLOUDINARY_URL: z.string().url().optional(),
+  CLOUDINARY_URL: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.string().url().optional()
+  ),
   // RevenueCat — bearer token que RevenueCat envía en cada webhook para verificar autenticidad
   REVENUECAT_WEBHOOK_SECRET: z.string().optional(),
 });
