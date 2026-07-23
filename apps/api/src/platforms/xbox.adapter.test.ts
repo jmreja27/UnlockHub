@@ -66,6 +66,9 @@ const mockPlatformAccount = {
   encryptedToken: makeStoredTokens(FUTURE_EXPIRY),
   lastSyncedAt: null,
   syncCooldownUntil: null,
+  requiresReauth: false,
+  psnProfilePrivate: false,
+  tokenExpiresAt: null,
   createdAt: new Date(),
   updatedAt: new Date(),
 };

@@ -40,16 +40,21 @@ const baseUser = {
   username: 'testuser',
   email: 'test@example.com',
   passwordHash: '',
+  birthDate: new Date('2000-01-01'),
   avatar: null,
   banner: null,
   bio: null,
   level: 1,
   xp: 0,
   streakDays: 0,
+  streakShields: 0,
   countryCode: null,
+  role: 'USER' as const,
   isPremium: false,
   premiumUntil: null,
   lastSyncAt: null,
+  profileVisibility: 'PUBLIC' as const,
+  deletedAt: null,
   createdAt: new Date(),
   updatedAt: new Date(),
 };
@@ -72,6 +77,7 @@ describe('authService.register', () => {
       username: 'testuser',
       email: 'test@example.com',
       password: 'Password1',
+      birthDate: new Date('2000-01-01'),
     });
 
     expect(result.user.id).toBe('user-1');
@@ -89,6 +95,7 @@ describe('authService.register', () => {
       username: 'testuser',
       email: 'test@example.com',
       password: 'Password1',
+      birthDate: new Date('2000-01-01'),
     });
 
     expect(mockUpsertUserScore).toHaveBeenCalledWith('user-1', 0, []);
@@ -99,7 +106,12 @@ describe('authService.register', () => {
     mockUserRepo.findUserByUsername.mockResolvedValue(null);
 
     await expect(
-      authService.register({ username: 'otro', email: 'test@example.com', password: 'Password1' }),
+      authService.register({
+        username: 'otro',
+        email: 'test@example.com',
+        password: 'Password1',
+        birthDate: new Date('2000-01-01'),
+      }),
     ).rejects.toMatchObject({ code: 'EMAIL_TAKEN', statusCode: 409 });
   });
 
@@ -108,7 +120,12 @@ describe('authService.register', () => {
     mockUserRepo.findUserByUsername.mockResolvedValue(baseUser);
 
     await expect(
-      authService.register({ username: 'testuser', email: 'nuevo@example.com', password: 'Password1' }),
+      authService.register({
+        username: 'testuser',
+        email: 'nuevo@example.com',
+        password: 'Password1',
+        birthDate: new Date('2000-01-01'),
+      }),
     ).rejects.toMatchObject({ code: 'USERNAME_TAKEN', statusCode: 409 });
   });
 });

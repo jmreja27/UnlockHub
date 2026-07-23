@@ -43,6 +43,7 @@ const makeUser = (overrides: Partial<{ id: string; username: string; deletedAt: 
   isPremium: false,
   premiumUntil: null,
   lastSyncAt: null,
+  profileVisibility: 'PUBLIC' as const,
   deletedAt: null,
   birthDate: null,
   createdAt: new Date(),

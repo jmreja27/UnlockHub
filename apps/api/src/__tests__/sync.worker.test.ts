@@ -132,12 +132,12 @@ const account = {
 beforeEach(() => {
   jest.clearAllMocks();
   mockGetIO.mockReturnValue(mockIO);
-  mockPrisma.platformAccount.findUnique.mockResolvedValue(account);
-  mockPrisma.platformAccount.upsert.mockResolvedValue(account);
+  (mockPrisma.platformAccount.findUnique as jest.Mock).mockResolvedValue(account);
+  (mockPrisma.platformAccount.upsert as jest.Mock).mockResolvedValue(account);
   // findMany usado por queueInitialSync (llamado desde A22 fallback y runExpressThenQueueFull)
   (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([account]);
-  mockPrisma.user.update.mockResolvedValue({ id: 'user-1' } as never);
-  mockPrisma.userAchievement.findMany.mockResolvedValue([]);
+  (mockPrisma.user.update as jest.Mock).mockResolvedValue({ id: 'user-1' } as never);
+  (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([]);
 });
 
 // ─── PARTE 8: lockDuration — evita jobs stalled con 300+ juegos PSN ─────────
@@ -404,7 +404,7 @@ describe('syncService.runExpressThenQueueFull', () => {
 
   it('llama queueInitialSync igualmente si triggerExpressSync lanza (infra error)', async () => {
     // Simular fallo de infraestructura en findUnique (antes del lock)
-    mockPrisma.platformAccount.findUnique.mockRejectedValueOnce(new Error('DB timeout'));
+    (mockPrisma.platformAccount.findUnique as jest.Mock).mockRejectedValueOnce(new Error('DB timeout'));
     (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValueOnce([account]);
 
     await syncService.runExpressThenQueueFull('user-1', 'STEAM');
@@ -418,7 +418,7 @@ describe('syncService.runExpressThenQueueFull', () => {
   });
 
   it('no lanza aunque tanto express como queueInitialSync fallen', async () => {
-    mockPrisma.platformAccount.findUnique.mockRejectedValueOnce(new Error('DB error'));
+    (mockPrisma.platformAccount.findUnique as jest.Mock).mockRejectedValueOnce(new Error('DB error'));
     (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValueOnce([]);
 
     // findMany devuelve [] → queueInitialSync retorna undefined sin encolar → no lanza
@@ -428,7 +428,7 @@ describe('syncService.runExpressThenQueueFull', () => {
 
 describe('syncService.getSyncStatus — campos de progreso desde Redis', () => {
   it('devuelve isRunning=true con processed/total/percentComplete cuando hay clave en Redis', async () => {
-    mockPrisma.platformAccount.findUnique.mockResolvedValueOnce(account);
+    (mockPrisma.platformAccount.findUnique as jest.Mock).mockResolvedValueOnce(account);
     mockRedis.ttl.mockResolvedValue(-1);
     mockRedis.get.mockImplementation((key: string) => {
       if (key.startsWith('sync:progress:')) {
@@ -449,7 +449,7 @@ describe('syncService.getSyncStatus — campos de progreso desde Redis', () => {
   });
 
   it('devuelve isRunning=false cuando no hay clave en Redis', async () => {
-    mockPrisma.platformAccount.findUnique.mockResolvedValueOnce(account);
+    (mockPrisma.platformAccount.findUnique as jest.Mock).mockResolvedValueOnce(account);
     mockRedis.ttl.mockResolvedValue(-1);
     mockRedis.get.mockResolvedValue(null);
 
@@ -480,7 +480,7 @@ describe('startSyncWorker — lock Redis por usuario (MEJORA-2)', () => {
     // SET NX devuelve 'OK' → lock adquirido
     mockRedis.set.mockResolvedValueOnce('OK');
 
-    mockPrisma.userAchievement.findMany
+    (mockPrisma.userAchievement.findMany as jest.Mock)
       .mockResolvedValueOnce([]) // prevEarnedIds
       .mockResolvedValueOnce([]); // newAchievements
 
@@ -488,8 +488,8 @@ describe('startSyncWorker — lock Redis por usuario (MEJORA-2)', () => {
       gamesUpdated: 0, achievementsSynced: 0, syncedAt: new Date().toISOString(),
     });
 
-    mockPrisma.user.findUnique.mockResolvedValueOnce({ xp: 0 });
-    mockPrisma.platformAccount.findMany.mockResolvedValueOnce([]);
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValueOnce({ xp: 0 });
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValueOnce([]);
 
     await processFn({ id: 'job-test', name: 'manual-sync:user-1:STEAM', opts: {}, data: { userId: 'user-1', platformAccountId: 'acc-1', platform: 'STEAM', triggerType: 'manual' } });
 
@@ -540,7 +540,7 @@ describe('startSyncWorker — lock Redis por usuario (MEJORA-2)', () => {
     // El adapter lanza un error
     (mockSteamAdapter.syncUser as jest.Mock).mockRejectedValueOnce(new Error('Timeout'));
 
-    mockPrisma.userAchievement.findMany.mockResolvedValueOnce([]); // prevEarnedIds
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValueOnce([]); // prevEarnedIds
 
     await expect(
       processFn({ id: 'job-3', name: 'manual-sync:user-1:STEAM', opts: {}, data: { userId: 'user-1', platformAccountId: 'acc-1', platform: 'STEAM', triggerType: 'manual' } }),
@@ -558,7 +558,7 @@ describe('startSyncWorker — lock Redis por usuario (MEJORA-2)', () => {
     // user-2: SET NX devuelve 'OK' → lock adquirido independientemente de user-1
     mockRedis.set.mockResolvedValueOnce('OK');
 
-    mockPrisma.userAchievement.findMany
+    (mockPrisma.userAchievement.findMany as jest.Mock)
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([]);
 
@@ -566,8 +566,8 @@ describe('startSyncWorker — lock Redis por usuario (MEJORA-2)', () => {
       gamesUpdated: 0, achievementsSynced: 0, syncedAt: new Date().toISOString(),
     });
 
-    mockPrisma.user.findUnique.mockResolvedValueOnce({ xp: 0 });
-    mockPrisma.platformAccount.findMany.mockResolvedValueOnce([]);
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValueOnce({ xp: 0 });
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValueOnce([]);
 
     await processFn({ id: 'job-4', name: 'manual-sync:user-2:STEAM', opts: {}, data: { userId: 'user-2', platformAccountId: 'acc-2', platform: 'STEAM', triggerType: 'manual' } });
 
@@ -597,7 +597,7 @@ describe('startSyncWorker — addXp persistido cuando hay logros nuevos (BUG-9)'
     expect(processFn).toBeDefined();
 
     // Primera llamada a userAchievement.findMany: prevEarnedIds (vacío — usuario sin logros previos)
-    mockPrisma.userAchievement.findMany
+    (mockPrisma.userAchievement.findMany as jest.Mock)
       .mockResolvedValueOnce([]) // prevEarnedIds
       .mockResolvedValueOnce([  // newAchievements tras sync
         { achievementId: 'ach-new-1', achievement: { title: 'Test A', normalizedPoints: 100 }, unlockedAt: new Date() },
@@ -621,7 +621,7 @@ describe('startSyncWorker — addXp persistido cuando hay logros nuevos (BUG-9)'
 
     const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
 
-    mockPrisma.userAchievement.findMany
+    (mockPrisma.userAchievement.findMany as jest.Mock)
       .mockResolvedValueOnce([]) // prevEarnedIds
       .mockResolvedValueOnce([]); // newAchievements — vacío
 
@@ -769,8 +769,8 @@ describe('startSyncWorker — batch job (SyncBatchJobData)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetIO.mockReturnValue(mockIO);
-    mockPrisma.platformAccount.upsert.mockResolvedValue(steamAccount);
-    mockPrisma.user.update.mockResolvedValue({ id: 'user-1' } as never);
+    (mockPrisma.platformAccount.upsert as jest.Mock).mockResolvedValue(steamAccount);
+    (mockPrisma.user.update as jest.Mock).mockResolvedValue({ id: 'user-1' } as never);
   });
 
   it('adquiere el lock UNA SOLA VEZ para el batch completo y lo libera en finally', async () => {
@@ -782,15 +782,15 @@ describe('startSyncWorker — batch job (SyncBatchJobData)', () => {
     mockRedis.set.mockResolvedValueOnce('OK');
 
     // STEAM: prevEarnedIds + newAchievements
-    mockPrisma.userAchievement.findMany
+    (mockPrisma.userAchievement.findMany as jest.Mock)
       .mockResolvedValueOnce([]) // STEAM prevEarnedIds
       .mockResolvedValueOnce([]); // STEAM newAchievements
 
     (mockSteamAdapter.syncUser as jest.Mock).mockResolvedValueOnce({
       gamesUpdated: 1, achievementsSynced: 0, syncedAt: new Date().toISOString(),
     });
-    mockPrisma.user.findUnique.mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' });
-    mockPrisma.platformAccount.findMany.mockResolvedValueOnce([{ platform: 'STEAM' }]);
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' });
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValueOnce([{ platform: 'STEAM' }]);
 
     await processFn({
       id: 'batch-1',
@@ -821,11 +821,11 @@ describe('startSyncWorker — batch job (SyncBatchJobData)', () => {
     const extendLock = jest.fn().mockResolvedValue(0);
 
     // Mock para 2 plataformas en serie: STEAM + RA
-    mockPrisma.platformAccount.findUnique
+    (mockPrisma.platformAccount.findUnique as jest.Mock)
       .mockResolvedValueOnce(steamAccount)
       .mockResolvedValueOnce(raAccount);
 
-    mockPrisma.userAchievement.findMany
+    (mockPrisma.userAchievement.findMany as jest.Mock)
       .mockResolvedValueOnce([]) // STEAM prevEarnedIds
       .mockResolvedValueOnce([]) // STEAM newAchievements
       .mockResolvedValueOnce([]) // RA prevEarnedIds
@@ -840,10 +840,10 @@ describe('startSyncWorker — batch job (SyncBatchJobData)', () => {
       gamesUpdated: 0, achievementsSynced: 0, syncedAt: new Date().toISOString(),
     });
 
-    mockPrisma.user.findUnique
+    (mockPrisma.user.findUnique as jest.Mock)
       .mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' })
       .mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' });
-    mockPrisma.platformAccount.findMany
+    (mockPrisma.platformAccount.findMany as jest.Mock)
       .mockResolvedValueOnce([{ platform: 'STEAM' }])
       .mockResolvedValueOnce([{ platform: 'RA' }]);
 
@@ -880,14 +880,14 @@ describe('startSyncWorker — batch job (SyncBatchJobData)', () => {
       ...steamAccount, id: 'acc-psn', platform: 'PSN' as const, externalId: 'psn-user',
     };
 
-    mockPrisma.platformAccount.findUnique
+    (mockPrisma.platformAccount.findUnique as jest.Mock)
       .mockResolvedValueOnce(steamAccount) // STEAM
       .mockResolvedValueOnce(psnAccount)   // PSN
       .mockResolvedValueOnce(raAccount);   // RA
 
     // PSN prevEarnedIds y luego rethrows antes de llegar a newAchievements
     // STEAM y RA: prevEarnedIds + newAchievements
-    mockPrisma.userAchievement.findMany
+    (mockPrisma.userAchievement.findMany as jest.Mock)
       .mockResolvedValueOnce([]) // STEAM prevEarnedIds
       .mockResolvedValueOnce([]) // STEAM newAchievements
       .mockResolvedValueOnce([]) // PSN prevEarnedIds
@@ -906,10 +906,10 @@ describe('startSyncWorker — batch job (SyncBatchJobData)', () => {
       gamesUpdated: 1, achievementsSynced: 3, syncedAt: new Date().toISOString(),
     });
 
-    mockPrisma.user.findUnique
+    (mockPrisma.user.findUnique as jest.Mock)
       .mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' }) // STEAM (sin XP)
       .mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' }); // RA (sin XP)
-    mockPrisma.platformAccount.findMany
+    (mockPrisma.platformAccount.findMany as jest.Mock)
       .mockResolvedValueOnce([{ platform: 'STEAM' }])
       .mockResolvedValueOnce([{ platform: 'RA' }]);
 
@@ -955,11 +955,11 @@ describe('startSyncWorker — batch job (SyncBatchJobData)', () => {
       ...steamAccount, id: 'acc-psn', platform: 'PSN' as const, externalId: 'psn-user',
     };
 
-    mockPrisma.platformAccount.findUnique
+    (mockPrisma.platformAccount.findUnique as jest.Mock)
       .mockResolvedValueOnce(psnAccount)   // PSN
       .mockResolvedValueOnce(raAccount);   // RA
 
-    mockPrisma.userAchievement.findMany
+    (mockPrisma.userAchievement.findMany as jest.Mock)
       .mockResolvedValueOnce([]) // PSN prevEarnedIds
       .mockResolvedValueOnce([]) // RA prevEarnedIds
       .mockResolvedValueOnce([]); // RA newAchievements
@@ -974,8 +974,8 @@ describe('startSyncWorker — batch job (SyncBatchJobData)', () => {
       gamesUpdated: 1, achievementsSynced: 3, syncedAt: new Date().toISOString(),
     });
 
-    mockPrisma.user.findUnique.mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' }); // RA (sin XP)
-    mockPrisma.platformAccount.findMany.mockResolvedValueOnce([{ platform: 'RA' }]);
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' }); // RA (sin XP)
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValueOnce([{ platform: 'RA' }]);
 
     const result = await processFn({
       id: 'batch-npsso',
@@ -1017,8 +1017,8 @@ describe('startSyncWorker — batch job (SyncBatchJobData)', () => {
     const psnAccount = {
       ...steamAccount, id: 'acc-psn', platform: 'PSN' as const, externalId: 'psn-user',
     };
-    mockPrisma.platformAccount.findUnique.mockResolvedValueOnce(psnAccount);
-    mockPrisma.userAchievement.findMany.mockResolvedValueOnce([]); // PSN prevEarnedIds
+    (mockPrisma.platformAccount.findUnique as jest.Mock).mockResolvedValueOnce(psnAccount);
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValueOnce([]); // PSN prevEarnedIds
 
     const { psnAdapter: psnAdapterMock } = jest.requireMock('../platforms/psn.adapter') as { psnAdapter: { syncUser: jest.Mock } };
     psnAdapterMock.syncUser.mockRejectedValueOnce(
@@ -1052,8 +1052,8 @@ describe('startSyncWorker — batch job (SyncBatchJobData)', () => {
     const extendLock = jest.fn().mockResolvedValue(0);
 
     // Plataforma única (STEAM) — adapter falla
-    mockPrisma.platformAccount.findUnique.mockResolvedValueOnce(steamAccount);
-    mockPrisma.userAchievement.findMany.mockResolvedValueOnce([]); // prevEarnedIds
+    (mockPrisma.platformAccount.findUnique as jest.Mock).mockResolvedValueOnce(steamAccount);
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValueOnce([]); // prevEarnedIds
 
     (mockSteamAdapter.syncUser as jest.Mock).mockRejectedValueOnce(new Error('Adapter error'));
 
@@ -1111,15 +1111,15 @@ describe('syncPlatform — T102: TTL de sync:progress = 900s (no 7200s)', () => 
     const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
 
     mockRedis.set.mockResolvedValueOnce('OK');
-    mockPrisma.userAchievement.findMany
+    (mockPrisma.userAchievement.findMany as jest.Mock)
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([]);
 
     (mockSteamAdapter.syncUser as jest.Mock).mockResolvedValueOnce({
       gamesUpdated: 0, achievementsSynced: 0, syncedAt: new Date().toISOString(),
     });
-    mockPrisma.user.findUnique.mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' });
-    mockPrisma.platformAccount.findMany.mockResolvedValueOnce([]);
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' });
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValueOnce([]);
 
     await processFn({ data: { userId: 'user-1', platformAccountId: 'acc-1', platform: 'STEAM', triggerType: 'manual' } });
 
@@ -1137,15 +1137,15 @@ describe('syncPlatform — T102: TTL de sync:progress = 900s (no 7200s)', () => 
     const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
 
     mockRedis.set.mockResolvedValueOnce('OK');
-    mockPrisma.userAchievement.findMany
+    (mockPrisma.userAchievement.findMany as jest.Mock)
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([]);
 
     (mockSteamAdapter.syncUser as jest.Mock).mockResolvedValueOnce({
       gamesUpdated: 0, achievementsSynced: 0, syncedAt: new Date().toISOString(),
     });
-    mockPrisma.user.findUnique.mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' });
-    mockPrisma.platformAccount.findMany.mockResolvedValueOnce([]);
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' });
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValueOnce([]);
 
     await processFn({ data: { userId: 'user-1', platformAccountId: 'acc-1', platform: 'STEAM', triggerType: 'manual' } });
 
@@ -1171,15 +1171,15 @@ describe('syncPlatform — T103: logs de inicio y fin por plataforma', () => {
     const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
 
     mockRedis.set.mockResolvedValueOnce('OK');
-    mockPrisma.userAchievement.findMany
+    (mockPrisma.userAchievement.findMany as jest.Mock)
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([]);
 
     (mockSteamAdapter.syncUser as jest.Mock).mockResolvedValueOnce({
       gamesUpdated: 2, achievementsSynced: 5, syncedAt: new Date().toISOString(),
     });
-    mockPrisma.user.findUnique.mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' });
-    mockPrisma.platformAccount.findMany.mockResolvedValueOnce([]);
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' });
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValueOnce([]);
 
     await processFn({ data: { userId: 'user-1', platformAccountId: 'acc-1', platform: 'STEAM', triggerType: 'manual' } });
 
@@ -1195,15 +1195,15 @@ describe('syncPlatform — T103: logs de inicio y fin por plataforma', () => {
     const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
 
     mockRedis.set.mockResolvedValueOnce('OK');
-    mockPrisma.userAchievement.findMany
+    (mockPrisma.userAchievement.findMany as jest.Mock)
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([]);
 
     (mockSteamAdapter.syncUser as jest.Mock).mockResolvedValueOnce({
       gamesUpdated: 3, achievementsSynced: 12, syncedAt: new Date().toISOString(),
     });
-    mockPrisma.user.findUnique.mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' });
-    mockPrisma.platformAccount.findMany.mockResolvedValueOnce([]);
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' });
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValueOnce([]);
 
     await processFn({ data: { userId: 'user-1', platformAccountId: 'acc-1', platform: 'STEAM', triggerType: 'manual' } });
 
@@ -1224,7 +1224,7 @@ describe('syncPlatform — T103: logs de inicio y fin por plataforma', () => {
     const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
 
     mockRedis.set.mockResolvedValueOnce('OK');
-    mockPrisma.userAchievement.findMany.mockResolvedValueOnce([]);
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValueOnce([]);
     (mockSteamAdapter.syncUser as jest.Mock).mockRejectedValueOnce(new Error('Timeout'));
 
     await expect(
@@ -1250,7 +1250,7 @@ describe('syncPlatform — T104: syncProgressKey borrada en finally en todos los
     const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
 
     mockRedis.set.mockResolvedValueOnce('OK');
-    mockPrisma.userAchievement.findMany.mockResolvedValueOnce([]);
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValueOnce([]);
     (mockSteamAdapter.syncUser as jest.Mock).mockRejectedValueOnce(new Error('API down'));
 
     await expect(
@@ -1266,14 +1266,14 @@ describe('syncPlatform — T104: syncProgressKey borrada en finally en todos los
     const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
 
     mockRedis.set.mockResolvedValueOnce('OK');
-    mockPrisma.userAchievement.findMany.mockResolvedValueOnce([]);
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValueOnce([]);
 
     // Adapter tiene éxito
     (mockSteamAdapter.syncUser as jest.Mock).mockResolvedValueOnce({
       gamesUpdated: 1, achievementsSynced: 5, syncedAt: new Date().toISOString(),
     });
     // Pero el upsert post-adapter falla
-    mockPrisma.platformAccount.upsert.mockRejectedValueOnce(new Error('DB timeout'));
+    (mockPrisma.platformAccount.upsert as jest.Mock).mockRejectedValueOnce(new Error('DB timeout'));
 
     await expect(
       processFn({ data: { userId: 'user-1', platformAccountId: 'acc-1', platform: 'STEAM', triggerType: 'manual' } }),
@@ -1289,15 +1289,15 @@ describe('syncPlatform — T104: syncProgressKey borrada en finally en todos los
     const processFn = MockWorker.mock.calls[0]?.[1] as ProcessFn;
 
     mockRedis.set.mockResolvedValueOnce('OK');
-    mockPrisma.userAchievement.findMany
+    (mockPrisma.userAchievement.findMany as jest.Mock)
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([]);
 
     (mockSteamAdapter.syncUser as jest.Mock).mockResolvedValueOnce({
       gamesUpdated: 0, achievementsSynced: 0, syncedAt: new Date().toISOString(),
     });
-    mockPrisma.user.findUnique.mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' });
-    mockPrisma.platformAccount.findMany.mockResolvedValueOnce([]);
+    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValueOnce({ xp: 0, profileVisibility: 'PUBLIC' });
+    (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValueOnce([]);
 
     await processFn({ data: { userId: 'user-1', platformAccountId: 'acc-1', platform: 'STEAM', triggerType: 'manual' } });
 

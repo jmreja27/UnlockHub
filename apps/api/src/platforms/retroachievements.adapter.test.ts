@@ -99,6 +99,9 @@ const mockPlatformAccount: PlatformAccount = {
   encryptedToken: API_KEY,
   lastSyncedAt: null,
   syncCooldownUntil: null,
+  requiresReauth: false,
+  psnProfilePrivate: false,
+  tokenExpiresAt: null,
   createdAt: new Date(),
   updatedAt: new Date(),
 };
@@ -404,10 +407,10 @@ describe('retroAchievementsAdapter.syncUser', () => {
   };
 
   beforeEach(() => {
-    mockPrisma.game.upsert.mockResolvedValue(mockDbGame as never);
-    mockPrisma.achievement.upsert.mockResolvedValue(mockDbAchievement as never);
-    mockPrisma.userAchievement.upsert.mockResolvedValue({} as never);
-    mockPrisma.platformAccount.upsert.mockResolvedValue({} as never);
+    (mockPrisma.game.upsert as jest.Mock).mockResolvedValue(mockDbGame as never);
+    (mockPrisma.achievement.upsert as jest.Mock).mockResolvedValue(mockDbAchievement as never);
+    (mockPrisma.userAchievement.upsert as jest.Mock).mockResolvedValue({} as never);
+    (mockPrisma.platformAccount.upsert as jest.Mock).mockResolvedValue({} as never);
     // T114 — FASE 1 del batch (RETURNING id/externalId) para los 3 logros de mockRaGameProgress.
     (mockPrisma.$queryRaw as jest.Mock).mockResolvedValue([
       { id: 'db-ach-101', externalId: '101' },
@@ -559,7 +562,7 @@ describe('retroAchievementsAdapter.syncUser', () => {
       .mockResolvedValue({ data: mockRaGameProgress });
 
     // Prisma falla en todos los upserts de juego
-    mockPrisma.game.upsert.mockRejectedValue(new Error('DB connection lost'));
+    (mockPrisma.game.upsert as jest.Mock).mockRejectedValue(new Error('DB connection lost'));
 
     const result = await retroAchievementsAdapter.syncUser(mockPlatformAccount);
 

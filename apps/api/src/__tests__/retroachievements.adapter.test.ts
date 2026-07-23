@@ -52,6 +52,7 @@ const baseAccount = {
   syncCooldownUntil: null,
   requiresReauth: false,
   psnProfilePrivate: false,
+  tokenExpiresAt: null,
   createdAt: new Date(),
   updatedAt: new Date(),
 };
@@ -112,7 +113,7 @@ describe('retroAchievementsAdapter.syncUserExpress', () => {
       .mockResolvedValue({ id: 'game-2' });
 
     // No debe lanzar — Promise.allSettled aísla el fallo
-    await expect(retroAchievementsAdapter.syncUserExpress(baseAccount)).resolves.toMatchObject({
+    await expect(retroAchievementsAdapter.syncUserExpress!(baseAccount)).resolves.toMatchObject({
       platform: 'RA',
     });
   });
@@ -133,7 +134,7 @@ describe('retroAchievementsAdapter.syncUserExpress', () => {
     // Hace que TODOS los upserts fallen para garantizar que logger.warn sea llamado
     (mockPrisma.game.upsert as jest.Mock).mockRejectedValue(new Error('DB error'));
 
-    await retroAchievementsAdapter.syncUserExpress(baseAccount);
+    await retroAchievementsAdapter.syncUserExpress!(baseAccount);
 
     expect(mockLogger.warn).toHaveBeenCalledWith(
       expect.objectContaining({ err: expect.any(Error) }),
@@ -151,7 +152,7 @@ describe('retroAchievementsAdapter.syncUserExpress', () => {
       return Promise.resolve({ data: validGameProgress });
     });
 
-    const result = await retroAchievementsAdapter.syncUserExpress(baseAccount);
+    const result = await retroAchievementsAdapter.syncUserExpress!(baseAccount);
 
     expect(result.platform).toBe('RA');
     expect(mockLogger.warn).not.toHaveBeenCalled();

@@ -41,7 +41,6 @@ const mockedPrisma = prisma as jest.Mocked<typeof prisma>;
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
 const STEAM_ID = '76561198000000001';
-const API_KEY = 'fake-steam-api-key';
 const steamGame = {
   appid: 730,
   name: 'Counter-Strike: Global Offensive',
@@ -141,7 +140,7 @@ describe('SteamAdapter.getUserAchievements', () => {
   it('devuelve los logros normalizados del usuario cuando no hay caché', async () => {
     setupAxiosMocksNoCache();
 
-    const achievements = await adapter.getUserAchievements(STEAM_ID, API_KEY);
+    const achievements = await adapter.getUserAchievements(STEAM_ID);
 
     // Se devuelven todos los logros del juego (no solo los desbloqueados)
     expect(achievements).toHaveLength(2);
@@ -167,7 +166,7 @@ describe('SteamAdapter.getUserAchievements', () => {
       // GetGlobalAchievementPercentagesForApp cache hit
       .mockResolvedValueOnce(JSON.stringify(rarityPercentages));
 
-    const achievements = await adapter.getUserAchievements(STEAM_ID, API_KEY);
+    const achievements = await adapter.getUserAchievements(STEAM_ID);
 
     // No debe haberse llamado a la API de Steam
     expect(mockedAxios.get).not.toHaveBeenCalled();
@@ -183,7 +182,7 @@ describe('SteamAdapter.getUserAchievements', () => {
       data: { response: {} }, // sin "games"
     });
 
-    await expect(adapter.getUserAchievements(STEAM_ID, API_KEY)).rejects.toMatchObject({
+    await expect(adapter.getUserAchievements(STEAM_ID)).rejects.toMatchObject({
       code: 'STEAM_API_ERROR',
       statusCode: 502,
     });
@@ -209,7 +208,7 @@ describe('SteamAdapter.getUserAchievements', () => {
       .mockResolvedValueOnce({ data: { game: { availableGameStats: { achievements: [] } } } })
       .mockResolvedValueOnce({ data: { achievementpercentages: { achievements: [] } } });
 
-    await expect(adapter.getUserAchievements(STEAM_ID, API_KEY)).rejects.toMatchObject({
+    await expect(adapter.getUserAchievements(STEAM_ID)).rejects.toMatchObject({
       code: 'STEAM_API_ERROR',
       statusCode: 502,
     });
@@ -244,43 +243,43 @@ describe('Normalización de puntos (normalizeAchievementPoints — curva F46)', 
 
   it('rareza 0% → 150 puntos (curva F46: ≤1% → 150, logro extremadamente raro)', async () => {
     buildMocksWithRarity(0);
-    const achievements = await adapter.getUserAchievements(STEAM_ID, API_KEY);
+    const achievements = await adapter.getUserAchievements(STEAM_ID);
     expect(achievements[0]?.normalizedPoints).toBe(150);
   });
 
   it('rareza 100% → 5 puntos (curva F46: >50% → 5, logro trivial)', async () => {
     buildMocksWithRarity(100);
-    const achievements = await adapter.getUserAchievements(STEAM_ID, API_KEY);
+    const achievements = await adapter.getUserAchievements(STEAM_ID);
     expect(achievements[0]?.normalizedPoints).toBe(5);
   });
 
   it('rareza 50% → 15 puntos (curva F46: ≤50% → 15, logro de dificultad media)', async () => {
     buildMocksWithRarity(50);
-    const achievements = await adapter.getUserAchievements(STEAM_ID, API_KEY);
+    const achievements = await adapter.getUserAchievements(STEAM_ID);
     expect(achievements[0]?.normalizedPoints).toBe(15);
   });
 
   it('rareza 99% → 5 puntos (curva F46: >50% → 5)', async () => {
     buildMocksWithRarity(99);
-    const achievements = await adapter.getUserAchievements(STEAM_ID, API_KEY);
+    const achievements = await adapter.getUserAchievements(STEAM_ID);
     expect(achievements[0]?.normalizedPoints).toBe(5);
   });
 
   it('rareza 25% → 15 puntos (curva F46: ≤50% → 15)', async () => {
     buildMocksWithRarity(25);
-    const achievements = await adapter.getUserAchievements(STEAM_ID, API_KEY);
+    const achievements = await adapter.getUserAchievements(STEAM_ID);
     expect(achievements[0]?.normalizedPoints).toBe(15);
   });
 
   it('rareza 3% → 100 puntos (curva F46: ≤5% → 100)', async () => {
     buildMocksWithRarity(3);
-    const achievements = await adapter.getUserAchievements(STEAM_ID, API_KEY);
+    const achievements = await adapter.getUserAchievements(STEAM_ID);
     expect(achievements[0]?.normalizedPoints).toBe(100);
   });
 
   it('rareza 8% → 60 puntos (curva F46: ≤10% → 60)', async () => {
     buildMocksWithRarity(8);
-    const achievements = await adapter.getUserAchievements(STEAM_ID, API_KEY);
+    const achievements = await adapter.getUserAchievements(STEAM_ID);
     expect(achievements[0]?.normalizedPoints).toBe(60);
   });
 });

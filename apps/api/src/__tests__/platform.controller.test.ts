@@ -63,6 +63,9 @@ const fakeAccount: PlatformAccount = {
   syncCooldownUntil: null,
   requiresReauth: false,
   psnProfilePrivate: false,
+  tokenExpiresAt: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
 };
 
 beforeEach(() => {

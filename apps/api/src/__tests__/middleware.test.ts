@@ -36,7 +36,7 @@ function mockRes() {
     res['jsonBody'] = body;
     return res;
   });
-  return res as unknown as Response;
+  return res as unknown as Response & { jsonBody: unknown };
 }
 
 function mockReq(opts: { authorization?: string } = {}) {

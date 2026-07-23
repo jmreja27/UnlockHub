@@ -153,7 +153,7 @@ describe('SteamAdapter — rawValue/rarity/iconUrl en upsert', () => {
       },
     });
 
-    mockPrisma.game.upsert.mockResolvedValue({ id: 'game-1' } as never);
+    (mockPrisma.game.upsert as jest.Mock).mockResolvedValue({ id: 'game-1' } as never);
     // T114 — el batch reemplaza achievement.upsert/userAchievement.upsert por $queryRaw (FASE 1,
     // RETURNING id/externalId) + $executeRaw (FASE 2). Orden de `.values` del Prisma.Sql resultante
     // (ver batchUpsertSteamAchievements): [id, gameId, externalId, title, description, iconUrl,
@@ -241,7 +241,7 @@ describe('SteamAdapter — F46 Fase 2: recálculo de XP y centinela unlockedAt',
       },
     });
 
-    mockPrisma.game.upsert.mockResolvedValue({ id: 'game-1' } as never);
+    (mockPrisma.game.upsert as jest.Mock).mockResolvedValue({ id: 'game-1' } as never);
     // T114 — ver nota equivalente en el describe de rawValue/rarity/iconUrl más arriba.
     mockPrisma.$queryRaw.mockResolvedValue([{ id: 'ach-1', externalId: 'ACH_1' }] as never);
     mockPrisma.$executeRaw.mockResolvedValue(1 as never);
@@ -351,7 +351,7 @@ describe('SteamAdapter — tope STEAM_MAX_GAMES_PER_SYNC', () => {
   beforeEach(() => {
     // Reset completo de axios para evitar sangrado de implementaciones entre suites
     mockAxios.get.mockReset();
-    mockPrisma.game.upsert.mockResolvedValue({ id: 'game-id' } as never);
+    (mockPrisma.game.upsert as jest.Mock).mockResolvedValue({ id: 'game-id' } as never);
     // T114 — ver nota equivalente en el describe de rawValue/rarity/iconUrl más arriba.
     mockPrisma.$queryRaw.mockResolvedValue([{ id: 'ach-id', externalId: 'ACH_1' }] as never);
     mockPrisma.$executeRaw.mockResolvedValue(1 as never);
@@ -394,8 +394,8 @@ describe('SteamAdapter — tope STEAM_MAX_GAMES_PER_SYNC', () => {
     expect(mockPrisma.game.upsert).toHaveBeenCalledTimes(100);
 
     // Los appids procesados deben ser los de los juegos con actividad (1-100), no los omitidos (101-150)
-    const processedExternalIds = mockPrisma.game.upsert.mock.calls.map(
-      (call) => call[0].create.externalId as string,
+    const processedExternalIds = (mockPrisma.game.upsert as jest.Mock).mock.calls.map(
+      (call: { create: { externalId: string } }[]) => call[0]!.create.externalId,
     );
     expect(processedExternalIds).toContain('1');
     expect(processedExternalIds).toContain('100');

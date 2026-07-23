@@ -117,10 +117,10 @@ async function cleanupUserKeys(userId: string, platforms: string[]) {
 describe('processSyncJob — lifecycle del handler real contra Redis real (T129/TESTS-2 #4, TESTS-3 e2e)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockPrisma.platformAccount.upsert.mockResolvedValue(makeAccount() as never);
+    (mockPrisma.platformAccount.upsert as jest.Mock).mockResolvedValue(makeAccount() as never);
     (mockPrisma.platformAccount.findMany as jest.Mock).mockResolvedValue([makeAccount()]);
-    mockPrisma.user.update.mockResolvedValue({ id: 'lifecycle-user' } as never);
-    mockPrisma.userAchievement.findMany.mockResolvedValue([]);
+    (mockPrisma.user.update as jest.Mock).mockResolvedValue({ id: 'lifecycle-user' } as never);
+    (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([]);
   });
 
   afterAll(async () => {
@@ -138,7 +138,7 @@ describe('processSyncJob — lifecycle del handler real contra Redis real (T129/
     });
 
     it('libera lock y progress tras completar, y vuelve a adquirirlos limpio en la 2ª ejecución', async () => {
-      mockPrisma.platformAccount.findUnique.mockResolvedValue(
+      (mockPrisma.platformAccount.findUnique as jest.Mock).mockResolvedValue(
         makeAccount({ userId }) as never,
       );
       mockSteamAdapter.syncUser.mockResolvedValue({
@@ -209,7 +209,7 @@ describe('processSyncJob — lifecycle del handler real contra Redis real (T129/
     });
 
     it('completa el batch pese al fallo de una plataforma, con resultado parcial y claves limpias', async () => {
-      mockPrisma.platformAccount.findUnique.mockImplementation(({ where }: never) => {
+      (mockPrisma.platformAccount.findUnique as jest.Mock).mockImplementation(({ where }: never) => {
         const id = (where as { id: string }).id;
         if (id === 'acc-steam') {
           return Promise.resolve(makeAccount({ id: 'acc-steam', userId, platform: 'STEAM' }) as never);

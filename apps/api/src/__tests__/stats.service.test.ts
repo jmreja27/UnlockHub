@@ -77,7 +77,7 @@ describe('getUserStats', () => {
 
   it('devuelve totalAchievements y totalXp correctos', async () => {
     mockUserFind.mockResolvedValue({ xp: 200, streakDays: 7 });
-    mockUAFind.mockResolvedValue([makeUA(), makeUA({ id: 'ach-2', gameId: 'game-2' })]);
+    mockUAFind.mockResolvedValue([makeUA(), makeUA(makeAchievement({ id: 'ach-2', gameId: 'game-2' }))]);
 
     const result = await statsService.getUserStats('u-1');
 
