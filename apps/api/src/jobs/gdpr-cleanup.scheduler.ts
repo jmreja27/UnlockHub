@@ -3,6 +3,7 @@ import { Queue, Worker } from 'bullmq';
 import { prisma } from '../lib/prisma';
 import { redis, createWorkerConnection } from '../lib/redis';
 import { logger } from '../lib/logger';
+import { removeUserFromRankings } from '../services/ranking.service';
 
 // Busca usuarios con soft delete anterior a 30 días y los borra físicamente
 export async function runGdprCleanup(): Promise<void> {
@@ -10,12 +11,15 @@ export async function runGdprCleanup(): Promise<void> {
 
   const deletedUsers = await prisma.user.findMany({
     where: { deletedAt: { lte: thirtyDaysAgo } },
-    select: { id: true },
+    select: { id: true, platformAccounts: { select: { platform: true } } },
   });
 
   if (deletedUsers.length === 0) return;
 
   for (const user of deletedUsers) {
+    // Red de seguridad: el ZREM ya debería haberse hecho en el soft delete (deleteAccount),
+    // pero si falló silenciosamente entonces, esta es la última oportunidad antes de perder el userId.
+    await removeUserFromRankings(user.id, user.platformAccounts.map((a) => a.platform));
     await prisma.user.delete({ where: { id: user.id } });
     logger.info({ userId: user.id }, '[GDPR] Usuario borrado físicamente tras 30 días de soft delete');
   }

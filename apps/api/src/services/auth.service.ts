@@ -13,6 +13,7 @@ import {
 import { prisma } from '../lib/prisma';
 
 import { sendPasswordResetEmail } from './email.service';
+import { upsertUserScore } from './ranking.service';
 
 const RESET_TOKEN_EXPIRY_MS = 60 * 60 * 1000; // 1 hora
 
@@ -38,6 +39,10 @@ export async function register(input: RegisterInput) {
     passwordHash,
     birthDate: input.birthDate,
   });
+
+  // El registro no permite elegir visibilidad — el perfil nace PUBLIC (default de schema.prisma),
+  // así que entra al ranking desde el alta con 0 XP, igual que hace seedRankingsFromDb().
+  await upsertUserScore(user.id, 0, []);
 
   const rawRefreshToken = signRefreshToken();
   await tokenRepo.createRefreshToken(user.id, rawRefreshToken);

@@ -26,6 +26,10 @@ jest.mock('../lib/logger', () => ({
   },
 }));
 
+jest.mock('../services/ranking.service', () => ({
+  removeUserFromRankings: jest.fn().mockResolvedValue(undefined),
+}));
+
 // BullMQ se instancia en el módulo — mock mínimo para que no rompa el import
 jest.mock('bullmq', () => ({
   Queue: jest.fn().mockImplementation(() => ({
@@ -39,8 +43,10 @@ jest.mock('bullmq', () => ({
 }));
 
 import { prisma } from '../lib/prisma';
+import { removeUserFromRankings } from '../services/ranking.service';
 
 const mockPrisma = prisma as jest.Mocked<typeof prisma>;
+const mockRemoveUserFromRankings = removeUserFromRankings as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -49,8 +55,8 @@ beforeEach(() => {
 describe('runGdprCleanup', () => {
   it('borra físicamente usuarios con deletedAt hace más de 30 días', async () => {
     (mockPrisma.user.findMany as jest.Mock).mockResolvedValue([
-      { id: 'old-user-1' },
-      { id: 'old-user-2' },
+      { id: 'old-user-1', platformAccounts: [{ platform: 'STEAM' }] },
+      { id: 'old-user-2', platformAccounts: [] },
     ]);
     (mockPrisma.user.delete as jest.Mock).mockResolvedValue({});
 
@@ -59,6 +65,30 @@ describe('runGdprCleanup', () => {
     expect(mockPrisma.user.delete).toHaveBeenCalledTimes(2);
     expect(mockPrisma.user.delete).toHaveBeenCalledWith({ where: { id: 'old-user-1' } });
     expect(mockPrisma.user.delete).toHaveBeenCalledWith({ where: { id: 'old-user-2' } });
+  });
+
+  it('llama a removeUserFromRankings como red de seguridad antes de borrar (T145 — idempotente aunque el ZREM del soft delete ya se hubiera hecho)', async () => {
+    (mockPrisma.user.findMany as jest.Mock).mockResolvedValue([
+      { id: 'old-user-1', platformAccounts: [{ platform: 'STEAM' }, { platform: 'RA' }] },
+    ]);
+    (mockPrisma.user.delete as jest.Mock).mockResolvedValue({});
+
+    await runGdprCleanup();
+
+    expect(mockRemoveUserFromRankings).toHaveBeenCalledWith('old-user-1', ['STEAM', 'RA']);
+    // El orden importa: limpiar Redis antes de perder el userId con el delete físico
+    const removeCallOrder = mockRemoveUserFromRankings.mock.invocationCallOrder[0];
+    const deleteCallOrder = (mockPrisma.user.delete as jest.Mock).mock.invocationCallOrder[0];
+    expect(removeCallOrder).toBeLessThan(deleteCallOrder);
+  });
+
+  it('no falla si no hay nada que limpiar (idempotente sin usuarios expirados)', async () => {
+    (mockPrisma.user.findMany as jest.Mock).mockResolvedValue([]);
+
+    await expect(runGdprCleanup()).resolves.not.toThrow();
+
+    expect(mockRemoveUserFromRankings).not.toHaveBeenCalled();
+    expect(mockPrisma.user.delete).not.toHaveBeenCalled();
   });
 
   it('no borra nada cuando no hay usuarios con deletedAt expirado', async () => {

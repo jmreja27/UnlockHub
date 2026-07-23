@@ -23,12 +23,17 @@ jest.mock('../lib/prisma', () => ({
     $transaction: jest.fn().mockResolvedValue([]),
   },
 }));
+jest.mock('../services/ranking.service', () => ({
+  upsertUserScore: jest.fn().mockResolvedValue(undefined),
+}));
 
 import { prisma } from '../lib/prisma';
 import * as emailService from '../services/email.service';
+import { upsertUserScore } from '../services/ranking.service';
 
 const mockUserRepo = userRepo as jest.Mocked<typeof userRepo>;
 const mockTokenRepo = tokenRepo as jest.Mocked<typeof tokenRepo>;
+const mockUpsertUserScore = upsertUserScore as jest.Mock;
 
 const baseUser = {
   id: 'user-1',
@@ -72,6 +77,21 @@ describe('authService.register', () => {
     expect(result.user.id).toBe('user-1');
     expect(result.accessToken).toBeTruthy();
     expect(result.refreshToken).toBeTruthy();
+  });
+
+  it('T145: añade al usuario al ranking global con XP 0 desde el alta (el perfil nace PUBLIC, sin plataformas vinculadas)', async () => {
+    mockUserRepo.findUserByEmail.mockResolvedValue(null);
+    mockUserRepo.findUserByUsername.mockResolvedValue(null);
+    mockUserRepo.createUser.mockResolvedValue(baseUser);
+    mockTokenRepo.createRefreshToken.mockResolvedValue({} as never);
+
+    await authService.register({
+      username: 'testuser',
+      email: 'test@example.com',
+      password: 'Password1',
+    });
+
+    expect(mockUpsertUserScore).toHaveBeenCalledWith('user-1', 0, []);
   });
 
   it('lanza EMAIL_TAKEN si el email ya existe', async () => {
