@@ -17,6 +17,12 @@ import { streakWorker } from '../../api/src/jobs/streak.worker';
 import { challengeWorker, scheduleChallengeEvaluation } from '../../api/src/jobs/challenge.scheduler';
 import { shieldWorker, scheduleShieldRecharge } from '../../api/src/jobs/streak-shields.scheduler';
 import { gdprCleanupWorker, scheduleGdprCleanupJob } from '../../api/src/jobs/gdpr-cleanup.scheduler';
+import {
+  achievementChallengeReminderWorker,
+  achievementChallengeExpiryWorker,
+  scheduleChallengeReminders,
+  scheduleChallengeExpiry,
+} from '../../api/src/jobs/achievement-challenge.scheduler';
 import { scheduleStreakJob } from '../../api/src/jobs/streak.scheduler';
 import { scheduleBackgroundSyncJob, startBackgroundSyncWorker } from '../../api/src/jobs/background-sync.scheduler';
 import { redis } from '../../api/src/lib/redis';
@@ -39,6 +45,8 @@ logger.info('Worker arrancado — esperando jobs BullMQ');
   try { await scheduleBackgroundSyncJob(); } catch (e) { logger.error({ err: e }, 'scheduleBackgroundSyncJob falló (no fatal)'); }
   try { await scheduleShieldRecharge(); } catch (e) { logger.error({ err: e }, 'scheduleShieldRecharge falló (no fatal)'); }
   try { await scheduleGdprCleanupJob(); } catch (e) { logger.error({ err: e }, 'scheduleGdprCleanupJob falló (no fatal)'); }
+  try { await scheduleChallengeReminders(); } catch (e) { logger.error({ err: e }, 'scheduleChallengeReminders falló (no fatal)'); }
+  try { await scheduleChallengeExpiry(); } catch (e) { logger.error({ err: e }, 'scheduleChallengeExpiry falló (no fatal)'); }
 })();
 
 process.on('SIGTERM', async () => {
@@ -51,6 +59,8 @@ process.on('SIGTERM', async () => {
     challengeWorker.close(),
     shieldWorker.close(),
     gdprCleanupWorker.close(),
+    achievementChallengeReminderWorker.close(),
+    achievementChallengeExpiryWorker.close(),
   ]);
   await prisma.$disconnect();
   await redis.quit();
@@ -68,6 +78,8 @@ process.on('SIGINT', async () => {
     challengeWorker.close(),
     shieldWorker.close(),
     gdprCleanupWorker.close(),
+    achievementChallengeReminderWorker.close(),
+    achievementChallengeExpiryWorker.close(),
   ]);
   await prisma.$disconnect();
   await redis.quit();
