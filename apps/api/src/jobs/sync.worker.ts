@@ -17,6 +17,7 @@ import { sendPush } from '../services/notification.service';
 import { createNotification } from '../services/inapp-notification.service';
 import { addXp, invalidateUserPublicCache } from '../services/user.service';
 import { upsertUserScore } from '../services/ranking.service';
+import { resolveAchievementChallenges } from '../services/achievement-challenge.service';
 
 import type { AnySyncJobData, SyncBatchJobData, SyncJobData, SyncJobResult } from './sync.queue';
 import { syncQueue } from './sync.queue';
@@ -265,6 +266,17 @@ async function syncPlatform(
           dbUser.xp,
           platformsData.map((p) => p.platform),
           dbUser.profileVisibility,
+        );
+      }
+    }
+
+    for (const ua of newAchievements) {
+      try {
+        await resolveAchievementChallenges(userId, ua.achievementId, ua.unlockedAt);
+      } catch (err) {
+        logger.warn(
+          { userId, achievementId: ua.achievementId, err: (err as Error).message },
+          '[SyncWorker] Resolución de reto fallida — sync no afectado',
         );
       }
     }

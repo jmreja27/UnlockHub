@@ -5,6 +5,7 @@ import { AppError } from '../middleware/errorHandler';
 import { ACHIEVEMENT_CHALLENGE_DURATION_DAYS } from '../config/achievementChallenge';
 
 import { createNotification } from './inapp-notification.service';
+import { awardPoints } from './points.service';
 
 const challengeSelect = {
   id: true,
@@ -226,4 +227,58 @@ export async function listMyChallenges(
   ]);
 
   return { data, total, page, limit };
+}
+
+/**
+ * Resuelve un reto 1v1 cuando uno de los participantes desbloquea el logro retado durante un sync.
+ * No-op si no hay ningún reto ACCEPTED y vigente (expiresAt en el futuro) para ese logro y ese usuario.
+ * Llamada desde sync.worker.ts por cada logro nuevo — aislada con try/catch por logro en el caller.
+ */
+export async function resolveAchievementChallenges(
+  userId: string,
+  achievementId: string,
+  _unlockedAt: Date,
+): Promise<void> {
+  const challenge = await prisma.achievementChallenge.findFirst({
+    where: {
+      achievementId,
+      status: 'ACCEPTED',
+      expiresAt: { gt: new Date() },
+      OR: [{ challengerId: userId }, { challengedId: userId }],
+    },
+    select: {
+      id: true,
+      challengerId: true,
+      challengedId: true,
+      achievement: { select: { title: true, normalizedPoints: true } },
+    },
+  });
+
+  if (!challenge) return;
+
+  const loserId = challenge.challengerId === userId ? challenge.challengedId : challenge.challengerId;
+  const points = challenge.achievement.normalizedPoints;
+
+  await prisma.achievementChallenge.update({
+    where: { id: challenge.id },
+    data: { status: 'RESOLVED_WIN', winnerId: userId, resolvedAt: new Date(), pointsAwarded: points },
+  });
+
+  await awardPoints(userId, points, 'CHALLENGE');
+
+  await createNotification({
+    userId,
+    type: 'ACHIEVEMENT_CHALLENGE',
+    title: '¡Has ganado el reto!',
+    body: challenge.achievement.title,
+    relatedId: challenge.id,
+  });
+
+  await createNotification({
+    userId: loserId,
+    type: 'ACHIEVEMENT_CHALLENGE',
+    title: 'Has perdido el reto',
+    body: challenge.achievement.title,
+    relatedId: challenge.id,
+  });
 }

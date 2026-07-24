@@ -6,6 +6,7 @@ jest.mock('../lib/prisma', () => ({
     friendship: { findFirst: jest.fn() },
     achievementChallenge: {
       findUnique: jest.fn(),
+      findFirst: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
       findMany: jest.fn(),
@@ -15,16 +16,23 @@ jest.mock('../lib/prisma', () => ({
   },
 }));
 
+jest.mock('../services/points.service', () => ({
+  awardPoints: jest.fn(),
+}));
+
 import { prisma } from '../lib/prisma';
+import { awardPoints } from '../services/points.service';
 
 const mockAchievement = prisma.achievement.findUnique as jest.Mock;
 const mockFriendship = prisma.friendship.findFirst as jest.Mock;
 const mockFindChallenge = prisma.achievementChallenge.findUnique as jest.Mock;
+const mockFindFirstChallenge = prisma.achievementChallenge.findFirst as jest.Mock;
 const mockCreateChallenge = prisma.achievementChallenge.create as jest.Mock;
 const mockUpdateChallenge = prisma.achievementChallenge.update as jest.Mock;
 const mockFindManyChallenges = prisma.achievementChallenge.findMany as jest.Mock;
 const mockCountChallenges = prisma.achievementChallenge.count as jest.Mock;
 const mockNotification = prisma.notification.create as jest.Mock;
+const mockAwardPoints = awardPoints as jest.Mock;
 
 const CHALLENGER_ID = 'cchallenger1';
 const CHALLENGED_ID = 'cchallenged1';
@@ -54,6 +62,7 @@ function makeChallengeRow(overrides: Partial<Record<string, unknown>> = {}) {
 beforeEach(() => {
   jest.clearAllMocks();
   mockNotification.mockResolvedValue({});
+  mockAwardPoints.mockResolvedValue(undefined);
 });
 
 describe('createChallenge', () => {
@@ -329,5 +338,75 @@ describe('listMyChallenges', () => {
         take: 10,
       }),
     );
+  });
+});
+
+describe('resolveAchievementChallenges', () => {
+  const UNLOCKED_AT = new Date('2026-07-24T10:00:00Z');
+
+  it('no-op si no hay ningún reto ACCEPTED vigente para ese logro y usuario', async () => {
+    mockFindFirstChallenge.mockResolvedValue(null);
+
+    await service.resolveAchievementChallenges(CHALLENGER_ID, ACHIEVEMENT_ID, UNLOCKED_AT);
+
+    expect(mockFindFirstChallenge).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          achievementId: ACHIEVEMENT_ID,
+          status: 'ACCEPTED',
+          OR: [{ challengerId: CHALLENGER_ID }, { challengedId: CHALLENGER_ID }],
+        }),
+      }),
+    );
+    expect(mockUpdateChallenge).not.toHaveBeenCalled();
+    expect(mockAwardPoints).not.toHaveBeenCalled();
+    expect(mockNotification).not.toHaveBeenCalled();
+  });
+
+  it('resuelve el reto: status RESOLVED_WIN, winnerId, pointsAwarded, puntos otorgados y ambas notificaciones', async () => {
+    mockFindFirstChallenge.mockResolvedValue({
+      id: CHALLENGE_ID,
+      challengerId: CHALLENGER_ID,
+      challengedId: CHALLENGED_ID,
+      achievement: { title: 'Primer platino', normalizedPoints: 50 },
+    });
+    mockUpdateChallenge.mockResolvedValue(makeChallengeRow({ status: 'RESOLVED_WIN' }));
+
+    await service.resolveAchievementChallenges(CHALLENGED_ID, ACHIEVEMENT_ID, UNLOCKED_AT);
+
+    expect(mockUpdateChallenge).toHaveBeenCalledWith({
+      where: { id: CHALLENGE_ID },
+      data: {
+        status: 'RESOLVED_WIN',
+        winnerId: CHALLENGED_ID,
+        resolvedAt: expect.any(Date),
+        pointsAwarded: 50,
+      },
+    });
+    expect(mockAwardPoints).toHaveBeenCalledWith(CHALLENGED_ID, 50, 'CHALLENGE');
+    expect(mockNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ userId: CHALLENGED_ID, type: 'ACHIEVEMENT_CHALLENGE', relatedId: CHALLENGE_ID }),
+      }),
+    );
+    expect(mockNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ userId: CHALLENGER_ID, type: 'ACHIEVEMENT_CHALLENGE', relatedId: CHALLENGE_ID }),
+      }),
+    );
+    expect(mockNotification).toHaveBeenCalledTimes(2);
+  });
+
+  it('un logro perteneciente a un reto ya resuelto/expirado no se re-resuelve (filtro status ACCEPTED)', async () => {
+    // El filtro status: 'ACCEPTED' del findFirst ya excluye RESOLVED_WIN/RESOLVED_DRAW/EXPIRED —
+    // el mock de Prisma simula ese filtro devolviendo null, como lo haría la BD real.
+    mockFindFirstChallenge.mockResolvedValue(null);
+
+    await service.resolveAchievementChallenges(CHALLENGER_ID, ACHIEVEMENT_ID, UNLOCKED_AT);
+
+    const callArgs = mockFindFirstChallenge.mock.calls[0][0];
+    expect(callArgs.where.status).toBe('ACCEPTED');
+    expect(mockUpdateChallenge).not.toHaveBeenCalled();
+    expect(mockAwardPoints).not.toHaveBeenCalled();
   });
 });

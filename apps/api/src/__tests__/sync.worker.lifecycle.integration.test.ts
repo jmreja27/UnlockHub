@@ -48,6 +48,10 @@ jest.mock('../services/inapp-notification.service', () => ({
   createNotification: jest.fn().mockResolvedValue(undefined),
 }));
 
+jest.mock('../services/achievement-challenge.service', () => ({
+  resolveAchievementChallenges: jest.fn().mockResolvedValue(undefined),
+}));
+
 jest.mock('../platforms/steam.adapter', () => ({
   steamAdapter: { platform: 'STEAM', syncUser: jest.fn(), syncUserBatched: undefined, syncUserExpress: jest.fn() },
 }));
@@ -69,10 +73,12 @@ import { prisma } from '../lib/prisma';
 import { processSyncJob } from '../jobs/sync.worker';
 import { steamAdapter } from '../platforms/steam.adapter';
 import { retroAchievementsAdapter } from '../platforms/retroachievements.adapter';
+import { resolveAchievementChallenges } from '../services/achievement-challenge.service';
 
 const mockPrisma = prisma as jest.Mocked<typeof prisma>;
 const mockSteamAdapter = steamAdapter as jest.Mocked<typeof steamAdapter>;
 const mockRaAdapter = retroAchievementsAdapter as jest.Mocked<typeof retroAchievementsAdapter>;
+const mockResolveChallenges = resolveAchievementChallenges as jest.Mock;
 
 function makeAccount(overrides: Partial<Record<string, unknown>> = {}) {
   return {
@@ -237,6 +243,96 @@ describe('processSyncJob — lifecycle del handler real contra Redis real (T129/
       expect(await redis.exists(lockKey)).toBe(0);
       expect(await redis.exists(steamProgressKey)).toBe(0);
       expect(await redis.exists(raProgressKey)).toBe(0);
+    });
+  });
+
+  describe('TEST 4 — integración con retos de logros (F47 Fase 1c)', () => {
+    const userId = 'tests4-challenge-user';
+    const lockKey = `sync:user-lock:${userId}`;
+    const progressKey = `sync:progress:${userId}:STEAM`;
+
+    afterEach(async () => {
+      await cleanupUserKeys(userId, ['STEAM']);
+    });
+
+    it('resuelve el reto activo del logro nuevo y el sync completa normalmente', async () => {
+      (mockPrisma.platformAccount.findUnique as jest.Mock).mockResolvedValue(
+        makeAccount({ userId }) as never,
+      );
+      const unlockedAt = new Date();
+      (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
+        {
+          achievementId: 'ach-retado',
+          unlockedAt,
+          achievement: { title: 'Primer platino', normalizedPoints: 50 },
+        },
+      ] as never);
+      mockSteamAdapter.syncUser.mockResolvedValue({
+        platform: 'STEAM',
+        achievementsSynced: 1,
+        gamesUpdated: 1,
+        syncedAt: new Date().toISOString(),
+      });
+
+      const job = makeBatchJob(userId, [{ platform: 'STEAM', platformAccountId: 'acc-1' }]);
+      const result = await processSyncJob(job);
+
+      expect(result).toMatchObject({ achievementsSynced: 1, gamesUpdated: 1 });
+      expect(mockResolveChallenges).toHaveBeenCalledWith(userId, 'ach-retado', unlockedAt);
+      expect(mockResolveChallenges).toHaveBeenCalledTimes(1);
+
+      // El sync completa igual que sin reto activo — lock y progress liberados (comportamiento T140 intacto).
+      expect(await redis.exists(lockKey)).toBe(0);
+      expect(await redis.exists(progressKey)).toBe(0);
+    });
+
+    it('un fallo en la resolución del reto no afecta al sync — se aísla con try/catch por logro', async () => {
+      (mockPrisma.platformAccount.findUnique as jest.Mock).mockResolvedValue(
+        makeAccount({ userId }) as never,
+      );
+      (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([
+        {
+          achievementId: 'ach-fallido',
+          unlockedAt: new Date(),
+          achievement: { title: 'Logro cualquiera', normalizedPoints: 10 },
+        },
+      ] as never);
+      mockResolveChallenges.mockRejectedValueOnce(new Error('DB caída al resolver el reto'));
+      mockSteamAdapter.syncUser.mockResolvedValue({
+        platform: 'STEAM',
+        achievementsSynced: 1,
+        gamesUpdated: 1,
+        syncedAt: new Date().toISOString(),
+      });
+
+      const job = makeBatchJob(userId, [{ platform: 'STEAM', platformAccountId: 'acc-1' }]);
+      const result = await processSyncJob(job);
+
+      expect(result).toMatchObject({ achievementsSynced: 1, gamesUpdated: 1 });
+      expect(mockResolveChallenges).toHaveBeenCalledTimes(1);
+      expect(await redis.exists(lockKey)).toBe(0);
+      expect(await redis.exists(progressKey)).toBe(0);
+    });
+
+    it('sin ningún logro nuevo, no llama a resolveAchievementChallenges y el sync no cambia', async () => {
+      (mockPrisma.platformAccount.findUnique as jest.Mock).mockResolvedValue(
+        makeAccount({ userId }) as never,
+      );
+      (mockPrisma.userAchievement.findMany as jest.Mock).mockResolvedValue([] as never);
+      mockSteamAdapter.syncUser.mockResolvedValue({
+        platform: 'STEAM',
+        achievementsSynced: 0,
+        gamesUpdated: 1,
+        syncedAt: new Date().toISOString(),
+      });
+
+      const job = makeBatchJob(userId, [{ platform: 'STEAM', platformAccountId: 'acc-1' }]);
+      const result = await processSyncJob(job);
+
+      expect(result).toMatchObject({ achievementsSynced: 0, gamesUpdated: 1 });
+      expect(mockResolveChallenges).not.toHaveBeenCalled();
+      expect(await redis.exists(lockKey)).toBe(0);
+      expect(await redis.exists(progressKey)).toBe(0);
     });
   });
 });
