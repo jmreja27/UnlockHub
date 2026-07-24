@@ -5,3 +5,4 @@ export * from './user.validators';
 export * from './subscription.validators';
 export * from './friendship.validators';
 export * from './challenge.validators';
+export * from './achievement-challenge.validators';

@@ -1,16 +1,16 @@
 import { Router } from 'express';
 
 import { authenticate } from '../middleware/authenticate';
-import { challengeFriendHandler } from '../controllers/achievement.controller';
+import { createChallengeHandler } from '../controllers/achievement-challenge.controller';
 import { getGuidesHandler, createGuideHandler } from '../controllers/guide.controller';
 
 const router = Router();
 
 /**
  * POST /api/v1/achievements/:id/challenge
- * Reta a un amigo a conseguir el logro indicado.
+ * Crea (o reutiliza) un reto 1v1 a otro usuario sobre el logro indicado.
  */
-router.post('/:id/challenge', authenticate, challengeFriendHandler);
+router.post('/:id/challenge', authenticate, createChallengeHandler);
 
 /**
  * GET  /api/v1/achievements/:achievementId/guides

@@ -16,6 +16,7 @@ import adminRouter from './admin.routes';
 import searchRouter from './search.routes';
 import gamesRouter from './games.routes';
 import achievementRouter from './achievement.routes';
+import achievementChallengeRouter from './achievement-challenge.routes';
 import guideRouter from './guide.routes';
 import webhooksRouter from './webhooks.routes';
 
@@ -41,6 +42,7 @@ router.use('/admin', adminRouter);
 router.use('/search', searchRouter);
 router.use('/games', gamesRouter);
 router.use('/achievements', achievementRouter);
+router.use('/achievement-challenges', achievementChallengeRouter);
 router.use('/guides', guideRouter);
 router.use('/webhooks', webhooksRouter);
 

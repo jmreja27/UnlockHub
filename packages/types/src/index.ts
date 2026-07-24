@@ -225,6 +225,31 @@ export interface UserChallenge {
   challenge?: WeeklyChallenge;
 }
 
+export type AchievementChallengeStatus =
+  | 'PENDING'
+  | 'ACCEPTED'
+  | 'REJECTED'
+  | 'EXPIRED'
+  | 'RESOLVED_WIN'
+  | 'RESOLVED_DRAW';
+
+export interface AchievementChallengeSummary {
+  id: string;
+  challengerId: string;
+  challengedId: string;
+  achievementId: string;
+  status: AchievementChallengeStatus;
+  createdAt: string;
+  acceptedAt: string | null;
+  expiresAt: string | null;
+  resolvedAt: string | null;
+  winnerId: string | null;
+  pointsAwarded: number | null;
+  challenger?: Pick<User, 'id' | 'username' | 'avatar'>;
+  challenged?: Pick<User, 'id' | 'username' | 'avatar'>;
+  achievement?: { id: string; title: string; iconUrl: string | null };
+}
+
 export interface GamingWrapped {
   year: number;
   month?: number;  // 1-12 si es wrapped mensual; undefined si es anual
