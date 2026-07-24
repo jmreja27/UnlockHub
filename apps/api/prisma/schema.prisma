@@ -53,6 +53,15 @@ enum ProfileVisibility {
   PRIVATE
 }
 
+enum AchievementChallengeStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  RESOLVED_WIN
+  RESOLVED_DRAW
+}
+
 // ─── Usuarios ─────────────────────────────────────────────────────────────────
 
 model User {
@@ -92,6 +101,8 @@ model User {
   passwordResetTokens PasswordResetToken[]
   notifications       Notification[]
   achievementGuides   AchievementGuide[]
+  challengesSent      AchievementChallenge[] @relation("ChallengerOf")
+  challengesReceived  AchievementChallenge[] @relation("ChallengedBy")
 
   @@index([email])
   @@index([username])
@@ -174,11 +185,36 @@ model Achievement {
   game             Game              @relation(fields: [gameId], references: [id], onDelete: Cascade)
   userAchievements UserAchievement[]
   guides           AchievementGuide[]
+  challenges       AchievementChallenge[]
 
   @@unique([platform, gameId, externalId])
   @@index([gameId])
   @@index([platform])
   @@index([normalizedPoints])
+}
+
+model AchievementChallenge {
+  id            String                     @id @default(cuid())
+  challengerId  String
+  challengedId  String
+  achievementId String
+  status        AchievementChallengeStatus @default(PENDING)
+  createdAt     DateTime                   @default(now())
+  acceptedAt    DateTime?
+  expiresAt     DateTime?
+  resolvedAt    DateTime?
+  winnerId      String?
+  pointsAwarded Int?
+
+  challenger  User        @relation("ChallengerOf", fields: [challengerId], references: [id], onDelete: Cascade)
+  challenged  User        @relation("ChallengedBy", fields: [challengedId], references: [id], onDelete: Cascade)
+  achievement Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@unique([challengerId, challengedId, achievementId])
+  @@index([challengedId, status])
+  @@index([challengerId, status])
+  @@index([status, expiresAt])
+  @@index([achievementId])
 }
 
 model UserAchievement {
@@ -415,6 +451,7 @@ model Notification {
   body      String
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
+  relatedId String? // id de la entidad relacionada (ej. AchievementChallenge.id) — nullable, no todas las notificaciones lo usan
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

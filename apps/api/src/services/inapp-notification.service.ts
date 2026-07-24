@@ -6,6 +6,7 @@ export interface CreateNotificationData {
   type: string;
   title: string;
   body: string;
+  relatedId?: string;
 }
 
 export async function createNotification(data: CreateNotificationData) {
